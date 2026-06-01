@@ -71,7 +71,13 @@ const _calibCache = new WeakMap<ChartHost, CalibCacheEntry>();
 export function computeForecastCalibration(host: ChartHost): ForecastCalibration | null
 {
     const series  = host._chartSeries;
-    const hist    = host._pvHistory;
+    //Prefer the hourly long-term-statistics series (5 days, ~120 rows) when available; fall back to the raw `_pvHistory` window when the
+    //statistics are absent or empty. Entities without `state_class` (`measurement` / `total` / `total_increasing`) are not LTS-tracked and
+    //will surface as an empty stats array, in which case the legacy raw path still drives the calibration over whatever past days
+    //`_pvHistory` covers (now 2 days post-#155). The fallback preserves coverage for non-tracked entities at the cost of a narrower window.
+    const hist    = (host._pvCalibStats && host._pvCalibStats.times.length > 0)
+        ? host._pvCalibStats
+        : host._pvHistory;
     const hassCfg = host.hass?.config;
     const raster  = host._engine?.getLidarRaster() ?? null;
 

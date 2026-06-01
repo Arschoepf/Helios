@@ -69,6 +69,20 @@ export interface PvHost
     //bin. Empty array when the guard is off or no battery is configured; the trainer then falls back to the legacy "train every bucket"
     //path.
     _batteryHistories:      PvHistory[];
+    //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same parallel times[] / values[] shape as `_pvHistory`,
+    //but populated via `recorder/statistics_during_period` with `period: 'hour'` over the past 5 days. Power sensors land here as bucket
+    //means; cumulative-energy sensors land as the bucket-end `state` field. Carries roughly 120 rows where the legacy raw-history path
+    //would have carried ~430k on a 1 Hz Victron, an order-of-magnitude lighter recorder load. Null when statistics are unavailable
+    //(entity has no `state_class`, LTS disabled), the calibration then degrades to the narrower `_pvHistory` window.
+    _pvCalibStats:          PvHistory | null;
+    _pvCalibStatsFetchKey:  string;
+    _pvCalibStatsFetching:  boolean;
+    //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same payload contract as `_pvCalibStats` but at a finer
+    //period for the trainer's 30-minute buckets. ~8.6k rows for 30 days. Null when statistics are unavailable; trainer then degrades to
+    //`_pvHistory`.
+    _pvTrainerStats:        PvHistory | null;
+    _pvTrainerStatsFetchKey: string;
+    _pvTrainerStatsFetching: boolean;
 }
 
 
@@ -170,49 +184,64 @@ export function refreshPv(host: PvHost): void
         }
     }
 
-    //History fetch, only when the (entity, range) tuple changes.
-    //Without this guard we'd reissue the WebSocket command on
-    //every Lit cycle (e.g. every clock tick) and the dashboard
-    //would queue thousands of identical requests.
+    //Three-fetch staging, gated independently so each piece reissues only when its (entity, window) tuple changes:
+    //  1. Raw history bounded to the chart's visible past (~2 days). This is the only call that has historically saturated the recorder
+    //     on high-frequency installs (Victron Cerbo at >1 Hz returns millions of rows over a 30-day window, see #155). Keeping it
+    //     narrow is the structural fix.
+    //  2. Hourly long-term statistics over 5 days, feeding `calibration.ts`. ~120 rows per fetch, vs ~430k on the legacy raw path for a
+    //     1 Hz Victron, two orders of magnitude lighter on the recorder.
+    //  3. 5-minute long-term statistics over 30 days, feeding `shadingTrainer.ts`. ~8.6k rows per fetch.
     //
-    //Range extension: the timeline UI itself only renders the
-    //last 2 past days, but the forecast calibration needs ~5
-    //past days of observed PV to derive a stable ratio against
-    //the model, and the shading-map trainer can use up to 30
-    //days to pre-fill its grid. We stretch the fetch window back
-    //to 30 days even though the chart will only plot the
-    //trailing 2; the extra samples just sit unused by the chart
-    //and feed both the calibration and the trainer without an
-    //extra HA round-trip.
-    if (!host._timeRange || host._pvFetching)
-    {
-        return;
-    }
-    //30-day history window: feeds both the 5-day scalar
-    //calibration (which only walks its own internal 5 days) and
-    //the 30-day shading-map trainer (which uses all of it). HA
-    //returns whatever the recorder retained; users on the
-    //default 10-day retention still get a 3x improvement over
-    //the old 7-day window, users with 30+ day retention get the
-    //full benefit and the dome is pre-filled at first load.
-    const CALIBRATION_PAST_DAYS = 30;
-    const today0 = new Date();
+    //All three exit cheaply on subsequent Lit cycles (clock ticks, hass updates) because the fetch key cache short-circuits
+    //identical-range re-fetches, mirroring the existing behaviour.
+    if (!host._timeRange) return;
+    const fetchEnd = host._timeRange.end;
+    const HOUR_MS  = 3_600_000;
+    const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
-    const fetchStart = new Date(today0.getTime() - CALIBRATION_PAST_DAYS * 24 * 3_600_000);
-    const fetchEnd   = host._timeRange.end;
-    const rangeKey = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
-    const fetchKey = `${entity}@${rangeKey}`;
-    if (fetchKey === host._pvFetchKey)
+
+    //Raw history, narrow window.
+    if (!host._pvFetching)
     {
-        return;
+        const fetchStart = host._timeRange.start;
+        const rangeKey   = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
+        //Optional per-bank battery SoC companion fetch. We only ask HA for the SoC histories when the user has explicitly armed the
+        //inverter-cutoff guard (cutoff percent configured AND at least one bank); otherwise the trainer doesn't need them and the extra
+        //entities in the WS payload would be a waste of HA recorder bandwidth. The fetch key includes the joined bank entity ids so
+        //swapping any bank forces a re-fetch on the next refresh.
+        const batteryEntities = batterySocEntitiesForInhibit(host.config);
+        const fullFetchKey = `${entity}@${rangeKey}`
+            + (batteryEntities.length > 0 ? '|bsoc:' + batteryEntities.join(',') : '');
+        if (fullFetchKey !== host._pvFetchKey)
+        {
+            host._pvFetchKey = fullFetchKey;
+            fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities);
+        }
     }
-    //Optional per-bank battery SoC companion fetch. We only ask HA for the SoC histories when the user has explicitly armed the inverter-
-    //cutoff guard (cutoff percent configured AND at least one bank); otherwise the trainer doesn't need them and the extra entities in
-    //the WS payload would be a waste of HA recorder bandwidth. The fetch key includes the joined bank entity ids so swapping any bank
-    //forces a re-fetch on the next refresh.
-    const batteryEntities = batterySocEntitiesForInhibit(host.config);
-    host._pvFetchKey = fetchKey + (batteryEntities.length > 0 ? '|bsoc:' + batteryEntities.join(',') : '');
-    fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities);
+
+    //Hourly LTS for calibration (5 days).
+    if (!host._pvCalibStatsFetching)
+    {
+        const calibStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
+        const calibKey   = `${entity}@h|${calibStart.getTime()}|${fetchEnd.getTime()}`;
+        if (calibKey !== host._pvCalibStatsFetchKey)
+        {
+            host._pvCalibStatsFetchKey = calibKey;
+            fetchPvStatistics(host, entity, calibStart, fetchEnd, 'hour', 'calib');
+        }
+    }
+
+    //5-min LTS for shading-map trainer (30 days).
+    if (!host._pvTrainerStatsFetching)
+    {
+        const trainerStart = new Date(today0.getTime() - 30 * 24 * HOUR_MS);
+        const trainerKey   = `${entity}@5m|${trainerStart.getTime()}|${fetchEnd.getTime()}`;
+        if (trainerKey !== host._pvTrainerStatsFetchKey)
+        {
+            host._pvTrainerStatsFetchKey = trainerKey;
+            fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer');
+        }
+    }
 }
 
 
@@ -393,6 +422,118 @@ export async function fetchPvHistory(
     {
         host._pvFetching = false;
     }
+}
+
+
+//Pull a long-term-statistics series from HA's `recorder/statistics_during_period` WebSocket command. Trades raw resolution for a two-orders-of-
+//magnitude reduction in payload size, which keeps the recorder responsive on installs whose PV entity reports several samples per second (Victron
+//Cerbo and friends, see #155).
+//
+//`role` selects the target slot: `'calib'` populates `host._pvCalibStats` for the 5-day forecast calibration, `'trainer'` populates
+//`host._pvTrainerStats` for the 30-day shading-map trainer. The two paths are independent so a slow trainer fetch does not delay the calibration
+//landing.
+//
+//Field selection depends on the entity unit. Cumulative-energy sensors (`Wh` / `kWh` / `MWh`) carry their cumulative value in the bucket's `state`
+//field and we anchor the sample at bucket end so the calibration's delta-sum integration sees the correct attribution. Power sensors carry the
+//bucket mean and we anchor at the bucket midpoint so the trapezoidal integration matches the existing semantics. Buckets with a null target field
+//are dropped silently.
+//
+//Long-term statistics require the source entity to carry a `state_class` (`measurement`, `total`, or `total_increasing`) so HA tracks it. When the
+//entity is not LTS-tracked HA returns an empty array; we surface that as an empty `PvHistory` and let the consumer fall back to `_pvHistory`.
+export async function fetchPvStatistics(
+    host: PvHost,
+    entityId: string,
+    start: Date,
+    end: Date,
+    period: '5minute' | 'hour' | 'day' | 'week' | 'month',
+    role: 'calib' | 'trainer',
+): Promise<void>
+{
+    if (!host.hass?.callWS) return;
+
+    const fetchingFlag    = role === 'calib' ? '_pvCalibStatsFetching'    : '_pvTrainerStatsFetching';
+    const targetSlot      = role === 'calib' ? '_pvCalibStats'            : '_pvTrainerStats';
+
+    host[fetchingFlag] = true;
+    try
+    {
+        //History only exists up to "now". Clamp the fetch end so we don't ask HA for empty future buckets.
+        const now = new Date();
+        const fetchEnd = end > now ? now : end;
+        if (start >= fetchEnd)
+        {
+            host[targetSlot] = { times: [], values: [] };
+            return;
+        }
+
+        const unit = (host._pvUnit || '').toLowerCase();
+        const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+
+        const result: any = await host.hass.callWS({
+            type:           'recorder/statistics_during_period',
+            start_time:     start.toISOString(),
+            end_time:       fetchEnd.toISOString(),
+            statistic_ids:  [entityId],
+            period,
+            types:          isCumulativeEnergy ? ['state'] : ['mean'],
+        });
+
+        const arr: any[] = (result && result[entityId]) ?? [];
+        const times:  Date[]   = [];
+        const values: number[] = [];
+
+        for (const item of arr)
+        {
+            //Bucket boundaries arrive as ISO 8601 strings or millisecond epochs depending on the HA version; coerce both.
+            const startRaw = item?.start;
+            const endRaw   = item?.end;
+            const startMs  = parseStatBoundary(startRaw);
+            const endMs    = parseStatBoundary(endRaw);
+            if (startMs === null) continue;
+            const valueRaw = isCumulativeEnergy ? item?.state : item?.mean;
+            if (valueRaw === null || valueRaw === undefined) continue;
+            const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
+            if (!isFinite(v)) continue;
+            //Cumulative sensors anchor at bucket end so consecutive deltas attribute correctly to the bucket that produced them.
+            //Power sensors anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` / `shadingTrainer.ts`
+            //matches the existing semantics.
+            const anchorMs = isCumulativeEnergy
+                ? (endMs ?? startMs)
+                : (endMs !== null ? (startMs + endMs) / 2 : startMs);
+            times.push(new Date(anchorMs));
+            values.push(v);
+        }
+
+        host[targetSlot] = { times, values };
+    }
+    catch (e)
+    {
+        //LTS endpoint missing or entity not tracked. Surface an empty series so the consumer can degrade to `_pvHistory`.
+        console.warn(`[HELIOS] PV statistics fetch failed (${role}):`, e);
+        host[targetSlot] = { times: [], values: [] };
+    }
+    finally
+    {
+        host[fetchingFlag] = false;
+    }
+}
+
+
+//Coerce a `start` / `end` field from a statistics bucket into a millisecond epoch. Accepts ISO strings, numeric seconds, and numeric milliseconds
+//since HA's payload shape has changed between releases. Returns null on anything unparseable.
+function parseStatBoundary(raw: unknown): number | null
+{
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (typeof raw === 'string')
+    {
+        const asNum = Number(raw);
+        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        const d = new Date(raw);
+        const t = d.getTime();
+        return isFinite(t) ? t : null;
+    }
+    return null;
 }
 
 

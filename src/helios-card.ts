@@ -357,6 +357,23 @@ export class HeliosCard extends LitElement
     //`window.heliosStats()` (raw entries returned, samples kept after
     //unit / unavailable filtering, window covered in hours).
     _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
+    //Hourly long-term-statistics series feeding the 5-day forecast
+    //calibration. Same shape as `_pvHistory` but populated via
+    //`recorder/statistics_during_period`, ~120 rows for 5 days vs
+    //potentially millions on the raw path for high-frequency
+    //sensors. Null while the first fetch is in flight; consumers
+    //(calibration.ts) degrade to `_pvHistory` when this is null or
+    //empty.
+    @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
+    _pvCalibStatsFetchKey  = '';
+    _pvCalibStatsFetching  = false;
+    //5-minute long-term-statistics series feeding the 30-day
+    //shading-map trainer. Same contract as `_pvCalibStats`, just at
+    //a finer period and over a longer window. ~8.6k rows for 30
+    //days, vs the legacy raw 30-day path.
+    @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
+    _pvTrainerStatsFetchKey  = '';
+    _pvTrainerStatsFetching  = false;
     //Per-bank companion battery SoC histories fetched alongside PV history when the user has at least one battery configured AND armed
     //the inverter-cutoff guard (`inverter-cutoff-soc-pct`). One entry per bank, parallel to parseBatteryBanks(config). Empty when the
     //guard is off or no battery is configured; the shading trainer reads it to skip buckets where ALL banks were at or above the cutoff

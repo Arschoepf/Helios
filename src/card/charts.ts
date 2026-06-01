@@ -487,6 +487,12 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
+    //Hourly long-term-statistics series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` because it
+    //carries the same 5-day window with two orders of magnitude fewer rows on high-frequency installs. Null while the stats fetch is in
+    //flight, or empty when the entity is not LTS-tracked, in both cases the consumer degrades to `_pvHistory`.
+    readonly _pvCalibStats:   PvHistory | null;
+    //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same fallback contract as `_pvCalibStats`.
+    readonly _pvTrainerStats: PvHistory | null;
     //Optional per-bank companion battery SoC histories, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
     //One entry per bank (parallel to parseBatteryBanks(config)); empty when the guard is off or no battery is configured. The shading
     //trainer reads it to skip buckets where ALL banks reached the cutoff (min SoC across banks).
