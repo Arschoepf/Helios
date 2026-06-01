@@ -170,12 +170,14 @@ export async function fetchSolarRadiationHistory(
         }
 
         const result: any = await host.hass.callWS({
-            type:             'history/history_during_period',
-            start_time:       start.toISOString(),
-            end_time:         fetchEnd.toISOString(),
-            entity_ids:       [entityId],
-            minimal_response: true,
-            no_attributes:    true
+            type:                     'history/history_during_period',
+            start_time:               start.toISOString(),
+            end_time:                 fetchEnd.toISOString(),
+            entity_ids:               [entityId],
+            minimal_response:         true,
+            no_attributes:            true,
+            //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency solar-radiation sensors. See #157.
+            significant_changes_only: true,
         });
 
         const arr: any[] = (result && result[entityId]) ?? [];

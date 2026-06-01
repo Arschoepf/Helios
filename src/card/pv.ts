@@ -377,12 +377,15 @@ export async function fetchPvHistory(
             ? [entityId, ...batterySocEntityIds]
             : [entityId];
         const result: any = await host.hass.callWS({
-            type:             'history/history_during_period',
-            start_time:       start.toISOString(),
-            end_time:         fetchEnd.toISOString(),
-            entity_ids:       entityIds,
-            minimal_response: true,
-            no_attributes:    true
+            type:                     'history/history_during_period',
+            start_time:               start.toISOString(),
+            end_time:                 fetchEnd.toISOString(),
+            entity_ids:               entityIds,
+            minimal_response:         true,
+            no_attributes:            true,
+            //Lets HA drop bucket-internal duplicates server-side. On a Victron MPPT at >1 Hz that trims roughly 30-70 % of the rows
+            //without affecting the calibration / chart since both consumers walk neighbour-pair deltas. See #157.
+            significant_changes_only: true,
         });
 
         const arr: any[] = (result && result[entityId]) ?? [];

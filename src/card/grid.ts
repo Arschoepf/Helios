@@ -120,12 +120,14 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
         try
         {
             const result: any = await host.hass.callWS({
-                type:             'history/history_during_period',
-                start_time:       start.toISOString(),
-                end_time:         end.toISOString(),
-                entity_ids:       [entity],
-                minimal_response: true,
-                no_attributes:    true
+                type:                     'history/history_during_period',
+                start_time:               start.toISOString(),
+                end_time:                 end.toISOString(),
+                entity_ids:               [entity],
+                minimal_response:         true,
+                no_attributes:            true,
+                //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters. See #157.
+                significant_changes_only: true,
             });
             const arr: any[] = (result && result[entity]) ?? [];
             const merged: Sample[] = [];

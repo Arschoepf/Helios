@@ -371,12 +371,14 @@ export async function fetchBatteryHistory(
         const ids = Array.from(idsSet);
 
         const result: any = await host.hass.callWS({
-            type:             'history/history_during_period',
-            start_time:       start.toISOString(),
-            end_time:         fetchEnd.toISOString(),
-            entity_ids:       ids,
-            minimal_response: true,
-            no_attributes:    true
+            type:                     'history/history_during_period',
+            start_time:               start.toISOString(),
+            end_time:                 fetchEnd.toISOString(),
+            entity_ids:               ids,
+            minimal_response:         true,
+            no_attributes:            true,
+            //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency battery SoC / power sensors. See #157.
+            significant_changes_only: true,
         });
 
         const parseSeries = (arr: any[]): BatteryHistory =>
