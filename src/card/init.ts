@@ -507,10 +507,10 @@ export function initEngineNow(host: InitHost): void
         const pooled   = tryClaimPooledEngine(homeKey);
         if (pooled)
         {
-            //Wipe the freshly-rendered (empty) container of any stale children Lit might have inserted. The pooled MapLibre stack
-            //is grafted into this same node next.
-            while (container.firstChild) container.removeChild(container.firstChild);
-            pooled.transplantToContainer(container);
+            //Re-parent the pooled engine's existing container DOM node into the slot Lit just rendered. The new shadow root ends
+            //up holding the SAME element the previous instance was using, MapLibre's internal `_container` reference stays
+            //valid, no private-field access needed.
+            pooled.reparentInto(container);
             host._engine = pooled;
             host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);

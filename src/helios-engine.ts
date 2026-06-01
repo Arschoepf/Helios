@@ -4516,33 +4516,31 @@ export class HeliosEngine
     }
 
 
-    //Move all children of the engine's current container into `newContainer`, then update MapLibre's internal container reference so
-    //future `appendChild` / lookup operations land on the new node. Used by the engine pool to graft a pooled MapLibre stack into the
-    //slot of a freshly-mounted helios-card element after Home Assistant has destroyed and re-created the element on a
-    //`config-changed` event.
+    //Re-parent the engine's existing container element into the position of `targetSlot` in a freshly-mounted helios-card shadow
+    //root. Used by the engine pool to graft a pooled MapLibre stack into a new element after Home Assistant destroyed the
+    //previous helios-card on an editor `config-changed` event.
     //
-    //We touch the private `_container` field on the MapLibre Map instance because the public API does not expose a setter for it.
-    //The cast keeps the rest of the engine free of `any`. If a future MapLibre version renames the field, this single call site
-    //will need adjustment.
-    public transplantToContainer(newContainer: HTMLElement): void
+    //We move the WHOLE container DOM node (not just its children) so MapLibre's internal `_container` reference stays valid, no
+    //private-field access, no manual `map.resize()` because the moved element keeps its dimensions, its CSS class names and its
+    //resize-observer wiring untouched. The `targetSlot` is the empty `<div id="map-container">` Lit just rendered, we replace it
+    //wholesale with the pooled container. Lit's template diff will leave the resulting node alone on subsequent renders because
+    //the template only declares an empty `<div id="map-container">` at this position and Lit reuses what is already in place
+    //when the tag matches.
+    public reparentInto(targetSlot: HTMLElement): void
     {
         if (!this.map) return;
-        const oldContainer = this.map.getContainer();
-        if (oldContainer === newContainer) return;
-        //Detach the resize observer from the old container so it does not fire on an orphaned element, then re-observe the new one.
-        this._resizeObserver?.disconnect();
-        while (oldContainer.firstChild)
+        const ourContainer = this.map.getContainer();
+        if (ourContainer === targetSlot) return;
+        const parent = targetSlot.parentNode;
+        if (!parent) return;
+        parent.replaceChild(ourContainer, targetSlot);
+        //Trigger a single resize after the next animation frame so the canvas catches the (typically identical) new dimensions
+        //once layout settles in the new shadow root. The ResizeObserver already on `ourContainer` will also fire when the parent
+        //layout completes; the explicit call is a safety net for browsers that batch the observer callback aggressively.
+        requestAnimationFrame(() =>
         {
-            newContainer.appendChild(oldContainer.firstChild);
-        }
-        (this.map as unknown as { _container: HTMLElement })._container = newContainer;
-        if (this._resizeObserver)
-        {
-            this._resizeObserver.observe(newContainer);
-        }
-        //Force MapLibre to re-read the new container's bounding box. The transplant changes the parent layout context, the canvas
-        //sizing has to follow.
-        try { this.map.resize(); } catch (_) { /* tolerant: a freshly-mounted shadow root with 0x0 dimensions will resize again on the next ResizeObserver tick */ }
+            try { this.map?.resize(); } catch (_) { /* tolerant: zero-dim transient resolves on the next observer tick */ }
+        });
     }
 
 

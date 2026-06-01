@@ -7,6 +7,35 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.10
+
+### Pool transplant moves the container, not its children, basemap stops going black
+
+Diagnostic on alpha.9 confirmed the pool itself works (the slider
+drag stopped incrementing `enginesCreated`). The visible artefact
+that remained was the basemap turning black when entering edit
+mode, the engine pool was successfully grafting the previous
+MapLibre stack into the editor preview pane but the transplant
+broke MapLibre's rendering.
+
+The alpha.9 transplant moved every CHILD of the old container into
+a freshly-rendered new container, then poked MapLibre's private
+`_container` field so future `appendChild` calls would land on the
+new node. The trouble is that the new container started life at
+0x0 dimensions in the new shadow root, `map.resize()` baked that
+into the canvas, the basemap requested its tiles at the wrong
+viewport, and the result was a black square (see also the project
+memory rule "Black-map = check container height FIRST").
+
+Alpha.10 instead moves the WHOLE old container DOM node into the
+new shadow root, replacing the freshly-rendered empty
+`<div id="map-container">` wholesale. MapLibre's `_container`
+reference stays valid because we never reach into the private
+field. The moved container keeps its existing children, its CSS
+class names and its ResizeObserver wiring. A `requestAnimationFrame`
+follow-up resize handles the typically-identical new dimensions
+once the new shadow root completes its first layout pass.
+
 ### alpha.9
 
 ### Engine pool with MapLibre transplant, real fix for the per-commit WebGL respawn
