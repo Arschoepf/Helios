@@ -24,6 +24,54 @@ export class WsTimeoutError extends Error
 }
 
 
+//-----------------------------------------------------------------
+//Module-level concurrency semaphore. Caps the number of in-flight
+//history / statistics WS fetches issued by Helios at any given
+//moment. The HA recorder is a single-threaded SQLite consumer per
+//connection, and a single user dashboard may run several
+//recorder-bound cards in parallel (Helios + apex-charts +
+//mini-graph + etc.). When Helios alone fires 5 concurrent fetches
+//(PV history, PV calib stats, PV trainer stats, battery,
+//radiation) it monopolises the recorder for the duration and
+//other cards' history queries stall behind us. A cap of 2 leaves
+//slack for the rest of the dashboard. See #160.
+//
+//Fetches over the cap queue up and fire as slots free, in FIFO
+//order. The semaphore is intentionally scoped to this module
+//(card-side) since each card has its own bundled instance of the
+//helpers; one Helios card limits itself to 2, two Helios cards
+//on the same dashboard collectively limit themselves to 4. This
+//is a good-citizen heuristic, not a system-wide throttle.
+
+const MAX_CONCURRENT_FETCHES = 2;
+let _activeFetches = 0;
+const _fetchQueue: Array<() => void> = [];
+
+function acquireFetchSlot(): Promise<void>
+{
+    if (_activeFetches < MAX_CONCURRENT_FETCHES)
+    {
+        _activeFetches++;
+        return Promise.resolve();
+    }
+    return new Promise<void>(resolve =>
+    {
+        _fetchQueue.push(() =>
+        {
+            _activeFetches++;
+            resolve();
+        });
+    });
+}
+
+function releaseFetchSlot(): void
+{
+    _activeFetches = Math.max(0, _activeFetches - 1);
+    const next = _fetchQueue.shift();
+    if (next) next();
+}
+
+
 export function callWSWithTimeout<T = unknown>(
     hass:    { callWS: (payload: object) => Promise<T> } | null | undefined,
     payload: { type: string; [k: string]: unknown },
@@ -34,30 +82,54 @@ export function callWSWithTimeout<T = unknown>(
     {
         return Promise.reject(new Error('hass.callWS unavailable'));
     }
-    return new Promise<T>((resolve, reject) =>
+    return acquireFetchSlot().then(() => new Promise<T>((resolve, reject) =>
     {
         let settled = false;
-        const timer = setTimeout(() =>
+        const finish = (action: () => void) =>
         {
             if (settled) return;
             settled = true;
-            reject(new WsTimeoutError(payload.type, timeoutMs));
+            releaseFetchSlot();
+            action();
+        };
+        const timer = setTimeout(() =>
+        {
+            finish(() => reject(new WsTimeoutError(payload.type, timeoutMs)));
         }, timeoutMs);
         hass.callWS(payload).then(
             (result: T) =>
             {
-                if (settled) return;
-                settled = true;
                 clearTimeout(timer);
-                resolve(result);
+                finish(() => resolve(result));
             },
             (err: unknown) =>
             {
-                if (settled) return;
-                settled = true;
                 clearTimeout(timer);
-                reject(err);
+                finish(() => reject(err));
             },
         );
-    });
+    }));
+}
+
+
+//Schedule a callback to run when the browser is idle, with a
+//conservative timeout fallback. Used to defer expensive non-critical
+//fetches (the 30-day shading-map trainer) until the user-facing
+//work has landed and the main thread has a moment to breathe. See
+//#160.
+//
+//Safari and some embedded browsers don't expose
+//`requestIdleCallback`; we fall back to a 1 s timeout so the work
+//still lands within a reasonable budget.
+export function scheduleIdle(cb: () => void, fallbackMs: number = 1_000): void
+{
+    const w = globalThis as typeof globalThis & {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+    };
+    if (typeof w.requestIdleCallback === 'function')
+    {
+        w.requestIdleCallback(cb, { timeout: fallbackMs * 2 });
+        return;
+    }
+    setTimeout(cb, fallbackMs);
 }

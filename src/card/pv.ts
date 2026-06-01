@@ -13,7 +13,7 @@ import { computePvPower, getSunPosition, type PanelOrientation } from '../engine
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
 import { parseBatteryBanks } from './battery';
-import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import { callWSWithTimeout, WsTimeoutError, scheduleIdle } from './ws-timeout';
 
 //Default panel height above ground in metres when the user didn't
 //set a per-array `height`. 5 m matches the eaves of a single-storey
@@ -327,7 +327,13 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
+                //Defer to browser idle time so the user-facing fetches (raw PV history + calib stats) land first and the chart paints
+                //quickly. The trainer feeds the shading-map heuristic which the engine can rebuild from any non-empty sample stream, so
+                //the trainer is effectively a background optimisation, not a blocker for the chip / chart render. See #160.
+                scheduleIdle(() =>
+                {
+                    fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
+                });
             }
         }
     }
