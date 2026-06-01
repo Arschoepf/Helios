@@ -151,6 +151,17 @@ function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): Pv
 }
 
 
+//Wipe the three module-level PV caches. Called from the card's `resetDataCache()` hook so the editor's "reset" button actually drops the
+//cross-mount memo. Without this call the next refresh would short-circuit on a cache hit and re-populate the slot with the exact data
+//the user just asked to clear.
+export function clearPvModuleCaches(): void
+{
+    _pvHistoryCache.clear();
+    _pvCalibStatsCache.clear();
+    _pvTrainerStatsCache.clear();
+}
+
+
 //Live + history refresh, called from the card on every lifecycle
 //cycle. Cheap fast paths exit early when no entity is configured or
 //when the (entity, range) tuple matches the last successful fetch.
@@ -207,15 +218,16 @@ export function refreshPv(host: PvHost): void
                 }
             }
 
-            //Extend `_pvHistory`'s tail with the live sample so the
-            //chart's right edge tracks the live state between hourly
-            //history re-fetches. The history fetch is keyed by
-            //(entity, fetch-range) and `range.end` is pinned to the
-            //hourly weather grid, so without this the plotted PV
-            //curve flatlines at the value captured at the last hour
-            //boundary even while the chip keeps ticking. The next
-            //full fetch (when the hour rolls over) replaces the
-            //array wholesale, so we don't accumulate duplicates.
+            //Extend `_pvHistory`'s tail with the live sample so the chart's right edge tracks the live state between hourly history
+            //re-fetches. The history fetch is keyed by (entity, fetch-range) and `range.end` is pinned to the hourly weather grid,
+            //so without this the plotted PV curve flatlines at the value captured at the last hour boundary even while the chip
+            //keeps ticking. The next full fetch (when the hour rolls over) replaces the array wholesale.
+            //
+            //In-place push instead of spread: with the live state ticking up to ~50 times per second and the fetch key sitting
+            //stable for an hour at a time, the previous spread-then-reassign reallocated `times` and `values` on every tick
+            //and the arrays grew unbounded. Push mutates the existing arrays (Lit re-renders are driven by the live state
+            //assignment above, not by `_pvHistory` identity), and we trim entries that drift before `_timeRange.start` so the
+            //tail does not balloon past the visible window.
             const hist = host._pvHistory;
             if (hist)
             {
@@ -223,10 +235,21 @@ export function refreshPv(host: PvHost): void
                 const lastTs  = lastIdx >= 0 ? hist.times[lastIdx].getTime() : 0;
                 if (ts > lastTs)
                 {
-                    host._pvHistory = {
-                        times:  [...hist.times,  new Date(ts)],
-                        values: [...hist.values, next],
-                    };
+                    hist.times.push(new Date(ts));
+                    hist.values.push(next);
+                    //Drop the leading samples that have aged out of the chart's visible window. Guards the array against
+                    //unbounded growth on long-uptime sessions where the fetch key stays stable for many hours.
+                    if (host._timeRange)
+                    {
+                        const rangeStartMs = host._timeRange.start.getTime();
+                        let drop = 0;
+                        while (drop < hist.times.length && hist.times[drop].getTime() < rangeStartMs) drop++;
+                        if (drop > 0)
+                        {
+                            hist.times.splice(0, drop);
+                            hist.values.splice(0, drop);
+                        }
+                    }
                 }
             }
         }
@@ -542,10 +565,16 @@ export async function fetchPvHistory(
 //`host._pvTrainerStats` for the 30-day shading-map trainer. The two paths are independent so a slow trainer fetch does not delay the calibration
 //landing.
 //
-//Field selection depends on the entity unit. Cumulative-energy sensors (`Wh` / `kWh` / `MWh`) carry their cumulative value in the bucket's `state`
-//field and we anchor the sample at bucket end so the calibration's delta-sum integration sees the correct attribution. Power sensors carry the
-//bucket mean and we anchor at the bucket midpoint so the trapezoidal integration matches the existing semantics. Buckets with a null target field
-//are dropped silently.
+//Field selection depends on the entity unit. Power sensors carry the bucket mean. Cumulative-energy sensors (`Wh` / `kWh` / `MWh`) carry
+//their cumulative reading in the bucket `state` field. We ask for BOTH columns in the WS payload and let the parser prefer `mean` when
+//it is populated, with `state` as fallback. Asking for both removes a class of silent failures: when the entity unit hasn't yet propagated
+//to `host._pvUnit` at the time the fetch fires (cold start before the live hass.states tick lands), the heuristic would have asked for
+//`mean` only and a cumulative-energy entity would have returned all-null buckets, leaving the slot empty.
+//
+//Anchoring: cumulative samples (taken from `state`) anchor at the bucket midpoint to match the power-sensor convention. The slight
+//attribution drift across the day boundary is absorbed by `calibration.ts:actualKwhForDay`'s guard widening (see #155 follow-ups).
+//Power samples (taken from `mean`) anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` and
+//`shadingTrainer.ts` matches the existing semantics. Buckets with both `mean` AND `state` null are dropped silently.
 //
 //Long-term statistics require the source entity to carry a `state_class` (`measurement`, `total`, or `total_increasing`) so HA tracks it. When the
 //entity is not LTS-tracked HA returns an empty array; we surface that as an empty `PvHistory` and let the consumer fall back to `_pvHistory`.
@@ -577,16 +606,16 @@ export async function fetchPvStatistics(
             return;
         }
 
-        const unit = (host._pvUnit || '').toLowerCase();
-        const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-
         const result: any = await callWSWithTimeout<any>(host.hass, {
             type:           'recorder/statistics_during_period',
             start_time:     start.toISOString(),
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  [entityId],
             period,
-            types:          isCumulativeEnergy ? ['state'] : ['mean'],
+            //Request both `mean` and `state`. Power sensors populate `mean`, cumulative-energy sensors populate `state`. The parser
+            //below prefers `mean` and falls back to `state`, so a single round-trip covers both wirings without depending on the
+            //user-facing unit having reached `host._pvUnit` yet.
+            types:          ['mean', 'state'],
         });
 
         const arr: any[] = (result && result[entityId]) ?? [];
@@ -601,16 +630,17 @@ export async function fetchPvStatistics(
             const startMs  = parseStatBoundary(startRaw);
             const endMs    = parseStatBoundary(endRaw);
             if (startMs === null) continue;
-            const valueRaw = isCumulativeEnergy ? item?.state : item?.mean;
+            //Prefer `mean` (populated for power / measurement entities); fall back to `state` (populated for cumulative-energy
+            //entities). Both buckets null is treated as a gap and skipped silently.
+            let valueRaw: unknown = item?.mean;
+            if (valueRaw === null || valueRaw === undefined) valueRaw = item?.state;
             if (valueRaw === null || valueRaw === undefined) continue;
             const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
             if (!isFinite(v)) continue;
-            //Cumulative sensors anchor at bucket end so consecutive deltas attribute correctly to the bucket that produced them.
-            //Power sensors anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` / `shadingTrainer.ts`
-            //matches the existing semantics.
-            const anchorMs = isCumulativeEnergy
-                ? (endMs ?? startMs)
-                : (endMs !== null ? (startMs + endMs) / 2 : startMs);
+            //Bucket midpoint anchor for both flavours. Aligns with the trapezoidal integration in `calibration.ts` and
+            //`shadingTrainer.ts`. Mid-bucket attribution averages out across the day boundary for cumulative sensors when the
+            //calibration's cross-day guard tolerates the trailing slice.
+            const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
             times.push(new Date(anchorMs));
             values.push(v);
         }
@@ -660,10 +690,17 @@ function parseStatBoundary(raw: unknown): number | null
 }
 
 
-//Locate the slot that brackets a scrub timestamp. Prefers the raw `_pvHistory` (finer resolution, narrow window) when it covers the
-//instant; falls back to the trainer-grade `_pvTrainerStats` (5-min over 30 days) for scrub points that land before the raw window. Both
-//slots carry the same `{ times, values }` shape, in the same unit, so the caller treats them identically. Returns null when neither slot
-//brackets the instant (scrub past either slot's edges, or no data fetched yet). See #161.
+//Locate the slot that brackets a scrub timestamp. Priority order:
+//  1. `_pvHistory` raw (~2 days, finest resolution)
+//  2. `_pvCalibStats` hourly (5 days), populated right after card mount and not deferred to idle
+//  3. `_pvTrainerStats` 5-min (30 days), idle-deferred so it lands a beat later
+//
+//The calibration slot sits between the raw and trainer ones intentionally: it lands FAST (no idle wait) and its hourly resolution is
+//plenty for chip-level accuracy. Without it, a user scrubbing the cursor before the trainer fetch has landed (the first second after
+//mount) sees nothing past the 2-day raw edge even though we already have data covering the chart's visible past.
+//
+//All three slots carry the same `{ times, values }` shape, in the same unit, so the caller treats them identically. Returns null when
+//none brackets the instant.
 function pickPvHistoryAt(host: PvHost, tMs: number): PvHistory | null
 {
     const bracketed = (h: PvHistory | null): PvHistory | null =>
@@ -675,7 +712,9 @@ function pickPvHistoryAt(host: PvHost, tMs: number): PvHistory | null
         if (tMs < firstMs || tMs > lastMs + 60_000) return null;
         return h;
     };
-    return bracketed(host._pvHistory) ?? bracketed(host._pvTrainerStats);
+    return bracketed(host._pvHistory)
+        ?? bracketed(host._pvCalibStats)
+        ?? bracketed(host._pvTrainerStats);
 }
 
 

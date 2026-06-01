@@ -7,6 +7,71 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.6
+
+### Multi-fix on top of the recorder unblock series
+
+A comprehensive audit on top of the alpha.2 to alpha.5 perf
+migration surfaced seven issues that this release fixes in one
+batch.
+
+- The editor "Reset data cache" button now actually resets. The
+  per-instance state was already cleared, but the cross-mount
+  module caches added since alpha.3 kept the previous data alive,
+  so the button looked broken. The reset now wipes PV, battery,
+  radiation, and grid module caches in addition to the
+  per-instance state.
+
+- Chip values at scrub time stay populated across a wider range.
+  The PV chip cursor reader used to fall back to the trainer
+  stats slot only (30 days, but idle-deferred so it lands a beat
+  after mount). It now consults the calibration stats slot first
+  (5 days, fetched immediately), so a user who scrubs right
+  after the page loads sees historical chip values without
+  waiting on the idle queue.
+
+- PV statistics fetch asks for both `mean` and `state` columns
+  instead of an exclusive heuristic driven by the entity unit.
+  Power sensors land via `mean`, cumulative-energy sensors land
+  via `state`, the parser prefers whichever is populated.
+  Removes a class of silent failures where the entity unit had
+  not yet propagated to the card state at the time of the first
+  fetch and a cumulative entity returned all-null `mean` buckets,
+  leaving the slot empty and the calibration affiné value
+  disappearing for the user.
+
+- Calibration cross-day cumulative bucket no longer dropped.
+  On hourly stats with bucket-midpoint anchor, the slice
+  straddling midnight (23:30 of day D to 00:30 of day D+1) used
+  to fail both day D's bucket guard and day D+1's previous-sample
+  guard, losing one hour of cumulative energy per calibration
+  day. The guard now tolerates the cross-day slice.
+
+- Per-day kWh chips on the timeline no longer read 0 kWh for
+  days beyond the narrow raw window. `computeDailyKwhTotals`
+  now integrates `_pvCalibStats` (5 days hourly) for days the
+  raw slot does not reach, while staying on the raw slot for
+  the days it covers. The "3 days ago" chips now reflect what
+  was actually produced instead of silently rounding to zero.
+
+- Shading-map trainer no longer trains buckets that fall
+  outside the battery SoC coverage when the inverter-cutoff
+  guard is armed. The SoC histories piggyback on the raw PV
+  fetch and only cover ~2 days; the trainer walks back 30
+  days. For the 28-day gap, the cutoff guard used to fall
+  through silently, accumulating phantom shadows at sun bins
+  where the inverter was actually clamping batteries-full
+  output. When the guard is configured and any SoC entity is
+  wired, an out-of-coverage bucket now skips (advances the
+  watermark) instead of training blind.
+
+- Live tail of `_pvHistory` no longer reallocates on every
+  tick. Pushing the live sample used to spread the entire
+  arrays into fresh ones at up to 50 Hz, growing unbounded over
+  long-uptime sessions. Push is now in-place and the tail
+  trims entries that age out of `_timeRange.start` so the
+  array stays bounded to the visible window.
+
 ### alpha.5
 
 ### Chip scrub coverage on cumulative-energy entities and outside-raw scrubs

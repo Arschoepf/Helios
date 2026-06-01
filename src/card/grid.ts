@@ -39,6 +39,15 @@ type Sample = { t: number; v: number; lastChangeT?: number | null };
 
 const _historyFetched   = new Set<string>();
 const _historyInflight  = new Set<string>();
+
+
+//Wipe the module-level grid history latch. Called from the card's `resetDataCache()` hook so the editor's "reset" button forces a
+//fresh 72 h backfill on the next refresh instead of relying on the already-fetched marker.
+export function clearGridModuleCaches(): void
+{
+    _historyFetched.clear();
+    _historyInflight.clear();
+}
 //72 hour history backfill so the past-scrub bracket actually
 //covers the timeline's visible past range (2 days + margin), the
 //earlier 6 h window had the user dragging the scrub deep into

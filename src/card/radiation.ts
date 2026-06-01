@@ -43,6 +43,13 @@ function radiationHistoryCacheGet(key: string): RadiationHistoryCacheEntry | nul
 }
 
 
+//Wipe the module-level radiation cache. Called from the card's `resetDataCache()` hook.
+export function clearRadiationModuleCaches(): void
+{
+    _radiationHistoryCache.clear();
+}
+
+
 //Coerce a `start` / `end` statistics field into a millisecond epoch. Same accept set as the PV / battery parsers, duplicated here so the
 //module stays self-contained.
 function parseStatBoundary(raw: unknown): number | null

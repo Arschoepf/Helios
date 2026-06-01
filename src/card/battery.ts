@@ -41,6 +41,14 @@ function batteryHistoryCacheGet(key: string): BatteryHistoryCacheEntry | null
 }
 
 
+//Wipe the module-level battery cache. Called from the card's `resetDataCache()` hook so the editor's "reset" button actually drops
+//the cross-mount memo.
+export function clearBatteryModuleCaches(): void
+{
+    _batteryHistoryCache.clear();
+}
+
+
 //Fetched historical series for one battery entity (SoC or power),
 //parallel times[] / values[] arrays.
 export interface BatteryHistory

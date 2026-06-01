@@ -21,7 +21,8 @@ import
     pvInverterMaxW,
     computePvPowerWeighted,
     wipeLegacyPvCalibStorage,
-    formatPvValue
+    formatPvValue,
+    clearPvModuleCaches
 } from './card/pv';
 import
 {
@@ -29,9 +30,10 @@ import
     batterySampleAtTime,
     formatBatteryPower,
     effectiveBatteryBanks,
+    clearBatteryModuleCaches,
     type BatteryBank
 } from './card/battery';
-import { refreshSolarRadiation } from './card/radiation';
+import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
 import { computeForecastCalibration } from './card/calibration';
 import
 {
@@ -71,7 +73,7 @@ import
     timelineWidthPct
 } from './card/timeline';
 import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
-import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime } from './card/grid';
+import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime, clearGridModuleCaches } from './card/grid';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -725,10 +727,26 @@ export class HeliosCard extends LitElement
     {
         //Drop in-memory PV state so the next refreshPv() refetches
         //from scratch instead of pulling from the cached fetch key.
-        this._pvHistory             = null;
-        this._pvSampleBuffer        = [];
-        this._pvFetchKey            = '';
-        this._pvHistoryDiagnostics  = null;
+        this._pvHistory                   = null;
+        this._pvCalibStats                = null;
+        this._pvTrainerStats              = null;
+        this._pvSampleBuffer              = [];
+        this._pvFetchKey                  = '';
+        this._pvCalibStatsFetchKey        = '';
+        this._pvTrainerStatsFetchKey      = '';
+        this._pvHistoryDiagnostics        = null;
+        this._batterySocHistory           = null;
+        this._batteryPowerHistory         = null;
+        this._batteryFetchKey             = '';
+        this._batteryHistories            = [];
+        this._solarRadiationHistory       = null;
+        this._solarRadiationFetchKey      = '';
+        //Drop the module-level caches too. Without these calls the per-LitElement state above is reset but the next refresh hits the
+        //cross-mount cache and rehydrates the slot from the exact stale entry the user just asked to clear.
+        clearPvModuleCaches();
+        clearBatteryModuleCaches();
+        clearRadiationModuleCaches();
+        clearGridModuleCaches();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         this.requestUpdate();
