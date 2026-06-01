@@ -7,6 +7,69 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.7
+
+### Resilience pass + hygiene cleanup
+
+Block B (preventive resilience fixes) and block C (hygiene) batched
+in one alpha.
+
+Resilience:
+
+- Open-Meteo rate-limit (HTTP 429) is no longer swallowed silently
+  inside the weather fetch. The error now propagates with its
+  status code so the engine catch arms the exponential back-off
+  table instead of letting the card keep hammering Open-Meteo at
+  the normal cadence under a rate-limit.
+- `VISUAL_CONFIG_KEYS` extended to every key the engine actually
+  consumes (PV layout, grid wiring, battery banks, inverter cutoff,
+  timeline preferences, shadows, LiDAR precision). Live edits in
+  the visual editor now reach the engine immediately instead of
+  waiting for the next natural respawn (page reload, theme flip).
+- Grid history backfill latch tracks a per-entity wall-clock and
+  re-issues the 72 h fetch on a 24 h cadence so the buffer head
+  stays fresh on long-uptime sessions. A `WsTimeoutError` arms a
+  2 min cooldown so the next `refreshGrid` tick does not hammer
+  the recorder with retries.
+- Radiation statistics parser is strict on the `mean` column and
+  no longer falls back to `state`. Pushing a cumulative MJ/m²
+  counter through the engine would feed monotonically increasing
+  values that look like 10000+ W/m² and distort every downstream
+  derivation. Out-of-shape entities now degrade cleanly to the
+  raw-history fallback.
+
+Hygiene cleanups (no user-facing behaviour change):
+
+- Removed the user-facing `v1.6.2` legacy-path reference from the
+  `pvArrayPeakKwpHelp` editor hint in all 11 locales.
+- Removed inline `1.8.0` / `alpha.18` version references from
+  source comments. Comments now describe current state only.
+- Corrected the `auto-rotate-enabled` schema default from `true`
+  to `false` in both the schema doc comment and the README.
+- Deleted the `HeliosColorPicker` custom element and its style
+  block. The pre-1.8.0 editor color pickers are gone; the class
+  was dead code in the bundle (~3-4 KB minified) and registered a
+  globally-scoped custom element with no consumers. Bundle drops
+  by 12 KB raw / 3 KB gzipped.
+- Deleted 9 dead i18n keys from `i18n/index.ts` and all 11
+  locales: `pvArrayShare`, `pvArrayShareHelp`, `gridSourceTitle`,
+  `uiColorsHint`, `sunColor`, `cloudColor`, `pvColor`,
+  `batteryColor`, `buildingColor`. Each was declared in the
+  `Translations` interface and provided in every locale but never
+  read anywhere in the source.
+- Updated the README colour defaults (`sun-color`, `cloud-color`,
+  `pv-color`, `battery-color`) to match the runtime constants.
+  The previous palette values (`#EF9F27`, `#5A8DC4`, `#27B36B`,
+  `#FF5252`) had been retired but the doc was not updated.
+- Removed em-dashes from `.github/workflows/test.yml` (`—` would
+  surface in CI failure logs).
+- Dropped the hardcoded `open` attribute on the Timeline
+  sub-section inside the editor UI accordion so it follows the
+  same collapse contract as every other section.
+- Added a NaN guard in `formatLocalisedNumber` so cold-cache or
+  upstream parse failures render a neutral zero placeholder
+  instead of surfacing the literal "NaN" string in chips.
+
 ### alpha.6
 
 ### Multi-fix on top of the recorder unblock series

@@ -1,6 +1,6 @@
 import { LitElement, html, TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { colorPickerStyles, editorStyles } from '../css/helios-card-editor-css';
+import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
     type HeliosConfig,
@@ -29,154 +29,6 @@ const LIDAR_VIEW_LEGACY_KEYS = [
 ] as const;
 
 
-//Custom color picker.
-//
-//Why custom: <input type="color"> opens a native popover, which iOS
-//Safari crashes on when invoked from a deeply nested Shadow DOM ,
-//exactly HA's setup (dashboard editor → custom card editor → Lit
-//root). We replace it with an in-shadow swatch + popover exposing a
-//curated 42-colour palette plus a hex text input for free entry.
-@customElement('helios-color-picker')
-export class HeliosColorPicker extends LitElement
-{
-    @property({ type: String }) public value:    string  = '#888888';
-    @property({ type: String }) public ariaLabel: string = 'Color';
-    @state()                    private _open    = false;
-    @state()                    private _hexDraft = '';
-
-    private static readonly PRESETS: string[] = [
-        '#ffffff', '#f5f5f4', '#d4d4d8', '#a8a29e', '#52525b', '#1f2937', '#000000',
-        '#fef3c7', '#fcd34d', '#f59e0b', '#ea580c', '#dc2626', '#991b1b', '#7c2d12',
-        '#dcfce7', '#86efac', '#22c55e', '#16a34a', '#15803d', '#064e3b', '#052e16',
-        '#dbeafe', '#93c5fd', '#3b82f6', '#2563eb', '#1d4ed8', '#1e3a8a', '#172554',
-        '#ede9fe', '#c4b5fd', '#8b5cf6', '#7c3aed', '#6d28d9', '#4c1d95', '#2e1065',
-        '#fce7f3', '#f9a8d4', '#ec4899', '#db2777', '#be185d', '#9d174d', '#500724'
-    ];
-
-    //Capturing document handler so a click outside closes the popover.
-    private _onDocClick = (e: MouseEvent) =>
-    {
-        const path = e.composedPath();
-        if (!path.includes(this))
-        {
-            this._open = false;
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-    };
-
-    public disconnectedCallback(): void
-    {
-        super.disconnectedCallback();
-        document.removeEventListener('click', this._onDocClick, true);
-    }
-
-    private _toggle(e: Event): void
-    {
-        e.stopPropagation();
-        this._open = !this._open;
-        this._hexDraft = this.value;
-        if (this._open)
-        {
-            //Defer one tick so the click that opened the popover doesn't immediately close it.
-            setTimeout(() => document.addEventListener('click', this._onDocClick, true), 0);
-        }
-        else
-        {
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-    }
-
-    private _emit(value: string): void
-    {
-        this.value = value;
-        this.dispatchEvent(new CustomEvent('value-changed',
-            { detail: { value }, bubbles: true, composed: true }));
-    }
-
-    private _selectPreset(hex: string, e: Event): void
-    {
-        e.stopPropagation();
-        this._emit(hex);
-        this._open = false;
-        document.removeEventListener('click', this._onDocClick, true);
-    }
-
-    private _onHexInput(e: Event): void
-    {
-        this._hexDraft = (e.target as HTMLInputElement).value;
-    }
-
-    private _commitHex(): void
-    {
-        const v = this._hexDraft.trim();
-        const m = /^#?([0-9a-fA-F]{6})$/.exec(v);
-        if (m)
-        {
-            this._emit('#' + m[1].toLowerCase());
-        }
-    }
-
-    private _onHexKey(e: KeyboardEvent): void
-    {
-        if (e.key === 'Enter')
-        {
-            this._commitHex();
-            this._open = false;
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-        else if (e.key === 'Escape')
-        {
-            this._open = false;
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-    }
-
-    protected render(): TemplateResult
-    {
-        return html`
-            <button
-                type="button"
-                class="swatch"
-                style="background:${this.value}"
-                aria-label="${this.ariaLabel}"
-                aria-haspopup="dialog"
-                aria-expanded="${this._open}"
-                @click="${this._toggle}"
-            ></button>
-            ${this._open ? html`
-                <div class="pop" role="dialog" @click="${(e: Event) => e.stopPropagation()}">
-                    <div class="grid">
-                        ${HeliosColorPicker.PRESETS.map(c => html`
-                            <button
-                                type="button"
-                                class="cell ${c.toLowerCase() === this.value.toLowerCase() ? 'selected' : ''}"
-                                style="background:${c}"
-                                aria-label="${c}"
-                                @click="${(e: Event) => this._selectPreset(c, e)}"
-                            ></button>
-                        `)}
-                    </div>
-                    <div class="hex-row">
-                        <span class="hex-prefix">#</span>
-                        <input
-                            class="hex-input"
-                            type="text"
-                            spellcheck="false"
-                            autocomplete="off"
-                            maxlength="7"
-                            .value="${this._hexDraft.replace(/^#/, '')}"
-                            @input="${this._onHexInput}"
-                            @blur="${this._commitHex}"
-                            @keydown="${this._onHexKey}"
-                        />
-                    </div>
-                </div>
-            ` : nothing}
-        `;
-    }
-
-    static styles = colorPickerStyles;
-}
 
 
 //Render a localised hint string that may contain markdown-style
@@ -1492,7 +1344,7 @@ export class HeliosCardEditor extends LitElement
                     </label>
                     <div class="hint">${t.editor.displayRadiusHint}</div>
 
-                    <details class="advanced-section" open>
+                    <details class="advanced-section">
                         <summary class="section-title section-title-collapse">${t.editor.timelineSection}</summary>
                         <div class="field">
                             <span class="label">${t.editor.timelineEnabled}</span>

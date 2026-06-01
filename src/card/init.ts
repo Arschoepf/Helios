@@ -17,56 +17,70 @@ import { refreshCloudDomeScene, type CloudDomeHost } from './cloudDome';
 import type { ChartSeries } from './charts';
 
 
-//Visual config keys that the engine reacts to via updateConfig().
-//Anything outside this list (e.g. home coords, which is an identity
-//input handled separately) is irrelevant for live updates.
+//Visual config keys that the engine reacts to via updateConfig(). Editing any of these from the visual editor or via the YAML hot-
+//reload pushes the change into the live engine without a full respawn. Anything outside this list either does not reach the engine
+//(card-only state), or is an identity input handled separately (home coords flip the engine identity through `_engineIdentitySig`).
+//
+//The list is exhaustive on purpose: a missing key would let a slider drag the editor exposes leave the engine on stale values until
+//the next natural respawn (page reload, dashboard edit, theme flip). The colour overrides and the legacy "pv-color" / "sun-color" /
+//"cloud-color" / "battery-color" / "building-color" keys are deliberately absent, those were removed from the schema and no longer
+//have a runtime effect.
 export const VISUAL_CONFIG_KEYS = [
     'show-labels',
-    'sun-color',
-    'cloud-color',
-    //pv-color is card-level; included so the sig changes and Lit
-    //re-renders the chart. pv-power-entity triggers a fresh fetch.
-    'pv-color',
     'pv-power-entity',
-    //map-style triggers a MapLibre setStyle(), the engine reloads
-    //the cloud disc, buildings and labels on the resulting
-    //`style.load`.
+    //PV layout, every change must reach the engine so the per-array shading geometry, the forecast and the calibration ratio
+    //recompute against the new tilt / azimuth / kWp / inverter cap.
+    'pv-arrays',
+    'pv-tilt',
+    'pv-azimuth',
+    'pv-peak-kwp',
+    'pv-inverter-max-kw',
+    //map-style triggers a MapLibre setStyle(), the engine reloads the cloud disc, buildings and labels on the resulting `style.load`.
     'map-style',
-    //Legacy flat keys kept on the watch list so editing a pre-multi-bank YAML still triggers a refresh; the multi-bank `batteries:`
-    //array entry below is what catches the post-migration shape (and any user editing via the new editor UI).
+    //Battery flat keys + the multi-bank array + the inverter-cutoff guard. Any of them changes the trainer guard or the chip wiring.
     'battery-soc-entity',
     'battery-power-entity',
+    'battery-power-invert',
     'batteries',
-    'battery-color',
-    //solar-radiation-entity, when set, feeds the engine sensor
-    //samples that override Open-Meteo for the live + past
-    //irradiance values. A change must refresh the engine so
-    //the override (or its absence) is picked up immediately.
+    'inverter-cutoff-soc-pct',
+    //Grid wiring: chips and flow leader paths follow these directly.
+    'grid-import-entity',
+    'grid-export-entity',
+    'grid-power-entity',
+    'grid-power-invert',
+    //solar-radiation-entity, when set, feeds the engine sensor samples that override Open-Meteo for the live + past irradiance
+    //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
     'solar-radiation-entity',
-    //building-radius / cluster-radius invalidate cache and refetch;
-    //opacity / color are cheap paint-property updates.
+    //building-radius / cluster-radius invalidate cache and refetch; opacity is a cheap paint-property update.
     'building-radius',
     'building-cluster-radius',
     'building-opacity',
-    'building-color',
+    //Render budget + LiDAR-View visuals. The slider that drives lidar-view-point-size lives on the LiDAR-View itself so the engine
+    //picks up the change immediately.
     'pixel-ratio',
-    //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must
-    //invalidate the engine sig so the shadow pipeline reruns
-    //against the new provider config (toggle, URL or bbox).
+    'shadows-enabled',
+    'shadow-opacity',
+    'lidar-precision',
+    'lidar-view-point-size',
+    //Timeline visibility + chart UX preferences.
+    'timeline-enabled',
+    'timeline-width-pct',
+    'timeline-consumption-enabled',
+    'date-format',
+    'time-format',
+    'auto-rotate-enabled',
+    //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must invalidate the engine sig so the shadow pipeline reruns against the
+    //new provider config (toggle, URL or bbox).
     'lidar-local-ndsm-enabled',
     'lidar-local-ndsm-url',
     'lidar-local-ndsm-min-lat',
     'lidar-local-ndsm-max-lat',
     'lidar-local-ndsm-min-lon',
-    'lidar-local-ndsm-max-lon'
-    //camera-pitch-deg, camera-bearing-deg, camera-locked are NOT in
-    //this list: a slider drag would respawn the engine every frame,
-    //which would teardown + rebuild the WebGL context for every
-    //pixel of input motion. The editor instead pushes the live
-    //preview through engine.setCameraBearing / setCameraPitch /
-    //setCameraLocked and lets the new values bake into the config so
-    //the next natural respawn (page reload, dashboard edit, theme
-    //flip) reads them out of _initialBearing / _initialPitch.
+    'lidar-local-ndsm-max-lon',
+    //camera-pitch-deg, camera-bearing-deg, camera-locked are NOT in this list: a slider drag would respawn the engine every frame,
+    //which would teardown + rebuild the WebGL context for every pixel of input motion. The editor instead pushes the live preview
+    //through engine.setCameraBearing / setCameraPitch / setCameraLocked and lets the new values bake into the config so the next
+    //natural respawn (page reload, dashboard edit, theme flip) reads them out of _initialBearing / _initialPitch.
 ] as const;
 
 

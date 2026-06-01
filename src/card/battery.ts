@@ -121,11 +121,11 @@ export function effectiveBatteryBanks(
     _defaults: { batteryPowerEntity: string | null; batterySocEntity: string | null },
 ): BatteryBank[]
 {
-    //HA Energy auto-detect fallback was retired in 1.8.0 alongside
-    //the grid one. The user-configured banks (either via the new
-    //`batteries:` array or the legacy flat `battery-soc-entity` /
-    //`battery-power-entity` keys) are the only source. Without
-    //explicit config, the SoC + power chips collapse cleanly.
+    //HA Energy auto-detect fallback is not consulted; the user-
+    //configured banks (either via the `batteries:` array or the
+    //flat `battery-soc-entity` / `battery-power-entity` keys) are
+    //the only source. Without explicit config the SoC + power
+    //chips collapse cleanly.
     return parseBatteryBanks(config);
 }
 

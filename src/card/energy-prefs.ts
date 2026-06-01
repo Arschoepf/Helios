@@ -78,10 +78,10 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
     catch
     {
         //Silent: the HA Energy auto-detect is no longer used by the
-        //chips (1.8.0 stripped the fallback). The subscription stays
-        //wired so any future opt-in surface (editor entity-picker
-        //"Use HA Energy default" toggle, etc.) has the snapshot
-        //ready, but failures should not flood the console.
+        //chips. The subscription stays wired so any future opt-in
+        //surface (editor entity-picker "Use HA Energy default"
+        //toggle, etc.) has the snapshot ready, but failures should
+        //not flood the console.
     }
 }
 
@@ -219,11 +219,11 @@ export function resolveEffectiveEntity(
 ): string
 {
     //User-config entity ONLY. The HA Energy dashboard auto-detect
-    //fallback was removed in 1.8.0: it was a steady source of bug
+    //fallback is not consulted: it was a steady source of bug
     //reports ("the chip reads from sensor X but my dashboard uses
     //sensor Y") and the resolution logic for daily-total vs
     //cumulative-since-install sensors was always wrong half the
-    //time anyway. The user-configured entity is now the only
+    //time anyway. The user-configured entity is the only
     //input; an empty string here collapses the corresponding chip.
     const raw = String(config?.[key] ?? '').trim();
     //grid-import-entity can be an array (heures pleines / creuses

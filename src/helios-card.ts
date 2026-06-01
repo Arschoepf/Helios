@@ -98,7 +98,7 @@ import
     cancelPendingRespawn,
     initVisibilityObserver
 } from './card/init';
-//Side-effect import: registers <helios-color-picker> and <helios-card-editor> as custom elements.
+//Side-effect import: registers <helios-card-editor> as a custom element.
 import './card/editor';
 
 
@@ -2519,11 +2519,11 @@ export class HeliosCard extends LitElement
                 ${hasApiKey && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
                     const sunColor = DEFAULT_SUN_COLOR_HEX;
                     const silhouettePts = this._getSilhouettePoints();
-                    //Pulse on bead arrival retired in alpha.18: the
-                    //flash carved a hot spot on the home silhouette
-                    //that competed with the steady HA-Energy-blue
-                    //identity, hard to read against the cloud-cover
-                    //wash. Glow is now a static hover-only halo.
+                    //Static hover-only halo. The earlier pulse-on-bead-
+                    //arrival was carving a hot spot on the home
+                    //silhouette that competed with the steady HA-Energy-
+                    //blue identity and was hard to read against the
+                    //cloud-cover wash.
                     const glowClasses = [
                         'home-glow-svg',
                         this._homeHover ? 'is-hovered' : '',

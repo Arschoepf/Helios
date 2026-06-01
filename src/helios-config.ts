@@ -209,10 +209,10 @@ export interface HeliosConfig
     //the Fiord dark style is auto-selected so the basemap matches the
     //frontend chrome without a per-card override.
     'map-style'?:             unknown;
-    //Opts the idle-camera orbit in or out. Default: true (orbit
-    //enabled). When false, the camera stays at the user's bearing
-    //forever; pinch-rotate still works normally. Useful on low-power
-    //devices or for users who find the constant motion distracting.
+    //Opts the idle-camera orbit in or out. Default: false (orbit
+    //disabled). When true, the camera slowly orbits around the home
+    //while idle; pinch-rotate still works normally. Useful on hero
+    //dashboards where the constant motion reads as alive.
     'auto-rotate-enabled'?:    unknown;
     //Optional camera pose pinned at every engine init. Numeric values
     //in degrees; when set they override the auto-default (pitch 55,

@@ -127,9 +127,6 @@ export interface Translations
         //section), plus the date and time format toggles for the
         //clock chip + the timeline labels.
         uiSection:                string;
-        uiColorsHint:             string;
-        sunColor:                 string;
-        cloudColor:               string;
         //Optional photovoltaic production overlay.
         pvSection:                string;
         pvHint:                   string;
@@ -162,9 +159,8 @@ export interface Translations
         pvArrayNameHelp:          string;
         pvArrayTilt:              string;
         pvArrayAzimuth:           string;
-        pvArrayShare:             string;
-        //Per-string peak power in kWp. Preferred over `share`; the
-        //total install power is the sum across rows.
+        //Per-string peak power in kWp. The total install power is
+        //the sum across rows.
         pvArrayPeakKwp:           string;
         pvArrayPeakKwpHelp:       string;
         pvArrayAdd:               string;
@@ -174,7 +170,6 @@ export interface Translations
         //know that 50/50 and 1/1 give the same forecast.
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
-        pvArrayShareHelp:         string;
         //Optional per-array GPS coordinates. Used when the panels
         //sit a meaningful distance away from the home (e.g. ground-
         //mounted in a clearing while the home is under trees) so
@@ -188,7 +183,6 @@ export interface Translations
         //per-array shading check.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
-        pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
         //Multi-bank battery editor. The section renders one collapsible card per bank (same widget as pv-arrays) so a user with house +
@@ -220,7 +214,6 @@ export interface Translations
         //train as phantom shadow. Leave the field empty to keep the legacy "train every bucket" behaviour.
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;
-        batteryColor:             string;
         //Grid section: import / export power readouts. Both sides
         //accept multiple entities; the chip displays whichever entity
         //last changed (typical for peak / off-peak indexes that never
@@ -231,7 +224,6 @@ export interface Translations
         gridImportHint:           string;
         gridExportTitle:          string;
         gridExportHint:           string;
-        gridSourceTitle:          string;
         gridSourceAdd:            string;
         gridSourceRemove:         string;
         //Combined signed grid-power entity: one sensor whose sign
@@ -280,7 +272,6 @@ export interface Translations
         buildingsHint:            string;
         buildingClusterRadius:    string;
         buildingOpacity:          string;
-        buildingColor:            string;
         //Pixel-ratio toggle replacing the old performance-mode
         //switch. 'Auto' uses the device's devicePixelRatio capped at
         //2 / 1.25 (desktop / mobile). '1x' forces 1.0 for the

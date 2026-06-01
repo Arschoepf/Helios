@@ -31,14 +31,27 @@
 
 import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
-import { callWSWithTimeout } from './ws-timeout';
+import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 
 
 type Sample = { t: number; v: number; lastChangeT?: number | null };
 
 
-const _historyFetched   = new Set<string>();
+//Per-entity wall-clock of the LAST successful backfill. The backfill itself walks the past 72 h, and on a long-uptime session (tablet
+//that never sleeps, kiosk display) the oldest in-buffer samples drop out of the 72 h window after about a day. Storing a timestamp
+//instead of a plain "done" flag lets us re-issue the backfill on a 24 h cadence so the buffer head keeps tracking with real time and
+//scrub never falls off the buffer's back edge.
+const _historyFetched   = new Map<string, number>();
+//Per-entity "do not retry before this wall-clock" for entities whose last fetch ended in a `WsTimeoutError`. Without the cooldown the
+//next `refreshGrid` tick (every clock tick, on every Lit cycle) would re-issue the WS call and pile up timeouts on an already-slow
+//recorder. 2 minutes is short enough that a transient recorder stall recovers gracefully and long enough that we do not contribute
+//to the load.
+const _historyFailedUntil = new Map<string, number>();
 const _historyInflight  = new Set<string>();
+//24 h refresh cadence: re-issue the 72 h backfill once a day so the buffer head stays fresh on long-uptime sessions.
+const GRID_FETCH_REFRESH_MS = 24 * 60 * 60_000;
+//2 min cooldown after a `WsTimeoutError`, prevents the per-tick retry storm.
+const GRID_FETCH_COOLDOWN_MS = 2 * 60_000;
 
 
 //Wipe the module-level grid history latch. Called from the card's `resetDataCache()` hook so the editor's "reset" button forces a
@@ -46,6 +59,7 @@ const _historyInflight  = new Set<string>();
 export function clearGridModuleCaches(): void
 {
     _historyFetched.clear();
+    _historyFailedUntil.clear();
     _historyInflight.clear();
 }
 //72 hour history backfill so the past-scrub bracket actually
@@ -120,8 +134,14 @@ export interface GridHost
 function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string, Sample[]>): void
 {
     if (!host.hass?.callWS) return;
-    if (_historyFetched.has(entity)) return;
     if (_historyInflight.has(entity)) return;
+    const now = Date.now();
+    //Cooldown after a previous timeout: do not retry yet.
+    const failedUntil = _historyFailedUntil.get(entity);
+    if (failedUntil !== undefined && now < failedUntil) return;
+    //Fresh enough: a previous backfill already landed within the refresh window.
+    const lastFetched = _historyFetched.get(entity);
+    if (lastFetched !== undefined && now - lastFetched < GRID_FETCH_REFRESH_MS) return;
     _historyInflight.add(entity);
     const end   = new Date();
     const start = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
@@ -174,9 +194,19 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                 bufMap.set(entity, deduped);
                 host.requestUpdate();
             }
-            _historyFetched.add(entity);
+            _historyFetched.set(entity, Date.now());
+            _historyFailedUntil.delete(entity);
         }
-        catch { /* silent: live derivation still works once HA pushes state */ }
+        catch (e)
+        {
+            //Live derivation still works once HA pushes state, so a transient backfill failure stays silent on the UI. On a
+            //`WsTimeoutError` we arm a short cooldown so the next `refreshGrid` tick does not re-fire the same heavy fetch into a
+            //recorder that is already struggling.
+            if (e instanceof WsTimeoutError)
+            {
+                _historyFailedUntil.set(entity, Date.now() + GRID_FETCH_COOLDOWN_MS);
+            }
+        }
         finally
         {
             _historyInflight.delete(entity);

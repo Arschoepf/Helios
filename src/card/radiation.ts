@@ -68,10 +68,15 @@ function parseStatBoundary(raw: unknown): number | null
 }
 
 
-//Parse a statistics payload into a RadiationHistory. Most irradiance sensors are `state_class: measurement` (Ecowitt, Davis, PWS) and
-//the `mean` column carries the value. Some installs wire a cumulative kWh / Wh sensor as the irradiance source instead, in which case
-//`mean` is null and `state` carries the cumulative reading at the bucket end. We prefer `mean` when present and fall back to `state`
-//so the slot lands populated either way. See #161.
+//Parse a statistics payload into a RadiationHistory. Irradiance sensors are `state_class: measurement` (Ecowitt, Davis, PWS, the
+//common HA integrations) and report instantaneous W/m². The `mean` column carries the bucket-averaged value, anchored at the bucket
+//midpoint to match the engine's W/m² assumption.
+//
+//We deliberately do NOT fall back to the `state` field here. A small subset of installs surface their radiation source as a
+//cumulative MJ/m² counter (`state_class: total_increasing`) and `state` then carries monotonically increasing values. Pushing those
+//straight to `setSolarRadiationSamples` would feed the engine values that look like 10000+ W/m² and distort every downstream
+//derivation (shading map calibration, "affiné" forecast, irradiance chip). Buckets with null `mean` are skipped and, if the slot
+//ends up empty, the consumer degrades to the raw-history fallback which has its own unit semantics handled.
 function parseRadiationStats(arr: any[]): RadiationHistory
 {
     const times:  Date[]   = [];
@@ -81,19 +86,11 @@ function parseRadiationStats(arr: any[]): RadiationHistory
         const startMs = parseStatBoundary(item?.start);
         const endMs   = parseStatBoundary(item?.end);
         if (startMs === null) continue;
-        let valueRaw: unknown = item?.mean;
-        let anchorAtEnd = false;
-        if (valueRaw === null || valueRaw === undefined)
-        {
-            valueRaw = item?.state;
-            anchorAtEnd = true;
-        }
+        const valueRaw = item?.mean;
         if (valueRaw === null || valueRaw === undefined) continue;
         const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
         if (!isFinite(v) || v < 0) continue;
-        const anchorMs = anchorAtEnd
-            ? (endMs ?? startMs)
-            : (endMs !== null ? (startMs + endMs) / 2 : startMs);
+        const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
         times.push(new Date(anchorMs));
         values.push(v);
     }
@@ -278,9 +275,10 @@ export async function fetchSolarRadiationHistory(
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  [entityId],
             period:         '5minute',
-            //Both fields, see #161. Most irradiance sensors are measurement (mean populated), but a kWh-wired source has mean: null and
-            //state: cumulative reading per bucket end.
-            types:          ['mean', 'state'],
+            //Mean only. The radiation parser refuses the cumulative `state` field to avoid feeding the engine monotonically
+            //increasing values that look like 10000+ W/m² (see parseRadiationStats). When the entity is wired as a cumulative
+            //counter the stats array lands empty and the raw-history fallback below takes over.
+            types:          ['mean'],
         });
         const statsArr: any[] = (statsResult && statsResult[entityId]) ?? [];
         if (statsArr.length > 0)
