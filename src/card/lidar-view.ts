@@ -169,7 +169,17 @@ export function renderLidarViewOpacityPicker(
                    .value="${String(pct)}"
                    aria-label="LiDAR view opacity percentage"
                    tabindex="${sliderActive ? 0 : -1}"
-                   @input="${(e: Event) => onChange(Number((e.target as HTMLInputElement).value) / 100)}" />
+                   @input="${(e: Event) => {
+                       const input = e.target as HTMLInputElement;
+                       const v = Number(input.value);
+                       onChange(v / 100);
+                       //Imperative DOM write for the % readout, the host's `_lidarViewOpacity` is intentionally NOT a `@state`
+                       //(the slider fires ~50 input events / s and a state coupling would re-render the entire card on every
+                       //tick, see the field comment in helios-card.ts), so a Lit pass would never re-paint the value span on
+                       //its own. Mirror what the input.value already reflects natively. See #153.
+                       const span = input.parentElement?.querySelector('.lidar-view-opacity-value') as HTMLElement | null;
+                       if (span) span.textContent = `${Math.round(v)}%`;
+                   }}" />
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
             <span class="lidar-view-opacity-value">${pct}%</span>
         </div>

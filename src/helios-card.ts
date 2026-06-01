@@ -1947,7 +1947,7 @@ export class HeliosCard extends LitElement
                                     aria-label="${lidarTitle}"
                                     @click="${onLidar}"
                                 >
-                                    <ha-icon icon="${lidarIcon}"></ha-icon>
+                                    <ha-icon class="${lidarLoading ? 'is-spinning' : ''}" icon="${lidarIcon}"></ha-icon>
                                 </button>
                                 <button
                                     type="button"
@@ -2240,7 +2240,7 @@ export class HeliosCard extends LitElement
                         class="grid-import-label"
                         style="left:${layout!.gridImportLabel.x}px; top:${layout!.gridImportLabel.y}px"
                     >
-                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
+                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
                         <span>${formatGridValue(gridImportDisplayWatts, gridImportDisplayUnit)}</span>
                     </div>
                 ` : nothing}
@@ -2265,7 +2265,7 @@ export class HeliosCard extends LitElement
                         class="grid-export-label"
                         style="left:${layout!.gridExportLabel.x}px; top:${layout!.gridExportLabel.y}px"
                     >
-                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
+                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
                         <span>${formatGridValue(gridExportDisplayWatts, gridExportDisplayUnit)}</span>
                     </div>
                 ` : nothing}

@@ -1976,9 +1976,14 @@ var ae,se=Object.create,le=Object.defineProperty,he=Object.getOwnPropertyDescrip
         shading dome modes used to apply. */
 
     /*  Spinner styling on the LiDAR mode-bar button while shadows
-        are loading. The mdi:loading icon rotates so the user reads
-        "fetching..." without us having to fork the layout. */
-    .mode-bar-seg.is-loading ha-icon
+        are loading. The class lives on the ha-icon itself so the
+        animation drops the exact frame the icon swaps to the
+        satellite / harddisk glyph; if we scoped it to
+        .mode-bar-seg.is-loading ha-icon the parent class flip and
+        the icon attribute swap could land one paint frame apart
+        and the satellite icon would briefly inherit the rotation
+        (see #152). */
+    .mode-bar-seg ha-icon.is-spinning
     {
         animation: mode-bar-spin 1.2s linear infinite;
     }
@@ -5805,7 +5810,7 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
                                     aria-label="${pe}"
                                     @click="${wt}"
                                 >
-                                    <ha-icon icon="${ue}"></ha-icon>
+                                    <ha-icon class="${le?"is-spinning":""}" icon="${ue}"></ha-icon>
                                 </button>
                                 <button
                                     type="button"
@@ -6079,7 +6084,7 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
                         class="grid-import-label"
                         style="left:${wt.gridImportLabel.x}px; top:${wt.gridImportLabel.y}px"
                     >
-                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
+                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
                         <span>${formatGridValue(Sn,os)}</span>
                     </div>
                 `:Dl}
@@ -6104,7 +6109,7 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
                         class="grid-export-label"
                         style="left:${wt.gridExportLabel.x}px; top:${wt.gridExportLabel.y}px"
                     >
-                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
+                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
                         <span>${formatGridValue(Mn,cs)}</span>
                     </div>
                 `:Dl}
@@ -6410,7 +6415,7 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
                    .value="${String(le)}"
                    aria-label="LiDAR view opacity percentage"
                    tabindex="${he?0:-1}"
-                   @input="${ae=>se(Number(ae.target.value)/100)}" />
+                   @input="${ae=>{const le=ae.target,he=Number(le.value);se(he/100);const ue=le.parentElement?.querySelector(".lidar-view-opacity-value");ue&&(ue.textContent=`${Math.round(he)}%`)}}" />
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
             <span class="lidar-view-opacity-value">${le}%</span>
         </div>

@@ -11,14 +11,14 @@ preserved from the in-tree history that used to live inside
 
 ### Battery, radiation, semaphore: extending the alpha.2 recorder fix
 
-Follow-up to alpha.2 after the reporter (LBDG_) tested it on his
-Victron setup and confirmed the PV path works (-26 % adaptive
-calibration applied, recorder no longer globally frozen). Two
-symptoms remained: battery data taking several minutes to
-populate, and a brief lag on each card mount. A second user on
-the same Reddit thread also reported every apex-charts on his
-dashboard flatlining while Helios was loading, the signature of
-a recorder still saturated by Helios on cards that share the
+Follow-up to alpha.2 after field validation against a Victron
+Cerbo GX setup. The PV-path fix from alpha.2 worked (adaptive
+calibration applied, recorder no longer globally frozen), but
+two symptoms remained: battery data took several minutes to
+populate, and each card mount caused a brief lag. A related
+report described every apex-charts card on the same dashboard
+flatlining while Helios was loading, the signature of Helios
+still monopolising the recorder on cards that share the
 connection.
 
 - Battery and radiation fetches now follow the same statistics-
@@ -40,12 +40,12 @@ connection.
 
 ### Recorder unblock on high-frequency PV sensors
 
-- Reported on Reddit (#155) by a user running a Victron Cerbo GX
-  MPPT logging more than one sample per second: the Helios card
-  never finished loading and the HA recorder went unresponsive
-  for unrelated entities while the card was open. Root cause was
-  a single 30-day raw history fetch that ballooned to millions
-  of state rows on high-frequency installs.
+- Tracked as #155. On installs whose PV entity reports more than
+  one sample per second (e.g. a Victron Cerbo GX MPPT), the
+  Helios card never finished loading and the HA recorder went
+  unresponsive for unrelated entities while the card was open.
+  Root cause was a single 30-day raw history fetch that ballooned
+  to millions of state rows on high-frequency installs.
 - The PV calibration and the 30-day shading-map trainer now
   consume `recorder/statistics_during_period` instead of raw
   history. ~120 hourly rows for the 5-day calibration, ~8.6k

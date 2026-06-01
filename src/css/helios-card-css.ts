@@ -1994,9 +1994,14 @@ export const heliosCardStyles = css`
         shading dome modes used to apply. */
 
     /*  Spinner styling on the LiDAR mode-bar button while shadows
-        are loading. The mdi:loading icon rotates so the user reads
-        "fetching..." without us having to fork the layout. */
-    .mode-bar-seg.is-loading ha-icon
+        are loading. The class lives on the ha-icon itself so the
+        animation drops the exact frame the icon swaps to the
+        satellite / harddisk glyph; if we scoped it to
+        .mode-bar-seg.is-loading ha-icon the parent class flip and
+        the icon attribute swap could land one paint frame apart
+        and the satellite icon would briefly inherit the rotation
+        (see #152). */
+    .mode-bar-seg ha-icon.is-spinning
     {
         animation: mode-bar-spin 1.2s linear infinite;
     }
