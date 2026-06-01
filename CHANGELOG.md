@@ -7,6 +7,34 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.9
+
+### Engine pool with MapLibre transplant, real fix for the per-commit WebGL respawn
+
+Alpha.8 deferred the engine cleanup on `disconnectedCallback` and
+cancelled it on the subsequent `connectedCallback`. The diagnostic
+in #162 confirmed Home Assistant actually destroys the helios-card
+element on every editor `config-changed` event and constructs a
+fresh one. A new element instance never sees the old timer, so the
+fix from alpha.8 covered only the same-instance reattach case
+(rare in practice).
+
+Replaces alpha.8's same-instance soft cleanup with a module-level
+engine pool keyed by home coordinates. On disconnect the engine is
+pushed to the pool, the next mount tries to claim it. When the
+claim succeeds, `HeliosEngine.transplantToContainer(newContainer)`
+moves the MapLibre stack (canvas, overlay divs, marker root) from
+the orphaned container into the new shadow root's
+`<div id="map-container">`, updates the MapLibre map's internal
+container reference, and calls `map.resize()` so dimensions
+follow. The new helios-card instance walks `wireEngineCallbacks`
+to re-bind the engine to itself. No `new HeliosEngine(...)`, no
+fresh WebGL context, no buildings refetch, no basemap reload.
+
+The pool entry's cleanup timer destroys the engine after a 1.5 s
+grace if no remount claims it (real navigation away). FIFO array
+per home key supports multiple cards at the same coordinates.
+
 ### alpha.8
 
 ### Soft cleanup on disconnect, stops the per-commit WebGL respawn

@@ -4508,6 +4508,44 @@ export class HeliosEngine
     }
 
 
+    //Returns the container element the MapLibre map currently lives in. Used by the engine pool in `init.ts` so the disconnect path can
+    //hand both the engine and its container to the pool and the next mount can transplant them into the freshly-created shadow root.
+    public getMapContainer(): HTMLElement | null
+    {
+        return this.map?.getContainer() ?? null;
+    }
+
+
+    //Move all children of the engine's current container into `newContainer`, then update MapLibre's internal container reference so
+    //future `appendChild` / lookup operations land on the new node. Used by the engine pool to graft a pooled MapLibre stack into the
+    //slot of a freshly-mounted helios-card element after Home Assistant has destroyed and re-created the element on a
+    //`config-changed` event.
+    //
+    //We touch the private `_container` field on the MapLibre Map instance because the public API does not expose a setter for it.
+    //The cast keeps the rest of the engine free of `any`. If a future MapLibre version renames the field, this single call site
+    //will need adjustment.
+    public transplantToContainer(newContainer: HTMLElement): void
+    {
+        if (!this.map) return;
+        const oldContainer = this.map.getContainer();
+        if (oldContainer === newContainer) return;
+        //Detach the resize observer from the old container so it does not fire on an orphaned element, then re-observe the new one.
+        this._resizeObserver?.disconnect();
+        while (oldContainer.firstChild)
+        {
+            newContainer.appendChild(oldContainer.firstChild);
+        }
+        (this.map as unknown as { _container: HTMLElement })._container = newContainer;
+        if (this._resizeObserver)
+        {
+            this._resizeObserver.observe(newContainer);
+        }
+        //Force MapLibre to re-read the new container's bounding box. The transplant changes the parent layout context, the canvas
+        //sizing has to follow.
+        try { this.map.resize(); } catch (_) { /* tolerant: a freshly-mounted shadow root with 0x0 dimensions will resize again on the next ResizeObserver tick */ }
+    }
+
+
     public cleanup(): void
     {
         bumpStat('enginesCleanedUp');

@@ -349,6 +349,67 @@ export function cancelPendingRespawn(host: InitHost): void
     }
 }
 
+
+//-----------------------------------------------------------------
+//Engine pool: keeps engines alive across the destroy/create cycle Home Assistant performs on every editor `config-changed` commit.
+//
+//Diagnostic (see issue #162): HA does not simply detach + re-attach the same helios-card custom-element instance when the editor
+//commits a change. It destroys the old element entirely and constructs a fresh one with the new config. The fresh element has no
+//`_engine`, so the `updated()` pass takes the respawn branch and allocates a new WebGL context. Counted by `enginesCreated`: one
+//cycle per slider release on a single-card dashboard, two on a dashboard that shows both the live tile and the editor preview.
+//
+//The pool short-circuits the cycle: instead of cleaning up on disconnect, we stash the engine into a module-level pool keyed by
+//home coordinates. When a freshly-mounted helios-card hits `initEngineNow`, it tries to claim a matching engine from the pool
+//first. If one is available we transplant its MapLibre container into the new shadow root via
+//`HeliosEngine.transplantToContainer`, re-wire the engine callbacks against the new host, and skip the new-engine allocation
+//entirely. Net: zero `enginesCreated` per editor commit on the steady state.
+//
+//Multi-card support: the pool stores a FIFO array per home key so two helios-cards at the same coordinates each get their own
+//stash. A grace cleanup timer per entry destroys the engine if no claim arrives within `ENGINE_POOL_GRACE_MS` (real navigation
+//away from the dashboard).
+
+interface PooledEngineEntry
+{
+    engine:       HeliosEngine;
+    cleanupTimer: number;
+}
+
+const _enginePool: Map<string, PooledEngineEntry[]> = new Map();
+const ENGINE_POOL_GRACE_MS = 1500;
+
+
+//Push an engine into the pool. Schedules a cleanup timer for the grace window so an engine that no remount claims is properly
+//destroyed instead of leaking.
+export function pushEngineToPool(homeKey: string, engine: HeliosEngine): void
+{
+    const cleanupTimer = window.setTimeout(() =>
+    {
+        const list = _enginePool.get(homeKey);
+        if (!list) return;
+        const idx = list.findIndex(e => e.engine === engine);
+        if (idx === -1) return;
+        list.splice(idx, 1);
+        if (list.length === 0) _enginePool.delete(homeKey);
+        engine.cleanup();
+    }, ENGINE_POOL_GRACE_MS);
+    const list = _enginePool.get(homeKey) ?? [];
+    list.push({ engine, cleanupTimer });
+    _enginePool.set(homeKey, list);
+}
+
+
+//Try to claim the oldest pooled engine for a given home key. Returns null when none is available so the caller falls back to a
+//fresh `new HeliosEngine(...)`. The grace cleanup timer is cancelled so the engine is not destroyed mid-claim.
+export function tryClaimPooledEngine(homeKey: string): HeliosEngine | null
+{
+    const list = _enginePool.get(homeKey);
+    if (!list || list.length === 0) return null;
+    const entry = list.shift()!;
+    if (list.length === 0) _enginePool.delete(homeKey);
+    window.clearTimeout(entry.cleanupTimer);
+    return entry.engine;
+}
+
 export function initEngine(host: InitHost): void
 {
     const now    = performance.now();
@@ -437,6 +498,25 @@ export function initEngineNow(host: InitHost): void
         //handle that case by simply not sending &elevation= and
         //letting Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
+
+        //Engine pool short-circuit: a previous helios-card instance at the same home coordinates may have stashed its MapLibre stack
+        //in the module-level pool right before being destroyed by Home Assistant's editor commit cycle. Reuse it by transplanting its
+        //container into this instance's `<div id="map-container">`, re-wire the engine callbacks, and skip the heavy
+        //`new HeliosEngine(...)` path entirely. See the pool header comment above for the diagnostic that motivated this.
+        const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+        const pooled   = tryClaimPooledEngine(homeKey);
+        if (pooled)
+        {
+            //Wipe the freshly-rendered (empty) container of any stale children Lit might have inserted. The pooled MapLibre stack
+            //is grafted into this same node next.
+            while (container.firstChild) container.removeChild(container.firstChild);
+            pooled.transplantToContainer(container);
+            host._engine = pooled;
+            host._lastEngineSpawnAt = performance.now();
+            wireEngineCallbacks(host);
+            host._initInflight = false;
+            return;
+        }
 
         const hadPreviousEngine = host._engine !== undefined;
         host._engine?.cleanup();
