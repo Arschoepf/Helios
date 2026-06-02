@@ -56,7 +56,6 @@ export interface TimelineHost extends OverlaysHost
 //changes, not on this tick, so they stay real-time regardless.
 //
 //Skip the _now / refreshOverlays update when neither the minute
-//nor the day have changed since the previous tick: the clock and
 //the live cursor display HH:MM at most, so a 30 s tick that lands
 //inside the same minute would cascade into a full Lit re-render
 //(template + arc + chart + dome) for no visible delta. On a busy
@@ -87,7 +86,10 @@ export function tick(host: TimelineHost): void
     if (dayRolledOver && host._engine)
     {
         const range = host._engine.getTimelineRange();
-        if (range) host._timeRange = range;
+        if (range)
+        {
+            host._timeRange = range;
+        }
         host._chartSeries = host._engine.getTimelineSeries() ?? host._chartSeries;
     }
     //The sun moves with time, so refresh its screen-space
@@ -162,7 +164,7 @@ export function onTimelinePointerUp(host: TimelineHost, e: PointerEvent): void
 //Translate the pointer's clientX into a timestamp inside the active
 //time range and pin the card into scrubbed mode. No hour-snap on the
 //selected time: the previous behaviour rounded to the nearest full
-//hour, which made the sun arc and the cloud disc jerk forward in 1 h
+//hour, which made the sun arc and the cloud dome jerk forward in 1 h
 //jumps as the user dragged the cursor. Sub-hour timestamps still
 //resolve to the right hourly bucket for weather variables (which are
 //only published hourly) via nearest-hour lookup in the engine, so we
@@ -178,8 +180,36 @@ export function applyTimelinePointer(host: TimelineHost, e: PointerEvent): void
     const rect    = track.getBoundingClientRect();
     const frac    = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const rangeMs = host._timeRange.end.getTime() - host._timeRange.start.getTime();
-    const t = new Date(host._timeRange.start.getTime() + frac * rangeMs);
+    const tMs     = host._timeRange.start.getTime() + frac * rangeMs;
 
+    //Live magnetism: snap back to live mode whenever the pointer
+    //lands within MAGNET_PX of the "now" pixel column. Kept tight
+    //(8 px ring) so the snap only fires when the pointer is almost
+    //exactly on the live cursor; the tooltip's restore-tab cue
+    //signals the snap zone before the user releases.
+    const MAGNET_PX = 8;
+    const nowMs     = Date.now();
+    const rangeStart = host._timeRange.start.getTime();
+    const rangeEnd   = host._timeRange.end.getTime();
+    if (nowMs >= rangeStart && nowMs <= rangeEnd)
+    {
+        const nowFrac    = (nowMs - rangeStart) / rangeMs;
+        const nowXPx     = rect.left + nowFrac * rect.width;
+        const pointerXPx = e.clientX;
+        if (Math.abs(pointerXPx - nowXPx) <= MAGNET_PX)
+        {
+            if (!host._isLiveMode || host._selectedTime !== null)
+            {
+                host._selectedTime  = null;
+                host._isLiveMode    = true;
+                host._chartHoverPct = null;
+                host._engine?.setSelectedTime(null);
+            }
+            return;
+        }
+    }
+
+    const t = new Date(tMs);
     if (host._selectedTime && host._selectedTime.getTime() === t.getTime())
     {
         return;
@@ -206,12 +236,21 @@ export function resetToLive(host: TimelineHost): void
 export function timelineEnabled(config: HeliosConfig | undefined): boolean
 {
     const raw = config?.['timeline-enabled'];
-    if (typeof raw === 'boolean') return raw;
+    if (typeof raw === 'boolean')
+    {
+        return raw;
+    }
     if (typeof raw === 'string')
     {
         const s = raw.trim().toLowerCase();
-        if (s === 'false' || s === '0' || s === 'off' || s === 'no') return false;
-        if (s === 'true'  || s === '1' || s === 'on'  || s === 'yes') return true;
+        if (s === 'false' || s === '0' || s === 'off' || s === 'no')
+        {
+            return false;
+        }
+        if (s === 'true' || s === '1' || s === 'on' || s === 'yes')
+        {
+            return true;
+        }
     }
     return DEFAULT_TIMELINE_ENABLED;
 }
@@ -231,12 +270,21 @@ export function timelineWidthPct(config: HeliosConfig | undefined): number
 export function timelineConsumptionEnabled(config: HeliosConfig | undefined): boolean
 {
     const raw = config?.['timeline-consumption-enabled'];
-    if (typeof raw === 'boolean') return raw;
+    if (typeof raw === 'boolean')
+    {
+        return raw;
+    }
     if (typeof raw === 'string')
     {
         const s = raw.trim().toLowerCase();
-        if (s === 'false' || s === '0' || s === 'off' || s === 'no') return false;
-        if (s === 'true'  || s === '1' || s === 'on'  || s === 'yes') return true;
+        if (s === 'false' || s === '0' || s === 'off' || s === 'no')
+        {
+            return false;
+        }
+        if (s === 'true' || s === '1' || s === 'on' || s === 'yes')
+        {
+            return true;
+        }
     }
     return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
 }

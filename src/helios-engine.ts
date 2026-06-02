@@ -667,7 +667,7 @@ export class HeliosEngine
     public setCameraPitch(deg: number): void
     {
         if (!this.map || !Number.isFinite(deg)) return;
-        const clamped = Math.max(15, Math.min(85, deg));
+        const clamped = Math.max(0, Math.min(89, deg));
         this.map.setPitch(clamped);
     }
     //Toggle the lock at runtime so the lock chip applies immediately
@@ -1185,8 +1185,8 @@ export class HeliosEngine
         //plane (90° would reveal the missing under-side of the
         //basemap mesh).
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
-        const PITCH_MIN_DEG = 15;
-        const PITCH_MAX_DEG = 85;
+        const PITCH_MIN_DEG = 0;
+        const PITCH_MAX_DEG = 89;
         let dragRotating  = false;
         let lastPointerX  = 0;
         let lastPointerY  = 0;
@@ -3386,6 +3386,13 @@ export class HeliosEngine
         gridExportLabel:   { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
+        //Projected screen position of the home building's roof top
+        //(home lat/lon at altitude `render_height`). The card uses
+        //this as the bottom endpoint of the drop leader so the line
+        //always lands exactly on the roof regardless of canvas size,
+        //pitch or zoom. Falls back to the ground home position when
+        //no home building has been resolved yet.
+        homeRoof:          { x: number; y: number };
         //SVG `polygon` `points` attribute for the PV home-anchor
         //ground disc. Built by projecting 48 points on a horizontal
         //circle of radius PV_HOME_ANCHOR_RADIUS_M metres around the
@@ -3476,12 +3483,48 @@ export class HeliosEngine
         //to render their rounded fillet without overlapping the
         //home pill.
         const CHIP_STACK_GAP_PX     = 60 * scale;
-        //Lift the entire home cluster (pill + chips) above the
-        //projected home centre so the icon sits above the roof
-        //silhouette, with enough breathing room for a visible solid
-        //leader to drop from the pill down to the building top below.
-        const CLUSTER_LIFT_PX = 60 * liftScale;
-        const clusterY = home.y - CLUSTER_LIFT_PX;
+        //Resolve the home roof Y by projecting the home lat/lon at
+        //the home building's tallest `render_height`. Used both for
+        //the drop-leader endpoint AND to anchor the chip cluster a
+        //fixed distance above the roof, so the cluster follows the
+        //building silhouette as the canvas grows instead of drifting
+        //up with a static screen-space lift. Falls back to the
+        //ground home position when no home building has been
+        //resolved yet (early frames before `_buildingsData` lands).
+        let roofY = home.y;
+        const homeFeatures = this._buildingsData?.home?.features;
+        if (homeFeatures && homeFeatures.length > 0)
+        {
+            let maxH = 0;
+            for (const feat of homeFeatures)
+            {
+                const props = (feat.properties ?? {}) as Record<string, unknown>;
+                const h     = typeof props['render_height'] === 'number'
+                    ? (props['render_height'] as number)
+                    : 0;
+                if (h > maxH)
+                {
+                    maxH = h;
+                }
+            }
+            if (maxH > 0)
+            {
+                const projectedRoof = this._projectScenePoint(this.homeLon, this.homeLat, maxH);
+                if (projectedRoof)
+                {
+                    roofY = projectedRoof.y;
+                }
+            }
+        }
+
+        //Cluster sits a fixed 28 px above the projected roof, with a
+        //modest screen-density ramp so the spacing scales with the
+        //rest of the cluster spread. Anchoring on the roof (instead
+        //of a static lift from the ground home position) keeps the
+        //home pill + chips visually attached to the building no
+        //matter how the user resizes the card.
+        const CLUSTER_ABOVE_ROOF_PX = 28 * liftScale;
+        const clusterY = roofY - CLUSTER_ABOVE_ROOF_PX;
         const pvX = home.x;
         const pvY = clusterY - PV_CHIP_OFFSET_PX * liftScale;
         //Battery column on the right.
@@ -3544,6 +3587,7 @@ export class HeliosEngine
             gridExportLabel:   { x: gridXLeft,      y: gridExportY  },
             ringEdge:          { x: ringEdgeX,      y: ringEdgeY    },
             home:              { x: home.x,         y: clusterY     },
+            homeRoof:          { x: home.x,         y: roofY        },
             homeAnchorPoints:  anchorPts.join(' '),
         };
     }

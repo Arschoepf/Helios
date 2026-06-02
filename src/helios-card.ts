@@ -2566,7 +2566,7 @@ export class HeliosCard extends LitElement
                     <svg class="home-drop-leader-svg">
                         <line class="home-drop-leader-line"
                               x1="${layout!.home.x}" y1="${layout!.home.y + 14}"
-                              x2="${layout!.home.x}" y2="${layout!.home.y + 60}" />
+                              x2="${layout!.homeRoof.x}" y2="${layout!.homeRoof.y}" />
                     </svg>
                     <div
                         class="home-pill"

@@ -127,7 +127,7 @@ export const heliosCardStyles = css`
     }
 
     /*  Home hover glow. Same base + top + side-quad polygons as the
-        cloud-disc mask (so it tracks rotation pixel-for-pixel with
+        cloud-dome mask (so it tracks rotation pixel-for-pixel with
         the building extrusion), painted in the configured sun colour
         with a CSS drop-shadow bloom. Opacity is the only thing that
         animates so the fade is GPU-cheap, the geometry comes back
@@ -158,12 +158,12 @@ export const heliosCardStyles = css`
             heavier filter rule.                                      */
         opacity: 0.25;
         transition: opacity 0.18s ease, filter 0.18s ease;
-        filter: drop-shadow(0 0 4px var(--energy-grid-consumption-color, #488fc2));
+        filter: drop-shadow(0 0 4px var(--primary-color, #03a9f4));
     }
     .home-glow-svg.is-hovered
     {
         opacity: 0.85;
-        filter: drop-shadow(0 0 8px var(--energy-grid-consumption-color, #488fc2));
+        filter: drop-shadow(0 0 8px var(--primary-color, #03a9f4));
     }
 
     /*  Production pulse: while PV is producing, the home silhouette
@@ -185,14 +185,14 @@ export const heliosCardStyles = css`
         92%
         {
             opacity: 0.85;
-            filter: drop-shadow(0 0 10px var(--pv-leader-color, var(--energy-solar-color, #ff9800)));
+            filter: drop-shadow(0 0 10px var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800))));
         }
         100%    { opacity: 0; }
     }
     .home-glow-svg.is-pv-pulsing .home-glow-shape
     {
-        fill:   var(--pv-leader-color, var(--energy-solar-color, #ff9800));
-        stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
+        fill:   var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
+        stroke: var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
     }
 
     /*  Touch devices have no hover state, mouseenter / mouseleave
@@ -207,13 +207,12 @@ export const heliosCardStyles = css`
     }
     .home-glow-svg .home-glow-shape
     {
-        /*  Translucent grid-consumption blue halo painted ONLY on
-            hover (the parent SVG controls opacity); the home base
-            identity colour lives on the 3D fill-extrusion in
-            _addBuildings(). */
-        fill: var(--energy-grid-consumption-color, #488fc2);
+        /*  Translucent HA primary-color halo painted ONLY on hover
+            (the parent SVG controls opacity); the home base identity
+            colour lives on the 3D fill-extrusion in _addBuildings(). */
+        fill: var(--primary-color, #03a9f4);
         fill-opacity: 0.08;
-        stroke: var(--energy-grid-consumption-color, #488fc2);
+        stroke: var(--primary-color, #03a9f4);
         stroke-width: 1;
         stroke-linejoin: round;
         /*  Painted polygons capture clicks so the silhouette's actual
@@ -238,8 +237,7 @@ export const heliosCardStyles = css`
         transition property, declaring it inside .detail-active
         only would mean removing the class snaps opacity back to 1
         with no fade-in. */
-    .cloud-pct-label,
-    .solar-svg,
+.solar-svg,
     .solar-pct-label,
     .pv-home-anchor-svg,
     .pv-home-leader-svg,
@@ -254,8 +252,8 @@ export const heliosCardStyles = css`
     {
         transition: opacity 0.35s ease;
     }
-    ha-card.detail-active .cloud-pct-label,
-    ha-card.detail-active .solar-svg,
+    ha-card.detail-active
+ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
     ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
@@ -342,21 +340,19 @@ export const heliosCardStyles = css`
         overflow-x: hidden;
     }
 
-    /*  Each dashboard section is rendered as a proper HA card: same
-        rounded plate, soft shadow and padding as the cards in the HA
-        Energy dashboard so a Helios dashboard panel reads as part of
-        the HA ecosystem rather than as a custom UI. The visible chip
-        identity stays via the coloured icon + label + figures.
-        Sections appear sequentially with a short stagger so the eye
-        lands on each one in turn without dragging the reveal. */
+    /*  Each dashboard section is rendered with the HA card frame:
+        same background, border colour, border radius and box-shadow
+        tokens that drive the cards on the native HA Energy dashboard.
+        Padding mirrors the HA Energy tooltip / card padding so the
+        panel reads as a stack of native HA cards. */
     .dash-card
     {
         background: var(--ha-card-background, var(--card-background-color, #ffffff));
         color: var(--primary-text-color, #212121);
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.08));
+        border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(0, 0, 0, 0.08)));
         border-radius: var(--ha-card-border-radius, 12px);
-        box-shadow: var(--ha-card-box-shadow, 0 1px 3px var(--shadow-color));
-        padding: 14px 16px;
+        box-shadow: var(--ha-card-box-shadow, 0 2px 4px 0 rgba(0, 0, 0, 0.16), 0 1px 4px 0 rgba(0, 0, 0, 0.06));
+        padding: 16px;
         display: flex;
         flex-direction: column;
         gap: 8px;
@@ -430,9 +426,9 @@ export const heliosCardStyles = css`
         the dashboard reads as the same family as HA's Energy
         distribution card. Today / Tomorrow ride the solar amber,
         the Battery section uses the discharge teal.                 */
-    .dash-card.dash-today    .dash-card-icon { color: var(--energy-solar-color, #ff9800);        background: rgba(255, 152, 0, 0.12);  }
-    .dash-card.dash-tomorrow .dash-card-icon { color: var(--amber-color, #ffc107);                background: rgba(255, 193, 7, 0.12);  }
-    .dash-card.dash-battery  .dash-card-icon { color: var(--energy-battery-out-color, #4db6ac); background: rgba(77, 182, 172, 0.12); }
+    .dash-card.dash-today    .dash-card-icon { color: var(--energy-solar-color, var(--energy-solar-color, #ff9800));        background: rgba(255, 152, 0, 0.12);  }
+    .dash-card.dash-tomorrow .dash-card-icon { color: var(--amber-color, var(--warning-color, #ffc107));                background: rgba(255, 193, 7, 0.12);  }
+    .dash-card.dash-battery  .dash-card-icon { color: var(--energy-battery-out-color, var(--energy-battery-out-color, #4db6ac)); background: rgba(77, 182, 172, 0.12); }
     .dash-card-label
     {
         font-size: 11px;
@@ -552,6 +548,25 @@ export const heliosCardStyles = css`
     {
         display: inline-flex;
         align-items: baseline;
+        line-height: 1;
+    }
+    /*  Forecast headline mirrors the produced figure typographically
+        (same font sizes for value + unit) so the reader scans
+        "produced / forecast" as twin columns rather than the forecast
+        looking like an afterthought. Italic + reduced opacity remain
+        as the only typographic differentiators. Inline ha-icon next
+        to the value carries the cumulative-bell glyph HA uses for
+        the predicted curve. */
+    .dash-today-stat--forecast
+    {
+        gap: 6px;
+        opacity: 0.75;
+        font-style: italic;
+    }
+    .dash-today-stat--forecast ha-icon
+    {
+        --mdc-icon-size: 22px;
+        align-self: center;
         line-height: 1;
     }
     /*  When forecast calibration kicks in we stack the raw stat
@@ -1020,8 +1035,21 @@ export const heliosCardStyles = css`
     .dash-today-chart-tooltip-row
     {
         display: inline-flex;
-        align-items: baseline;
+        align-items: center;
         gap: 4px;
+    }
+    .dash-today-chart-tooltip-row--forecast
+    {
+        opacity: 0.85;
+        font-style: italic;
+    }
+    .dash-today-chart-tooltip-icon
+    {
+        --mdc-icon-size: 12px;
+        display: inline-flex;
+        align-items: center;
+        flex-shrink: 0;
+        line-height: 1;
     }
     .dash-today-chart-tooltip-key
     {
@@ -1193,55 +1221,6 @@ export const heliosCardStyles = css`
         cursor: grabbing;
     }
 
-    /*  Back-to-live tab. A real tab: rounded TOP corners only, flat
-        bottom that overlaps the time-bar's top border by 1 px so the
-        tab reads as physically attached to the chart card below it.
-        Renders only while scrubbing. Side flips with the scrub
-        cursor: scrub on the right half -> tab on the LEFT, scrub on
-        the left half -> tab on the RIGHT, the two never collide. */
-    .tb-back-to-live
-    {
-        position: absolute;
-        bottom: 100%;
-        margin-bottom: -1px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        height: 18px;
-        box-sizing: border-box;
-        padding: 0 8px 0 6px;
-        background: var(--primary-color, #03a9f4);
-        color: var(--text-on-primary-color, #ffffff);
-        border: 1px solid var(--darker-primary-color, #0288d1);
-        border-bottom: 0;
-        border-radius: 6px 6px 0 0;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size: 11px;
-        font-weight: 600;
-        line-height: 1;
-        letter-spacing: 0.3px;
-        cursor: pointer;
-        pointer-events: auto;
-        z-index: 31;
-        transition: background 0.12s;
-    }
-    .tb-back-to-live.is-left  { left:  10px; }
-    .tb-back-to-live.is-right { right: 10px; }
-    .tb-back-to-live:hover  { background: var(--dark-primary-color, #0288d1); }
-    .tb-back-to-live:active { background: var(--darker-primary-color, #01579b); }
-    .tb-back-to-live ha-icon
-    {
-        --mdc-icon-size: 12px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-    .tb-back-to-live span
-    {
-        text-transform: uppercase;
-    }
-
     /*  Chart card, bordered white panel hosting the area chart,
         day-label chips on the midline, dotted day separators and
         the live + scrub HTML cursor overlays. */
@@ -1250,17 +1229,18 @@ export const heliosCardStyles = css`
         position: relative;
         background: var(--card-background-color, #ffffff);
         /*  Theme-aware ink border so the chart cards stand out
-            against the basemap on both palettes. The 0.35 alpha
+            against the basemap on both palettes. The 0.55 alpha
             keeps the stroke visible without dominating the chart
             content underneath. */
         border: 2px solid rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.55);
-        /*  HA card radius (var(--ha-border-radius-lg) = 12 px) so the
-            chart panels read as part of the HA dashboard chip family
-            instead of as 3 px softened squares from the legacy time
-            bar look. */
         border-radius: 12px;
         box-shadow: 0 1px 3px var(--shadow-color);
-        height: 48px;
+        /*  Height scales with the card's container width (cqw =
+            container-query width). 36 px floor on a small grid tile,
+            72 px ceiling on a fullscreen kiosk. Both timeline charts
+            share the same expression so they always stay siblings of
+            the same height. */
+        height: clamp(36px, 8cqw, 72px);
         overflow: hidden;
     }
     ha-card.theme-dark .tb-chart-card
@@ -1405,75 +1385,157 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Hover tooltip chip, sits above the chart-card stack
-        inside the time-bar. White chip with the same border +
-        shadow recipe as the .clock and .lidar-view chips so the
-        whole timeline reads as one chip family.                    */
-    .tb-hover-tooltip
+    /*  Hover tooltip card, sits above the chart-card stack inside
+        the time-bar. Frame + padding match HA Energy dashboard chart
+        tooltips so the card reads as native HA chrome (card-background
+        surface, HA divider border, HA standard elevation shadow). */
+    /*  Wrapper that hosts the magnet tab + tooltip body. Carries the
+        horizontal positioning (left + translateX) so both children
+        slide together as one block when the scrub moves — the tab
+        inherits the wrapper's transform via the DOM tree so there's
+        no per-element lag. Bottom + margin lift the whole stack into
+        the 10 px gap above the chart card. */
+    .tb-hover-tooltip-wrapper
     {
         position: absolute;
         bottom: 100%;
-        margin-bottom: 4px;
-        transform: translateX(-50%);
-        background: var(--card-background-color, #ffffff);
-        color: var(--primary-text-color, #212121);
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        /*  Rounder corners (12 px vs the earlier 3 px) so the tooltip
-            visually belongs to the same chip family as the cloud /
-            PV / grid pills sitting above. The smaller hover footprint
-            keeps the radius perceptually softer rather than capsule-
-            shaped. */
-        border-radius: 12px;
-        padding: 4px 8px;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size: 11px;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
+        margin-bottom: 10px;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: center;
         pointer-events: none;
         z-index: 30;
     }
-
-    /*  Two-line header on the tooltip: date on top, time below. The
-        date line was promoted from the deleted top-left clock chip
-        so the user still reads "which day" at a glance when scrubbing
-        across a multi-day window. */
-    .tb-hover-tooltip-date
+    .tb-hover-tooltip
     {
-        font-weight: 500;
-        opacity: 0.75;
-        margin-bottom: 1px;
-        text-align: center;
+        background: var(--card-background-color, #ffffff);
+        color: var(--primary-text-color, #212121);
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: 4px;
+        padding: 6px 8px;
+        box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.16), 0 1px 4px 0 rgba(0, 0, 0, 0.06);
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size: 12px;
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        min-width: 120px;
+        align-self: stretch;
     }
 
+    /*  Inner layout: time header in bold, a small gap, then one row
+        per data series. No banded backgrounds, no row separators —
+        the surrounding card frame is the only visible chrome. */
     .tb-hover-tooltip-time
     {
-        font-weight: 600;
-        margin-bottom: 3px;
+        font-weight: 700;
         text-align: center;
+        letter-spacing: 0.3px;
+        margin-bottom: 4px;
     }
-
     .tb-hover-tooltip-row
     {
         display: flex;
         align-items: center;
         gap: 6px;
+        padding: 1px 0;
     }
 
     .tb-hover-tooltip-icon
     {
-        --mdc-icon-size: 13px;
+        --mdc-icon-size: 14px;
         display: inline-flex;
         align-items: center;
         flex-shrink: 0;
         line-height: 1;
+        color: var(--primary-text-color, #212121);
+        --mdc-icon-color: var(--primary-text-color, #212121);
     }
-
     .tb-hover-tooltip-value
     {
         flex: 1;
         text-align: right;
+    }
+
+    /*  Magnet-snap tab: real chip tab stacked above the tooltip in
+        the wrapper's vertical flex column. Top corners match the
+        tooltip's border-radius, bottom corners are flat and the
+        bottom border is dropped so the seam between the tab and the
+        tooltip reads as one continuous frame. -1 px margin pulls the
+        tab down onto the tooltip's top border, sharing the 1 px line. */
+    .tb-hover-tooltip-magnet-tab
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 18px;
+        padding: 0 10px;
+        background: var(--primary-color, #03a9f4);
+        color: var(--text-on-primary-color, #ffffff);
+        border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
+        border-bottom: 0;
+        border-radius: 4px 4px 0 0;
+        margin-bottom: -1px;
+    }
+    .tb-hover-tooltip-magnet-tab ha-icon
+    {
+        --mdc-icon-size: 14px;
+        color: inherit;
+    }
+
+    /*  Scrub tail: a vertical dotted line drawn at the scrub X,
+        sitting in the 10 px gap between the tooltip's bottom edge
+        and the chart-card top edge. Positioned independently of the
+        tooltip so it stays anchored on the scrub line even when the
+        tooltip slides to clear the timeline edges. The dot pattern
+        is painted via repeating-linear-gradient so the magnet-snap
+        variant can flow the dots upward via a background-position
+        animation; a plain dashed border could not be animated. */
+    .tb-hover-tooltip-tail
+    {
+        position: absolute;
+        bottom: 100%;
+        width: 1.5px;
+        height: 10px;
+        /*  Default cursor paints in the theme's primary text colour
+            (black-ish on light themes, white-ish on dark) and is NOT
+            animated, so a regular scrub reads as a quiet vertical
+            cue. The brand-blue + flow animation only kicks in inside
+            the magnet zone (see the .is-magnet-snap rule below). */
+        background-image: repeating-linear-gradient(
+            to bottom,
+            var(--primary-text-color, #212121) 0,
+            var(--primary-text-color, #212121) 2px,
+            transparent 2px,
+            transparent 4px
+        );
+        transform: translateX(-50%);
+        pointer-events: none;
+        /*  Foreground layer above the tooltip (z 30) AND above any
+            chart-card decoration so the animated cursor stays visible
+            in the magnet zone. */
+        z-index: 1001;
+    }
+    /*  Magnet-snap variant: brand-blue dot column with a continuous
+        upward flow animation so the user sees a "rising" pattern
+        that signals "release here to return to live". The flow runs
+        bottom to top because the live cursor sits ABOVE the chart
+        viewport (in time, "now" is the forward edge). */
+    .tb-hover-tooltip-tail.is-magnet-snap
+    {
+        background-image: repeating-linear-gradient(
+            to bottom,
+            var(--primary-color, #03a9f4) 0,
+            var(--primary-color, #03a9f4) 2px,
+            transparent 2px,
+            transparent 4px
+        );
+        animation: tb-hover-tooltip-tail-flow 0.5s linear infinite;
+    }
+    @keyframes tb-hover-tooltip-tail-flow
+    {
+        from { background-position: 0 0; }
+        to   { background-position: 0 -4px; }
     }
 
     /*  tb-hover-tooltip flips with the theme on its own through
@@ -1573,9 +1635,9 @@ export const heliosCardStyles = css`
             the timeline + day-strip stack reads as one outlined
             instrument. */
         border: 2px solid rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.55);
-        /*  Pill radius so the day strip matches the rest of the HA-
-            energy-styled chip family across the card. */
-        border-radius: 999px;
+        /*  Compact radius (matches the chart cards stacked above) so
+            the strip reads as a low-key axis rather than a pill chip. */
+        border-radius: 8px;
         box-shadow: 0 1px 2px var(--shadow-color);
         overflow: hidden;
         pointer-events: none;
@@ -1612,13 +1674,7 @@ export const heliosCardStyles = css`
                          var(--ha-font-family,
                              var(--paper-font-common-base_-_font-family,
                                  Roboto, "Helvetica Neue", Arial, sans-serif)));
-        /*  One smaller font-size for date AND kWh so they share a
-            baseline; the previous 13 / 12 px split injected a 0.5 px
-            ascender-asymmetry that read as "labels not centred", and
-            the previous max of 9 px still overflowed on narrow phone
-            cells. The visual hierarchy comes from weight + opacity +
-            italic only, no size delta. */
-        font-size: clamp(6px, 5.5cqw, 8px);
+        font-size: clamp(9px, 7cqw, 11px);
         line-height: 18px;
         letter-spacing: 0;
         font-variant-numeric: tabular-nums;
@@ -1626,34 +1682,27 @@ export const heliosCardStyles = css`
         overflow: hidden;
         text-overflow: clip;
         z-index: 2;
-        font-weight: 600;
-        container-type: inline-size;
-        container-name: tb-day-strip-cell;
+        font-weight: 400;
     }
 
     .tb-day-strip-cell.is-today
     {
-        font-weight: 800;
+        font-weight: 500;
+    }
+    /*  Active day during scrub / hover gets a faint brand-blue tint
+        and bumps the label to a slightly heavier weight so the user
+        reads "I am on this day" at a glance. Tint uses --primary-color
+        at 16 % alpha for both light and dark themes, sitting just
+        above the strip's own --card-background-color. */
+    .tb-day-strip-cell.is-active
+    {
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 16%, transparent);
+        font-weight: 600;
     }
 
-    /*  Spans inherit everything; no per-span font-size or line-
-        height override, that's what kept the baselines drifting
-        between weights / styles. Hierarchy lives in weight +
-        opacity + italic only (see the .tb-day-strip-kwh rule
-        further down for the lighter weight + 0.75 opacity recipe). */
     .tb-day-strip-date
     {
         font-weight: inherit;
-    }
-
-    /*  Cramped-cell fallback: drop the kWh annotation only on
-        extremely narrow cells where neither the date nor the kWh
-        could fit. Above this floor the kWh is always shown so the
-        last forecast day stays readable even when the timeline
-        ends mid-day and that cell is much narrower than the others. */
-    @container tb-day-strip-cell (max-width: 48px)
-    {
-        .tb-day-strip-kwh { display: none; }
     }
 
     /*  Vertical separator at each between-day boundary. Dotted
@@ -1678,26 +1727,6 @@ export const heliosCardStyles = css`
         );
     }
 
-    /*  Daily kWh total, sits next to the date label in the same
-        cell. Same lighter weight + opacity recipe as the previous
-        chip layout so the date stays the primary read; forecast
-        days italicise to flag "estimate, not observation".         */
-    .tb-day-strip-kwh
-    {
-        font-weight: 500;
-        opacity: 0.75;
-    }
-    .tb-day-strip-kwh::before
-    {
-        content: "·";
-        margin-right: 2px;
-        opacity: 0.5;
-    }
-    .tb-day-strip-kwh.is-forecast
-    {
-        font-style: italic;
-    }
-
     /*  Optional PV graph card stacked above the main chart. Same
         height as the main chart so the two cards form a balanced
         stack: production sits on top, irradiance + cloud cover
@@ -1706,7 +1735,7 @@ export const heliosCardStyles = css`
         (32 px PV + 64 px main) layout occupied. */
     .tb-pv-card
     {
-        height: 48px;
+        height: clamp(36px, 8cqw, 72px);
     }
 
 
@@ -1763,15 +1792,10 @@ export const heliosCardStyles = css`
         Selector list mirrors what .detail-active fades earlier in
         this file, plus the corners (top-left clock + top-right rail
         minus the LiDAR button itself), the home hitbox / glow, and
-        the timeline. Easier to audit if any future overlay needs
-        to be hidden in LiDAR View by looking at this single block. */
+        the timeline. */
     /*  Base transition + composite-layer hint kept on the unprefixed
         selectors so the fade runs in BOTH directions across every
-        browser. Declaring the transition only inside .lidar-view-
-        active made entry smooth but the exit snap-back instantly
-        because the selector no longer matched and the transition
-        property left scope; declaring it here keeps it in scope at
-        all times. The will-change: opacity hint promotes each element
+        browser. The will-change: opacity hint promotes each element
         to its own composite layer so the GPU drives the alpha sweep
         instead of asking the painter to redo layout per frame,
         which used to drop frames on the chips that sit inside
@@ -1783,8 +1807,7 @@ export const heliosCardStyles = css`
     .home-drop-leader-svg,
     .solar-svg,
     .solar-pct-label,
-    .cloud-pct-label,
-    .pv-home-anchor-svg,
+.pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -1802,31 +1825,13 @@ export const heliosCardStyles = css`
         GPU layers in idle VRAM (~15-30 MB on devices with limited
         budgets) and forcing the compositor to re-sync them on every
         Lit re-render. Promote only when a mode actually toggles. */
-    ha-card.lidar-view-active     .overlay-top-left, ha-card.lidar-view-active     .home-glow-svg,
-    ha-card.lidar-view-active     .home-hitbox,      ha-card.lidar-view-active     .home-silhouette-svg,
-    ha-card.lidar-view-active     .home-drop-leader-svg, ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active     .solar-pct-label,  ha-card.lidar-view-active     .cloud-pct-label,
-    ha-card.lidar-view-active     .pv-home-anchor-svg, ha-card.lidar-view-active   .pv-home-leader-svg,
-    ha-card.lidar-view-active     .pv-pct-label,     ha-card.lidar-view-active     .battery-leader-svg,
-    ha-card.lidar-view-active     .battery-pct-label,ha-card.lidar-view-active     .grid-leader-svg,
-    ha-card.lidar-view-active     .grid-import-label,ha-card.lidar-view-active     .grid-export-label,
-    ha-card.lidar-view-active     .home-pill,
-    ha-card.shading-dome-active   .overlay-top-left, ha-card.shading-dome-active   .home-glow-svg,
-    ha-card.shading-dome-active   .home-hitbox,      ha-card.shading-dome-active   .home-silhouette-svg,
-    ha-card.shading-dome-active   .home-drop-leader-svg, ha-card.shading-dome-active .solar-svg,
-    ha-card.shading-dome-active   .solar-pct-label,  ha-card.shading-dome-active   .cloud-pct-label,
-    ha-card.shading-dome-active   .pv-home-anchor-svg, ha-card.shading-dome-active .pv-home-leader-svg,
-    ha-card.shading-dome-active   .pv-pct-label,     ha-card.shading-dome-active   .battery-leader-svg,
-    ha-card.shading-dome-active   .battery-pct-label,ha-card.shading-dome-active   .grid-leader-svg,
-    ha-card.shading-dome-active   .grid-import-label,ha-card.shading-dome-active   .grid-export-label,
-    ha-card.shading-dome-active   .home-pill,
     ha-card.detail-active         .overlay-top-left, ha-card.detail-active         .home-glow-svg,
     ha-card.detail-active         .home-hitbox,      ha-card.detail-active         .pv-home-anchor-svg,
     ha-card.detail-active         .pv-home-leader-svg, ha-card.detail-active       .pv-pct-label,
     ha-card.detail-active         .battery-leader-svg, ha-card.detail-active       .battery-pct-label,
     ha-card.detail-active         .solar-svg,        ha-card.detail-active         .solar-pct-label,
-    ha-card.detail-active         .cloud-pct-label
-    {
+    ha-card.detail-active
+{
         will-change: opacity;
     }
 
@@ -1839,22 +1844,6 @@ export const heliosCardStyles = css`
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
     }
-    ha-card.lidar-view-active .home-glow-svg,
-    ha-card.lidar-view-active .home-hitbox,
-    ha-card.lidar-view-active .home-silhouette-svg,
-    ha-card.lidar-view-active .home-drop-leader-svg,
-    ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active .solar-pct-label,
-    ha-card.lidar-view-active .cloud-pct-label,
-    ha-card.lidar-view-active .pv-home-anchor-svg,
-    ha-card.lidar-view-active .pv-home-leader-svg,
-    ha-card.lidar-view-active .pv-pct-label,
-    ha-card.lidar-view-active .battery-leader-svg,
-    ha-card.lidar-view-active .battery-pct-label,
-    ha-card.lidar-view-active .grid-leader-svg,
-    ha-card.lidar-view-active .grid-import-label,
-    ha-card.lidar-view-active .grid-export-label,
-    ha-card.lidar-view-active .home-pill
     {
         opacity: 0;
         pointer-events: none;
@@ -1862,17 +1851,14 @@ export const heliosCardStyles = css`
     /*  Timeline slides out below the card edge. Pointer-events
         disabled so the drifting element cannot intercept clicks
         while off-screen. translateX kept so the bar stays centred. */
-    ha-card.lidar-view-active .time-bar
     {
         transform: translateX(-50%) translateY(140%);
         pointer-events: none;
     }
-    ha-card.lidar-view-active .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
     }
-    ha-card.lidar-view-active .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
@@ -1883,34 +1869,15 @@ export const heliosCardStyles = css`
         canvas, then the dome SVG itself overlays the map without
         intercepting pointer events. Top-right chip cluster stays
         live so the user can toggle the dome back off.            */
-    ha-card.shading-dome-active .overlay-top-left,
-    ha-card.shading-dome-active .home-glow-svg,
-    ha-card.shading-dome-active .home-hitbox,
-    ha-card.shading-dome-active .home-silhouette-svg,
-    ha-card.shading-dome-active .home-drop-leader-svg,
-    ha-card.shading-dome-active .solar-svg,
-    ha-card.shading-dome-active .solar-pct-label,
-    ha-card.shading-dome-active .cloud-pct-label,
-    ha-card.shading-dome-active .pv-home-anchor-svg,
-    ha-card.shading-dome-active .pv-home-leader-svg,
-    ha-card.shading-dome-active .pv-pct-label,
-    ha-card.shading-dome-active .battery-leader-svg,
-    ha-card.shading-dome-active .battery-pct-label,
-    ha-card.shading-dome-active .grid-leader-svg,
-    ha-card.shading-dome-active .grid-import-label,
-    ha-card.shading-dome-active .grid-export-label,
-    ha-card.shading-dome-active .home-pill
     {
         opacity: 0;
         pointer-events: none;
     }
     /*  Same slide-out as LiDAR for the timeline. */
-    ha-card.shading-dome-active .time-bar
     {
         transform: translateX(-50%) translateY(140%);
         pointer-events: none;
     }
-    ha-card.shading-dome-active .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
@@ -1918,33 +1885,10 @@ export const heliosCardStyles = css`
 
     /*  Cloud-dome (per-layer reveal) is now a soft mode: the rest of
         the HUD stays alive and the cloud chip itself remains visible
-        as the OFF switch. No fade-out blanket like the LiDAR or
-        shading dome modes used to apply. */
-
-    /*  Spinner styling on the LiDAR mode-bar button while shadows
-        are loading. The class lives on the ha-icon itself so the
-        animation drops the exact frame the icon swaps to the
-        satellite / harddisk glyph; if we scoped it to
-        .mode-bar-seg.is-loading ha-icon the parent class flip and
-        the icon attribute swap could land one paint frame apart
-        and the satellite icon would briefly inherit the rotation
-        (see #152). */
-    .mode-bar-seg ha-icon.is-spinning
-    {
-        animation: mode-bar-spin 1.2s linear infinite;
-    }
-    @keyframes mode-bar-spin
-    {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
-    }
-    /*  Three-segment mode bar (Layer UI / LiDAR / Ombres). Sits
-        in the top-right rail in place of the old LiDAR chip pair.
-        Stacked VERTICALLY with iOS-friendly 40 px touch targets
-        so the trio is comfortable on a phone in landscape. Each
-        segment is icon-only with a title tooltip; the active
-        segment takes the same scrub-blue plate the clock chip
-        uses while scrubbing so the user has one consistent
+        as the OFF switch. */
+    /*  Cloud-cover toggle button. iOS-friendly 40 px touch target,
+        icon-only with a title tooltip; the on state takes the brand
+        primary plate so the user has one consistent
         visual language for "you are in a non-default mode".
         Segments are glued together via shared borders and
         matching corner radii.                                    */
@@ -1954,17 +1898,10 @@ export const heliosCardStyles = css`
         the HA dashboard toolbar buttons so a Helios card dropped
         into a HA Energy dashboard reads as part of the toolbar
         family. */
-    .mode-bar
+    .cloud-cover-toggle
     {
-        display: inline-flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 4px;
-        pointer-events: auto;
-        background: transparent;
-    }
-    .mode-bar-seg
-    {
+        appearance: none;
+        -webkit-appearance: none;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -1972,298 +1909,51 @@ export const heliosCardStyles = css`
         height: 40px;
         box-sizing: border-box;
         padding: 0;
-        background: transparent;
-        /*  Use --primary-text-color so the icon stays readable on
-            light dashboards (HA's --secondary-text-color is a faded
-            grey that disappears against a white --ha-card-background-color). */
+        background-color: transparent;
+        background-clip: padding-box;
         color: var(--primary-text-color, #212121);
         border: 0;
+        outline: 0 !important;
+        outline-offset: 0;
         border-radius: 50%;
+        overflow: hidden;
         cursor: pointer;
         position: relative;
         z-index: 50;
         opacity: 1;
-        transition: background 0.15s, color 0.15s;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.15s, color 0.15s;
     }
-    .mode-bar-seg:hover  { background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
-    .mode-bar-seg:active { background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
-    .mode-bar-seg ha-icon
+    .cloud-cover-toggle:hover,
+    .cloud-cover-toggle:focus,
+    .cloud-cover-toggle:focus-visible,
+    .cloud-cover-toggle:active
+    {
+        outline: 0 !important;
+        box-shadow: none !important;
+    }
+    .cloud-cover-toggle:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
+    .cloud-cover-toggle:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
+    .cloud-cover-toggle ha-icon
     {
         --mdc-icon-size: 22px;
         color: inherit;
         display: inline-flex;
         align-items: center;
+        pointer-events: none;
     }
-    .mode-bar-seg.is-disabled
-    {
-        opacity: 0.35;
-        cursor: not-allowed;
-    }
-    .mode-bar-seg.is-disabled:hover,
-    .mode-bar-seg.is-disabled:active { background: transparent; }
     /*  Active toggle: brand-blue pastille behind the icon, white
         glyph on top. Same on-primary recipe HA toolbars use. */
-    .mode-bar-seg.is-on
+    .cloud-cover-toggle.is-on
     {
         background: var(--primary-color, #03a9f4);
         color: var(--text-on-primary-color, #ffffff);
     }
-    .mode-bar-seg.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
-    .mode-bar-seg.is-on:active { background: var(--darker-primary-color, #01579b); }
-    /*  Dome SVG: full-card overlay, sits below the click chrome so
-        it never blocks pointer events. Fade alpha comes from inline
-        style driven by the dome fade RAF.                          */
-    .shading-dome-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        z-index: 7;
-    }
-    /*  Wireframe + cell outlines paint via currentColor so the dome
-        flips polarity with the theme: black ink on a bright basemap
-        in light mode, white ink against a darkened basemap in dark
-        mode. Per-cell opacities live inline so the wipe + decay
-        envelope stays a pure paint-property and doesn't bleed into
-        the theme switch. */
-    .shading-dome-cells-wire,
-    .shading-dome-cells-color
-    {
-        color: var(--primary-text-color, #212121);
-    }
-    ha-card.theme-dark .shading-dome-cells-wire,
-    ha-card.theme-dark .shading-dome-cells-color
-    {
-        color: #ffffff;
-    }
-    /*  Cloud-bin picker: small segmented control hugging the top
-        edge under the dome chip cluster. Pills mirror the dome's
-        accent so it reads as part of the same widget.             */
-    /*  Continuous cloud-cover slider, bottom-centre of the card
-        while the dome is on. Sun glyph on the LEFT, heavy-cloud
-        glyph on the RIGHT, the slider in between reads as the
-        cloud-cover knob driving the dome's view. Percent value
-        chip on the far RIGHT is the immediate readout. Shares the
-        same pill, same z, same bottom anchor as the LiDAR opacity
-        slider so the two modes feel mounted to the same rail. */
-    .shading-dome-cloud-slider
-    {
-        position: absolute;
-        bottom: 14px;
-        left: 50%;
-        /*  translateY(60px) parks the pill below the card so the
-            slide-in animation can lift it back into view when the
-            mode becomes active. The .is-active class below resets
-            translateY to 0; the transition on transform + opacity
-            runs in both directions. */
-        transform: translate(-50%, 60px);
-        opacity: 0;
-        pointer-events: none;
-        transition: transform 0.35s ease, opacity 0.35s ease;
-        z-index: 50;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 12px;
-        min-height: 28px;
-        box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 999px;
-    }
-    .shading-dome-cloud-slider.is-active
-    {
-        transform: translate(-50%, 0);
-        opacity: 1;
-        pointer-events: auto;
-    }
-    /*  Tick wrapper: the slider sits in a relative container so
-        the tick spans can be absolutely positioned over the
-        track without disturbing the slider's native thumb
-        hit-area. --thumb-r feeds the calc() positions on each
-        tick so they land on the actual thumb centre at every
-        snap point, not on the wrap's geometric percentage. The
-        native thumb's centre travels between (thumb-r) and
-        (track-width - thumb-r), so we use the same offset for
-        the tick positions.                                       */
-    .shading-dome-cloud-track-wrap
-    {
-        --thumb-r: 7px;
-        position: relative;
-        display: inline-flex;
-        align-items: center;
-        height: 14px;
-    }
-    .shading-dome-cloud-tick
-    {
-        position: absolute;
-        top: 50%;
-        width: 2px;
-        height: 8px;
-        background: rgba(255, 255, 255, 0.35);
-        border-radius: 1px;
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-        /*  Stack below the slider thumb so the knob always reads as
-            the foreground, the ticks as reference marks behind it. */
-        z-index: 0;
-    }
-    .shading-dome-cloud-icon
-    {
-        --mdc-icon-size: 16px;
-        color: rgba(255, 255, 255, 0.85);
-        display: inline-flex;
-        align-items: center;
-    }
-    .shading-dome-cloud-icon--sun   { color: #fde68a; }
-    .shading-dome-cloud-icon--cloud { color: #cbd5e1; }
-    .shading-dome-cloud-range
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 160px;
-        height: 4px;
-        background: linear-gradient(to right, #fde68a 0%, #cbd5e1 100%);
-        border-radius: 999px;
-        outline: none;
-        cursor: pointer;
-        margin: 0;
-    }
-    .shading-dome-cloud-range::-webkit-slider-thumb
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--primary-color, #03a9f4);
-        border: 2px solid var(--card-background-color, #ffffff);
-        box-shadow: 0 1px 3px var(--shadow-color);
-        cursor: pointer;
-        position: relative;
-        z-index: 2;
-    }
-    .shading-dome-cloud-range::-moz-range-thumb
-    {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--primary-color, #03a9f4);
-        border: 2px solid var(--card-background-color, #ffffff);
-        box-shadow: 0 1px 3px var(--shadow-color);
-        cursor: pointer;
-        position: relative;
-        z-index: 2;
-    }
-    .shading-dome-cloud-value
-    {
-        min-width: 36px;
-        text-align: right;
-        font-size: 11px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.85);
-        font-variant-numeric: tabular-nums;
-    }
-
-    /*  LiDAR View opacity slider. Painted at the bottom of the card
-        while the LiDAR view is active. Same capsule pill as the dome
-        cloud picker for visual consistency between the two modes;
-        ungated (continuous, no ticks) because opacity is a free
-        analog tune, not a binned pick.                              */
-
-    .lidar-view-opacity-slider
-    {
-        position: absolute;
-        bottom: 14px;
-        left: 50%;
-        /*  Same parked-below-the-card resting state as the dome
-            slider so the two modes share one slide-in animation. */
-        transform: translate(-50%, 60px);
-        opacity: 0;
-        pointer-events: none;
-        transition: transform 0.35s ease, opacity 0.35s ease;
-        z-index: 50;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        padding: 6px 12px;
-        min-height: 28px;
-        box-sizing: border-box;
-        background: rgba(0, 0, 0, 0.55);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        border-radius: 999px;
-    }
-    .lidar-view-opacity-slider.is-active
-    {
-        transform: translate(-50%, 0);
-        opacity: 1;
-        pointer-events: auto;
-    }
-    .lidar-view-opacity-icon
-    {
-        --mdc-icon-size: 16px;
-        color: rgba(255, 255, 255, 0.85);
-        display: inline-flex;
-        align-items: center;
-    }
-    .lidar-view-opacity-icon--low  { opacity: 0.7; }
-    .lidar-view-opacity-icon--high { opacity: 1.0; }
-    .lidar-view-opacity-range
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 160px;
-        height: 4px;
-        background: linear-gradient(to right, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.9) 100%);
-        border-radius: 999px;
-        outline: none;
-        cursor: pointer;
-        margin: 0;
-    }
-    .lidar-view-opacity-range::-webkit-slider-thumb
-    {
-        appearance: none;
-        -webkit-appearance: none;
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--primary-color, #03a9f4);
-        border: 2px solid var(--card-background-color, #ffffff);
-        box-shadow: 0 1px 3px var(--shadow-color);
-        cursor: pointer;
-        position: relative;
-        z-index: 2;
-    }
-    .lidar-view-opacity-range::-moz-range-thumb
-    {
-        width: 16px;
-        height: 16px;
-        border-radius: 50%;
-        background: var(--primary-color, #03a9f4);
-        border: 2px solid var(--card-background-color, #ffffff);
-        box-shadow: 0 1px 3px var(--shadow-color);
-        cursor: pointer;
-        position: relative;
-        z-index: 2;
-    }
-    .lidar-view-opacity-value
-    {
-        min-width: 36px;
-        text-align: right;
-        font-size: 11px;
-        font-weight: 600;
-        color: rgba(255, 255, 255, 0.85);
-        font-variant-numeric: tabular-nums;
-    }
-
-
-    /*  Top corner overlays. Date/time + scrub-return cluster on the
-        left; LiDAR-view toggle + "LiDAR" status chip on the right.
-        Both rails are flex rows sitting 8 px from their card edge,
-        each one fusing two elements (chip + adjacent button) into
-        a single composite control via shared seams.                */
+    .cloud-cover-toggle.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
+    .cloud-cover-toggle.is-on:active { background: var(--darker-primary-color, #01579b); }
+    /*  Top corner overlays. Camera-lock + scrub-return on the left,
+        cloud-cover toggle on the right. Both rails are flex rows
+        sitting 8 px from their card edge.                          */
 
     /*  Date/time chip, same chip language as the on-map readouts.
         Explicit height (border-box) so the chip and the back-to-
@@ -2279,18 +1969,17 @@ export const heliosCardStyles = css`
     .pv-pct-label,
     .battery-pct-label,
     .solar-pct-label,
-    .cloud-pct-label
-    {
+{
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
     }
 
     /*  Top-right overlay rail. Hosts the three view-mode toggles
-        (default layer, LiDAR view, shading dome). z-index: 60 keeps
+        (default layer view). z-index: 60 keeps
         the rail above the LiDAR canvas (z 30) and the centre spinner
         (z 50) so a toggle is always reachable. Pointer events off on
         the rail itself so the empty rail never steals map
-        interactions; each .mode-bar-seg button opts back in. */
+        interactions; each .cloud-cover-toggle button opts back in. */
     .overlay-top-right
     {
         position: absolute;
@@ -2305,10 +1994,10 @@ export const heliosCardStyles = css`
 
     /*  Camera-lock toggle. Pinned top-left of the card, opens
         (lock-open) when the camera is free and closes (lock) when
-        locked. Same visual size and idle/active recipe as a
-        .mode-bar-seg so the left lock button + the right mode-bar
-        read as one button family. The brand-blue pastille appears
-        when locked, matching the mode-bar-seg.is-on state. */
+        locked. Same visual size and idle/active recipe as the
+        .cloud-cover-toggle so the left lock button and the right
+        cloud-cover button read as one family. The brand-blue
+        pastille appears when locked, matching cloud-cover-toggle.is-on. */
     .camera-lock-btn
     {
         display: inline-flex;
@@ -2348,10 +2037,10 @@ export const heliosCardStyles = css`
 
     /*  Top-left rail, mirrors overlay-top-right on the opposite edge
         so the corner overlays sit at matching heights. Hosts the
-        camera-lock toggle (replaces the old clock chip). Pointer
-        events are off on the rail by default; the button opts back
-        in via .camera-lock-btn so clicks reach it without the rail
-        stealing unrelated map interactions. */
+        camera-lock toggle. Pointer events are off on the rail by
+        default; the button opts back in via .camera-lock-btn so
+        clicks reach it without the rail stealing unrelated map
+        interactions. */
     .overlay-top-left
     {
         position: absolute;
@@ -2388,7 +2077,7 @@ export const heliosCardStyles = css`
     .shadow-busy-sun
     {
         --mdc-icon-size: 18px;
-        color: var(--helios-sun-color, var(--energy-solar-color, #ff9800));
+        color: var(--helios-sun-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -2407,8 +2096,7 @@ export const heliosCardStyles = css`
         2 px ring instead of the production / battery / grid hues.
         Always sits above the arc + the solar ray so the toggle stays
         reachable. */
-    .cloud-pct-label
-    {
+{
         position: absolute;
         top: 8px;
         left: 50%;
@@ -2423,7 +2111,7 @@ export const heliosCardStyles = css`
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--helios-cloud-color, var(--secondary-text-color, #727272));
+        border:     2px solid var(--helios-cloud-color, var(--secondary-text-color, var(--secondary-text-color, #727272)));
         border-radius: 999px;
         padding: 3px 10px;
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
@@ -2436,18 +2124,17 @@ export const heliosCardStyles = css`
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
     }
-
-    .cloud-pct-label ha-icon
+ha-icon
     {
         --mdc-icon-size: 16px;
         color: inherit;
         display: inline-flex;
         align-items: center;
     }
-    /*  Cloud chip ON state (per-layer detail visible): same scrub-
-        blue plate as the clock chip in scrub mode so the user reads
-        "this control is currently expanding the layers below".    */
-    .cloud-pct-label.is-on
+    /*  Cloud chip ON state (per-layer detail visible): brand-blue
+        plate signals the control is currently expanding the layers
+        below.                                                       */
+.is-on
     {
         background: var(--primary-color, #03a9f4);
         color: var(--text-on-primary-color, #ffffff);
@@ -2460,123 +2147,95 @@ export const heliosCardStyles = css`
         hover so the affordance reads without a tooltip. The chip
         does NOT lift on hover, the user asked for a flat feedback
         so the chip stays anchored to its X-centred top spot. */
-    button.cloud-pct-label
-    {
+    button
+{
         font-family: inherit;
         cursor: pointer;
         pointer-events: auto;
         transition: box-shadow 0.15s ease;
     }
-    button.cloud-pct-label:hover
+    button
+:hover
     {
         box-shadow: 0 2px 8px var(--shadow-color);
     }
-    button.cloud-pct-label:active
+    button
+:active
     {
         box-shadow: 0 1px 2px var(--shadow-color);
     }
-    button.cloud-pct-label:focus-visible
+    button
+:focus-visible
     {
         outline: 2px solid var(--primary-color, #03a9f4);
         outline-offset: 1px;
     }
 
-    /*  Row of three per-layer cloud chips revealed when the cloud
-        toggle is ON. Toggle is instant in both directions, the chips
-        and their leaders flip between hidden and visible in the same
-        frame as the click. Same pill recipe as the chip itself.
-        The 54px top leaves a 16px lane underneath the cloud toggle
-        chip for the L-shape leaders drawn by .cloud-layer-leaders. */
-    .cloud-layer-chips
-    {
-        position: absolute;
-        top: 54px;
-        left: 50%;
-        transform: translateX(-50%);
-        display: flex;
-        gap: 8px;
-        z-index: 50;
-        pointer-events: none;
-    }
-
-    /*  L-shape leaders connecting the cloud toggle (top-center) to
-        the three layer chips (bottom). 180 x 22 viewBox in 1:1 pixel
-        units so the elbow's quadratic-bezier fillet renders as a true
-        soft arc (matching the main home leaders). The two outer paths
-        are L-with-fillet, the middle is a straight vertical. Z-index
-        50 puts the leaders ABOVE every chip + SVG overlay below so
-        they always crown the cluster without getting crossed by any
-        arc or chip family.                                          */
-    .cloud-layer-leaders
-    {
-        position: absolute;
-        top: 32px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 180px;
-        height: 22px;
-        z-index: 50;
-        pointer-events: none;
-        color: var(--secondary-text-color, rgba(0, 0, 0, 0.55));
-        opacity: 0;
-        overflow: visible;
-    }
-    .cloud-layer-leaders.is-on { opacity: 1; }
-    /*  Solid stroke, same vocabulary as the main home leaders
-        (.grid-import-leader-line etc.): no dashes, hairline 1 px
-        weight to match the HA Energy dashboard's connector lines,
-        round caps. Both individual leaders and the rail flip
-        between hidden and visible instantly with the toggle so the
-        whole layer cluster appears and disappears in one frame. */
-    .cloud-layer-leader
-    {
-        stroke-width: 1;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-        opacity: 0;
-    }
-    .cloud-layer-leaders.is-on .cloud-layer-leader { opacity: 0.75; }
-    /*  Fixed pill geometry so the row layout does not reflow as the
-        per-layer cover percent changes. min-width = 54 px holds the
-        widest value ("100%") at the current font; shorter strings
-        ("7 %") get centered inside the same footprint via
-        justify-content. The fixed width also makes the SVG leader
-        path coordinates above stable and aligned with each chip's
-        centre.
-        The three chips appear and disappear together in one frame
-        with the toggle: no fade, no cascade, no slide. */
+    /*  Per-altitude cloud cover discs. Three 40 px round chips drop
+        in the overlay-top-right rail below the cloud-cover toggle.
+        Always in the DOM whenever the cloud scene is available so
+        the chips can fade between the on / off states. The cascade
+        runs strict TOP DOWN on enter: high first (delay 0), mid
+        after high finishes (~280 ms), low last (~560 ms); on exit
+        the same selectors apply BOTTOM UP — low fades first, then
+        mid, then high. Visuals mirror the toggle's idle look exactly,
+        transparent plate, primary-text-color icon + label. */
     .cloud-layer-chip
     {
         display: inline-flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 4px;
-        height: 20px;
-        min-width: 54px;
-        padding: 2px 8px;
-        box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
+        width:  40px;
+        height: 40px;
+        margin-top: 4px;
+        background: transparent;
         color: var(--primary-text-color, #212121);
-        border: 2px solid var(--helios-cloud-color, var(--secondary-text-color, #727272));
-        border-radius: 999px;
-        font-size: 11px;
+        border-radius: 50%;
+        font-size: 12px;
         font-weight: 600;
-        line-height: 1.2;
+        line-height: 1;
         font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
+        pointer-events: none;
         opacity: 0;
+        transform: translateY(-4px);
+        transition: opacity 0.28s ease, transform 0.28s ease;
     }
-    /*  Smaller glyph (11 px vs 14) so the icon stops dominating the
-        pill: with the new layout the percent text is the primary
-        information, the icon is just a layer marker.               */
+    /*  Exit cascade (bottom up): low fades out first, then mid, then
+        high. These selectors only match when the chip does NOT carry
+        the is-on class, i.e. the moment the toggle flips off. */
+    .cloud-layer-chip--low  { transition-delay: 0ms;   }
+    .cloud-layer-chip--mid  { transition-delay: 280ms; }
+    .cloud-layer-chip--high { transition-delay: 560ms; }
+    /*  Enter cascade (top down): high first, then mid, then low.
+        The is-on selectors override the default delays above so the
+        same chip uses different timings on entry vs exit. */
+    .cloud-layer-chip--high.is-on
+    {
+        opacity: 1;
+        transform: translateY(0);
+        transition-delay: 0ms;
+    }
+    .cloud-layer-chip--mid.is-on
+    {
+        opacity: 1;
+        transform: translateY(0);
+        transition-delay: 280ms;
+    }
+    .cloud-layer-chip--low.is-on
+    {
+        opacity: 1;
+        transform: translateY(0);
+        transition-delay: 560ms;
+    }
     .cloud-layer-chip ha-icon
     {
-        --mdc-icon-size: 11px;
+        --mdc-icon-size: 14px;
         color: inherit;
+        display: inline-flex;
+        align-items: center;
+        margin-bottom: 2px;
     }
-    .cloud-layer-chips.is-on .cloud-layer-chip { opacity: 1; }
 
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
@@ -2606,7 +2265,7 @@ export const heliosCardStyles = css`
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--pv-leader-color, var(--energy-solar-color, #ff9800));
+        border:     2px solid var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
         border-radius: 999px;
         padding: 3px 10px;
         font-size:    12px;
@@ -2654,7 +2313,7 @@ export const heliosCardStyles = css`
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
+        border:     2px solid var(--battery-leader-color, var(--energy-battery-out-color, var(--energy-battery-out-color, #4db6ac)));
         border-radius: 999px;
         padding: 3px 10px;
         font-size:    12px;
@@ -2705,11 +2364,11 @@ export const heliosCardStyles = css`
     }
     .grid-import-label
     {
-        border: 2px solid var(--energy-grid-consumption-color, #488fc2);
+        border: 2px solid var(--energy-grid-consumption-color, var(--energy-grid-consumption-color, #488fc2));
     }
     .grid-export-label
     {
-        border: 2px solid var(--energy-grid-return-color, #8353d1);
+        border: 2px solid var(--energy-grid-return-color, var(--energy-grid-return-color, #8353d1));
     }
     .grid-import-label ha-icon,
     .grid-export-label ha-icon
@@ -2731,20 +2390,20 @@ export const heliosCardStyles = css`
     }
     .grid-import-leader-line
     {
-        stroke: var(--energy-grid-consumption-color, #488fc2);
+        stroke: var(--energy-grid-consumption-color, var(--energy-grid-consumption-color, #488fc2));
         stroke-width: 1;
         stroke-linecap: round;
         fill: none;
     }
     .grid-export-leader-line
     {
-        stroke: var(--energy-grid-return-color, #8353d1);
+        stroke: var(--energy-grid-return-color, var(--energy-grid-return-color, #8353d1));
         stroke-width: 1;
         stroke-linecap: round;
         fill: none;
     }
-    .grid-import-leader-bead { fill: var(--energy-grid-consumption-color, #488fc2); }
-    .grid-export-leader-bead { fill: var(--energy-grid-return-color, #8353d1); }
+    .grid-import-leader-bead { fill: var(--energy-grid-consumption-color, var(--energy-grid-consumption-color, #488fc2)); }
+    .grid-export-leader-bead { fill: var(--energy-grid-return-color, var(--energy-grid-return-color, #8353d1)); }
 
     /*  PV → home leader. Vertical dashed line from the PV chip's
         bottom edge down to the home marker, painted in the configured
@@ -2765,7 +2424,7 @@ export const heliosCardStyles = css`
 
     .pv-home-leader-line
     {
-        stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
+        stroke: var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
         stroke-width: 1;
         stroke-opacity: 1;
         stroke-linecap: round;
@@ -2803,7 +2462,7 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         pointer-events: none;
-        /*  Sits ABOVE the cloud-cover disc bands (z 3) so the green
+        /*  Sits ABOVE the cloud-cover dome bands (z 3) so the green
             HA-Energy home ring is always visible at the foot of the
             house even when overcast. Stacks below the home-glow
             silhouette (z 9) and the time bar (z 10) so it still
@@ -2861,7 +2520,7 @@ export const heliosCardStyles = css`
 
     .battery-leader-line
     {
-        stroke: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
+        stroke: var(--battery-leader-color, var(--energy-battery-out-color, var(--energy-battery-out-color, #4db6ac)));
         stroke-width: 1;
         stroke-opacity: 1;
         stroke-linecap: round;
@@ -2994,7 +2653,6 @@ export const heliosCardStyles = css`
         on the home, sliced into three horizontal bands (low / mid
         / high cloud) whose per-band opacity scales with the live
         cover percentage. Same fade-in / fade-out CSS rules as the
-        shading dome (toggled by the cloud-dome mode-bar segment),
         and same currentColor + opacity-driven look so the bands
         feel like "filling water" inside a glass hemisphere. */
     .cloud-dome-svg
@@ -3005,7 +2663,7 @@ export const heliosCardStyles = css`
         height: 100%;
         pointer-events: none;
         z-index: 12;
-        color: var(--helios-cloud-color, var(--primary-text-color, #727272));
+        color: var(--helios-cloud-color, var(--primary-text-color, var(--secondary-text-color, #727272)));
         transition: opacity 240ms ease-out;
     }
     .cloud-dome-disc
@@ -3116,7 +2774,7 @@ export const heliosCardStyles = css`
             reads distinct from the PV production identity. PV stays
             on --energy-solar-color (orange); the sun stays on amber
             so the two never blur visually. */
-        border:     2px solid var(--helios-sun-color, var(--amber-color, #ffc107));
+        border:     2px solid var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
         border-radius: 999px;
         padding: 3px 10px;
         font-size:    12px;
@@ -3257,8 +2915,7 @@ export const heliosCardStyles = css`
         flips on its own width, not on the viewport's. */
     @container helios-card (min-width: 900px)
     {
-        .cloud-pct-label,
-        .pv-pct-label,
+.pv-pct-label,
         .battery-pct-label,
         .grid-import-label,
         .grid-export-label,
@@ -3267,7 +2924,7 @@ export const heliosCardStyles = css`
             font-size: 14px;
             padding: 4px 12px;
         }
-        .cloud-pct-label ha-icon,
+ha-icon,
         .pv-pct-label ha-icon,
         .battery-pct-label ha-icon,
         .grid-import-label ha-icon,
@@ -3283,12 +2940,6 @@ export const heliosCardStyles = css`
         .tb-hover-tooltip
         {
             font-size: 13px;
-        }
-        .cloud-layer-chip
-        {
-            font-size: 13px;
-            height: 24px;
-            min-width: 64px;
         }
     }
 
