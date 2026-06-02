@@ -32,6 +32,17 @@ export interface EnergyDefaults
     //core 2024+ on the battery source so the dashboard can show a
     //live percentage gauge.
     batterySocEntity:  string | null;
+    //Signed live grid power sensors collected from every grid
+    //source's `stat_rate` field. The HA Energy dashboard reads
+    //these directly from `hass.states` and splits the sign across
+    //its IMPORT / EXPORT chips with no slope derivation, see
+    //`hui-power-sankey-card.ts` in the home-assistant/frontend
+    //repo. Helios consumes the same field to make its LIVE chip
+    //match the value the official Energy dashboard renders.
+    //Multi-source installs (split tariffs, separate import / export
+    //meters that each expose their own rate) contribute one rate
+    //per source and the consumer sums them.
+    gridStatRates:     string[];
 }
 
 
@@ -42,6 +53,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     gridExportEntity:   null,
     batteryPowerEntity: null,
     batterySocEntity:   null,
+    gridStatRates:      [],
 };
 
 
@@ -139,7 +151,20 @@ export function parseEnergyPrefs(prefs: {
     energy_sources?: Array<Record<string, unknown>>;
 }): EnergyDefaults
 {
-    const out: EnergyDefaults = { ...EMPTY_ENERGY_DEFAULTS };
+    //Fresh literal rather than `{ ...EMPTY_ENERGY_DEFAULTS }` so the
+    //`gridStatRates` array is not aliased on the shared empty default,
+    //avoiding cross-call contamination when multiple parses run in
+    //the same lifecycle (the subscription path can trigger a parse
+    //while a previous one is still settling).
+    const out: EnergyDefaults =
+    {
+        pvPowerEntity:      null,
+        gridImportEntity:   null,
+        gridExportEntity:   null,
+        batteryPowerEntity: null,
+        batterySocEntity:   null,
+        gridStatRates:      [],
+    };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
     for (const src of sources)
@@ -166,6 +191,12 @@ export function parseEnergyPrefs(prefs: {
                 const e = pickFirstString(src['stat_energy_to']);
                 if (e) out.gridExportEntity = e;
             }
+            //Live signed power sensor (HA Energy dashboard reads
+            //this for its own live chip, no slope, no aggregation).
+            //One per source so multi-tariff installs that expose a
+            //rate per tariff each contribute to the LIVE sum.
+            const rate = pickFirstString(src['stat_rate']);
+            if (rate) out.gridStatRates.push(rate);
         }
         else if (type === 'battery')
         {

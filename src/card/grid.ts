@@ -32,6 +32,7 @@
 import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import type { EnergyDefaults } from './energy-prefs';
 
 
 type Sample = { t: number; v: number; lastChangeT?: number | null };
@@ -109,6 +110,13 @@ export interface GridHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
+    //Optional snapshot of HA Energy dashboard defaults, populated by
+    //`card/energy-prefs.ts` via a long-running subscription. When the
+    //user has `stat_rate` sensors configured on grid sources, Helios
+    //layers a LIVE-only override on top of the directional kWh
+    //derivation so the chip matches the value the official Energy
+    //dashboard displays to the watt.
+    readonly _energyDefaults?: EnergyDefaults;
 
     requestUpdate(): void;
 
@@ -306,17 +314,73 @@ export function refreshGrid(host: GridHost): void
         return;
     }
 
-    //A combined signed entity, when wired, owns both chips and the
-    //two directional slots are ignored. Otherwise fall back to the
-    //independent import / export slots.
+    //A user-wired combined signed entity owns both chips outright
+    //and the two directional slots are ignored. Highest priority,
+    //the user picked this explicitly.
     if (resolveEntities(host, 'combined').length > 0)
     {
         readCombined(host);
         return;
     }
 
+    //Directional slots run unconditionally so the scrub + chart
+    //past-derivation buffers stay warm. They consume the user's
+    //grid-import-entity / grid-export-entity (typically cumulative
+    //kWh) and own the past-derivation path.
     readSlot(host, 'import');
     readSlot(host, 'export');
+
+    //HA Energy dashboard alignment: when the user's Energy
+    //dashboard config exposes a `stat_rate` sensor on any grid
+    //source, mirror HA's live read on top of the directional
+    //slope so the LIVE chip matches the value the official
+    //Energy dashboard renders to the watt. The kWh buffers
+    //populated above keep driving scrub + chart history; only
+    //the LIVE chip values are overridden.
+    const statRates = host._energyDefaults?.gridStatRates ?? [];
+    if (statRates.length > 0)
+    {
+        readStatRates(host, statRates);
+    }
+}
+
+
+//Mirror of HA `hui-power-sankey-card`'s live grid read. Sums the
+//signed power across every `stat_rate` entity collected from the
+//Energy dashboard prefs, applies the optional `grid-power-invert`
+//flip, then routes the net through `applyCombinedSplit` exactly
+//like the user-explicit combined path does: a non-negative net
+//shows on IMPORT only, a negative net on EXPORT only.
+//
+//No slope, no integration. The chip value reads whatever the
+//signed power sensor reports right now, normalised by SI prefix
+//on the unit (k -> *1000, M -> *1e6, etc.) the same way the
+//official Energy dashboard does it.
+//
+//Bails out silently when no rate sensor produced a usable value,
+//leaving the directional readSlot results from this same refresh
+//cycle as the displayed LIVE values. That preserves the legacy
+//behaviour for users running an older HA without `stat_rate` on
+//their Energy dashboard sources.
+function readStatRates(host: GridHost, rates: string[]): void
+{
+    let signedWatts = 0;
+    let sawAny      = false;
+    for (const entity of rates)
+    {
+        const stateObj = host.hass.states?.[entity];
+        if (!stateObj) continue;
+        const raw = stateObj.state;
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
+        const num = parseNumericState(raw);
+        if (num === null) continue;
+        const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
+        signedWatts += pvNormalizeToWatts(num, unit);
+        sawAny = true;
+    }
+    if (!sawAny) return;
+    if (gridPowerInvert(host.config)) signedWatts = -signedWatts;
+    applyCombinedSplit(host, signedWatts);
 }
 
 
