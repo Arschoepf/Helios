@@ -9,8 +9,6 @@ export const pl: Translations = {
     lidarViewChipLabel: 'Widok LiDAR',
 
     shadingDomeChipLabel: 'Cienie',
-    cameraLockEnable:     'Zablokuj kamerę',
-    cameraLockDisable:    'Odblokuj kamerę',
     detail:
     {
         exitHint: 'Kliknij gdziekolwiek, aby wyjść',

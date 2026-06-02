@@ -151,7 +151,19 @@ export function refreshSolarRadiation(host: RadiationHost): void
     {
         return;
     }
-    const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+    //Narrow raw window cap, mirrors the PV side (see fetchPvHistory):
+    //a Davis / Ecowitt W/m² sensor reporting every second over a
+    //multi-day visible timeline used to drag the HA recorder for the
+    //whole duration of the fetch, blocking every other card reading
+    //the same entity. The chart only needs accurate live data for
+    //the head of the curve; older past values are interpolated from
+    //the engine's resampled series. 6 h gives the W/m² tooltip
+    //enough resolution while keeping the recorder responsive.
+    const RAW_WINDOW_H = 6;
+    const visibleStart = host._timeRange.start;
+    const cap          = new Date(host._timeRange.end.getTime() - RAW_WINDOW_H * 3_600_000);
+    const fetchStart   = visibleStart < cap ? cap : visibleStart;
+    const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
     const fetchKey = `${entity}@${rangeKey}`;
     if (fetchKey === host._solarRadiationFetchKey)
     {
@@ -168,7 +180,7 @@ export function refreshSolarRadiation(host: RadiationHost): void
         pushSolarRadiationToEngine(host);
         return;
     }
-    fetchSolarRadiationHistory(host, entity, host._timeRange.start, host._timeRange.end, fetchKey);
+    fetchSolarRadiationHistory(host, entity, fetchStart, host._timeRange.end, fetchKey);
 }
 
 

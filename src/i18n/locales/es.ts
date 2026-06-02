@@ -6,8 +6,6 @@ export const es: Translations = {
     lidarViewChipLabel: 'Vista LiDAR',
 
     shadingDomeChipLabel: 'Sombras',
-    cameraLockEnable:     'Bloquear cámara',
-    cameraLockDisable:    'Desbloquear cámara',
     detail:
     {
         exitHint: 'Toca en cualquier lugar para salir',

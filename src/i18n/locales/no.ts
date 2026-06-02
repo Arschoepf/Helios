@@ -15,8 +15,6 @@ export const no: Translations = {
     lidarViewChipLabel: 'LiDAR-visning',
 
     shadingDomeChipLabel: 'Skygger',
-    cameraLockEnable:     'Lås kamera',
-    cameraLockDisable:    'Lås opp kamera',
     detail:
     {
         exitHint: 'Trykk hvor som helst for å gå ut',

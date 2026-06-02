@@ -359,7 +359,16 @@ export function refreshBattery(host: BatteryHost): void
     //Without this guard we'd reissue the WS command on every Lit
     //cycle (e.g. every clock tick).
     if (!host._timeRange || host._batteryFetching) return;
-    const rangeKey = `${host._timeRange.start.getTime()}|${host._timeRange.end.getTime()}`;
+    //Narrow raw window cap, mirrors the PV and W/m² sides: a 1 Hz
+    //battery SoC / power sensor (Victron Cerbo, JK BMS over MQTT,
+    //...) over a multi-day visible timeline used to drag the
+    //recorder. The battery chip only needs the live values + the
+    //tooltip's hover lookup, both of which the recent 6 h covers.
+    const RAW_WINDOW_H = 6;
+    const visibleStart = host._timeRange.start;
+    const cap          = new Date(host._timeRange.end.getTime() - RAW_WINDOW_H * 3_600_000);
+    const fetchStart   = visibleStart < cap ? cap : visibleStart;
+    const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
     //Bank signature: entity ids + invert flags + capacity weights. Capacity weights enter the key so a mid-session edit of a kWh field
     //invalidates the cached history and triggers a refetch that re-applies the new weighting at parse time.
     const sig = banks.map(b =>
@@ -379,7 +388,7 @@ export function refreshBattery(host: BatteryHost): void
         host._batteryPowerHistory = cached.power;
         return;
     }
-    fetchBatteryHistory(host, banks, host._timeRange.start, host._timeRange.end, fetchKey);
+    fetchBatteryHistory(host, banks, fetchStart, host._timeRange.end, fetchKey);
 }
 
 

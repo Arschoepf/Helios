@@ -6,8 +6,6 @@ export const nl: Translations = {
     lidarViewChipLabel: 'LiDAR-weergave',
 
     shadingDomeChipLabel: 'Schaduwen',
-    cameraLockEnable:     'Camera vergrendelen',
-    cameraLockDisable:    'Camera ontgrendelen',
     detail:
     {
         exitHint: 'Tik ergens om te sluiten',

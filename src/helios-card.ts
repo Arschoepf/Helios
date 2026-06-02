@@ -1902,22 +1902,18 @@ export class HeliosCard extends LitElement
                     //sun, partly-cloudy, cloudy or pouring depending on
                     //the current home reading. The user reads the sky
                     //state at a glance without opening the dome.
-                    //Camera lock chip sits top-left where the clock chip used to live; the three view-mode toggles stay anchored
-                    //top-right. Tapping the chip captures the camera's current bearing and pitch, persists them with the lock flag
-                    //through a `config-changed` event, and applies the new state to the live MapLibre instance so the visible map
-                    //matches before HA's round-trip lands.
+                    //Camera lock chip sits top-left. Tapping the chip flips the lock state and asks the engine to persist the new
+                    //pose (bearing + pitch + lock flag) to localStorage so the next reload restores it. No tooltip, no title, no
+                    //localised label, the open/closed padlock glyph already carries the meaning and a tooltip on a touchscreen is
+                    //useless.
                     const cameraLocked  = this._isCameraLocked();
                     const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
-                    const lockI18n      = pickTranslations((this.hass as any)?.locale?.language ?? (typeof navigator !== 'undefined' ? navigator.language : 'en'));
-                    const lockLabel     = cameraLocked ? lockI18n.cameraLockDisable : lockI18n.cameraLockEnable;
                     return html`
                         <div class="overlay-top-left">
                             <button
                                 type="button"
                                 class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
                                 aria-pressed="${cameraLocked ? 'true' : 'false'}"
-                                aria-label="${lockLabel}"
-                                title="${lockLabel}"
                                 @click="${this._onCameraLockToggle}"
                             >
                                 <ha-icon icon="${lockIcon}"></ha-icon>
@@ -2667,43 +2663,25 @@ export class HeliosCard extends LitElement
         this._cloudDomeMode = false;
         if (!this._shadingDomeMode) toggleShadingDome(this);
     };
-    //Camera lock state used by the top-right lock button. Prefers the
-    //engine's live cfg (kept in sync by setCameraLocked) over the
-    //YAML-on-disk view so a click that has not yet round-tripped
-    //through HA still reflects in the button icon. Falls back to the
-    //card config flag when the engine has not booted yet.
+    //Camera lock state used by the top-left lock button. Delegates
+    //to the engine, which itself prefers localStorage over the legacy
+    //YAML flag, so the button icon always matches what MapLibre is
+    //actually doing.
     private _isCameraLocked(): boolean
     {
         if (this._engine) return this._engine.isCameraLocked();
-        return (this.config as Record<string, unknown>)?.['camera-locked'] === true;
+        return false;
     }
-    //Lock-button click handler. Captures the camera's CURRENT bearing
-    //and pitch (whatever the user dragged to), persists the three
-    //values to YAML under the same `camera-bearing-deg` /
-    //`camera-pitch-deg` / `camera-locked` keys the engine reads on
-    //init, and applies the new lock state to the live MapLibre
-    //instance so drag-rotate stops responding in the same frame as
-    //the click. Reload restores the saved pose because the engine
-    //reads these keys in `_initialBearing` / `_initialPitch`.
+    //Lock-button click handler. Asks the engine to flip its lock
+    //state; the engine takes care of persisting the current bearing,
+    //pitch and lock flag to localStorage (HA's lovelace does NOT
+    //persist `config-changed` from a live card, so a YAML round-trip
+    //would be silently dropped on disk). The next reload reads the
+    //same localStorage entry and restores the pose.
     private _onCameraLockToggle = (): void =>
     {
-        const wasLocked = this._isCameraLocked();
-        const nextLock  = !wasLocked;
-        const bearing   = this._engine ? this._engine.getCameraBearing() : undefined;
-        const pitch     = this._engine ? this._engine.getCameraPitch()   : undefined;
-        const nextCfg: Record<string, unknown> = { ...(this.config as Record<string, unknown>) };
-        nextCfg['camera-locked'] = nextLock;
-        if (Number.isFinite(bearing as number)) nextCfg['camera-bearing-deg'] = Math.round(((bearing as number) % 360 + 360) % 360 * 10) / 10;
-        if (Number.isFinite(pitch as number))   nextCfg['camera-pitch-deg']   = Math.round(Math.max(15, Math.min(85, pitch as number)) * 10) / 10;
-        if (this._engine)
-        {
-            if (Number.isFinite(bearing as number)) this._engine.setCameraBearing(bearing as number);
-            if (Number.isFinite(pitch as number))   this._engine.setCameraPitch(pitch as number);
-            this._engine.setCameraLocked(nextLock);
-        }
-        //HA persists the new YAML and calls setConfig() back on this
-        //same card instance; no card rebuild, no MapLibre teardown.
-        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: nextCfg }, bubbles: true, composed: true }));
+        if (!this._engine) return;
+        this._engine.setCameraLocked(!this._engine.isCameraLocked());
         this.requestUpdate();
     };
 

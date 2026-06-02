@@ -138,11 +138,11 @@ export const heliosCardStyles = css`
             read as interactive on hover. */
         pointer-events: none;
         cursor: pointer;
-        /*  Sits ABOVE the basemap + buildings but BELOW the time bar
-            (z 10) so the outline never paints over the timeline when
-            the home and the bar overlap, the bar always wins on the
-            shared pixels. */
-        z-index: 9;
+        /*  Sits ABOVE the basemap + buildings but BELOW the home chip
+            cluster (z 8) so the hover glow + production pulse never
+            cross over the PV / battery / grid / cloud / solar value
+            chips. The chips always win on the shared pixels. */
+        z-index: 6;
         /*  Resting opacity is a faint 0.25 so the home silhouette is
             always discoverable on the basemap (the user reported the
             home was lost in busy mixed buildings + map detail). Hover
@@ -1186,46 +1186,53 @@ export const heliosCardStyles = css`
         cursor: grabbing;
     }
 
-    /*  Back-to-live tab. Small scrub-blue capsule attached to the
-        top edge of the time-bar (sits just above the chart card),
-        rendered only while scrubbing. Position flips with the scrub
-        cursor: when the cursor is on the right half (selPct >= 50)
-        the tab anchors on the LEFT so the two never collide; when
-        the cursor is on the left half it anchors on the RIGHT.
-        Geometry matches the .tb-hover-tooltip plate (same chip
-        family) so the timeline reads as one coherent instrument. */
+    /*  Back-to-live tab. A real tab: rounded TOP corners only, flat
+        bottom that overlaps the time-bar's top border by 1 px so the
+        tab reads as physically attached to the chart card below it.
+        Renders only while scrubbing. Side flips with the scrub
+        cursor: scrub on the right half -> tab on the LEFT, scrub on
+        the left half -> tab on the RIGHT, the two never collide. */
     .tb-back-to-live
     {
         position: absolute;
         bottom: 100%;
-        margin-bottom: 4px;
+        margin-bottom: -1px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width:  24px;
-        height: 20px;
+        gap: 4px;
+        height: 18px;
         box-sizing: border-box;
-        padding: 0;
+        padding: 0 8px 0 6px;
         background: var(--primary-color, #03a9f4);
         color: var(--text-on-primary-color, #ffffff);
         border: 1px solid var(--darker-primary-color, #0288d1);
-        border-radius: 999px;
-        box-shadow: 0 1px 3px var(--shadow-color);
+        border-bottom: 0;
+        border-radius: 6px 6px 0 0;
+        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1;
+        letter-spacing: 0.3px;
         cursor: pointer;
         pointer-events: auto;
         z-index: 31;
         transition: background 0.12s;
     }
-    .tb-back-to-live.is-left  { left:  0; }
-    .tb-back-to-live.is-right { right: 0; }
+    .tb-back-to-live.is-left  { left:  10px; }
+    .tb-back-to-live.is-right { right: 10px; }
     .tb-back-to-live:hover  { background: var(--dark-primary-color, #0288d1); }
     .tb-back-to-live:active { background: var(--darker-primary-color, #01579b); }
     .tb-back-to-live ha-icon
     {
-        --mdc-icon-size: 13px;
+        --mdc-icon-size: 12px;
         color: inherit;
         display: inline-flex;
         align-items: center;
+    }
+    .tb-back-to-live span
+    {
+        text-transform: uppercase;
     }
 
     /*  Chart card, bordered white panel hosting the area chart,
@@ -3053,11 +3060,13 @@ export const heliosCardStyles = css`
         stroke-opacity: 0.25;
     }
 
-    /*  Incidence ray, dashes flow from the sun toward the home at
-        a speed proportional to live irradiance. */
+    /*  Incidence ray, dashes flow from the sun toward the home at a
+        speed proportional to live irradiance. Hairline 1 px to match
+        the home cluster's solid leaders so the whole connector family
+        reads at one weight. */
     .solar-svg .solar-ray
     {
-        stroke-width: 1.5;
+        stroke-width: 1;
         stroke-dasharray: 5 5;
         stroke-opacity: 0.55;
         stroke-linecap: round;

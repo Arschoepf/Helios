@@ -30,16 +30,6 @@ export interface Translations
     //are painted on the celestial hemisphere above the home.
     shadingDomeChipLabel: string;
 
-    //Tooltip / aria-label on the camera lock button rendered in the
-    //top-right of the permanent card UI. The button flips the user
-    //between an unlocked camera (free drag-rotate / drag-pitch) and
-    //a locked camera that holds the current pose. The label depends
-    //on the CURRENT state so it tells the user what the next click
-    //will DO: when locked, the button shows "Unlock camera"; when
-    //unlocked, it shows "Lock camera".
-    cameraLockEnable:    string;
-    cameraLockDisable:   string;
-
     //Detail dashboard, opened by clicking the home. The camera eases
     //in (zoom + pitch) and a full-card overlay takes over while the
     //pre-existing HUD fades out.

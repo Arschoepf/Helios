@@ -570,26 +570,74 @@ export class HeliosEngine
         return this.map !== undefined;
     }
 
-    //Resting-pose helpers. Read the user-configured `camera-bearing-deg`
-    /// `camera-pitch-deg` if set, otherwise fall back to the hemisphere-
-    //aware default bearing (north up in SH, south up in NH) and the
-    //55 deg pitch tuned for the 3D scene. The returned values are
-    //clamped to the same bounds the manual drag handlers enforce so a
-    //stale YAML value can never put the camera in an unrenderable pose.
+    //Camera pose persistence. HA's lovelace does NOT persist
+    //`config-changed` events emitted from a live card (only from the
+    //editor preview), so a YAML round-trip is not an option for a
+    //control that lives outside the editor. localStorage keyed on the
+    //home coordinates is the right fit: instant write, instant read on
+    //the next boot, scoped per-card by lat/lon. The 3-decimal rounding
+    //gives ~111 m precision, enough to keep two homes on the same
+    //street apart while tolerating tiny GPS jitter on the config side.
+    private _cameraPoseStorageKey(): string
+    {
+        const lat = Math.round(this.homeLat * 1000) / 1000;
+        const lon = Math.round(this.homeLon * 1000) / 1000;
+        return `helios:camera-pose:${lat}:${lon}`;
+    }
+    private _readStoredPose(): { bearing?: number; pitch?: number; locked?: boolean } | null
+    {
+        try
+        {
+            const raw = window.localStorage.getItem(this._cameraPoseStorageKey());
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed as { bearing?: number; pitch?: number; locked?: boolean };
+        }
+        catch
+        {
+            //Quota errors, disabled storage, private windows: any of
+            //these silently degrade to "no stored pose, use defaults".
+        }
+        return null;
+    }
+    private _writeStoredPose(pose: { bearing: number; pitch: number; locked: boolean }): void
+    {
+        try
+        {
+            window.localStorage.setItem(this._cameraPoseStorageKey(), JSON.stringify(pose));
+        }
+        catch
+        {
+            //Same silent-degrade rationale as the reader. The live
+            //engine state is already mutated in setCameraLocked /
+            //setCameraBearing / setCameraPitch, only persistence
+            //across reloads is lost.
+        }
+    }
+    //Resting pose, applied on map init. Reads localStorage first
+    //(the runtime lock chip writes there), then the legacy YAML
+    //`camera-bearing-deg` / `camera-pitch-deg` keys for older
+    //installs, then the hemisphere-aware default (north up in SH,
+    //south up in NH). All values are wrapped / clamped so a stale
+    //read can never put the camera in an unrenderable pose.
     private _initialBearing(): number
     {
-        const raw = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
+        const stored = this._readStoredPose();
+        const rawStored = stored && typeof stored.bearing === 'number' ? stored.bearing : NaN;
+        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
+        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
         if (Number.isFinite(raw))
         {
-            //Wrap into [0, 360) so 720 deg, -45 deg etc all become valid.
-            const wrapped = ((raw % 360) + 360) % 360;
-            return wrapped;
+            return ((raw % 360) + 360) % 360;
         }
         return this.homeLat >= 0 ? 180 : 0;
     }
     private _initialPitch(): number
     {
-        const raw = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
+        const stored = this._readStoredPose();
+        const rawStored = stored && typeof stored.pitch === 'number' ? stored.pitch : NaN;
+        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
+        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
         if (Number.isFinite(raw))
         {
             return Math.max(15, Math.min(85, raw));
@@ -598,10 +646,12 @@ export class HeliosEngine
     }
     //True when manual drag-rotate / drag-pitch + the idle auto-orbit
     //should all be suppressed because the user opted into a locked
-    //camera pose. Consumed by the canvas pointer handlers and the
-    //auto-rotate rAF loop.
+    //camera pose. Reads the localStorage flag first (live lock chip),
+    //then the legacy YAML key as fallback.
     public isCameraLocked(): boolean
     {
+        const stored = this._readStoredPose();
+        if (stored && typeof stored.locked === 'boolean') return stored.locked;
         return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
     }
     //Live setter so the editor's slider can preview a new bearing
@@ -620,16 +670,21 @@ export class HeliosEngine
         const clamped = Math.max(15, Math.min(85, deg));
         this.map.setPitch(clamped);
     }
-    //Toggle the lock at runtime so the editor's switch can apply
-    //immediately without a respawn. Flips the pinch-rotate handler;
-    //the pointer drag-rotate gate re-evaluates isCameraLocked() on
-    //every pointerdown so its branch picks up the new state too.
-    //The cfg is mutated in-place so the rAF auto-rotate loop reads
-    //the new value on its very next tick.
+    //Toggle the lock at runtime so the lock chip applies immediately
+    //without a respawn. Flips the pinch-rotate handler; the pointer
+    //drag-rotate gate re-evaluates isCameraLocked() on every
+    //pointerdown so its branch picks up the new state too. The cfg
+    //is mutated in-place AND the localStorage record refreshed so the
+    //next boot restores the same state without a config round-trip.
     public setCameraLocked(locked: boolean): void
     {
         if (!this.map) return;
         (this.cfg as Record<string, unknown>)['camera-locked'] = locked;
+        this._writeStoredPose({
+            bearing: this.map.getBearing(),
+            pitch:   this.map.getPitch(),
+            locked,
+        });
         if (locked) this.map.touchZoomRotate.disable();
         else        this.map.touchZoomRotate.enable({ around: 'center' });
     }

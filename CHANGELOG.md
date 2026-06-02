@@ -7,6 +7,94 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.1
+
+### Recorder relief on 1 Hz installs, camera persistence, back-to-live tab, polish
+
+Direct follow-up to the beta.0 regressions and the high-frequency
+sensor story. The card now leans on the LTS slots it already
+fetched for everything older than the last 6 hours, so a Victron
+Cerbo, JK BMS or Ecowitt setup at 1 Hz no longer drags the HA
+recorder for tens of seconds every time the card loads. Camera
+pose actually persists this time, the back-to-live control is a
+real tab, and a handful of polish items land alongside.
+
+**Recorder relief on 1 Hz installs.** The raw `history_during_period`
+fetch behind the PV chart, the W/m² entity and the battery banks
+used to ask HA for the full visible timeline (multiple days). On
+a sensor pushing one value per second that scan dragged the
+single-threaded recorder for 30 to 100 seconds on every card
+load, blocking every other card reading the same entities for
+the duration. The user reported disk IO jumping from 20 % to
+67 % on InfluxDB-backed setups.
+
+Three pieces:
+
+- The raw window is capped at the last 6 hours per fetch site
+  (PV, radiation, battery). The recent past keeps full
+  resolution for tooltip and chart-head accuracy.
+- The PV chart blends in the hourly LTS slot
+  (`_pvCalibStats`, 5 days) for the past that the 6-hour raw
+  window does not cover. The LTS slot was already fetched for
+  the calibration ratio, so this is a free reuse, no extra
+  recorder hit.
+- The hover tooltip's `pvValueAtTime` falls through the same
+  way: raw within the 6-hour window, LTS outside, forecast
+  beyond "now".
+
+Net IO drops by orders of magnitude on 1 Hz installs without any
+visible quality loss on the chart or the tooltip.
+
+**Past PV chart visible again.** A 1 Hz sensor over 6 hours
+produces ~21 600 raw samples. The resulting SVG `d` path string
+overflows Safari and Firefox's path rasterisers (the path
+silently renders nothing), so the past portion of the chart was
+showing up empty even though the tooltip read the correct
+values. `renderPvChart` now decimates to at most 1 500 points
+via per-pixel min/max bucketing so the visible curve still
+reflects peaks and troughs at heavy compression. Same fix
+incidentally speeds up every layout pass on the timeline by
+~10×.
+
+**Camera pose actually persists (#166 follow-up).** The
+beta.0 fix wrote the pose under the engine's expected keys but
+HA's lovelace does NOT persist `config-changed` events emitted
+from a live card, only from the editor preview. The lock chip
+now writes directly to `localStorage` under the key
+`helios:camera-pose:<lat>:<lon>`. The engine reads the same
+key on init, falls back to the legacy YAML keys for older
+installs, and finally to the hemisphere-aware default. Locking
+the camera, dragging it, reloading: the same pose comes back.
+
+**Back-to-live is a real tab now.** The previous round
+shipped a rounded capsule that read as a deformed button. The
+new control is a proper tab: rounded TOP corners only, flat
+bottom that overlaps the chart card's top border by 1 px so
+the tab looks physically attached. Side still flips based on
+the scrub position (scrub on the right -> tab on the left, and
+vice versa). The tab's pointerdown and click both
+`stopPropagation()` so a tap on the tab no longer bubbles up
+to the time-bar's scrub handler (which used to re-scrub to
+the tab's X coordinate and silently swallow the click).
+
+**Lock button stripped of tooltip + i18n.** The `title=`
+attribute and the two i18n keys (`cameraLockEnable`,
+`cameraLockDisable`) are gone. A tooltip on a touch device
+never shows, and the padlock glyph already carries the
+meaning. `aria-label` for accessibility is implicit via the
+icon's HA semantics, no localised string is generated on the
+critical render path.
+
+**Home glow z-index lowered.** The hover glow + production
+pulse used to paint over the home cluster chips (PV, battery,
+grid import/export). z-index drops from 9 to 6 so the glow sits
+above the basemap and the solar ray but below all chips at z 8.
+
+**Solar incidence ray thinner.** The dashed sun -> PV connector
+was at `stroke-width: 1.5`, thicker than the other solid
+leaders (which dropped to 1 in #164). Now also at 1 so the
+connector family reads at one weight.
+
 ### beta.0
 
 ### Chrome simplification, camera pose persistence, CSS audit pass

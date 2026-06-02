@@ -9,8 +9,6 @@ export const cs: Translations = {
     lidarViewChipLabel: 'Zobrazení LiDAR',
 
     shadingDomeChipLabel: 'Stíny',
-    cameraLockEnable:     'Zamknout kameru',
-    cameraLockDisable:    'Odemknout kameru',
     detail:
     {
         exitHint: 'Klikněte kamkoli pro ukončení',

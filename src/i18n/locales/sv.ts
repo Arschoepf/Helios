@@ -9,8 +9,6 @@ export const sv: Translations = {
     lidarViewChipLabel: 'LiDAR-vy',
 
     shadingDomeChipLabel: 'Skuggor',
-    cameraLockEnable:     'Lås kamera',
-    cameraLockDisable:    'Lås upp kamera',
     detail:
     {
         exitHint: 'Klicka var som helst för att avsluta',

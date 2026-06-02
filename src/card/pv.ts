@@ -283,10 +283,24 @@ export function refreshPv(host: PvHost): void
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
 
-    //Raw history, narrow window.
+    //Raw history, narrow window. Capped at the last RAW_WINDOW_H
+    //hours regardless of how wide the user's visible timeline is.
+    //The HA recorder is single-threaded behind SQLite, so a multi-
+    //day raw fetch on a 1 Hz inverter (Victron Cerbo and friends)
+    //blocks every other card reading the same entity for the
+    //duration of the fetch, on every card load. The chart already
+    //has access to two LTS slots (`_pvCalibStats` at hour resolution
+    //over 5 days, `_pvTrainerStats` at 5-min resolution over 30
+    //days), which carry the past portion of the visible timeline
+    //orders of magnitude faster. Raw only needs to cover the live
+    //tail accurately enough for the tooltip and the head of the
+    //chart curve.
+    const RAW_WINDOW_H = 6;
     if (!host._pvFetching)
     {
-        const fetchStart = host._timeRange.start;
+        const visibleStart = host._timeRange.start;
+        const cap          = new Date(fetchEnd.getTime() - RAW_WINDOW_H * HOUR_MS);
+        const fetchStart   = visibleStart < cap ? cap : visibleStart;
         const rangeKey   = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
         //Optional per-bank battery SoC companion fetch. We only ask HA for the SoC histories when the user has explicitly armed the
         //inverter-cutoff guard (cutoff percent configured AND at least one bank); otherwise the trainer doesn't need them and the extra
