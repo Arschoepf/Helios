@@ -62,17 +62,21 @@ export function clearGridModuleCaches(): void
     _historyFailedUntil.clear();
     _historyInflight.clear();
 }
-//72 hour history backfill so the past-scrub bracket actually
-//covers the timeline's visible past range (2 days + margin), the
-//earlier 6 h window had the user dragging the scrub deep into
-//yesterday and hitting the buffer's edge, where pickBracket fell
-//back to the first two samples and returned a constant slope for
-//every position past that edge (the user's "scrub value never
-//changes, no matter where I drop the cursor" symptom).
-const GRID_HISTORY_WINDOW_MS = 72 * 60 * 60_000;
+//6 hour history backfill. Grid meters on Victron Cerbo / similar
+//inverter ecosystems report at 1 Hz; the earlier 72 h window
+//meant the recorder had to scan ~250 000 rows per entity per
+//card load (and 2 to 3 grid entities are typical: import + export +
+//optional combined), which dragged the single-threaded HA
+//recorder into a 100-second IO stall and blocked every other
+//card reading the same entities. The trade-off accepted here is
+//that scrubbing the timeline past 6 h returns a flat extrapolated
+//watt value (pickBracket hits the buffer edge and the slope
+//flattens), instead of a true historical bracket. Live readings
+//and the bottom-bar chart's recent past stay accurate.
+const GRID_HISTORY_WINDOW_MS = 6 * 60 * 60_000;
 //In-memory retention window aligned with the backfill so live
 //accumulation never trims off bracket-relevant history.
-const GRID_SAMPLE_WINDOW_MS = 72 * 60 * 60_000;
+const GRID_SAMPLE_WINDOW_MS = 6 * 60 * 60_000;
 const GRID_SAMPLE_MAX       = 16384;
 //Minimum time span a slope must cover before it is trusted. Below
 //this the 1 Wh meter quantum dominates the numerator and the

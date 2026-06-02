@@ -7,6 +7,37 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.2
+
+### Grid history window 72 h -> 6 h, the last recorder hot path
+
+beta.1 capped the PV, W/m² and battery raw fetches at 6 hours and
+the user-visible 100-second IO stall shrank but did not go away.
+A re-audit of every WebSocket recorder call on the card surfaced
+the remaining offender: the grid module
+(`src/card/grid.ts`) was still fetching a 72-hour raw window
+per grid entity on every card load. On a Victron Cerbo or
+similar setup at 1 Hz that's ~250 000 rows scanned per import
++ export + optional combined entity, dwarfing every other fetch
+the card issues.
+
+`GRID_HISTORY_WINDOW_MS` (and the matching in-memory
+`GRID_SAMPLE_WINDOW_MS`) drop from 72 h to 6 h. The trade-off
+accepted is that scrubbing the timeline beyond 6 hours past now
+returns a flat extrapolated watt value (the bracket-pick hits
+the buffer edge), instead of a true historical bracket. Live
+chips, recent past chart and short-scrub tooltips stay
+accurate.
+
+Combined with beta.1's caps, every recorder-bound call the card
+issues on load is now at most 6 hours of raw data per entity,
+and the LTS slots (calibration, trainer) keep the
+multi-day past covered for the chart and the tooltip. A reload
+mid-fetch no longer piles a fresh 100-second query onto the
+queue; each query completes in 1 to 2 seconds even on 1 Hz
+installs, so 5 rapid reloads cost ~10 seconds of recorder time
+instead of ~500.
+
 ### beta.1
 
 ### Recorder relief on 1 Hz installs, camera persistence, back-to-live tab, polish
