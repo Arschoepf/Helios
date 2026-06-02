@@ -3454,20 +3454,27 @@ export class HeliosEngine
         //    home, stacked vertically: Import on top of Export.
         //That keeps "what is in" (grid + sun) on one side and "what
         //is stored / consumed" on the other.
-        const CHIP_SIDE_X_OFFSET_PX = 70;
+        //Pixel offsets driving the chip cluster around the home.
+        //All four constants are scaled by `_heliosScale()` so the
+        //cluster spreads on a fullscreen / kiosk layout instead of
+        //clumping at the centre of an otherwise empty canvas. See
+        //issue #33. At standard Lovelace grid sizes scale = 1.0,
+        //so the cluster geometry stays exactly as before.
+        const scale = this._heliosScale();
+        const CHIP_SIDE_X_OFFSET_PX = 70 * scale;
         //Vertical distance between the top and bottom rows of chips.
         //Bumped to 60 so the L-shape leaders below have enough room
         //to render their rounded fillet without overlapping the
         //home pill.
-        const CHIP_STACK_GAP_PX     = 60;
+        const CHIP_STACK_GAP_PX     = 60 * scale;
         //Lift the entire home cluster (pill + chips) above the
         //projected home centre so the icon sits above the roof
         //silhouette, with enough breathing room for a visible solid
         //leader to drop from the pill down to the building top below.
-        const CLUSTER_LIFT_PX = 60;
+        const CLUSTER_LIFT_PX = 60 * scale;
         const clusterY = home.y - CLUSTER_LIFT_PX;
         const pvX = home.x;
-        const pvY = clusterY - PV_CHIP_OFFSET_PX;
+        const pvY = clusterY - PV_CHIP_OFFSET_PX * scale;
         //Battery column on the right.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
         const batterySocY       = clusterY - CHIP_STACK_GAP_PX / 2;
@@ -3598,6 +3605,24 @@ export class HeliosEngine
     private _invalidateProjCache(): void
     {
         this._projCache = null;
+    }
+
+    //Linear ramp on the card's min CSS dimension so the sun arc and
+    //the home chip cluster expand on a fullscreen / kiosk layout
+    //instead of staying pinned to the tuned-for-grid pixel sizes.
+    //Below MIN_DIM_FLOOR_PX the scale is fixed at 1.0 (standard
+    //Lovelace grid cell); above MIN_DIM_FLOOR_PX it ramps linearly
+    //to MAX_SCALE at MAX_DIM_PX. See issue #33.
+    private _heliosScale(): number
+    {
+        const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
+        if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
+        const FLOOR = 600;
+        const TOP   = 1200;
+        const MAX   = 1.6;
+        if (minDim <= FLOOR) return 1.0;
+        if (minDim >= TOP)   return MAX;
+        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
     }
 
     private _projectScenePoint(
@@ -4003,9 +4028,11 @@ export class HeliosEngine
         const a   = sun.altitude * D;
         const z   = sun.azimuth  * D;
 
-        const east  = SUN_ARC_RADIUS_M * Math.cos(a) * Math.sin(z);
-        const north = SUN_ARC_RADIUS_M * Math.cos(a) * Math.cos(z);
-        const up    = SUN_ARC_RADIUS_M * Math.sin(a);
+        //Scale the celestial radius on fullscreen / kiosk layouts so the arc reads from across the room instead of sitting at its grid-tuned size. See issue #33.
+        const R = SUN_ARC_RADIUS_M * this._heliosScale();
+        const east  = R * Math.cos(a) * Math.sin(z);
+        const north = R * Math.cos(a) * Math.cos(z);
+        const up    = R * Math.sin(a);
 
         //Local metres-per-degree.
         const mPerDegLat = 111_320;
@@ -4030,9 +4057,11 @@ export class HeliosEngine
         const D = Math.PI / 180;
         const a = altitudeDeg * D;
         const z = azimuthDeg  * D;
-        const east  = SUN_ARC_RADIUS_M * Math.cos(a) * Math.sin(z);
-        const north = SUN_ARC_RADIUS_M * Math.cos(a) * Math.cos(z);
-        const up    = SUN_ARC_RADIUS_M * Math.sin(a);
+        //Same scale as the sun arc so the shading-dome cells line up with the arc on fullscreen layouts. See issue #33.
+        const R = SUN_ARC_RADIUS_M * this._heliosScale();
+        const east  = R * Math.cos(a) * Math.sin(z);
+        const north = R * Math.cos(a) * Math.cos(z);
+        const up    = R * Math.sin(a);
         const mPerDegLat = 111_320;
         const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
         const lon = this.homeLon + east  / mPerDegLon;

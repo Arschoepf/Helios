@@ -30,6 +30,13 @@ export const heliosCardStyles = css`
         position: relative;
         overflow: hidden;
         background: #000;
+        /*  Container query host so the fullscreen / kiosk breakpoint
+            rules at the bottom of this stylesheet can react to the
+            card's own width without depending on the viewport size,
+            which would mis-fire when the user has several Helios
+            cards side by side in a grid view. See issue #33. */
+        container-type: inline-size;
+        container-name: helios-card;
         /*  Card frame: pull the radius + border + shadow straight off
             the HA card design tokens so Helios matches whatever the
             user's frontend theme has set for every other dashboard
@@ -3244,6 +3251,58 @@ export const heliosCardStyles = css`
             animation-duration:         0ms !important;
             animation-iteration-count:  1   !important;
             transition-duration:        0ms !important;
+        }
+    }
+
+
+    /*  Fullscreen / kiosk breakpoint, see issue #33. When the card
+        is rendered above 900 CSS px of width (a dedicated dashboard
+        view, kiosk panel, mobile portrait on tablet, ...), the chip
+        text bumps one size step up so the value chips, the day-strip
+        and the W/m² readout stay readable from across the room.
+
+        The sun arc radius and the home chip cluster offsets are
+        scaled separately by the engine (_heliosScale), so the
+        on-map geometry expands in lockstep with this typography pass
+        without overlapping the chip text.
+
+        Container queries on ha-card (declared above) so a Helios
+        card sitting in a wide section view alongside narrower cards
+        flips on its own width, not on the viewport's. */
+    @container helios-card (min-width: 900px)
+    {
+        .cloud-pct-label,
+        .pv-pct-label,
+        .battery-pct-label,
+        .grid-import-label,
+        .grid-export-label,
+        .solar-pct-label
+        {
+            font-size: 14px;
+            padding: 4px 12px;
+        }
+        .cloud-pct-label ha-icon,
+        .pv-pct-label ha-icon,
+        .battery-pct-label ha-icon,
+        .grid-import-label ha-icon,
+        .grid-export-label ha-icon,
+        .solar-pct-label ha-icon
+        {
+            --mdc-icon-size: 18px;
+        }
+        .tb-day-strip-cell
+        {
+            font-size: clamp(8px, 5.5cqw, 12px);
+        }
+        .tb-hover-tooltip
+        {
+            font-size: 13px;
+        }
+        .cloud-layer-chip
+        {
+            font-size: 13px;
+            height: 24px;
+            min-width: 64px;
         }
     }
 

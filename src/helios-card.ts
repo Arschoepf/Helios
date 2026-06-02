@@ -2093,7 +2093,7 @@ export class HeliosCard extends LitElement
                                   a disc has no orientation.  -->
                             <circle
                                 class="pv-home-leader-bead"
-                                r="4"
+                                r="3"
                                 fill="${pvColor}"
                             >
                                 <animateMotion
@@ -2149,7 +2149,7 @@ export class HeliosCard extends LitElement
                             ${!batteryIdle ? svg`
                                 <circle
                                     class="battery-leader-bead"
-                                    r="4"
+                                    r="3"
                                     style="fill:${batteryLeaderColor}"
                                 >
                                     <animateMotion
@@ -2199,7 +2199,7 @@ export class HeliosCard extends LitElement
                               import flows FROM the grid INTO the home,
                               so the bead travels chip → home. -->
                         ${gridImportBeadDur !== null ? svg`
-                            <circle class="grid-import-leader-bead" r="3.5">
+                            <circle class="grid-import-leader-bead" r="3">
                                 <animateMotion dur="${gridImportBeadDur.toFixed(2)}s" repeatCount="indefinite"
                                                path="${gridImportLeaderPath}" />
                             </circle>
@@ -2223,7 +2223,7 @@ export class HeliosCard extends LitElement
                               traversal so the bead starts at the home
                               end of the path and ends at the chip.  -->
                         ${gridExportBeadDur !== null ? svg`
-                            <circle class="grid-export-leader-bead" r="3.5">
+                            <circle class="grid-export-leader-bead" r="3">
                                 <animateMotion dur="${gridExportBeadDur.toFixed(2)}s" repeatCount="indefinite"
                                                keyPoints="1;0" keyTimes="0;1"
                                                path="${gridExportLeaderPath}" />
@@ -2337,7 +2337,7 @@ export class HeliosCard extends LitElement
                               during camera rotation. -->
                         <circle
                             class="solar-ray-bead"
-                            r="5"
+                            r="3"
                             fill="${sunColor}"
                         >
                             <animateMotion

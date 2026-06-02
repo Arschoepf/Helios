@@ -7,6 +7,49 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.5
+
+### Uniform beads, fullscreen polish (#33)
+
+**Leader-bead radii unified.** The animated discs that ride the
+solid leaders between the home and its chips were sized
+inconsistently across the family: `r=4` on PV and battery,
+`r=3.5` on grid import / export, `r=5` on the solar ray. All five
+classes now use `r=3` (6 px diameter), matching the visual weight
+HA Energy gives to its own flow circles when rendered at the
+typical card size.
+
+**Fullscreen / kiosk layout polish (#33).** When the card is
+rendered above 900 CSS px wide (a dedicated solar dashboard view,
+a kiosk panel, mobile portrait on a tablet), the layout used to
+keep the chip cluster clumped in the central 25 % of the canvas
+and the sun arc pinned to its grid-tuned 40 m radius.
+
+A new engine helper `_heliosScale()` ramps a multiplier from 1.0
+at min(width, height) <= 600 px to 1.6 at >= 1200 px, fed by the
+existing ResizeObserver-backed canvas dimension cache. The
+multiplier scales:
+
+- `SUN_ARC_RADIUS_M`: the celestial hemisphere the sun arc and
+  the shading-dome paint on stretches with the card, so the arc
+  reads from across the room.
+- `PV_CHIP_OFFSET_PX`, `CHIP_SIDE_X_OFFSET_PX`, `CHIP_STACK_GAP_PX`,
+  `CLUSTER_LIFT_PX`: the chip cluster around the home spreads
+  proportionally, so the PV / battery / grid pills no longer
+  collide in the centre.
+
+At standard Lovelace grid sizes scale = 1.0 and the geometry
+stays exactly as before.
+
+CSS-side, a new `@container helios-card (min-width: 900px)` rule
+bumps the typography on the value chips (PV / battery / grid /
+cloud / solar), the day-strip, the hover tooltip and the cloud
+layer chips so they stay readable at the same distance. The
+container query targets the card's own width via
+`container-type: inline-size` on `ha-card`, so a Helios card
+sitting in a wide section view alongside narrower cards flips
+on its own size, not the viewport's.
+
 ### beta.4
 
 ### Fix the beta.1 raw-window cap anchor, restores past chart history
