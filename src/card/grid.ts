@@ -32,7 +32,6 @@
 import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
-import type { EnergyDefaults } from './energy-prefs';
 
 
 type Sample = { t: number; v: number; lastChangeT?: number | null };
@@ -70,20 +69,20 @@ export function clearGridModuleCaches(): void
 //  - RAW the last 6 hours, full resolution + significant_changes_only.
 //    This is the heaviest call (~10-20k rows per entity at 1 Hz) but
 //    it stays bounded and the recorder handles it in 1 to 2 s.
-//  - LTS (5-minute period) the previous 4 days 18 hours, total
-//    backfill coverage 5 days. ~1440 rows per entity, near-free on
-//    the recorder regardless of source frequency since the rows
-//    come from HA's pre-aggregated `statistics_short_term` table.
+//  - LTS (5-minute period) the previous 18 hours, total backfill
+//    coverage 24 hours. ~216 rows per entity, near-free on the
+//    recorder regardless of source frequency since the rows come
+//    from HA's pre-aggregated `statistics_short_term` table.
 //
-//Scrubbing inside 5 days past returns a real bracketed slope. Past
-//5 days pickBracket refuses to extrapolate (returns null) and the
-//chip displays nothing rather than a fabricated value. Live
-//readings stay accurate at all times.
+//Scrubbing inside 24 hours past returns a real bracketed slope.
+//Past 24 hours pickBracket refuses to extrapolate (returns null)
+//and the chip displays nothing rather than a fabricated value.
+//Live readings stay accurate at all times.
 const GRID_HISTORY_WINDOW_MS = 6 * 60 * 60_000;
-const GRID_LTS_WINDOW_MS     = 5 * 24 * 60 * 60_000;
+const GRID_LTS_WINDOW_MS     = 24 * 60 * 60_000;
 //In-memory retention window aligned with the LTS backfill so live
 //accumulation never trims off bracket-relevant history.
-const GRID_SAMPLE_WINDOW_MS = 5 * 24 * 60 * 60_000;
+const GRID_SAMPLE_WINDOW_MS = 24 * 60 * 60_000;
 const GRID_SAMPLE_MAX       = 16384;
 //Minimum time span a slope must cover before it is trusted. Below
 //this the 1 Wh meter quantum dominates the numerator and the
@@ -110,13 +109,6 @@ export interface GridHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
-    //Optional snapshot of HA Energy dashboard defaults, populated by
-    //`card/energy-prefs.ts` via a long-running subscription. When the
-    //user has `stat_rate` sensors configured on grid sources, Helios
-    //layers a LIVE-only override on top of the directional kWh
-    //derivation so the chip matches the value the official Energy
-    //dashboard displays to the watt.
-    readonly _energyDefaults?: EnergyDefaults;
 
     requestUpdate(): void;
 
@@ -169,23 +161,13 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
         try
         {
             //Fire BOTH backfills in parallel through the module-level
-            //semaphore. LTS catches the 5 d..6 h slice with 5-minute
+            //semaphore. LTS catches the 24 h..6 h slice with 5-minute
             //buckets, raw catches the 6 h..now slice at full resolution
-            //with significant_changes_only. BOTH arms are wrapped in a
-            //.catch that returns null and arms the cooldown on a
-            //WsTimeoutError; that way a single failing arm degrades
-            //the buffer to whatever the other arm returned instead of
-            //rejecting the whole Promise.all and leaving the buffer
-            //empty. The merge code downstream handles ltsArr / rawArr
-            //being empty gracefully.
-            const armCooldownIfTimeout = (e: unknown): null =>
-            {
-                if (e instanceof WsTimeoutError)
-                {
-                    _historyFailedUntil.set(entity, Date.now() + GRID_FETCH_COOLDOWN_MS);
-                }
-                return null;
-            };
+            //with significant_changes_only. The LTS arm is wrapped in a
+            //.catch so a recorder without LTS for this entity (custom
+            //sensor without `state_class`) silently degrades to raw
+            //only, the user-facing behaviour stays the same as before
+            //the LTS arm landed.
             const [ltsResult, rawResult] = await Promise.all([
                 callWSWithTimeout<any>(host.hass, {
                     type:          'recorder/statistics_during_period',
@@ -200,7 +182,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     //at the bucket end so consecutive deltas attribute
                     //to the bucket that produced them.
                     types:         ['mean', 'state'],
-                }).catch(armCooldownIfTimeout),
+                }).catch(() => null),
                 callWSWithTimeout<any>(host.hass, {
                     type:                     'history/history_during_period',
                     start_time:               rawStart.toISOString(),
@@ -210,7 +192,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     no_attributes:            true,
                     //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters. See #157.
                     significant_changes_only: true,
-                }).catch(armCooldownIfTimeout),
+                }),
             ]);
             const merged: Sample[] = [];
             let lastV: number | null = null;
@@ -324,73 +306,17 @@ export function refreshGrid(host: GridHost): void
         return;
     }
 
-    //A user-wired combined signed entity owns both chips outright
-    //and the two directional slots are ignored. Highest priority,
-    //the user picked this explicitly.
+    //A combined signed entity, when wired, owns both chips and the
+    //two directional slots are ignored. Otherwise fall back to the
+    //independent import / export slots.
     if (resolveEntities(host, 'combined').length > 0)
     {
         readCombined(host);
         return;
     }
 
-    //Directional slots run unconditionally so the scrub + chart
-    //past-derivation buffers stay warm. They consume the user's
-    //grid-import-entity / grid-export-entity (typically cumulative
-    //kWh) and own the past-derivation path.
     readSlot(host, 'import');
     readSlot(host, 'export');
-
-    //HA Energy dashboard alignment: when the user's Energy
-    //dashboard config exposes a `stat_rate` sensor on any grid
-    //source, mirror HA's live read on top of the directional
-    //slope so the LIVE chip matches the value the official
-    //Energy dashboard renders to the watt. The kWh buffers
-    //populated above keep driving scrub + chart history; only
-    //the LIVE chip values are overridden.
-    const statRates = host._energyDefaults?.gridStatRates ?? [];
-    if (statRates.length > 0)
-    {
-        readStatRates(host, statRates);
-    }
-}
-
-
-//Mirror of HA `hui-power-sankey-card`'s live grid read. Sums the
-//signed power across every `stat_rate` entity collected from the
-//Energy dashboard prefs, applies the optional `grid-power-invert`
-//flip, then routes the net through `applyCombinedSplit` exactly
-//like the user-explicit combined path does: a non-negative net
-//shows on IMPORT only, a negative net on EXPORT only.
-//
-//No slope, no integration. The chip value reads whatever the
-//signed power sensor reports right now, normalised by SI prefix
-//on the unit (k -> *1000, M -> *1e6, etc.) the same way the
-//official Energy dashboard does it.
-//
-//Bails out silently when no rate sensor produced a usable value,
-//leaving the directional readSlot results from this same refresh
-//cycle as the displayed LIVE values. That preserves the legacy
-//behaviour for users running an older HA without `stat_rate` on
-//their Energy dashboard sources.
-function readStatRates(host: GridHost, rates: string[]): void
-{
-    let signedWatts = 0;
-    let sawAny      = false;
-    for (const entity of rates)
-    {
-        const stateObj = host.hass.states?.[entity];
-        if (!stateObj) continue;
-        const raw = stateObj.state;
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
-        const num = parseNumericState(raw);
-        if (num === null) continue;
-        const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        signedWatts += pvNormalizeToWatts(num, unit);
-        sawAny = true;
-    }
-    if (!sawAny) return;
-    if (gridPowerInvert(host.config)) signedWatts = -signedWatts;
-    applyCombinedSplit(host, signedWatts);
 }
 
 
@@ -472,17 +398,9 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
                      ?? parseTimestamp(stateObj.last_changed)
                      ?? nowMs;
 
-        //Record the sample BEFORE the per-unit derivation so the
-        //scrub buffer is populated regardless of unit. Cumulative
-        //meters need it for the bracketed-slope past-derivation;
-        //power-native meters need it for the closest-sample-wins
-        //past-derivation. The previous gate inside the kWh branch
-        //starved the scrub path on power-native configurations
-        //(closest-sample search on an empty buffer returned null).
-        recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
-
         if (u === 'wh' || u === 'kwh' || u === 'mwh')
         {
+            recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
             const out = bracketedSlopeWatts(bufMap.get(entity), u, nowMs, LIVE_SLOPE_LOOKBACK_MS);
             if (out !== null)
             {

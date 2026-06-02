@@ -3461,15 +3461,6 @@ export class HeliosEngine
         //issue #33. At standard Lovelace grid sizes scale = 1.0,
         //so the cluster geometry stays exactly as before.
         const scale = this._heliosScale();
-        //Dedicated vertical-lift ramp, steeper than the horizontal
-        //chip-cluster ramp because the leaders from PV / battery /
-        //grid chips down to the home need more screen height on a
-        //fullscreen canvas to keep the connection visually readable.
-        //At standard Lovelace card sizes (<= 600 px) the lift ramp
-        //stays at 1.0 so nothing moves; on a kiosk-sized canvas the
-        //lift grows faster than the horizontal spread so the chips
-        //float higher and the leader lines breathe.
-        const liftScale = this._clusterLiftScale();
         const CHIP_SIDE_X_OFFSET_PX = 70 * scale;
         //Vertical distance between the top and bottom rows of chips.
         //Bumped to 60 so the L-shape leaders below have enough room
@@ -3480,10 +3471,10 @@ export class HeliosEngine
         //projected home centre so the icon sits above the roof
         //silhouette, with enough breathing room for a visible solid
         //leader to drop from the pill down to the building top below.
-        const CLUSTER_LIFT_PX = 60 * liftScale;
+        const CLUSTER_LIFT_PX = 60 * scale;
         const clusterY = home.y - CLUSTER_LIFT_PX;
         const pvX = home.x;
-        const pvY = clusterY - PV_CHIP_OFFSET_PX * liftScale;
+        const pvY = clusterY - PV_CHIP_OFFSET_PX * scale;
         //Battery column on the right.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
         const batterySocY       = clusterY - CHIP_STACK_GAP_PX / 2;
@@ -3633,53 +3624,26 @@ export class HeliosEngine
         if (minDim >= TOP)   return MAX;
         return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
     }
-    //Steeper vertical lift ramp for the chip cluster. The horizontal
-    //chip-spread ramp (`_heliosScale()`) caps at 1.6x because beyond
-    //that the chips spread off the centre of the canvas; the vertical
-    //lift from chip to home benefits from a bigger multiplier so the
-    //leader line keeps pace with the canvas growth and the home stays
-    //visually anchored in the lower half of the scene. Same FLOOR /
-    //TOP breakpoints as the chip scale so the transitions hinge
-    //together.
-    private _clusterLiftScale(): number
-    {
-        const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
-        if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
-        const FLOOR = 600;
-        const TOP   = 1200;
-        const MAX   = 2.4;
-        if (minDim <= FLOOR) return 1.0;
-        if (minDim >= TOP)   return MAX;
-        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
-    }
-    //Dedicated ramp for the sun arc + sun disc. The chip cluster
-    //scale (1.6 max) is too conservative for the arc because the
-    //arc is computed in world metres, projected by MapLibre at a
-    //fixed zoom: at standard card sizes 40 m maps to ~120-160 CSS
-    //px which fills the lower half of the canvas nicely, but on a
-    //kiosk-sized canvas the same 40 m still reads as ~120-160 px,
-    //lost in the empty space. The arc needs a bigger multiplier to
-    //keep its visual share of the canvas constant. The sun disc
-    //radius + halo gradient stops (rendered card-side) consume the
-    //same value via `getSunArcScale()` so the disc-to-arc ratio
-    //stays constant across canvas sizes.
+    //Dedicated ramp for the sun arc. The chip cluster scale (1.6 max)
+    //is too conservative for the arc because the arc is computed in
+    //world metres, projected by MapLibre at a fixed zoom: at standard
+    //card sizes 40 m maps to ~120-160 CSS px which fills the lower
+    //half of the canvas nicely, but on a kiosk-sized canvas the same
+    //40 m still reads as ~120-160 px, lost in the empty space. The
+    //arc needs a bigger multiplier to keep its visual share of the
+    //canvas constant. Same FLOOR / TOP breakpoints as the chip
+    //scale so the two transitions happen on the same hinge.
     private _sunArcScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
         if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
         const FLOOR = 600;
         const TOP   = 1200;
-        const MAX   = 2.2;
+        const MAX   = 3.0;
         if (minDim <= FLOOR) return 1.0;
         if (minDim >= TOP)   return MAX;
         return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
     }
-    //Public accessor for the sun-arc scale so the card-side render
-    //can scale the sun disc + halo together with the arc world-metres
-    //radius. Without this the disc would stay at its grid-tuned pixel
-    //size while the arc grows, the sun would read as a tiny dot on
-    //a gigantic curve on a fullscreen canvas.
-    public getSunArcScale(): number { return this._sunArcScale(); }
 
     private _projectScenePoint(
         lon: number, lat: number, altitudeM: number
