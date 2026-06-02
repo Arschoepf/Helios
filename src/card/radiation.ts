@@ -159,9 +159,14 @@ export function refreshSolarRadiation(host: RadiationHost): void
     //the head of the curve; older past values are interpolated from
     //the engine's resampled series. 6 h gives the W/m² tooltip
     //enough resolution while keeping the recorder responsive.
+    //Cap anchored on NOW so fetchStart stays in the past even when
+    //the visible timeline end sits in the forecast horizon (next
+    //day). Anchoring on timeline end would place fetchStart in the
+    //future and the inner clamp at fetchSolarRadiationHistory
+    //would leave the slot empty.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    const cap          = new Date(host._timeRange.end.getTime() - RAW_WINDOW_H * 3_600_000);
+    const cap          = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
     const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
     const fetchKey = `${entity}@${rangeKey}`;

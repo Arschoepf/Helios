@@ -298,8 +298,16 @@ export function refreshPv(host: PvHost): void
     const RAW_WINDOW_H = 6;
     if (!host._pvFetching)
     {
+        //Cap anchored on NOW, not on the visible timeline end. The
+        //timeline end is the forecast horizon (e.g. tomorrow 23:59),
+        //so anchoring the cap there would place fetchStart in the
+        //future, fetchPvHistory would see `start >= fetchEnd` after
+        //its own "clamp end to now" pass, blank `_pvHistory` and
+        //leave the chart's past portion empty until live state
+        //pushes start landing. The window we actually want is
+        //"the last 6 h of real wall-clock time".
         const visibleStart = host._timeRange.start;
-        const cap          = new Date(fetchEnd.getTime() - RAW_WINDOW_H * HOUR_MS);
+        const cap          = new Date(Date.now() - RAW_WINDOW_H * HOUR_MS);
         const fetchStart   = visibleStart < cap ? cap : visibleStart;
         const rangeKey   = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
         //Optional per-bank battery SoC companion fetch. We only ask HA for the SoC histories when the user has explicitly armed the

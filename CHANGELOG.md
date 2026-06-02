@@ -7,6 +7,29 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.4
+
+### Fix the beta.1 raw-window cap anchor, restores past chart history
+
+beta.1 capped the PV, W/m² and battery raw fetches at the last
+6 hours and computed the cap as `fetchEnd - 6 h`, where
+`fetchEnd` was sourced from `host._timeRange.end` (the forecast
+horizon, typically next day 23:59) rather than wall-clock time.
+On any timeline where `end > now`, the resulting `fetchStart`
+fell in the FUTURE.
+
+Each `fetch*History` helper then ran its own "clamp end to now"
+pass, and the resulting `start >= fetchEnd` condition tripped
+the early-return that blanks the slot to `{times: [], values:
+[]}`. The chart's past portion stayed empty and the curve only
+started painting from the moment live state pushes began
+landing (i.e. from the refresh instant forward).
+
+The three sites (`refreshPv`, `refreshBattery`,
+`refreshSolarRadiation`) now anchor the cap on `Date.now()`
+directly, so `fetchStart` always sits 6 hours back from real
+wall-clock time and the inner clamp leaves the slot populated.
+
 ### beta.3
 
 ### Grid LTS backfill, restores past-scrub coverage to 24 h

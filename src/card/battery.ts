@@ -364,9 +364,14 @@ export function refreshBattery(host: BatteryHost): void
     //...) over a multi-day visible timeline used to drag the
     //recorder. The battery chip only needs the live values + the
     //tooltip's hover lookup, both of which the recent 6 h covers.
+    //Cap anchored on NOW so fetchStart stays in the past even when
+    //the visible timeline end sits in the forecast horizon (next
+    //day). Anchoring on timeline end would place fetchStart in the
+    //future and the inner clamp at fetchBatteryHistory would
+    //leave the slot empty.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    const cap          = new Date(host._timeRange.end.getTime() - RAW_WINDOW_H * 3_600_000);
+    const cap          = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
     const fetchStart   = visibleStart < cap ? cap : visibleStart;
     const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
     //Bank signature: entity ids + invert flags + capacity weights. Capacity weights enter the key so a mid-session edit of a kWh field
