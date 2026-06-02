@@ -78,6 +78,7 @@ import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridComb
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
+    refreshHaDailyTotals,
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
@@ -483,6 +484,17 @@ export class HeliosCard extends LitElement
     //in the card YAML / editor is empty.
     @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
     _energyPrefsUnsub?: () => void;
+    //HA Energy daily-total alignment cache. Three slots fed by
+    //`refreshHaDailyTotals()`: the headline "kWh produit aujourd'hui"
+    //for the PV detail panel (#180), and the charged / discharged
+    //totals for the battery card (#181). Null while no HA stat is
+    //configured or the recorder call has not yet landed; consumers
+    //(`renderDashTodaySection`, `computeBatteryToday`) fall back to
+    //the local-buffer integration in that case so the values keep
+    //rendering on standalone-only setups.
+    @state() _haSolarTodayKwh:        number | null = null;
+    @state() _haBatteryChargedKwh:    number | null = null;
+    @state() _haBatteryDischargedKwh: number | null = null;
     //Projected screen-space positions of each configured PV array
     //marker. Refreshed on every map transform via projectPvArray
     //Markers(); the SVG overlay renders one lollipop per entry.
@@ -823,13 +835,28 @@ export class HeliosCard extends LitElement
         //readings update on hass state changes, not on this tick, so
         //they remain real-time regardless. Cuts the per-second wake-
         //ups by 30× compared to the previous 1 Hz cadence.
-        this._timer = window.setInterval(() => tick(this), 30_000);
+        this._timer = window.setInterval(() =>
+        {
+            tick(this);
+            //Same 30 s cadence as the timeline clock tick refreshes
+            //the HA Energy daily-total cache. The recorder query is a
+            //single WS round-trip per non-empty entity list and the
+            //result moves by single-watt-hour increments on real
+            //installs, so 30 s is plenty fast for the headline to
+            //track the dashboard tile without piling on WS traffic.
+            refreshHaDailyTotals(this);
+        }, 30_000);
         initVisibilityObserver(this);
         if (typeof document !== 'undefined')
         {
             document.addEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
         subscribeEnergyPrefs(this);
+        //One-shot refresh at connect time so the headline lights up
+        //on the first render rather than waiting up to 30 s for the
+        //tick. The helper short-circuits when no HA stat is wired,
+        //so a standalone install pays a no-op.
+        refreshHaDailyTotals(this);
     }
 
     public disconnectedCallback(): void
