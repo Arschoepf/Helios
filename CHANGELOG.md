@@ -7,6 +7,44 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.3
+
+### Grid LTS backfill, restores past-scrub coverage to 24 h
+
+beta.2 capped the grid raw backfill at 6 h to unblock the
+recorder on 1 Hz installs. The trade-off was that scrubbing the
+home card timeline past 6 h returned no value on the grid
+import / export chips (pickBracket refused to extrapolate
+beyond the buffer edge). This release adds the missing piece
+without re-introducing the recorder stall.
+
+The grid backfill is now two-tiered, mirroring the recipe the PV
+chart already uses:
+
+- LTS at 5-minute period covers the 24 h..6 h slice
+  (~216 buckets per entity). Pulled from HA's pre-aggregated
+  `statistics_short_term` table, near-free on the recorder
+  regardless of source frequency.
+- Raw, full resolution + `significant_changes_only`, covers the
+  6 h..now slice. Bounded at ~10 to 20 k rows per entity on a
+  1 Hz meter, completes in 1 to 2 s.
+
+Both arms fire in parallel through the existing module-level
+WS semaphore (cap 2 in-flight). The LTS arm is wrapped in a
+silent `.catch` so a custom sensor without `state_class` (no
+LTS available) degrades to raw-only and the user-facing
+behaviour stays as-is.
+
+LTS samples land in the same `Sample[]` buffer as the raw
+samples, so `pickBracket` works as-is. Cumulative-energy meters
+anchor LTS samples at the bucket end (consecutive `state`
+deltas attribute to the correct bucket); power-native meters
+anchor at the bucket midpoint and use `mean` directly.
+
+The buffer retention window also bumps from 6 h to 24 h so the
+live accumulation does not trim off bracket-relevant history
+mid-session.
+
 ### beta.2
 
 ### Grid history window 72 h -> 6 h, the last recorder hot path

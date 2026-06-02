@@ -62,21 +62,27 @@ export function clearGridModuleCaches(): void
     _historyFailedUntil.clear();
     _historyInflight.clear();
 }
-//6 hour history backfill. Grid meters on Victron Cerbo / similar
-//inverter ecosystems report at 1 Hz; the earlier 72 h window
-//meant the recorder had to scan ~250 000 rows per entity per
-//card load (and 2 to 3 grid entities are typical: import + export +
-//optional combined), which dragged the single-threaded HA
-//recorder into a 100-second IO stall and blocked every other
-//card reading the same entities. The trade-off accepted here is
-//that scrubbing the timeline past 6 h returns a flat extrapolated
-//watt value (pickBracket hits the buffer edge and the slope
-//flattens), instead of a true historical bracket. Live readings
-//and the bottom-bar chart's recent past stay accurate.
+//Two-tier backfill recipe to keep the recorder happy on high-
+//frequency grid meters (Victron Cerbo, JK BMS, IoT smart meters at
+//1 Hz) without losing past-scrub coverage:
+//
+//  - RAW the last 6 hours, full resolution + significant_changes_only.
+//    This is the heaviest call (~10-20k rows per entity at 1 Hz) but
+//    it stays bounded and the recorder handles it in 1 to 2 s.
+//  - LTS (5-minute period) the previous 18 hours, total backfill
+//    coverage 24 hours. ~216 rows per entity, near-free on the
+//    recorder regardless of source frequency since the rows come
+//    from HA's pre-aggregated `statistics_short_term` table.
+//
+//Scrubbing inside 24 hours past returns a real bracketed slope.
+//Past 24 hours pickBracket refuses to extrapolate (returns null)
+//and the chip displays nothing rather than a fabricated value.
+//Live readings stay accurate at all times.
 const GRID_HISTORY_WINDOW_MS = 6 * 60 * 60_000;
-//In-memory retention window aligned with the backfill so live
+const GRID_LTS_WINDOW_MS     = 24 * 60 * 60_000;
+//In-memory retention window aligned with the LTS backfill so live
 //accumulation never trims off bracket-relevant history.
-const GRID_SAMPLE_WINDOW_MS = 6 * 60 * 60_000;
+const GRID_SAMPLE_WINDOW_MS = 24 * 60 * 60_000;
 const GRID_SAMPLE_MAX       = 16384;
 //Minimum time span a slope must cover before it is trusted. Below
 //this the 1 Wh meter quantum dominates the numerator and the
@@ -147,27 +153,78 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
     const lastFetched = _historyFetched.get(entity);
     if (lastFetched !== undefined && now - lastFetched < GRID_FETCH_REFRESH_MS) return;
     _historyInflight.add(entity);
-    const end   = new Date();
-    const start = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
+    const end      = new Date();
+    const rawStart = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
+    const ltsStart = new Date(end.getTime() - GRID_LTS_WINDOW_MS);
     (async (): Promise<void> =>
     {
         try
         {
-            const result: any = await callWSWithTimeout<any>(host.hass, {
-                type:                     'history/history_during_period',
-                start_time:               start.toISOString(),
-                end_time:                 end.toISOString(),
-                entity_ids:               [entity],
-                minimal_response:         true,
-                no_attributes:            true,
-                //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters. See #157.
-                significant_changes_only: true,
-            });
-            const arr: any[] = (result && result[entity]) ?? [];
+            //Fire BOTH backfills in parallel through the module-level
+            //semaphore. LTS catches the 24 h..6 h slice with 5-minute
+            //buckets, raw catches the 6 h..now slice at full resolution
+            //with significant_changes_only. The LTS arm is wrapped in a
+            //.catch so a recorder without LTS for this entity (custom
+            //sensor without `state_class`) silently degrades to raw
+            //only, the user-facing behaviour stays the same as before
+            //the LTS arm landed.
+            const [ltsResult, rawResult] = await Promise.all([
+                callWSWithTimeout<any>(host.hass, {
+                    type:          'recorder/statistics_during_period',
+                    start_time:    ltsStart.toISOString(),
+                    end_time:      rawStart.toISOString(),
+                    statistic_ids: [entity],
+                    period:        '5minute',
+                    //Both fields: power-native sensors populate `mean`,
+                    //cumulative-energy sensors populate `state`. The
+                    //parser below prefers `mean` and anchors at the
+                    //bucket midpoint; falls back to `state` and anchors
+                    //at the bucket end so consecutive deltas attribute
+                    //to the bucket that produced them.
+                    types:         ['mean', 'state'],
+                }).catch(() => null),
+                callWSWithTimeout<any>(host.hass, {
+                    type:                     'history/history_during_period',
+                    start_time:               rawStart.toISOString(),
+                    end_time:                 end.toISOString(),
+                    entity_ids:               [entity],
+                    minimal_response:         true,
+                    no_attributes:            true,
+                    //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters. See #157.
+                    significant_changes_only: true,
+                }),
+            ]);
             const merged: Sample[] = [];
             let lastV: number | null = null;
             let lastChangeT: number | null = null;
-            for (const item of arr)
+            //LTS samples first (older). One per 5-minute bucket.
+            const ltsArr: any[] = (ltsResult && (ltsResult as Record<string, unknown>)[entity] as any[]) ?? [];
+            for (const item of ltsArr)
+            {
+                const startMs = parseStatBoundary(item?.start);
+                const endMs   = parseStatBoundary(item?.end);
+                if (startMs === null) continue;
+                let valueRaw: unknown = item?.mean;
+                let anchorAtEnd = false;
+                if (valueRaw === null || valueRaw === undefined)
+                {
+                    valueRaw = item?.state;
+                    anchorAtEnd = true;
+                }
+                if (valueRaw === null || valueRaw === undefined) continue;
+                const v = parseNumericState(valueRaw);
+                if (v === null) continue;
+                const t = anchorAtEnd
+                    ? (endMs ?? startMs)
+                    : (endMs !== null ? (startMs + endMs) / 2 : startMs);
+                const realTransition = lastV !== null && lastV !== v;
+                if (realTransition || lastChangeT === null) lastChangeT = t;
+                merged.push({ t, v, lastChangeT });
+                lastV = v;
+            }
+            //Raw samples next (newer). High-resolution last 6 h.
+            const rawArr: any[] = (rawResult && rawResult[entity]) ?? [];
+            for (const item of rawArr)
             {
                 const sRaw = item?.s ?? item?.state;
                 if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
@@ -216,6 +273,25 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
             _historyInflight.delete(entity);
         }
     })();
+}
+
+
+//Coerce a `start` / `end` statistics field into a millisecond epoch.
+//Same accept set as the PV / battery / radiation stats parsers,
+//copied here so grid.ts stays import-light.
+function parseStatBoundary(raw: unknown): number | null
+{
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (typeof raw === 'string')
+    {
+        const asNum = Number(raw);
+        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        const d = new Date(raw);
+        const t = d.getTime();
+        return isFinite(t) ? t : null;
+    }
+    return null;
 }
 
 
