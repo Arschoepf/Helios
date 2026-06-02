@@ -2402,12 +2402,11 @@ export const heliosCardStyles = css`
     }
 
     /*  Cloud-cover percentage chip, pinned at the top centre of the
-        card. Style aligned with the clock chip family (.clock + the
-        other home anchored chips): same height, same border weight,
-        same pill radius, same shadow recipe. The crisp-edge text-
-        rendering + integer translate keep the glyph from going fuzzy
-        in the half-pixel landing zone Safari produces with a 50 %
-        anchor + -50 % translate. */
+        card. Same compact pill recipe as the PV / SoC / Grid In /
+        Grid Out chips, just with the configured cloud colour on the
+        2 px ring instead of the production / battery / grid hues.
+        Always sits above the arc + the solar ray so the toggle stays
+        reachable. */
     .cloud-pct-label
     {
         position: absolute;
@@ -2415,33 +2414,32 @@ export const heliosCardStyles = css`
         left: 50%;
         transform: translateX(-50%);
         pointer-events: none;
-        /*  Always on top of the arc + the solar ray: the cloud
-            toggle is a control, it must never get crossed over by
-            the solar-ray going from the sun to the PV chip.        */
         z-index: 50;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        height: 22px;
+        justify-content: center;
+        gap: 4px;
+        min-width: 56px;
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border:     2px solid var(--helios-cloud-color, var(--secondary-text-color, #727272));
         border-radius: 999px;
-        padding: 2px 10px;
+        padding: 3px 10px;
         font-family: var(--primary-font-family, 'Roboto', sans-serif);
         font-size:    12px;
         font-weight:  600;
         line-height:  1.2;
         font-variant-numeric: tabular-nums;
         box-shadow: 0 1px 3px var(--shadow-color);
+        white-space: nowrap;
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
     }
 
     .cloud-pct-label ha-icon
     {
-        --mdc-icon-size: 14px;
+        --mdc-icon-size: 16px;
         color: inherit;
         display: inline-flex;
         align-items: center;
@@ -2452,41 +2450,29 @@ export const heliosCardStyles = css`
     .cloud-pct-label.is-on
     {
         background: var(--primary-color, #03a9f4);
-        color: #ffffff;
+        color: var(--text-on-primary-color, #ffffff);
         border-color: var(--darker-primary-color, #01579b);
     }
 
     /*  Cloud chip is now a button (the click toggles the per-layer
         display below). Reset native button defaults so it visually
-        matches the previous span recipe + add a subtle hover feedback
-        so the affordance reads without a tooltip.                   */
+        matches the canonical chip recipe and add a soft shadow on
+        hover so the affordance reads without a tooltip. The chip
+        does NOT lift on hover, the user asked for a flat feedback
+        so the chip stays anchored to its X-centred top spot. */
     button.cloud-pct-label
     {
         font-family: inherit;
         cursor: pointer;
         pointer-events: auto;
-        transition: background 0.15s ease, transform 0.12s ease,
-                    box-shadow 0.15s ease, border-color 0.15s ease;
+        transition: box-shadow 0.15s ease;
     }
-    /*  Hover / active transforms MUST keep translateX(-50%) baked
-        into the chip's positioning, otherwise the hover replaces it
-        and the chip jumps to the right (left:50% then no recentre).
-        Stack the lift on top of the X-centre so the chip rises in
-        place. */
     button.cloud-pct-label:hover
     {
-        background: color-mix(in srgb, var(--primary-color, #03a9f4) 8%, var(--card-background-color, #ffffff));
-        border-color: color-mix(in srgb, var(--primary-color, #03a9f4) 55%, var(--divider-color, rgba(0, 0, 0, 0.18)));
-        box-shadow: 0 2px 6px var(--shadow-color);
-        transform: translateX(-50%) translateY(-1px);
-    }
-    button.cloud-pct-label.is-on:hover
-    {
-        background: color-mix(in srgb, var(--primary-color, #03a9f4) 88%, #ffffff);
+        box-shadow: 0 2px 8px var(--shadow-color);
     }
     button.cloud-pct-label:active
     {
-        transform: translateX(-50%) translateY(0);
         box-shadow: 0 1px 2px var(--shadow-color);
     }
     button.cloud-pct-label:focus-visible
@@ -2571,7 +2557,7 @@ export const heliosCardStyles = css`
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color: var(--primary-text-color, #212121);
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.18));
+        border: 2px solid var(--helios-cloud-color, var(--secondary-text-color, #727272));
         border-radius: 999px;
         font-size: 11px;
         font-weight: 600;

@@ -7,6 +7,35 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.8
+
+### Cloud chip joins the canonical chip family
+
+The cloud-cover chip and its three layer sub-chips (low / mid /
+high) read with a different visual recipe than the rest of the
+chip family: 1 px divider-grey border vs the canonical 2 px
+coloured ring used by PV, SoC, Grid In and Grid Out. The cloud
+chip also lifted by 1 px on hover (translateY) which left the
+top-anchored pill bouncing visually each time the cursor entered
+or left it.
+
+The cloud chip now uses the same compact pill recipe as PV / SoC
+/ Grid: 2 px ring in the configured cloud colour
+(`--helios-cloud-color`, falling back to the HA secondary text
+token then `#727272`), `gap: 4px`, `min-width: 56px`, `padding:
+3px 10px`, `ha-icon` sized at 16 px to match. The 22 px fixed
+height is gone, the padding now drives the chip dimensions
+exactly like the other chips.
+
+The hover transform is gone. On hover the chip stays anchored at
+its X-centred top spot and the box-shadow softens from
+`0 1px 3px` to `0 2px 8px`; on active the shadow drops back
+flat. The user explicitly asked for shadow-only feedback so the
+chip does not move around.
+
+The three layer sub-chips get the same 2 px coloured ring so the
+detail view reads as a coherent group with the parent chip.
+
 ### beta.7
 
 ### Sun arc gets its own fullscreen ramp
