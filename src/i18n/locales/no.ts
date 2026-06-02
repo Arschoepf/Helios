@@ -15,6 +15,8 @@ export const no: Translations = {
     lidarViewChipLabel: 'LiDAR-visning',
 
     shadingDomeChipLabel: 'Skygger',
+    cameraLockEnable:     'Lås kamera',
+    cameraLockDisable:    'Lås opp kamera',
     detail:
     {
         exitHint: 'Trykk hvor som helst for å gå ut',
@@ -55,15 +57,6 @@ export const no: Translations = {
         autoRotateHint:     'Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). En enfingers-bevegelse pauser den umiddelbart, og den fortsetter så snart du slipper.',
         autoRotateOn:       'På',
         autoRotateOff:      'Av',
-        cameraTitle:        'Kamera',
-        cameraHint:         'Hvileposisjon for kameraet som brukes hver gang kortet initialiseres. Dra glidebryterne for en sanntidsforhåndsvisning, verdiene du velger overstyrer den automatiske standarden ved neste rendring. Tilbakestillingsknappen nederst til høyre setter alt tilbake til den automatiske posisjonen.',
-        cameraPitch:        'Vertikal helling',
-        cameraBearing:      'Horisontal rotasjon',
-        cameraLocked:       'Lås rotasjon',
-        cameraLockedOn:     'Låst',
-        cameraLockedOff:    'Fri',
-        cameraLockedHelp:   'Når låst, er dra-rotasjon og dra-helling deaktivert på kortet, og den automatiske rotasjonen ved inaktivitet er satt på pause.',
-        cameraReset:        'Tilbakestill',
         dateFormat:         'Datoformat (standard: mm-dd)',
         dateFormatHelp:     'Tokens: yyyy, yy, mm, dd. Eksempler:',
         timeFormat:         'Klokkeformat',

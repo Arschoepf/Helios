@@ -14,6 +14,8 @@ export const fr: Translations = {
     lidarViewChipLabel: 'Vue LiDAR',
 
     shadingDomeChipLabel: 'Ombres',
+    cameraLockEnable:     'Verrouiller la caméra',
+    cameraLockDisable:    'Déverrouiller la caméra',
     detail:
     {
         exitHint: 'Cliquez n\'importe où pour quitter',
@@ -53,15 +55,6 @@ export const fr: Translations = {
         autoRotateHint:     'Après quelques secondes d\'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches.',
         autoRotateOn:       'Activée',
         autoRotateOff:      'Désactivée',
-        cameraTitle:        'Caméra',
-        cameraHint:         'Pose initiale de la caméra à chaque ouverture de la carte. Glisse les curseurs pour ajuster en direct, les valeurs choisies remplacent la pose par défaut au prochain rendu. Bouton « Réinitialiser » en bas à droite pour revenir aux valeurs auto.',
-        cameraPitch:        'Inclinaison verticale',
-        cameraBearing:      'Rotation horizontale',
-        cameraLocked:       'Verrouiller la rotation',
-        cameraLockedOn:     'Verrouillée',
-        cameraLockedOff:    'Libre',
-        cameraLockedHelp:   'Quand la rotation est verrouillée, plus aucun glissement ne déplace la caméra et l\'orbite automatique est suspendue.',
-        cameraReset:        'Réinitialiser',
         dateFormat:         'Format de date (par défaut : mm-dd)',
         dateFormatHelp:     'Tokens : yyyy, yy, mm, dd. Exemples :',
         timeFormat:         'Format de l\'heure',

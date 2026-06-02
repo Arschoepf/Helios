@@ -2488,6 +2488,67 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
+    /*  Middle-right rail. Hosts the view-mode toggles (layer, LiDAR,
+        shading dome) at the vertical centre of the card so the
+        top-right corner stays reserved for the camera-lock chip. Same
+        column-flex layout and pointer-events-off rail as
+        .overlay-top-right; each interactive child opts back in. */
+    .overlay-middle-right
+    {
+        position: absolute;
+        top: 50%;
+        right: 8px;
+        transform: translateY(-50%);
+        z-index: 60;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        pointer-events: none;
+    }
+
+    /*  Camera-lock toggle. Pinned top-right of the card, opens
+        (lock-open) when the camera is free and closes (lock) when
+        locked. Same visual size and idle/active recipe as a
+        .mode-bar-seg so the two rails on the right edge read as a
+        single button family. The brand-blue pastille appears when
+        locked, matching the mode-bar-seg.is-on state. */
+    .camera-lock-btn
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  40px;
+        height: 40px;
+        box-sizing: border-box;
+        padding: 0;
+        background: transparent;
+        color: var(--primary-text-color, #212121);
+        border: 0;
+        border-radius: 50%;
+        cursor: pointer;
+        pointer-events: auto;
+        position: relative;
+        z-index: 50;
+        opacity: 1;
+        transition: background 0.15s, color 0.15s;
+    }
+    .camera-lock-btn ha-icon
+    {
+        --mdc-icon-size: 22px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+    }
+    .camera-lock-btn:hover  { background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
+    .camera-lock-btn:active { background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
+    .camera-lock-btn.is-on
+    {
+        background: var(--primary-color);
+        color: var(--text-primary-color, #ffffff);
+    }
+    .camera-lock-btn.is-on:hover  { background: var(--dark-primary-color); }
+    .camera-lock-btn.is-on:active { background: var(--darker-primary-color); }
+
     /*  Top-left rail, mirrors overlay-top-right on the opposite edge
         so the corner overlays sit at matching heights. Hosts the
         date/time clock chip plus, when scrubbing, the back-to-live
@@ -2651,9 +2712,9 @@ export const heliosCardStyles = css`
     }
 
     /*  Row of three per-layer cloud chips revealed when the cloud
-        toggle is ON. Cascade fade-in: low first, then mid, then
-        high. Cascade fade-out: reverse order (high first, then mid,
-        then low). Same pill recipe as the chip itself.
+        toggle is ON. Toggle is instant in both directions, the chips
+        and their leaders flip between hidden and visible in the same
+        frame as the click. Same pill recipe as the chip itself.
         The 54px top leaves a 16px lane underneath the cloud toggle
         chip for the L-shape leaders drawn by .cloud-layer-leaders. */
     .cloud-layer-chips
@@ -2688,33 +2749,23 @@ export const heliosCardStyles = css`
         pointer-events: none;
         color: var(--secondary-text-color, rgba(0, 0, 0, 0.55));
         opacity: 0;
-        transition: opacity 0.4s ease;
         overflow: visible;
     }
     .cloud-layer-leaders.is-on { opacity: 1; }
     /*  Solid stroke, same vocabulary as the main home leaders
-        (.grid-import-leader-line etc.): no dashes, stroke-width 2,
-        round caps. */
+        (.grid-import-leader-line etc.): no dashes, hairline 1 px
+        weight to match the HA Energy dashboard's connector lines,
+        round caps. Both individual leaders and the rail flip
+        between hidden and visible instantly with the toggle so the
+        whole layer cluster appears and disappears in one frame. */
     .cloud-layer-leader
     {
-        stroke-width: 2;
+        stroke-width: 1;
         stroke-linecap: round;
         stroke-linejoin: round;
+        opacity: 0;
     }
-    /*  Trunk reveals INSTANTLY with the toggle: it's the shared
-        spine the 3 branches grow from. The 3 branches then cascade
-        out of the junction point in the chip order. Reversed on the
-        way out. */
-    .cloud-layer-leader { opacity: 0; transition: opacity 0.25s ease; }
-    .cloud-layer-leaders .cloud-layer-leader--trunk { transition-delay: 0.28s; }
-    .cloud-layer-leaders .cloud-layer-leader--low   { transition-delay: 0.56s; }
-    .cloud-layer-leaders .cloud-layer-leader--mid   { transition-delay: 0.28s; }
-    .cloud-layer-leaders .cloud-layer-leader--high  { transition-delay: 0s; }
     .cloud-layer-leaders.is-on .cloud-layer-leader { opacity: 0.75; }
-    .cloud-layer-leaders.is-on .cloud-layer-leader--trunk { transition-delay: 0s; }
-    .cloud-layer-leaders.is-on .cloud-layer-leader--low   { transition-delay: 0.28s; }
-    .cloud-layer-leaders.is-on .cloud-layer-leader--mid   { transition-delay: 0.28s; }
-    .cloud-layer-leaders.is-on .cloud-layer-leader--high  { transition-delay: 0.56s; }
     /*  Fixed pill geometry so the row layout does not reflow as the
         per-layer cover percent changes. min-width = 54 px holds the
         widest value ("100%") at the current font; shorter strings
@@ -2722,11 +2773,8 @@ export const heliosCardStyles = css`
         justify-content. The fixed width also makes the SVG leader
         path coordinates above stable and aligned with each chip's
         centre.
-        Animation: ONLY opacity + a 4 px vertical slide (no scale).
-        Scaling text fractionally produced sub-pixel raster blur even
-        after the transition settled; pure opacity + integer-px
-        translate keeps the font rasteriser on whole-pixel grids the
-        whole time. */
+        The three chips appear and disappear together in one frame
+        with the toggle: no fade, no cascade, no slide. */
     .cloud-layer-chip
     {
         display: inline-flex;
@@ -2749,8 +2797,6 @@ export const heliosCardStyles = css`
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
         opacity: 0;
-        transform: translateY(-4px);
-        transition: opacity 0.28s ease, transform 0.28s ease;
     }
     /*  Smaller glyph (11 px vs 14) so the icon stops dominating the
         pill: with the new layout the percent text is the primary
@@ -2760,19 +2806,7 @@ export const heliosCardStyles = css`
         --mdc-icon-size: 11px;
         color: inherit;
     }
-    /*  Fade-out cascade: high first, mid second, low last. */
-    .cloud-layer-chips .cloud-layer-chip--low  { transition-delay: 0.56s; }
-    .cloud-layer-chips .cloud-layer-chip--mid  { transition-delay: 0.28s; }
-    .cloud-layer-chips .cloud-layer-chip--high { transition-delay: 0s; }
-    /*  Fade-in cascade: low first, mid second, high last. */
-    .cloud-layer-chips.is-on .cloud-layer-chip
-    {
-        opacity: 1;
-        transform: translateY(0);
-    }
-    .cloud-layer-chips.is-on .cloud-layer-chip--low  { transition-delay: 0s; }
-    .cloud-layer-chips.is-on .cloud-layer-chip--mid  { transition-delay: 0.28s; }
-    .cloud-layer-chips.is-on .cloud-layer-chip--high { transition-delay: 0.56s; }
+    .cloud-layer-chips.is-on .cloud-layer-chip { opacity: 1; }
 
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
@@ -2928,14 +2962,14 @@ export const heliosCardStyles = css`
     .grid-import-leader-line
     {
         stroke: var(--energy-grid-consumption-color, #488fc2);
-        stroke-width: 2;
+        stroke-width: 1;
         stroke-linecap: round;
         fill: none;
     }
     .grid-export-leader-line
     {
         stroke: var(--energy-grid-return-color, #8353d1);
-        stroke-width: 2;
+        stroke-width: 1;
         stroke-linecap: round;
         fill: none;
     }
@@ -2962,7 +2996,7 @@ export const heliosCardStyles = css`
     .pv-home-leader-line
     {
         stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
-        stroke-width: 2;
+        stroke-width: 1;
         stroke-opacity: 1;
         stroke-linecap: round;
         fill: none;
@@ -3058,7 +3092,7 @@ export const heliosCardStyles = css`
     .battery-leader-line
     {
         stroke: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
-        stroke-width: 2;
+        stroke-width: 1;
         stroke-opacity: 1;
         stroke-linecap: round;
         stroke-linejoin: round;
@@ -3151,7 +3185,7 @@ export const heliosCardStyles = css`
     .home-drop-leader-line
     {
         stroke: var(--primary-color, #03a9f4);
-        stroke-width: 2;
+        stroke-width: 1;
         stroke-linecap: round;
         fill: none;
         opacity: 0.85;

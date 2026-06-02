@@ -16,6 +16,8 @@ export const en: Translations = {
     lidarViewChipLabel: 'LiDAR view',
 
     shadingDomeChipLabel: 'Shadows',
+    cameraLockEnable:     'Lock camera pose',
+    cameraLockDisable:    'Unlock camera pose',
     detail:
     {
         exitHint: 'Tap anywhere to exit',
@@ -56,15 +58,6 @@ export const en: Translations = {
         autoRotateHint:     'When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun\'s apparent motion). A single-finger drag pauses it instantly and it resumes once you let go.',
         autoRotateOn:       'On',
         autoRotateOff:      'Off',
-        cameraTitle:        'Camera',
-        cameraHint:         'Resting camera pose applied every time the card initialises. Drag the sliders for live preview, the values you pick override the auto default on the next render. Reset button at the bottom-right reverts everything back to the auto pose.',
-        cameraPitch:        'Vertical tilt',
-        cameraBearing:      'Horizontal rotation',
-        cameraLocked:       'Lock rotation',
-        cameraLockedOn:     'Locked',
-        cameraLockedOff:    'Free',
-        cameraLockedHelp:   'While locked, drag-rotate and drag-pitch are disabled on the card and the idle auto-orbit is suspended.',
-        cameraReset:        'Reset',
         dateFormat:         'Date format (default: mm-dd)',
         dateFormatHelp:     'Tokens: yyyy, yy, mm, dd. Examples:',
         timeFormat:         'Time format',

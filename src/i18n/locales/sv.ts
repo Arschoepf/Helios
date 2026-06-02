@@ -9,6 +9,8 @@ export const sv: Translations = {
     lidarViewChipLabel: 'LiDAR-vy',
 
     shadingDomeChipLabel: 'Skuggor',
+    cameraLockEnable:     'Lås kamera',
+    cameraLockDisable:    'Lås upp kamera',
     detail:
     {
         exitHint: 'Klicka var som helst för att avsluta',
@@ -48,15 +50,6 @@ export const sv: Translations = {
         autoRotateHint:     'Efter några sekunders inaktivitet roterar kameran långsamt runt hemmet (ungefär 1,5°/s, mot solens skenbara rörelse). Ett enfingersdrag pausar den omedelbart och den återupptas så snart du släpper.',
         autoRotateOn:       'På',
         autoRotateOff:      'Av',
-        cameraTitle:        'Kamera',
-        cameraHint:         'Viloläge för kameran som tillämpas varje gång kortet initialiseras. Dra i reglagen för en förhandsvisning i realtid, värdena du väljer åsidosätter den automatiska standarden vid nästa rendering. Återställningsknappen nere till höger återställer allt till det automatiska läget.',
-        cameraPitch:        'Vertikal lutning',
-        cameraBearing:      'Horisontell rotation',
-        cameraLocked:       'Lås rotation',
-        cameraLockedOn:     'Låst',
-        cameraLockedOff:    'Fri',
-        cameraLockedHelp:   'När den är låst är dragrotation och draglutning inaktiverade på kortet, och den automatiska rotationen vid inaktivitet pausas.',
-        cameraReset:        'Återställ',
         dateFormat:         'Datumformat (standard: mm-dd)',
         dateFormatHelp:     'Token: yyyy, yy, mm, dd. Exempel:',
         timeFormat:         'Tidsformat',

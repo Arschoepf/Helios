@@ -6,6 +6,8 @@ export const it: Translations = {
     lidarViewChipLabel: 'Vista LiDAR',
 
     shadingDomeChipLabel: 'Ombre',
+    cameraLockEnable:     'Blocca camera',
+    cameraLockDisable:    'Sblocca camera',
     detail:
     {
         exitHint: 'Tocca un punto qualsiasi per uscire',
@@ -46,15 +48,6 @@ export const it: Translations = {
         autoRotateHint:     'Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un gesto con un dito la mette in pausa all\'istante e riprende non appena rilasci.',
         autoRotateOn:       'Attiva',
         autoRotateOff:      'Disattiva',
-        cameraTitle:        'Camera',
-        cameraHint:         'Posizione di riposo della camera applicata ogni volta che la scheda si inizializza. Trascina i cursori per un\'anteprima in tempo reale, i valori che scegli sovrascrivono l\'impostazione automatica al rendering successivo. Il pulsante di reset in basso a destra riporta tutto alla posa automatica.',
-        cameraPitch:        'Inclinazione verticale',
-        cameraBearing:      'Rotazione orizzontale',
-        cameraLocked:       'Blocca rotazione',
-        cameraLockedOn:     'Bloccata',
-        cameraLockedOff:    'Libera',
-        cameraLockedHelp:   'Quando è bloccata, i gesti di rotazione e inclinazione sono disattivati sulla scheda e l\'orbita automatica in inattività viene sospesa.',
-        cameraReset:        'Ripristina',
         dateFormat:         'Formato data (predefinito: mm-dd)',
         dateFormatHelp:     'Token: yyyy, yy, mm, dd. Esempi:',
         timeFormat:         'Formato ora',

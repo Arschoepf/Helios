@@ -7,6 +7,53 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.13
+
+### Camera lock on the live card, hairline leaders, instant cloud-toggle
+
+Three UI changes shipped together, each tracked in a dedicated
+issue.
+
+**Camera lock button on the permanent card UI (#163).** The
+camera rotation X / Y sliders + lock switch are removed from the
+editor "Camera" section (and the i18n keys that drove them are
+gone with them). The same intent now lives directly on the live
+card as a single lock chip pinned top-right: open padlock when
+the camera is free, closed padlock when the pose is held.
+Clicking the chip captures the bearing and pitch that the user
+just dragged to, flips the lock state, persists the three values
+to YAML through a normal `config-changed` event, and applies the
+new lock to the live MapLibre instance in the same frame so the
+button feel matches the visible map. Reload re-applies the saved
+pose, since the values landed in YAML. The three view-mode
+toggles (default layer, LiDAR view, shading dome) keep the same
+X coordinate but move from the top-right rail to a new
+middle-right rail, leaving the corner free for the lock chip.
+
+**Hairline leader strokes (#164).** All six solid leader lines
+on the home cluster move from `stroke-width: 2` down to
+`stroke-width: 1` to match the connector lines on the Home
+Assistant Energy dashboard. The card now reads as part of the
+same Energy visual family when dropped on the same dashboard
+view. The chart curves are untouched, their widths are tuned for
+chart legibility rather than leader weight.
+
+- `.pv-home-leader-line`
+- `.battery-leader-line`
+- `.grid-import-leader-line`
+- `.grid-export-leader-line`
+- `.home-drop-leader-line`
+- `.cloud-layer-leader`
+
+**Instant cloud-cover toggle (#165).** Tapping the central cloud
+percentage chip used to expand the three layer chips (low / mid
+/ high) and their L-shape leaders through a ~0.6 s cascade. The
+cascade is removed entirely: the three chips and their leaders
+appear and disappear in the same frame as the click. The
+`transition` + every `transition-delay` rule on
+`.cloud-layer-chips` and `.cloud-layer-leaders` are dropped, the
+elements simply flip between `opacity: 0` and `opacity: 1`.
+
 ### alpha.12
 
 ### Pool reverted, shared fetch caches added
