@@ -401,8 +401,10 @@ export const DEFAULT_GRID_IMPORT_COLOR_HEX: string = '#488fc2';  //--energy-grid
 export const DEFAULT_GRID_EXPORT_COLOR_HEX: string = '#8353d1';  //--energy-grid-return-color
 
 
-//Default values for the building config, exposed so the visual editor can render the matching placeholder / slider defaults.
-export const DEFAULT_BUILDING_RADIUS_M         = 100;
+//Display radius is locked at 300 m: past that the basemap + LiDAR fetch and the per-frame projection start to chug on mid-range
+//phones, and the home cluster stops reading as "near home" anyway. The constant stays exported so any leftover legacy reader sees
+//the new value; the editor radius slider is gone (the user no longer chooses).
+export const DEFAULT_BUILDING_RADIUS_M         = 300;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';

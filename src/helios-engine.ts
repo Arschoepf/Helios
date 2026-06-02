@@ -2362,21 +2362,14 @@ export class HeliosEngine
         }
     }
 
-    //Resolves the configured building radius (metres). Falls back to
-    //DEFAULT_BUILDING_RADIUS_M and clamps to a sane range so a stray
-    //editor value can't accidentally trigger fetching dozens of tiles.
+    //Display radius is fixed at DEFAULT_BUILDING_RADIUS_M (300 m).
+    //The editor no longer exposes a slider for it; the constant is
+    //the single source of truth so every consumer (basemap bbox,
+    //LiDAR fetch extent, projection clip, MapLibre bounds) stays in
+    //lockstep.
     private _buildingRadiusMeters(): number
     {
-        const v = Number(this.cfg['building-radius']);
-        if (!Number.isFinite(v) || v <= 0)
-        {
-            return DEFAULT_BUILDING_RADIUS_M;
-        }
-        //Hard ceiling at 500 m. Past that the basemap / LiDAR fetch
-        //and the per-frame projection start to chug; the slider in
-        //the editor also caps at 500 so anything above can only come
-        //from a hand-edited YAML config.
-        return Math.min(500, Math.max(20, v));
+        return DEFAULT_BUILDING_RADIUS_M;
     }
 
     //Clamp MapLibre's camera bounds to a tight bbox around the home,

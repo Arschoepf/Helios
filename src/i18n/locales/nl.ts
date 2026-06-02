@@ -121,8 +121,6 @@ export const nl: Translations = {
         solarRadiationEntityHelp: 'Kies een sensor die de globale kortgolvige instraling rapporteert in W/m² (typisch een Ecowitt / Davis / persoonlijk weerstation). Wanneer ingesteld, vervangen de huidige status en de recorder-geschiedenis Open-Meteo voor de live + verleden instralingswaarden overal waar ze verschijnen (cijfer op de zonpastille, Y-as van de PV-grafiek, kleuring van de zonneboog). Voorspellingsuren blijven Open-Meteo gebruiken, een sensor kent alleen het heden.',
         buildingsSection:   'Gebouw',
         buildingsHint:      'Om de kaart soepel te houden in dichte stedelijke gebieden, worden alleen gebouwen binnen de ingestelde straal rond het huis in 3D weergegeven. Het eigen huis blijft altijd volledig dekkend; de aangrenzende gebouwen worden met de geconfigureerde dekking weergegeven om stedelijke context te geven zonder met de data-overlays te concurreren. De clusterstraal voegt aanbouwen (veranda, garage, bijgebouw) toe aan de "huis"-groep.',
-        displayRadius:         'Weergavestraal',
-        displayRadiusHint:     'Bepaalt het zichtbare gebied rond het huis. Alles buiten deze straal wordt verborgen: basiskaart, naburige gebouwen, schaduwen. Stuurt ook de omvang van de LiDAR-fetch en de clip van de geprojecteerde schaduwen aan.',
         timelineSection:          'Timeline',
         timelineEnabled:          'Timeline tonen',
         timelineEnabledOn:        'Tonen',

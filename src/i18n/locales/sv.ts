@@ -123,8 +123,6 @@ export const sv: Translations = {
         solarRadiationEntityHelp: 'Välj en sensor som rapporterar global kortvågsstrålning i W/m² (typisk Ecowitt / Davis / personlig väderstation). När den är inställd ersätter dess aktuella tillstånd och recorder-historik Open-Meteo för den levande + tidigare strålningen överallt där den visas (solchipets nummer, PV-diagrammets Y-axel, solbågsfärgning). Prognostimmar använder alltid Open-Meteo eftersom en sensor bara känner nuet.',
         buildingsSection:   'Byggnad',
         buildingsHint:      'För att hålla kortet smidigt i täta urbana områden renderas endast byggnader inom den konfigurerade radien runt hemmet i 3D. Hemmet självt stannar vid full opacitet; närliggande byggnader renderas med den konfigurerade opaciteten så att de ger urban kontext utan att konkurrera med dataöverlagren. Klusterradien grupperar fastsittande uthus (verandor, garage, skjul) i "hemmet"-uppsättningen.',
-        displayRadius:         'Visningsradie',
-        displayRadiusHint:     'Definierar det synliga området runt hemmet. Allt bortom denna radie döljs: baskarta, närliggande byggnader, skuggor. Driver också LiDAR-hämtningens omfattning och den projicerade skuggans klippning.',
         timelineSection:          'Tidslinje',
         timelineEnabled:          'Visa tidslinje',
         timelineEnabledOn:        'Visa',

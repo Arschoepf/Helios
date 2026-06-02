@@ -121,8 +121,6 @@ export const de: Translations = {
         solarRadiationEntityHelp: 'Wähle einen Sensor, der die globale Kurzwellenstrahlung in W/m² meldet (typisch Ecowitt / Davis / private Wetterstation). Wenn gesetzt, ersetzt sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo bei allen Live- und Vergangenheitswerten der Bestrahlungsstärke (Zahl an der Sonnenpastille, Y-Achse des PV-Charts, Färbung des Sonnenbogens). Vorhersagestunden verwenden weiterhin Open-Meteo, da ein Sensor nur die Gegenwart kennt.',
         buildingsSection:   'Gebäude',
         buildingsHint:      'Damit die Karte auch in dicht bebauten Stadtgebieten flüssig bleibt, werden nur Gebäude innerhalb des eingestellten Radius um das eigene Zuhause in 3D dargestellt. Das eigene Haus bleibt immer voll deckend; die Nachbargebäude werden mit der konfigurierten Deckkraft gerendert, um den städtebaulichen Kontext zu zeigen, ohne mit den Daten-Overlays zu konkurrieren. Der Cluster-Radius gruppiert anliegende Nebengebäude (Wintergärten, Garagen) in die „Heimat"-Gruppe.',
-        displayRadius:         'Anzeigeradius',
-        displayRadiusHint:     'Bestimmt den um das Zuhause sichtbaren Bereich. Alles jenseits dieses Radius bleibt verborgen: Grundkarte, Nachbargebäude, Schatten. Steuert zugleich den LiDAR-Fetch-Bereich und das Clipping der projizierten Schatten.',
         timelineSection:          'Timeline',
         timelineEnabled:          'Timeline anzeigen',
         timelineEnabledOn:        'Anzeigen',

@@ -130,8 +130,6 @@ export const no: Translations = {
         solarRadiationEntityHelp: 'Velg en sensor som rapporterer global kortbølget innstråling i W/m² (typisk en Ecowitt / Davis / personlig værstasjon). Når satt, erstatter dens nåværende tilstand og recorder-historikk Open-Meteo for live og tidligere innstrålingsverdier overalt der de vises (tall på solpastillen, Y-aksen i PV-grafen, fargen på solbuen). Prognose-timene bruker fortsatt Open-Meteo, en sensor kjenner bare nået.',
         buildingsSection:   'Bygning',
         buildingsHint:      'For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.',
-        displayRadius:         'Visningsradius',
-        displayRadiusHint:     'Definerer det synlige området rundt huset. Alt utenfor denne radiusen skjules: grunnkart, nabobygninger, skygger. Styrer også LiDAR-hentingens omfang og klipp av projiserte skygger.',
         timelineSection:          'Timeline',
         timelineEnabled:          'Vis timeline',
         timelineEnabledOn:        'Vis',

@@ -10,7 +10,7 @@ import
 } from './helios-config';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
-import { formatDate, darkenHex } from './card/format';
+import { darkenHex } from './card/format';
 import
 {
     refreshPv,
@@ -44,6 +44,7 @@ import
     renderTimelineNightZones,
     renderTimelineFutureMask,
     renderTimelineHoverTooltip,
+    renderTimelineBackToLiveTab,
     handleChartHoverMove,
     handleChartHoverLeave
 } from './card/charts';
@@ -615,14 +616,6 @@ export class HeliosCard extends LitElement
     private _lastRefreshConfigRef:         unknown = undefined;
     private _lastRefreshTimeRangeRef:      unknown = undefined;
     private _lastRefreshEnergyDefaultsRef: unknown = undefined;
-
-    //Clock-label memoisation. The date+time strings in the top-left
-    //change at most once per minute, but render() ran formatDate +
-    //toLocaleTimeString on every cycle (every overlay @state move
-    //during auto-rotate). Cached on epoch-minute + format flags.
-    private _cachedClockLabelKey:  string = '';
-    private _cachedClockDateLabel: string = '';
-    private _cachedClockTimeLabel: string = '';
 
     //Arc-segment scratch buffers. The sun arc is split by altitude
     //(below-horizon goes BEHIND the chip cluster, above-horizon goes
@@ -1234,45 +1227,6 @@ export class HeliosCard extends LitElement
         const hasApiKey = getHomeCoords(this.config, this.hass) !== null;
 
 
-        //Date+time shown bottom-right: tracks the timeline cursor.
-        //  - In live mode it follows wall-clock time (re-rendered every
-        //    second by _tick).
-        //  - In scrubbed mode it shows the selected instant exactly.
-        //Both date and time follow the user-defined date format.
-        const displayDate = !this._isLiveMode && this._selectedTime
-            ? this._selectedTime
-            : this._now;
-        //time-format: '12h' or '24h' (default). hourCycle is more
-        //authoritative than hour12, which some locales silently
-        //ignore (fr-FR falls back to 24h regardless of hour12).
-        const is12h = String(this.config?.['time-format'] ?? '24h').toLowerCase() === '12h';
-        //Memoise the date+time labels keyed on (epoch-minute, format
-        //flags) so a rotation that only mutates camera state does
-        //not re-run Intl.DateTimeFormat (2-5 ms per call on Safari)
-        //or our formatDate helper. Both labels only change once per
-        //minute in live mode and once per scrub-step in scrub mode.
-        const dateFmt = String(this.config?.['date-format'] ?? '');
-        const labelKey = `${Math.floor(displayDate.getTime() / 60_000)}|${is12h ? '12' : '24'}|${dateFmt}`;
-        let displayDateLabel: string;
-        let displayTimeLabel: string;
-        if (this._cachedClockLabelKey === labelKey)
-        {
-            displayDateLabel = this._cachedClockDateLabel;
-            displayTimeLabel = this._cachedClockTimeLabel;
-        }
-        else
-        {
-            displayDateLabel = formatDate(displayDate, this.config?.['date-format']);
-            displayTimeLabel = displayDate.toLocaleTimeString([], {
-                hour:      '2-digit',
-                minute:    '2-digit',
-                hourCycle: is12h ? 'h12' : 'h23'
-            } as Intl.DateTimeFormatOptions);
-            this._cachedClockLabelKey   = labelKey;
-            this._cachedClockDateLabel  = displayDateLabel;
-            this._cachedClockTimeLabel  = displayTimeLabel;
-        }
-
         //The on-ground disc self-encodes the low/mid/high breakdown
         //via three concentric bands (proportional radial widths,
         //three shades of the cloud colour); no hover tooltip
@@ -1826,6 +1780,7 @@ export class HeliosCard extends LitElement
                               area and the PV area visually balance
                               each other.  -->
                         ${renderTimelineHoverTooltip(this)}
+                        ${renderTimelineBackToLiveTab(this, () => resetToLive(this))}
                         ${pvEntityId ? html`
                             <div
                                 class="tb-chart-card tb-pv-card"
@@ -1947,16 +1902,16 @@ export class HeliosCard extends LitElement
                     //sun, partly-cloudy, cloudy or pouring depending on
                     //the current home reading. The user reads the sky
                     //state at a glance without opening the dome.
-                    //Camera lock button. Lives in the top-right corner of the permanent card UI so the user can pin or release
-                    //the camera pose without opening the editor. Toggling reads the engine's current bearing and pitch, persists
-                    //them along with the `camera-locked` flag through a `config-changed` event, and updates the live engine state
-                    //immediately so the visible map matches before HA's round-trip lands.
+                    //Camera lock chip sits top-left where the clock chip used to live; the three view-mode toggles stay anchored
+                    //top-right. Tapping the chip captures the camera's current bearing and pitch, persists them with the lock flag
+                    //through a `config-changed` event, and applies the new state to the live MapLibre instance so the visible map
+                    //matches before HA's round-trip lands.
                     const cameraLocked  = this._isCameraLocked();
                     const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
                     const lockI18n      = pickTranslations((this.hass as any)?.locale?.language ?? (typeof navigator !== 'undefined' ? navigator.language : 'en'));
                     const lockLabel     = cameraLocked ? lockI18n.cameraLockDisable : lockI18n.cameraLockEnable;
                     return html`
-                        <div class="overlay-top-right">
+                        <div class="overlay-top-left">
                             <button
                                 type="button"
                                 class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
@@ -1968,7 +1923,7 @@ export class HeliosCard extends LitElement
                                 <ha-icon icon="${lockIcon}"></ha-icon>
                             </button>
                         </div>
-                        <div class="overlay-middle-right">
+                        <div class="overlay-top-right">
                             <div class="mode-bar" role="radiogroup" aria-label="View mode">
                                 <button
                                     type="button"
@@ -2007,31 +1962,6 @@ export class HeliosCard extends LitElement
                         </div>
                     `;
                 })() : nothing}
-
-                <!--  Top-left cluster: clock chip showing the active
-                      timeline instant + (in scrub mode) a back-to-
-                      live button right beside it. The clock takes a
-                      blue / white "is-scrub" theme when scrubbing
-                      so the same chip doubles as the mode signal,
-                      no separate scrub-time chip needed lower on
-                      the card.  -->
-                ${hasApiKey ? html`
-                    <div class="overlay-top-left">
-                        <div class="clock ${!this._isLiveMode ? 'is-scrub' : ''}">
-                            <span class="clock-date">${displayDateLabel}</span>
-                            <span class="clock-time">${displayTimeLabel}</span>
-                        </div>
-                        ${!this._isLiveMode ? html`
-                            <button
-                                class="live-return-btn"
-                                @click="${() => resetToLive(this)}"
-                                aria-label="Back to live"
-                            >
-                                <ha-icon icon="mdi:restore"></ha-icon>
-                            </button>
-                        ` : nothing}
-                    </div>
-                ` : nothing}
 
                 <!--  Solar arc, BACK pass. Renders only the dotted
                       below-horizon segments (the sun's path through
@@ -2748,12 +2678,13 @@ export class HeliosCard extends LitElement
         return (this.config as Record<string, unknown>)?.['camera-locked'] === true;
     }
     //Lock-button click handler. Captures the camera's CURRENT bearing
-    //and pitch (whatever the user dragged to) when locking, persists
-    //them to the YAML alongside the lock flag, and applies the new
-    //lock state to the live engine so MapLibre stops responding to
-    //drag-rotate immediately. Unlocking just drops the lock flag and
-    //leaves the bearing/pitch in config so the next reload restores
-    //the same pose.
+    //and pitch (whatever the user dragged to), persists the three
+    //values to YAML under the same `camera-bearing-deg` /
+    //`camera-pitch-deg` / `camera-locked` keys the engine reads on
+    //init, and applies the new lock state to the live MapLibre
+    //instance so drag-rotate stops responding in the same frame as
+    //the click. Reload restores the saved pose because the engine
+    //reads these keys in `_initialBearing` / `_initialPitch`.
     private _onCameraLockToggle = (): void =>
     {
         const wasLocked = this._isCameraLocked();
@@ -2762,8 +2693,8 @@ export class HeliosCard extends LitElement
         const pitch     = this._engine ? this._engine.getCameraPitch()   : undefined;
         const nextCfg: Record<string, unknown> = { ...(this.config as Record<string, unknown>) };
         nextCfg['camera-locked'] = nextLock;
-        if (Number.isFinite(bearing as number)) nextCfg['camera-bearing'] = Math.round(((bearing as number) % 360 + 360) % 360 * 10) / 10;
-        if (Number.isFinite(pitch as number))   nextCfg['camera-pitch']   = Math.round(Math.max(15, Math.min(85, pitch as number)) * 10) / 10;
+        if (Number.isFinite(bearing as number)) nextCfg['camera-bearing-deg'] = Math.round(((bearing as number) % 360 + 360) % 360 * 10) / 10;
+        if (Number.isFinite(pitch as number))   nextCfg['camera-pitch-deg']   = Math.round(Math.max(15, Math.min(85, pitch as number)) * 10) / 10;
         if (this._engine)
         {
             if (Number.isFinite(bearing as number)) this._engine.setCameraBearing(bearing as number);

@@ -131,8 +131,6 @@ export const en: Translations = {
         solarRadiationEntityHelp: 'Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours always use Open-Meteo since a sensor only knows the present.',
         buildingsSection:   'Building',
         buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
-        displayRadius:         'Display radius',
-        displayRadiusHint:     'Defines the visible area around the home. Anything past this radius is hidden: basemap, neighbouring buildings, shadows. Also drives the LiDAR fetch extent and the projected-shadow clip.',
         timelineSection:          'Timeline',
         timelineEnabled:          'Show timeline',
         timelineEnabledOn:        'Show',

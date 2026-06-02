@@ -4,7 +4,6 @@ import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
     type HeliosConfig,
-    DEFAULT_BUILDING_RADIUS_M,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_LIDAR_PRECISION,
@@ -1161,18 +1160,6 @@ export class HeliosCardEditor extends LitElement
                         </div>
                     </div>
                     <div class="hint">${t.editor.pixelRatioHint}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.displayRadius}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="20" max="500" step="10"
-                                .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                                @input="${(e: Event) => this._numSlider('building-radius', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
-                        </div>
-                    </label>
-                    <div class="hint">${t.editor.displayRadiusHint}</div>
 
                     <details class="advanced-section">
                         <summary class="section-title section-title-collapse">${t.editor.timelineSection}</summary>

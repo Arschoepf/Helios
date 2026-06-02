@@ -247,14 +247,6 @@ export interface Translations
         weatherHint:              string;
         solarRadiationEntity:     string;
         solarRadiationEntityHelp: string;
-        //Display radius (m) around the home: everything outside this
-        //disc is hidden by an opaque crop mask, regardless of what
-        //the basemap would otherwise show. Originally a buildings-
-        //only setting, hence the legacy `building-radius` config
-        //key; now also drives the LiDAR fetch bbox, the shadow clip,
-        //and the cropped viewport.
-        displayRadius:            string;
-        displayRadiusHint:        string;
         //Timeline sub-section, nested inside the UI section. Hosts the visibility toggle, the width slider and the per-day consumption-chip toggle.
         timelineSection:          string;
         timelineEnabled:          string;

@@ -123,8 +123,6 @@ export const cs: Translations = {
         solarRadiationEntityHelp: 'Vyberte senzor hlásící globální krátkovlnné záření ve W/m² (typicky Ecowitt / Davis / osobní meteostanice). Po nastavení jeho aktuální stav a historie recordera nahrazují Open-Meteo pro živé + minulé záření všude, kde se objevuje (číslo chipu slunce, osa Y grafu FV, zbarvení slunečního oblouku). Hodiny předpovědi vždy používají Open-Meteo, protože senzor zná jen současnost.',
         buildingsSection:   'Budova',
         buildingsHint:      'Aby byla karta plynulá v hustých městských oblastech, pouze budovy v nakonfigurovaném okruhu kolem domu jsou vykresleny ve 3D. Sám dům zůstává na plné neprůhlednosti; okolní budovy jsou vykresleny s nakonfigurovanou neprůhledností, takže poskytují městský kontext, aniž by soupeřily s datovými překryvy. Poloměr clusteru seskupuje připojené hospodářské budovy (verandy, garáže, kůlny) do skupiny „dům".',
-        displayRadius:         'Poloměr zobrazení',
-        displayRadiusHint:     'Definuje viditelnou oblast kolem domu. Vše za tímto poloměrem je skryto: podkladová mapa, sousední budovy, stíny. Také pohání rozsah načítání LiDAR a oříznutí promítaných stínů.',
         timelineSection:          'Časová osa',
         timelineEnabled:          'Zobrazit časovou osu',
         timelineEnabledOn:        'Zobrazit',

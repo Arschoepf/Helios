@@ -121,8 +121,6 @@ export const pt: Translations = {
         solarRadiationEntityHelp: 'Escolhe um sensor que reporte irradiância solar global em W/m² (tipicamente uma estação meteo Ecowitt / Davis / pessoal). Quando definido, o seu estado atual e o seu histórico do recorder substituem o Open-Meteo nos valores live + passados de irradiância em todos os sítios onde aparecem (número na pastilha sol, eixo Y do gráfico FV, coloração do arco solar). As horas de previsão continuam a usar Open-Meteo, um sensor só conhece o presente.',
         buildingsSection:   'Edifício',
         buildingsHint:      'Para manter o cartão fluido em zonas urbanas densas, apenas os edifícios dentro do raio configurado em redor da casa são renderizados em 3D. A própria casa permanece sempre com opacidade total; os edifícios vizinhos são renderizados com a opacidade configurada para dar contexto urbano sem competir com os dados. O raio do grupo inclui anexos contíguos (varandas, garagens, dependências) no grupo «casa».',
-        displayRadius:         'Raio de visualização',
-        displayRadiusHint:     'Define a área visível em torno da casa. Tudo o que estiver para além deste raio fica oculto: mapa base, edifícios vizinhos, sombras. Também controla o âmbito do fetch LiDAR e o corte das sombras projetadas.',
         timelineSection:          'Timeline',
         timelineEnabled:          'Mostrar a timeline',
         timelineEnabledOn:        'Mostrar',

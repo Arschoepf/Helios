@@ -128,8 +128,6 @@ export const fr: Translations = {
         solarRadiationEntityHelp: 'Choisis un capteur qui remonte l\'irradiance solaire globale en W/m² (typiquement une station météo Ecowitt / Davis / perso). Quand il est défini, son état actuel et son historique recorder remplacent Open-Meteo pour les valeurs live + passées partout où elles apparaissent (nombre sur la pastille soleil, axe Y du graphique PV, coloration de l\'arc solaire). Les heures de prévision continuent d\'utiliser Open-Meteo, un capteur ne connaît que le présent.',
         buildingsSection:   'Bâtiment',
         buildingsHint:      'Pour ménager les performances en zone urbaine dense, seuls les bâtiments dans le rayon configuré autour de la maison sont rendus en 3D. La maison elle-même reste toujours à pleine opacité, les bâtiments voisins sont rendus en transparence pour donner le contexte sans concurrencer les données. Le rayon de regroupement permet d\'inclure les bâtiments attenants (véranda, dépendance, garage) dans le groupe « maison ».',
-        displayRadius:         'Rayon d\'affichage',
-        displayRadiusHint:     'Définit la zone visible autour de la maison. Tout ce qui se trouve au-delà de ce rayon est masqué : fond de carte, bâtiments voisins, ombres. Pilote également l\'étendue du fetch LiDAR et le clip des ombres projetées.',
         timelineSection:          'Timeline',
         timelineEnabled:          'Afficher la timeline',
         timelineEnabledOn:        'Afficher',

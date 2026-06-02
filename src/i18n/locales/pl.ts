@@ -123,8 +123,6 @@ export const pl: Translations = {
         solarRadiationEntityHelp: 'Wybierz czujnik raportujący globalne natężenie promieniowania krótkofalowego w W/m² (typowo Ecowitt / Davis / osobista stacja pogodowa). Po ustawieniu jego aktualny stan i historia recordera zastępują Open-Meteo dla bieżącego + przeszłego natężenia wszędzie, gdzie się pojawia (numer chipa słońca, oś Y wykresu PV, kolorowanie łuku słońca). Godziny prognozy zawsze używają Open-Meteo, ponieważ czujnik zna tylko teraźniejszość.',
         buildingsSection:   'Budynek',
         buildingsHint:      'Aby utrzymać kartę płynną w gęstych obszarach miejskich, tylko budynki w skonfigurowanym promieniu wokół domu są renderowane w 3D. Sam dom pozostaje przy pełnej nieprzezroczystości; pobliskie budynki są renderowane ze skonfigurowaną nieprzezroczystością, aby zapewniały kontekst miejski bez konkurowania z nakładkami danych. Promień klastra grupuje przyległe budynki gospodarcze (werandy, garaże, szopy) w zestaw „dom".',
-        displayRadius:         'Promień wyświetlania',
-        displayRadiusHint:     'Definiuje widoczny obszar wokół domu. Wszystko poza tym promieniem jest ukryte: mapa podkładowa, sąsiednie budynki, cienie. Steruje również zasięgiem pobierania LiDAR i klipem rzucanych cieni.',
         timelineSection:          'Oś czasu',
         timelineEnabled:          'Pokaż oś czasu',
         timelineEnabledOn:        'Pokaż',

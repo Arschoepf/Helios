@@ -7,6 +7,85 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.0
+
+### Chrome simplification, camera pose persistence, CSS audit pass
+
+First beta of the v1.8.2 line. Closes the alpha cycle by tightening
+the on-card chrome in preparation for the upcoming HA Energy
+integration: fewer chips on screen, the camera pose actually
+sticks across reloads, the editor surface area shrinks, and a CSS
+audit pass aligns the styling on HA's design tokens so the card
+flips polarity cleanly with the host theme.
+
+**Camera pose + lock state are now persistent (#166).** The lock
+chip introduced in alpha.13 wrote the bearing and pitch under
+`camera-bearing` and `camera-pitch`. The engine, on init, reads
+`camera-bearing-deg` and `camera-pitch-deg` (the legacy editor
+keys). The mismatch silently dropped the saved pose on every page
+reload. The lock click handler now writes the `-deg` keys, so
+locking + reloading restores the exact bearing, pitch and lock
+state.
+
+**Top-left chrome simplified (#167).** The date / time chip and
+its scrub-mode "back to live" button are gone. The date is
+promoted to the scrub tooltip (which now shows date + time +
+readings) and the tooltip pins itself at the scrub cursor when
+the user is not actively hovering, so the moment selected on the
+timeline stays labeled. The back-to-live button moves to a small
+scrub-blue tab on the time-bar that swaps side based on the
+scrub position: cursor in the right half, tab on the left;
+cursor in the left half, tab on the right, the two never
+collide.
+
+**Overlay layout restored (#168).** The camera lock chip moves
+to the top-left rail (replacing the deleted clock chip) and the
+three view-mode toggles (default layer, LiDAR view, shading
+dome) move back to the top-right rail. The middle-right rail
+introduced in alpha.13 is gone.
+
+**Timeline day-strip tightened for phone widths (#169).** The
+day-strip cells at the bottom of the timeline still overflowed on
+narrow phones. The font-size clamp drops from `clamp(6px, 6.5cqw,
+9px)` to `clamp(6px, 5.5cqw, 8px)`, the inline gap between the
+date and the kWh value drops to 1 px, the cell padding to 1 px,
+the `·` separator margin to 2 px, and the letter-spacing to 0.
+The hierarchy (bold date, lighter italic forecast kWh) is
+unchanged.
+
+**Display radius locked at 300 m (#170).** Past 300 m the
+basemap + LiDAR fetch and the per-frame projection start to
+chug on mid-range phones, and the home cluster stops reading as
+"near home" anyway. The editor slider is removed, the engine
+returns the constant directly, and the two i18n keys
+(`displayRadius` + `displayRadiusHint`) are dropped from every
+locale.
+
+**CSS audit pass.** A pass on the stylesheet against HA's design
+tokens:
+
+- Dead CSS removed: the `.lidar-view-toggle-btn` / `.lidar-view-chip`
+  family is gone (the LiDAR toggle has been part of the
+  `.mode-bar` radio group for several releases). Its dark-theme
+  override is gone too.
+- Token rename: `--text-primary-color` was a typo for
+  `--text-on-primary-color`. Every consumer (`.mode-bar-seg.is-on`,
+  `.camera-lock-btn.is-on`, `.tb-back-to-live`) now uses the
+  correct token. The `#ffffff` fallback masked the typo so the
+  visual output is unchanged.
+- Hard-coded dark plate (`#191a1b` / `#e6e6e6`) on
+  `.detail-close-btn`, `.dash-card` and the four bead strokes
+  (`.pv-home-leader-bead`, `.battery-leader-bead`,
+  `.solar-svg .solar-ray-bead`, `.dash-today-chart-hover-dot`)
+  routed through `var(--card-background-color)` /
+  `var(--primary-text-color)` / `var(--divider-color)` with the
+  original hex as fallback.
+- Missing fallbacks added on every `var(--primary-color)`,
+  `var(--dark-primary-color)`, `var(--darker-primary-color)`
+  occurrence so a theme that does not define the token (some
+  community themes ship only the light grays) still gets the
+  HA brand-blue palette.
+
 ### alpha.13
 
 ### Camera lock on the live card, hairline leaders, instant cloud-toggle

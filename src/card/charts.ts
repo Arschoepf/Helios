@@ -392,18 +392,40 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
-    const hoverPct = host._chartHoverPct;
-    if (!range || !series || hoverPct === null) return html``;
-    if (hoverPct < 0 || hoverPct > 100)         return html``;
+    if (!range || !series) return html``;
 
     const startMs = range.start.getTime();
     const rangeMs = range.end.getTime() - startMs;
     if (rangeMs <= 0) return html``;
-    const hoverMs = startMs + (hoverPct / 100) * rangeMs;
 
-    const irrV = interpAt(series.times, series.irradiance, hoverMs);
-    const cldV = interpAt(series.times, series.cloud,      hoverMs);
-    const pv   = pvValueAtTime(host, hoverMs);
+    //Two-mode anchor. Hover pin (cursor inside the chart) takes
+    //precedence so the user always sees readings under their finger
+    //or mouse; otherwise the tooltip parks itself on the scrubbed
+    //instant so the moment the user clicked stays labeled (date +
+    //time + values). In live mode with no hover, no tooltip.
+    const hoverPct  = host._chartHoverPct;
+    const scrubbing = !host._isLiveMode && host._selectedTime !== null;
+    let pct:  number;
+    let atMs: number;
+    if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
+    {
+        pct  = hoverPct;
+        atMs = startMs + (pct / 100) * rangeMs;
+    }
+    else if (scrubbing)
+    {
+        atMs = host._selectedTime!.getTime();
+        pct  = ((atMs - startMs) / rangeMs) * 100;
+        if (pct < 0 || pct > 100) return html``;
+    }
+    else
+    {
+        return html``;
+    }
+
+    const irrV = interpAt(series.times, series.irradiance, atMs);
+    const cldV = interpAt(series.times, series.cloud,      atMs);
+    const pv   = pvValueAtTime(host, atMs);
     const hasPv = isFinite(pv.value);
 
     //Colour configs no longer consulted, HA Energy palette via the
@@ -424,11 +446,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             : lerpHexToward(pvBaseColor, '#000000', 0.35))
         : pvBaseColor;
 
-    const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
+    const atDate    = new Date(atMs);
+    const timeLabel = atDate.toLocaleTimeString([], {
         hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     });
+    const dateLabel = formatDate(atDate, host.config?.['date-format']);
 
-    const clampedPct = Math.max(8, Math.min(92, hoverPct));
+    const clampedPct = Math.max(8, Math.min(92, pct));
 
     //PV decimals: 1 for kW/MW under three digits, 0 otherwise. The user reads "1.2 kW" on residential gear but "1234 W" on the raw W entity, both
     //compact.
@@ -441,6 +465,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             class="tb-hover-tooltip"
             style="left:${clampedPct.toFixed(2)}%"
         >
+            <div class="tb-hover-tooltip-date">${dateLabel}</div>
             <div class="tb-hover-tooltip-time">${timeLabel}</div>
             ${isFinite(irrV) ? html`
                 <div class="tb-hover-tooltip-row">
@@ -461,6 +486,34 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                 </div>
             ` : nothing}
         </div>
+    `;
+}
+
+
+//Back-to-live tab. Rendered inside the time-bar overlay only when
+//the user is scrubbing (selected an instant that is not live).
+//Anchors at the OPPOSITE end of the timeline from the scrub
+//tooltip so the two never collide: scrub on the left half, tab on
+//the right; scrub on the right half, tab on the left. Click jumps
+//the timeline back to live mode through the existing host helper.
+export function renderTimelineBackToLiveTab(host: ChartHost, onClick: () => void): TemplateResult
+{
+    if (host._isLiveMode || host._selectedTime === null || !host._timeRange) return html``;
+    const startMs = host._timeRange.start.getTime();
+    const rangeMs = host._timeRange.end.getTime() - startMs;
+    if (rangeMs <= 0) return html``;
+    const selPct  = ((host._selectedTime.getTime() - startMs) / rangeMs) * 100;
+    const onLeft  = selPct >= 50;
+    return html`
+        <button
+            type="button"
+            class="tb-back-to-live ${onLeft ? 'is-left' : 'is-right'}"
+            aria-label="Back to live"
+            title="Back to live"
+            @click="${onClick}"
+        >
+            <ha-icon icon="mdi:restore"></ha-icon>
+        </button>
     `;
 }
 
