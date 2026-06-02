@@ -359,21 +359,27 @@ export function refreshBattery(host: BatteryHost): void
     //Without this guard we'd reissue the WS command on every Lit
     //cycle (e.g. every clock tick).
     if (!host._timeRange || host._batteryFetching) return;
-    //Narrow raw window cap, mirrors the PV and W/m² sides: a 1 Hz
-    //battery SoC / power sensor (Victron Cerbo, JK BMS over MQTT,
-    //...) over a multi-day visible timeline used to drag the
-    //recorder. The battery chip only needs the live values + the
-    //tooltip's hover lookup, both of which the recent 6 h covers.
-    //Cap anchored on NOW so fetchStart stays in the past even when
-    //the visible timeline end sits in the forecast horizon (next
-    //day). Anchoring on timeline end would place fetchStart in the
-    //future and the inner clamp at fetchBatteryHistory would
-    //leave the slot empty.
+    //Two-tier window:
+    //  - LTS arm uses `visibleStart`, full visible timeline range.
+    //    The dashboard panel's today's charged / discharged kWh
+    //    totals integrate across the full current day, so trimming
+    //    to 6 h here would silently drop the morning slice and the
+    //    panel would report a fraction of the day's true energy.
+    //    LTS is near-free on the recorder regardless of source
+    //    frequency, so the broader window costs nothing.
+    //  - Raw arm uses `rawStart`, capped at the last 6 h. The raw
+    //    path only fires when LTS is empty (custom sensor without
+    //    `state_class`), and on a 1 Hz BMS without LTS the wider
+    //    window would drag the recorder, the same reason the PV /
+    //    grid / W/m² sides cap their raw arms too.
+    //  Both anchors are computed off `Date.now()` so the inner
+    //  clamp at fetchBatteryHistory never tips into the future on
+    //  a forecast-horizon timeline end.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
-    const cap          = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
-    const fetchStart   = visibleStart < cap ? cap : visibleStart;
-    const rangeKey = `${fetchStart.getTime()}|${host._timeRange.end.getTime()}`;
+    const rawStart     = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
+    const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
+    const rangeKey = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
     //Bank signature: entity ids + invert flags + capacity weights. Capacity weights enter the key so a mid-session edit of a kWh field
     //invalidates the cached history and triggers a refetch that re-applies the new weighting at parse time.
     const sig = banks.map(b =>
@@ -393,7 +399,7 @@ export function refreshBattery(host: BatteryHost): void
         host._batteryPowerHistory = cached.power;
         return;
     }
-    fetchBatteryHistory(host, banks, fetchStart, host._timeRange.end, fetchKey);
+    fetchBatteryHistory(host, banks, ltsStart, rawStart, host._timeRange.end, fetchKey);
 }
 
 
@@ -501,7 +507,8 @@ function parseStatBoundary(raw: unknown): number | null
 export async function fetchBatteryHistory(
     host:     BatteryHost,
     banks:    BatteryBank[],
-    start:    Date,
+    ltsStart: Date,
+    rawStart: Date,
     end:      Date,
     cacheKey: string = '',
 ): Promise<void>
@@ -514,7 +521,7 @@ export async function fetchBatteryHistory(
         //empty future buckets.
         const now = new Date();
         const fetchEnd = end > now ? now : end;
-        if (start >= fetchEnd)
+        if (ltsStart >= fetchEnd && rawStart >= fetchEnd)
         {
             host._batterySocHistory   = { times: [], values: [] };
             host._batteryPowerHistory = { times: [], values: [] };
@@ -535,9 +542,16 @@ export async function fetchBatteryHistory(
         //shape so the per-bank aggregation downstream is source-agnostic.
         const perEntity: Record<string, BatteryHistory> = {};
 
+        //LTS arm uses the broader `ltsStart` (typically the visible
+        //timeline start, often midnight or earlier) so the dashboard
+        //panel's today's charged/discharged kWh totals can integrate
+        //across the FULL current day. LTS is near-free on the
+        //recorder regardless of source frequency. The raw fallback
+        //below uses the narrower `rawStart` so a non-LTS-tracked
+        //entity does not pull a multi-day raw scan on a 1 Hz BMS.
         const statsResult: any = await callWSWithTimeout<any>(host.hass, {
             type:           'recorder/statistics_during_period',
-            start_time:     start.toISOString(),
+            start_time:     ltsStart.toISOString(),
             end_time:       fetchEnd.toISOString(),
             statistic_ids:  ids,
             period:         '5minute',
@@ -556,10 +570,11 @@ export async function fetchBatteryHistory(
         else
         {
             //Either no entity is LTS-tracked (no `state_class`) or the recorder hasn't seen the window yet. Fall back to raw history with
-            //`significant_changes_only` so high-frequency installs still benefit from server-side dedup.
+            //`significant_changes_only` so high-frequency installs still benefit from server-side dedup. Raw arm is capped at the narrow
+            //`rawStart` (last 6 h) so a 1 Hz BMS without LTS does not drag the recorder.
             const rawResult: any = await callWSWithTimeout<any>(host.hass, {
                 type:                     'history/history_during_period',
-                start_time:               start.toISOString(),
+                start_time:               rawStart.toISOString(),
                 end_time:                 fetchEnd.toISOString(),
                 entity_ids:               ids,
                 minimal_response:         true,

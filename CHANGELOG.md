@@ -7,6 +7,41 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.6
+
+### Battery dashboard panel today's totals, restore full-day integration
+
+The dashboard panel (the dive-in view opened by clicking the
+home) shows today's charged / discharged kWh totals for the
+battery, computed by `computeBatteryToday` integrating the
+signed power curve from `_batteryPowerHistory` between local
+midnight and now.
+
+beta.4 capped every history fetch at the last 6 hours to keep
+the recorder responsive on 1 Hz installs. That cap applied to
+BOTH arms of `fetchBatteryHistory`: the LTS arm
+(`recorder/statistics_during_period`, 5-minute period) and the
+raw fallback. The LTS arm is near-free on the recorder
+regardless of source frequency, so capping it served no perf
+purpose; what it cost was the morning portion of today's
+battery curve, and the panel reported a fraction of the day's
+true charged / discharged energy as a result.
+
+`fetchBatteryHistory` now takes two start anchors:
+
+- `ltsStart`: the full visible timeline range (typically midnight
+  or earlier). The LTS arm queries the recorder over this
+  broader window so today's totals integrate across the full
+  current day.
+- `rawStart`: the last 6 hours. The raw fallback (used only
+  when the entity is not LTS-tracked) keeps its cap so a 1 Hz
+  BMS without `state_class` does not drag the recorder.
+
+PV, grid and W/m² were not affected: PV's chart blend already
+falls through to the 5-day hourly LTS slot for past beyond 6 h,
+grid's two-tier backfill (24 h LTS + 6 h raw) landed in beta.3,
+W/m² is not surfaced on the dashboard panel.
+
 ### beta.5
 
 ### Uniform beads, fullscreen polish (#33)
