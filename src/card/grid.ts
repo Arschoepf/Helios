@@ -70,20 +70,20 @@ export function clearGridModuleCaches(): void
 //  - RAW the last 6 hours, full resolution + significant_changes_only.
 //    This is the heaviest call (~10-20k rows per entity at 1 Hz) but
 //    it stays bounded and the recorder handles it in 1 to 2 s.
-//  - LTS (5-minute period) the previous 18 hours, total backfill
-//    coverage 24 hours. ~216 rows per entity, near-free on the
-//    recorder regardless of source frequency since the rows come
-//    from HA's pre-aggregated `statistics_short_term` table.
+//  - LTS (5-minute period) the previous 4 days 18 hours, total
+//    backfill coverage 5 days. ~1440 rows per entity, near-free on
+//    the recorder regardless of source frequency since the rows
+//    come from HA's pre-aggregated `statistics_short_term` table.
 //
-//Scrubbing inside 24 hours past returns a real bracketed slope.
-//Past 24 hours pickBracket refuses to extrapolate (returns null)
-//and the chip displays nothing rather than a fabricated value.
-//Live readings stay accurate at all times.
+//Scrubbing inside 5 days past returns a real bracketed slope. Past
+//5 days pickBracket refuses to extrapolate (returns null) and the
+//chip displays nothing rather than a fabricated value. Live
+//readings stay accurate at all times.
 const GRID_HISTORY_WINDOW_MS = 6 * 60 * 60_000;
-const GRID_LTS_WINDOW_MS     = 24 * 60 * 60_000;
+const GRID_LTS_WINDOW_MS     = 5 * 24 * 60 * 60_000;
 //In-memory retention window aligned with the LTS backfill so live
 //accumulation never trims off bracket-relevant history.
-const GRID_SAMPLE_WINDOW_MS = 24 * 60 * 60_000;
+const GRID_SAMPLE_WINDOW_MS = 5 * 24 * 60 * 60_000;
 const GRID_SAMPLE_MAX       = 16384;
 //Minimum time span a slope must cover before it is trusted. Below
 //this the 1 Wh meter quantum dominates the numerator and the
@@ -169,13 +169,23 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
         try
         {
             //Fire BOTH backfills in parallel through the module-level
-            //semaphore. LTS catches the 24 h..6 h slice with 5-minute
+            //semaphore. LTS catches the 5 d..6 h slice with 5-minute
             //buckets, raw catches the 6 h..now slice at full resolution
-            //with significant_changes_only. The LTS arm is wrapped in a
-            //.catch so a recorder without LTS for this entity (custom
-            //sensor without `state_class`) silently degrades to raw
-            //only, the user-facing behaviour stays the same as before
-            //the LTS arm landed.
+            //with significant_changes_only. BOTH arms are wrapped in a
+            //.catch that returns null and arms the cooldown on a
+            //WsTimeoutError; that way a single failing arm degrades
+            //the buffer to whatever the other arm returned instead of
+            //rejecting the whole Promise.all and leaving the buffer
+            //empty. The merge code downstream handles ltsArr / rawArr
+            //being empty gracefully.
+            const armCooldownIfTimeout = (e: unknown): null =>
+            {
+                if (e instanceof WsTimeoutError)
+                {
+                    _historyFailedUntil.set(entity, Date.now() + GRID_FETCH_COOLDOWN_MS);
+                }
+                return null;
+            };
             const [ltsResult, rawResult] = await Promise.all([
                 callWSWithTimeout<any>(host.hass, {
                     type:          'recorder/statistics_during_period',
@@ -190,7 +200,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     //at the bucket end so consecutive deltas attribute
                     //to the bucket that produced them.
                     types:         ['mean', 'state'],
-                }).catch(() => null),
+                }).catch(armCooldownIfTimeout),
                 callWSWithTimeout<any>(host.hass, {
                     type:                     'history/history_during_period',
                     start_time:               rawStart.toISOString(),
@@ -200,7 +210,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     no_attributes:            true,
                     //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters. See #157.
                     significant_changes_only: true,
-                }),
+                }).catch(armCooldownIfTimeout),
             ]);
             const merged: Sample[] = [];
             let lastV: number | null = null;
@@ -462,9 +472,17 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
                      ?? parseTimestamp(stateObj.last_changed)
                      ?? nowMs;
 
+        //Record the sample BEFORE the per-unit derivation so the
+        //scrub buffer is populated regardless of unit. Cumulative
+        //meters need it for the bracketed-slope past-derivation;
+        //power-native meters need it for the closest-sample-wins
+        //past-derivation. The previous gate inside the kWh branch
+        //starved the scrub path on power-native configurations
+        //(closest-sample search on an empty buffer returned null).
+        recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
+
         if (u === 'wh' || u === 'kwh' || u === 'mwh')
         {
-            recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
             const out = bracketedSlopeWatts(bufMap.get(entity), u, nowMs, LIVE_SLOPE_LOOKBACK_MS);
             if (out !== null)
             {
