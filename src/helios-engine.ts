@@ -3607,12 +3607,12 @@ export class HeliosEngine
         this._projCache = null;
     }
 
-    //Linear ramp on the card's min CSS dimension so the sun arc and
-    //the home chip cluster expand on a fullscreen / kiosk layout
-    //instead of staying pinned to the tuned-for-grid pixel sizes.
-    //Below MIN_DIM_FLOOR_PX the scale is fixed at 1.0 (standard
-    //Lovelace grid cell); above MIN_DIM_FLOOR_PX it ramps linearly
-    //to MAX_SCALE at MAX_DIM_PX. See issue #33.
+    //Linear ramp on the card's min CSS dimension so the home chip
+    //cluster expands on a fullscreen / kiosk layout instead of
+    //staying pinned to the tuned-for-grid pixel sizes. Below
+    //FLOOR the scale is fixed at 1.0 (standard Lovelace grid
+    //cell); above FLOOR it ramps linearly to MAX at TOP. See
+    //issue #33.
     private _heliosScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
@@ -3620,6 +3620,26 @@ export class HeliosEngine
         const FLOOR = 600;
         const TOP   = 1200;
         const MAX   = 1.6;
+        if (minDim <= FLOOR) return 1.0;
+        if (minDim >= TOP)   return MAX;
+        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
+    }
+    //Dedicated ramp for the sun arc. The chip cluster scale (1.6 max)
+    //is too conservative for the arc because the arc is computed in
+    //world metres, projected by MapLibre at a fixed zoom: at standard
+    //card sizes 40 m maps to ~120-160 CSS px which fills the lower
+    //half of the canvas nicely, but on a kiosk-sized canvas the same
+    //40 m still reads as ~120-160 px, lost in the empty space. The
+    //arc needs a bigger multiplier to keep its visual share of the
+    //canvas constant. Same FLOOR / TOP breakpoints as the chip
+    //scale so the two transitions happen on the same hinge.
+    private _sunArcScale(): number
+    {
+        const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
+        if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
+        const FLOOR = 600;
+        const TOP   = 1200;
+        const MAX   = 3.0;
         if (minDim <= FLOOR) return 1.0;
         if (minDim >= TOP)   return MAX;
         return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
@@ -4029,7 +4049,7 @@ export class HeliosEngine
         const z   = sun.azimuth  * D;
 
         //Scale the celestial radius on fullscreen / kiosk layouts so the arc reads from across the room instead of sitting at its grid-tuned size. See issue #33.
-        const R = SUN_ARC_RADIUS_M * this._heliosScale();
+        const R = SUN_ARC_RADIUS_M * this._sunArcScale();
         const east  = R * Math.cos(a) * Math.sin(z);
         const north = R * Math.cos(a) * Math.cos(z);
         const up    = R * Math.sin(a);
@@ -4058,7 +4078,7 @@ export class HeliosEngine
         const a = altitudeDeg * D;
         const z = azimuthDeg  * D;
         //Same scale as the sun arc so the shading-dome cells line up with the arc on fullscreen layouts. See issue #33.
-        const R = SUN_ARC_RADIUS_M * this._heliosScale();
+        const R = SUN_ARC_RADIUS_M * this._sunArcScale();
         const east  = R * Math.cos(a) * Math.sin(z);
         const north = R * Math.cos(a) * Math.cos(z);
         const up    = R * Math.sin(a);

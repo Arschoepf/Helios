@@ -7,6 +7,32 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### beta.7
+
+### Sun arc gets its own fullscreen ramp
+
+beta.5 scaled both the sun arc radius and the home chip cluster
+offsets through a single helper `_heliosScale()` that ramped
+from 1.0 at min(width, height) <= 600 px to 1.6 at >= 1200 px.
+The chip cluster looked right at that ramp, but the arc still
+read as small on a fullscreen / kiosk canvas.
+
+The arc is computed in world metres, projected by MapLibre at a
+fixed zoom: at the standard 440 px-wide card 40 m maps to ~140
+CSS px and fills the lower half of the canvas. On a 1500 px-wide
+kiosk canvas the same 40 m still maps to ~140 px and gets lost
+in the empty space. The chip cluster, which is computed directly
+in pixel offsets, did NOT need the same multiplier.
+
+A dedicated helper `_sunArcScale()` ramps the arc on its own from
+1.0 at <= 600 px to 3.0 at >= 1200 px, applied at the two call
+sites (`_sunSpherePoint` for the arc itself,
+`_projectSpherePoint` for the shading-dome cells that share the
+same celestial hemisphere).
+
+The chip cluster ramp (`_heliosScale()`) stays at 1.6 max so the
+home chips do not over-spread on a wide canvas.
+
 ### beta.6
 
 ### Battery dashboard panel today's totals, restore full-day integration
