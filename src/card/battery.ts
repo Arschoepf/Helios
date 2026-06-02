@@ -185,6 +185,16 @@ export interface BatteryHost
     _batteryPowerHistory: BatteryHistory | null;
     _batteryFetchKey:     string;
     _batteryFetching:     boolean;
+    //HA Energy daily-total alignment: when the user has battery
+    //sources configured on the Energy dashboard, the card refresh
+    //loop queries the recorder for today's net charge / discharge
+    //change and writes the values here. `computeBatteryToday`
+    //prefers these over the in-browser integration of
+    //`_batteryPowerHistory`. Null when no HA stat is available or
+    //the recorder call has not yet landed (consumer falls back to
+    //the local integration in either case).
+    _haBatteryChargedKwh?:    number | null;
+    _haBatteryDischargedKwh?: number | null;
 }
 
 
@@ -718,6 +728,28 @@ export function formatBatteryPower(hass: any, value: number, unit: string): stri
 //card can render the vessel + flow values from a single read.
 export function computeBatteryToday(host: BatteryHost): BatteryToday
 {
+    //HA Energy alignment short-circuit. When the user wired battery
+    //sources on the Energy dashboard, the card's refresh tick has
+    //already populated the two slots from `recorder/statistics_during_period`
+    //(types: 'change') over today's local window. The recorder
+    //value is the same Riemann sum the Energy dashboard tile shows,
+    //precise to the watt-hour on every cadence including the 1 Hz
+    //installs where the in-browser integration drifts. Use both
+    //slots as a pair: a partial override (only one side set) would
+    //let one direction tick from HA while the other ticks from the
+    //local buffer, the two directions would no longer share a
+    //consistent baseline.
+    const haCharged    = host._haBatteryChargedKwh    ?? null;
+    const haDischarged = host._haBatteryDischargedKwh ?? null;
+    if (haCharged !== null && haDischarged !== null)
+    {
+        return {
+            socNow:        host._batterySoc,
+            chargedKwh:    haCharged,
+            dischargedKwh: haDischarged,
+        };
+    }
+
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
     const startMs = today0.getTime();

@@ -44,6 +44,15 @@ export interface DashboardHost extends ChartHost, BatteryHost
     readonly _engine?:     HeliosEngine;
     readonly _instanceId:  string;
     readonly _sunScene?:   SunScene | null;
+    //HA Energy daily-total alignment: when the user has a solar
+    //source on the Energy dashboard, the card refresh loop queries
+    //the recorder for today's net change on every `stat_energy_from`
+    //and writes the sum here. `renderDashTodaySection` prefers this
+    //over the integral of the local `_pvHistory` for the headline
+    //"kWh produit aujourd'hui" so the value matches HA Energy to
+    //the watt-hour. Null when not configured or the recorder call
+    //has not landed (consumer falls back to the local integration).
+    _haSolarTodayKwh?: number | null;
 
     _detailMode:           boolean;
     _homeHover:            boolean;
@@ -551,9 +560,22 @@ export function renderDashTodaySection(
     //after midnight, which is a UX regression (the user sees "-0"
     //and assumes a bug). Flooring at zero matches the rest of the
     //PV readouts (live chip, tooltip) that already do this.
-    const producedKwh = cum.actualSamples.length > 0
+    //
+    //HA Energy alignment short-circuit (#180): when the user has
+    //a solar source on the Energy dashboard, the card refresh tick
+    //has populated `_haSolarTodayKwh` from
+    //`recorder/statistics_during_period` (types: 'change') over the
+    //local day. The recorder's Riemann sum matches the value the
+    //HA Energy tile shows to the watt-hour, including on the sparse
+    //high-frequency installs where the in-browser trapezoidal
+    //integration of `_pvHistory` drifts. The chart curve, the
+    //forecast and the calibration loop are NOT touched here, they
+    //continue to consume the local integration.
+    const haProducedKwh = host._haSolarTodayKwh ?? null;
+    const integratedProducedKwh = cum.actualSamples.length > 0
         ? Math.max(0, cum.actualSamples[cum.actualSamples.length - 1].kwh)
         : 0;
+    const producedKwh = haProducedKwh !== null ? Math.max(0, haProducedKwh) : integratedProducedKwh;
     const forecastKwh = cum.predictedSamples.length > 0
         ? cum.predictedSamples[cum.predictedSamples.length - 1].kwh
         : 0;

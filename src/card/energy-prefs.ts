@@ -43,17 +43,40 @@ export interface EnergyDefaults
     //meters that each expose their own rate) contribute one rate
     //per source and the consumer sums them.
     gridStatRates:     string[];
+    //Cumulative-kWh meters collected from each solar source's
+    //`stat_energy_from`. Helios uses these to query the recorder
+    //for today's produced-kWh change (HA's own daily-total
+    //convention) and reports the result on the detail-panel
+    //headline, matching the value the Energy dashboard shows
+    //regardless of the in-browser PV integration drift on sparse
+    //high-frequency installs. The PV chart curve, the forecast and
+    //the adaptive 5-day calibration are NOT touched; the local
+    //integration still drives them. Only the headline kWh adopts
+    //the HA-aligned value.
+    solarStatEnergyFroms: string[];
+    //Cumulative-kWh discharge meters collected from each battery
+    //source's `stat_energy_from`. Same recorder-statistics
+    //convention as `solarStatEnergyFroms`; consumed by the battery
+    //card's headline "discharged today" total.
+    batteryStatEnergyFroms: string[];
+    //Cumulative-kWh charge meters collected from each battery
+    //source's `stat_energy_to`. Consumed by the battery card's
+    //headline "charged today" total.
+    batteryStatEnergyTos:   string[];
 }
 
 
 export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
 {
-    pvPowerEntity:      null,
-    gridImportEntity:   null,
-    gridExportEntity:   null,
-    batteryPowerEntity: null,
-    batterySocEntity:   null,
-    gridStatRates:      [],
+    pvPowerEntity:          null,
+    gridImportEntity:       null,
+    gridExportEntity:       null,
+    batteryPowerEntity:     null,
+    batterySocEntity:       null,
+    gridStatRates:          [],
+    solarStatEnergyFroms:   [],
+    batteryStatEnergyFroms: [],
+    batteryStatEnergyTos:   [],
 };
 
 
@@ -120,6 +143,106 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
 }
 
 
+//Host shape consumed by `refreshHaDailyTotals`. The card writes
+//the three slots when the recorder query lands; downstream render
+//functions (`renderDashTodaySection` for PV, `computeBatteryToday`
+//for battery) prefer these over the local-integration values.
+export interface HaDailyTotalsHost
+{
+    readonly hass: any;
+    readonly _energyDefaults: EnergyDefaults;
+    _haSolarTodayKwh:          number | null;
+    _haBatteryChargedKwh:      number | null;
+    _haBatteryDischargedKwh:   number | null;
+    requestUpdate(): void;
+}
+
+
+//Recorder query helper. Sums the `change` field of
+//`recorder/statistics_during_period` over today (local midnight to
+//now) across every statistic_id in the list. Returns null when
+//the list is empty, when no `hass.callWS` is available, or when
+//the call rejects, so callers fall back to their existing
+//in-browser integration cleanly.
+async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string[]): Promise<number | null>
+{
+    if (statisticIds.length === 0) return null;
+    if (!host.hass?.callWS) return null;
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const now = new Date();
+    try
+    {
+        const result = await host.hass.callWS({
+            type:          'recorder/statistics_during_period',
+            start_time:    midnight.toISOString(),
+            end_time:      now.toISOString(),
+            statistic_ids: statisticIds,
+            //Day-period query returns at most one bucket per statistic
+            //covering today's window. `types: ['change']` returns the
+            //net delta the recorder computed across the bucket using
+            //the same Riemann sum HA Energy itself consumes, so the
+            //result matches the dashboard tile to the watt-hour.
+            period:        'day',
+            types:         ['change'],
+        }) as Record<string, Array<{ change?: number | null }>>;
+        let total = 0;
+        let anyHit = false;
+        for (const id of statisticIds)
+        {
+            const buckets = result?.[id];
+            if (!Array.isArray(buckets)) continue;
+            for (const bucket of buckets)
+            {
+                const v = typeof bucket?.change === 'number' ? bucket.change : null;
+                if (v === null) continue;
+                total += v;
+                anyHit = true;
+            }
+        }
+        return anyHit ? total : null;
+    }
+    catch
+    {
+        //Statistic missing, recorder under load or RBAC denied. The
+        //caller already paints a working value from the local buffer
+        //integration, so failing silently keeps the chip readable.
+        return null;
+    }
+}
+
+
+//Refresh the three HA Energy daily-total slots from the recorder.
+//Fired periodically from the card's tick loop; cheap to call (a
+//single WS round-trip per non-empty list).
+export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<void>
+{
+    const defaults = host._energyDefaults;
+    const [solar, charged, discharged] = await Promise.all([
+        fetchTodayKwhChange(host, defaults.solarStatEnergyFroms),
+        fetchTodayKwhChange(host, defaults.batteryStatEnergyTos),
+        fetchTodayKwhChange(host, defaults.batteryStatEnergyFroms),
+    ]);
+    let changed = false;
+    if (solar !== null && solar !== host._haSolarTodayKwh)
+    {
+        host._haSolarTodayKwh = solar;
+        changed = true;
+    }
+    if (charged !== null && charged !== host._haBatteryChargedKwh)
+    {
+        host._haBatteryChargedKwh = charged;
+        changed = true;
+    }
+    if (discharged !== null && discharged !== host._haBatteryDischargedKwh)
+    {
+        host._haBatteryDischargedKwh = discharged;
+        changed = true;
+    }
+    if (changed) host.requestUpdate();
+}
+
+
 export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
 {
     if (host._energyPrefsUnsub)
@@ -152,18 +275,21 @@ export function parseEnergyPrefs(prefs: {
 }): EnergyDefaults
 {
     //Fresh literal rather than `{ ...EMPTY_ENERGY_DEFAULTS }` so the
-    //`gridStatRates` array is not aliased on the shared empty default,
+    //array fields are not aliased on the shared empty default,
     //avoiding cross-call contamination when multiple parses run in
     //the same lifecycle (the subscription path can trigger a parse
     //while a previous one is still settling).
     const out: EnergyDefaults =
     {
-        pvPowerEntity:      null,
-        gridImportEntity:   null,
-        gridExportEntity:   null,
-        batteryPowerEntity: null,
-        batterySocEntity:   null,
-        gridStatRates:      [],
+        pvPowerEntity:          null,
+        gridImportEntity:       null,
+        gridExportEntity:       null,
+        batteryPowerEntity:     null,
+        batterySocEntity:       null,
+        gridStatRates:          [],
+        solarStatEnergyFroms:   [],
+        batteryStatEnergyFroms: [],
+        batteryStatEnergyTos:   [],
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -172,10 +298,19 @@ export function parseEnergyPrefs(prefs: {
         if (!src || typeof src !== 'object') continue;
         const type = String(src['type'] ?? '').toLowerCase();
 
-        if (type === 'solar' && !out.pvPowerEntity)
+        if (type === 'solar')
         {
+            //First non-null stat_energy_from drives the legacy
+            //pvPowerEntity slot used by the multi-array auto-detect.
+            //Every solar source's stat_energy_from also feeds the
+            //daily-total alignment list consumed by the detail
+            //panel headline.
             const e = pickFirstString(src['stat_energy_from']);
-            if (e) out.pvPowerEntity = e;
+            if (e)
+            {
+                if (!out.pvPowerEntity) out.pvPowerEntity = e;
+                out.solarStatEnergyFroms.push(e);
+            }
         }
         else if (type === 'grid')
         {
@@ -209,6 +344,14 @@ export function parseEnergyPrefs(prefs: {
                        ?? pickFirstString(src['stat_energy_to']);
                 if (e) out.batteryPowerEntity = e;
             }
+            //Daily-total alignment list (battery card headline
+            //"charged today" / "discharged today"). Every source's
+            //two cumulative meters contribute; the consumer queries
+            //the recorder for today's change per direction.
+            const dischargeMeter = pickFirstString(src['stat_energy_from']);
+            if (dischargeMeter) out.batteryStatEnergyFroms.push(dischargeMeter);
+            const chargeMeter = pickFirstString(src['stat_energy_to']);
+            if (chargeMeter) out.batteryStatEnergyTos.push(chargeMeter);
             //State of charge: HA core 2024+ exposes this as
             //`stat_soc` on the battery source. Read it when present
             //so Helios can drive the SoC chip from the dashboard
