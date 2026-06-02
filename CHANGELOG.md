@@ -7,6 +7,47 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.11
+
+### Engine pool with eager registration and ownership handshake, fixes the per-commit WebGL respawn for real
+
+The previous attempts failed because they registered the engine
+into the pool from `disconnectedCallback`. The Home Assistant
+frontend source (`hui-card.ts:121-166`, dev branch) confirms HA
+constructs the new helios-card element, calls `setConfig` on it,
+and only THEN removes the old element. By the time the OLD card's
+`disconnectedCallback` fires, the NEW card has already been
+constructed and is about to run its own `updated()`. The pool
+push was always too late.
+
+Alpha.11 inverts the timing.
+
+- Eager registration: every engine pushes itself into the pool the
+  moment it is created in `initEngineNow`, not at disconnect.
+  When the slider commit destroys the preview pane, the NEW
+  helios-card construction finds the OLD preview's engine already
+  waiting in the pool.
+
+- Pool key: (homeKey, mode) where mode is `preview` when HA
+  sets `element.preview = true` (which the editor preview pane
+  does, line `hui-card.ts:136-138`) and `live` for the dashboard
+  tile. The preview pane never claims the live dashboard's
+  engine, and vice versa.
+
+- Owner handshake: each pool entry tracks `lastOwner`. Claim
+  reassigns the owner and cancels any pending dispose. Release
+  is a no-op when the releaser is not the registered owner (the
+  old card releasing after a new card has already claimed). When
+  the releaser IS the owner (real navigation away), release
+  schedules dispose after the grace window.
+
+The previous `pushEngineToPool` / `tryClaimPooledEngine` helpers
+are replaced by `registerEngineInPool` /
+`claimEngineFromPool` / `releaseEngineFromPool` /
+`isCurrentPoolOwner`. The 1.5 second grace window is widened to
+2.5 seconds to absorb the 1 second mount-debounce a fresh card
+incurs before its first engine pass.
+
 ### alpha.10
 
 ### Pool transplant moves the container, not its children, basemap stops going black

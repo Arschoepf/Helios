@@ -97,7 +97,7 @@ import
     initEngine,
     cancelPendingRespawn,
     initVisibilityObserver,
-    pushEngineToPool
+    releaseEngineFromPool
 } from './card/init';
 //Side-effect import: registers <helios-card-editor> as a custom element.
 import './card/editor';
@@ -893,16 +893,14 @@ export class HeliosCard extends LitElement
             window.clearTimeout(this._connectSettleTimer);
             this._connectSettleTimer = undefined;
         }
-        //Stash the engine into the module-level pool (see `init.ts:pushEngineToPool`). Home Assistant destroys and re-creates the
-        //helios-card element on every editor `config-changed` event, not only on the documented edit-mode entry; the freshly-created
-        //element has no `_engine` field and would allocate a fresh WebGL context unless it can claim one from the pool. Pushing
-        //here lets the next mount transplant the existing MapLibre stack into its shadow root instead of building a new one.
-        //
-        //The pool's per-entry cleanup timer destroys the engine if no remount claims it within the grace window (real navigation
-        //away from the dashboard).
+        //Pool release with handshake. The engine was registered in the pool when it was created (eager registration in
+        //`init.ts:initEngineNow`), not here. The release call checks whether THIS card is still the pool's registered owner: if
+        //a remount has already claimed the engine, release is a no-op and the engine stays alive for the new owner. If we are
+        //still the owner (real navigation away from the card), release schedules a dispose after the grace window.
         if (this._engine !== undefined && this._lastHomeKey)
         {
-            pushEngineToPool(this._lastHomeKey, this._engine);
+            const mode: 'preview' | 'live' = (this as unknown as { preview?: boolean }).preview === true ? 'preview' : 'live';
+            releaseEngineFromPool(this._lastHomeKey, mode, this._engine, this);
             this._engine = undefined;
         }
         else if (this._engine !== undefined)
