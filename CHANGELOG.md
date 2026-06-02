@@ -7,6 +7,35 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+> Hardening release on top of v1.8.1. The cycle focuses on three
+> things: recorder relief for installs with high-frequency
+> sensors (1 Hz Victron Cerbo, JK BMS, Ecowitt feeds and
+> similar) so loading Helios no longer blocks every other card
+> on the dashboard for 30 to 100 seconds on each mount, camera
+> pose + lock persistence to localStorage so the framing
+> survives page reloads, and a chip family harmonisation pass
+> (cloud chip joins the canonical recipe, leader-bead radii
+> unified, sun arc gets its own fullscreen ramp). The dashboard
+> panel's today's battery totals are back to a full-day window
+> after beta.4 over-trimmed them, and the back-to-live
+> affordance is now a real tab anchored to the chart card.
+>
+> The full beta-by-beta narrative is preserved below. Upcoming
+> work is tracked live on the public roadmap at
+> [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
+> pulled directly from the GitHub Project and refreshed every
+> five minutes.
+>
+> Special thanks to **LBDG_** and **JJAsond** for the relentless
+> field testing on 1 Hz installs throughout the entire beta
+> cycle. They turned the recorder pressure investigation from
+> "intermittent, slow, weird" into a precise diagnosis (the
+> grid module's 72 h raw window being the last hot path, the
+> raw-window cap anchor mis-sourced from the forecast horizon,
+> the LTS arm being over-capped in beta.4) and validated each
+> beta in production before it shipped. v1.8.2 would not be
+> where it is without their patience.
+
 ### beta.8
 
 ### Cloud chip joins the canonical chip family

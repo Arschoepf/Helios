@@ -336,6 +336,29 @@ diagnostic snapshot.
   [0.5, 1.5] and returns a `{ ratio, daysUsed }` pair. Pure
   function consumed by `dashboard.ts` to render the "refined"
   annotation; null when fewer than 2 past days carry enough data.
+* **`card/ws-timeout.ts`**, thin wrapper around `hass.callWS`
+  with two responsibilities. First, it races each call against a
+  30 s budget so a stalled recorder rejects with a typed
+  `WsTimeoutError` instead of hanging the card on its loading
+  state forever (the Victron Cerbo at 1 Hz case where the
+  SQLite consumer saturated and history queries never returned).
+  Second, a module-level FIFO semaphore caps the number of
+  in-flight history / statistics fetches at 2 so Helios stays a
+  good citizen of the dashboard when other recorder-bound cards
+  (apex-charts, mini-graph) read the same single-threaded
+  consumer in parallel. Excess fetches queue and fire as slots
+  free. Each caller catches the timeout and renders a degraded
+  state (live chips still update from `hass.states`, the chart's
+  past portion blanks until the next refresh cycle).
+* **`card/energy-prefs.ts`**, long-running subscription to HA's
+  Energy dashboard preferences (`energy/get_prefs` + the
+  `energy_preferences_updated` event). Parses the resolved
+  config into a `{ pv-power, grid-import, grid-export,
+  battery-power, battery-soc }` defaults snapshot cached on the
+  host. Reserved for a future opt-in "Use HA Energy default"
+  toggle in the editor; chips currently read user-configured
+  entities only, so failures are silent and the subscription is
+  effectively a no-op at the chip level.
 * **`card/overlays.ts`**, screen-space projections refreshed on
   every map transform and clock tick: sun arc samples, sun
   position, home silhouettes, label anchors.
