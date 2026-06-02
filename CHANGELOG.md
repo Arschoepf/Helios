@@ -7,6 +7,55 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.2
 
+### alpha.12
+
+### Pool reverted, shared fetch caches added
+
+A deeper investigation into the Home Assistant frontend source
+(see issue #162) confirmed that `hui-card.ts:195` hard-codes the
+helios-card rebuild on every editor preview commit, with no
+opt-out hook available. Cross-shadow-root DOM transplant of the
+MapLibre container reliably broke rendering (basemap turned
+black, timeline / solar arc overlays vanished), because the
+moved node loses its old shadow root's CSS scoping AND lands in
+a freshly-mounted parent whose layout has not yet resolved a
+non-zero height, hitting the standard "container at 0 px causes
+black canvas" failure mode.
+
+Alphas 8 through 11 attempted to keep the engine alive across
+the rebuild cycle and all introduced visible side effects.
+Reverting to the simple lifecycle: every helios-card instance
+owns its engine, creates it on mount, destroys it on disconnect.
+The editor preview pane re-allocates a WebGL context per
+config-changed commit, which is exactly what apexcharts-card,
+mini-graph-card and Mushroom accept too. The live dashboard
+tile is untouched, `hui-card` takes the `_updateElement` branch
+when `preview === false` and the engine survives every
+config-changed commit.
+
+To make the per-commit recreation cheap, the parsed fetch
+payloads are now cached at module scope:
+
+- **Buildings**: the OpenMapTiles GeoJSON for the home is
+  cached for 30 minutes per (homeLat, homeLon, radius,
+  clusterRadius). A fresh engine after a slider commit picks up
+  the cached payload synchronously and skips the network +
+  parse round-trip.
+- **LiDAR raster and shadow features**: same 30-min cache per
+  (homeLat, homeLon, radius, rasterSize, providerId). The
+  multi-megabyte typed array decode that the IGN COG provider
+  performs is now paid once per session, not once per commit.
+
+OpenFreeMap basemap tiles are already cached by the browser's
+HTTP cache. The MapLibre `setStyle` re-fetch on a fresh engine
+resolves from disk, not from network.
+
+Removed: the engine pool, the DOM reparent helpers
+(`HeliosEngine.reparentInto`, `HeliosEngine.getMapContainer`),
+the engine pool API on `init.ts`
+(`registerEngineInPool` / `claimEngineFromPool` /
+`releaseEngineFromPool`). The `preview` field on `InitHost`.
+
 ### alpha.11
 
 ### Engine pool with eager registration and ownership handshake, fixes the per-commit WebGL respawn for real

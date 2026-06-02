@@ -96,8 +96,7 @@ import
     getHomeCoords,
     initEngine,
     cancelPendingRespawn,
-    initVisibilityObserver,
-    releaseEngineFromPool
+    initVisibilityObserver
 } from './card/init';
 //Side-effect import: registers <helios-card-editor> as a custom element.
 import './card/editor';
@@ -893,19 +892,13 @@ export class HeliosCard extends LitElement
             window.clearTimeout(this._connectSettleTimer);
             this._connectSettleTimer = undefined;
         }
-        //Pool release with handshake. The engine was registered in the pool when it was created (eager registration in
-        //`init.ts:initEngineNow`), not here. The release call checks whether THIS card is still the pool's registered owner: if
-        //a remount has already claimed the engine, release is a no-op and the engine stays alive for the new owner. If we are
-        //still the owner (real navigation away from the card), release schedules a dispose after the grace window.
-        if (this._engine !== undefined && this._lastHomeKey)
+        //Engine cleanup on disconnect. Home Assistant's editor preview pane destroys + re-creates the helios-card element on every
+        //`config-changed` commit (see `hui-card.ts:195`, the rebuild is hard-coded and no opt-out hook exists, confirmed by
+        //investigation in #162). We accept the cost of allocating a fresh MapLibre + WebGL context per commit, which is the same
+        //trade-off apexcharts-card, mini-graph-card and Mushroom make. The live dashboard tile is NOT recreated (`hui-card` takes
+        //the `_updateElement` branch when `preview === false`), so the user-facing surface stays smooth.
+        if (this._engine !== undefined)
         {
-            const mode: 'preview' | 'live' = (this as unknown as { preview?: boolean }).preview === true ? 'preview' : 'live';
-            releaseEngineFromPool(this._lastHomeKey, mode, this._engine, this);
-            this._engine = undefined;
-        }
-        else if (this._engine !== undefined)
-        {
-            //No homeKey, can't pool. Fall back to immediate cleanup.
             this._engine.cleanup();
             this._engine = undefined;
         }

@@ -107,6 +107,71 @@ const MAX_LIVE_ENGINES = 4;
 const _liveEngines = new Set<HeliosEngine>();
 
 
+//-----------------------------------------------------------------
+//Shared fetch caches: HA's editor preview pane destroys and re-creates the helios-card element on every config-changed commit
+//(slider release, picker write, see #162 and `hui-card.ts:195`). The map's WebGL context is unavoidably re-allocated each time
+//because the cycle is hard-coded in HA, but the expensive PARSED fetch payloads (buildings GeoJSON, LiDAR raster) do not need to
+//be re-downloaded and re-parsed. Stashing them at module scope lets the fresh engine pick them up synchronously and skip the
+//network round-trip entirely.
+//
+//The browser already caches the underlying HTTP responses (MapTiler tile JSONs, OFM basemap tiles, IGN LiDAR tiles) under its
+//normal cache headers, so reuse here only saves the parsing + projection cost. For buildings that is a 10-50 ms hit. For LiDAR
+//raster that is several megabytes of binary decoded into typed arrays, between 100 ms and 1 s depending on the resolution. Both
+//show up as a noticeable flash in the preview when not cached; with the shared cache the flash disappears.
+//
+//TTL is wide (30 minutes) because the underlying physical data does not change. The cache key encodes home position + radius +
+//raster size so any meaningful change (user moves home, edits radius, switches precision) invalidates the entry naturally.
+
+const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
+
+interface SharedBuildingsCacheEntry
+{
+    data: BuildingsResult;
+    ts:   number;
+}
+
+interface SharedLidarCacheEntry
+{
+    features:    GeoJSON.FeatureCollection;
+    diagnostics: {
+        cellsKept:         number;
+        cellsPerClumpCap:  number;
+        heightRangeM:      [number, number] | null;
+    };
+    raster:      unknown;
+    ts:          number;
+}
+
+const _sharedBuildingsCache: Map<string, SharedBuildingsCacheEntry> = new Map();
+const _sharedLidarCache:     Map<string, SharedLidarCacheEntry>     = new Map();
+
+
+function sharedBuildingsCacheGet(key: string): BuildingsResult | null
+{
+    const entry = _sharedBuildingsCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > SHARED_FETCH_CACHE_TTL_MS)
+    {
+        _sharedBuildingsCache.delete(key);
+        return null;
+    }
+    return entry.data;
+}
+
+
+function sharedLidarCacheGet(key: string): SharedLidarCacheEntry | null
+{
+    const entry = _sharedLidarCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > SHARED_FETCH_CACHE_TTL_MS)
+    {
+        _sharedLidarCache.delete(key);
+        return null;
+    }
+    return entry;
+}
+
+
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
 //Sources of the irradiance value displayed in the PV legend.
@@ -2641,6 +2706,20 @@ export class HeliosEngine
             return;
         }
 
+        //Shared module-level cache short-circuit. When HA destroys + re-creates the helios-card element on an editor commit, a
+        //fresh engine instance pays the buildings parse cost again unless we serve from the shared cache here. The browser HTTP
+        //cache covers the underlying tile request; this map skips the parsed result so we do not re-walk the GeoJSON either.
+        const sharedBuildings = sharedBuildingsCacheGet(key);
+        if (sharedBuildings)
+        {
+            this._buildingsFetchKey = key;
+            this._buildingsData     = sharedBuildings;
+            this._pushRenderableSources();
+            this._lastAtmosphereAlt = -999;
+            this._refreshShadowsAndAtmosphere();
+            return;
+        }
+
         //Abort any in-flight request so a rapid radius change doesn't leave a slow tile from the previous fetch racing the new one to populate the
         //sources.
         this._buildingsAbort?.abort();
@@ -2661,6 +2740,7 @@ export class HeliosEngine
         {
             if (ac.signal.aborted || !this.map) return;
             this._buildingsData = result;
+            _sharedBuildingsCache.set(key, { data: result, ts: Date.now() });
             this._pushRenderableSources();
             //Buildings just arrived, the shadow source is still empty, bypass the "sun hardly moved" guard so the next call paints a full atmosphere
             //pass and populates the shadow polygons.
@@ -2735,12 +2815,33 @@ export class HeliosEngine
             RASTER_DEFAULTS.maxRasterSize,
             Math.max(RASTER_DEFAULTS.minRasterSize, rawCells)
         );
-        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
+        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}|${provider.id ?? ''}`;
         //Bail if we already have a fresh successful payload for this key.
         if (this._lidarShadowKey === key && this._lidarShadowFeatures) return;
         //Bail if we are inside the backoff window for the SAME failed key. A key change (user moved home / edited radius / etc.)
         //bypasses the backoff because it represents a fresh request the failed key knows nothing about.
         if (this._lidarShadowFailedKey === key && Date.now() < this._lidarShadowBackoffUntil) return;
+
+        //Shared module-level cache short-circuit. The LiDAR fetch is the heaviest single network + parse step in the engine boot,
+        //a fresh-engine path after an editor commit re-pays that cost end-to-end unless we serve from the shared cache here.
+        const sharedLidar = sharedLidarCacheGet(key);
+        if (sharedLidar)
+        {
+            this._lidarShadowKey          = key;
+            this._lidarShadowFeatures     = sharedLidar.features;
+            this._lidarShadowDiagnostics  = sharedLidar.diagnostics;
+            this._lidarRaster             = (sharedLidar.raster as typeof this._lidarRaster) ?? null;
+            this._lidarShadowFailedKey    = '';
+            this._lidarShadowFailureCount = 0;
+            this._lidarShadowBackoffUntil = 0;
+            this._lidarViewLayer?.setData(this._lidarRaster);
+            this._lastLidarExposureAlt    = -999;
+            this._lastLidarExposureAz     = -999;
+            this._scheduleLidarExposureRecompute();
+            this._lastAtmosphereAlt       = -999;
+            this._refreshShadowsAndAtmosphere();
+            return;
+        }
 
         this._lidarShadowAbort?.abort();
         const ac = new AbortController();
@@ -2764,6 +2865,13 @@ export class HeliosEngine
             this._lidarShadowFeatures    = res.features;
             this._lidarShadowDiagnostics = res.diagnostics;
             this._lidarRaster            = res.raster ?? null;
+            //Promote to the shared cache so a fresh engine after an editor commit can serve from memory.
+            _sharedLidarCache.set(key, {
+                features:    res.features,
+                diagnostics: res.diagnostics,
+                raster:      res.raster ?? null,
+                ts:          Date.now()
+            });
             //Reset the failure / backoff state, this key is now known-good.
             this._lidarShadowFailedKey    = '';
             this._lidarShadowFailureCount = 0;
@@ -4505,42 +4613,6 @@ export class HeliosEngine
         {
             this._renderForCurrentSelection();
         }
-    }
-
-
-    //Returns the container element the MapLibre map currently lives in. Used by the engine pool in `init.ts` so the disconnect path can
-    //hand both the engine and its container to the pool and the next mount can transplant them into the freshly-created shadow root.
-    public getMapContainer(): HTMLElement | null
-    {
-        return this.map?.getContainer() ?? null;
-    }
-
-
-    //Re-parent the engine's existing container element into the position of `targetSlot` in a freshly-mounted helios-card shadow
-    //root. Used by the engine pool to graft a pooled MapLibre stack into a new element after Home Assistant destroyed the
-    //previous helios-card on an editor `config-changed` event.
-    //
-    //We move the WHOLE container DOM node (not just its children) so MapLibre's internal `_container` reference stays valid, no
-    //private-field access, no manual `map.resize()` because the moved element keeps its dimensions, its CSS class names and its
-    //resize-observer wiring untouched. The `targetSlot` is the empty `<div id="map-container">` Lit just rendered, we replace it
-    //wholesale with the pooled container. Lit's template diff will leave the resulting node alone on subsequent renders because
-    //the template only declares an empty `<div id="map-container">` at this position and Lit reuses what is already in place
-    //when the tag matches.
-    public reparentInto(targetSlot: HTMLElement): void
-    {
-        if (!this.map) return;
-        const ourContainer = this.map.getContainer();
-        if (ourContainer === targetSlot) return;
-        const parent = targetSlot.parentNode;
-        if (!parent) return;
-        parent.replaceChild(ourContainer, targetSlot);
-        //Trigger a single resize after the next animation frame so the canvas catches the (typically identical) new dimensions
-        //once layout settles in the new shadow root. The ResizeObserver already on `ourContainer` will also fire when the parent
-        //layout completes; the explicit call is a safety net for browsers that batch the observer callback aggressively.
-        requestAnimationFrame(() =>
-        {
-            try { this.map?.resize(); } catch (_) { /* tolerant: zero-dim transient resolves on the next observer tick */ }
-        });
     }
 
 

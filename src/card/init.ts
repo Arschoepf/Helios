@@ -232,9 +232,6 @@ export interface InitHost extends OverlaysHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
-    //Set by Home Assistant on the editor preview pane via `element.preview = true` (see `hui-card.ts:136`). Defaults to false on the
-    //live dashboard tile. Drives the pool-key discriminator so a preview-mode mount never reuses a live-mode engine and vice versa.
-    readonly preview?: boolean;
 
     _engine?:            HeliosEngine;
     _fetching:           boolean;
@@ -353,123 +350,6 @@ export function cancelPendingRespawn(host: InitHost): void
 }
 
 
-//-----------------------------------------------------------------
-//Engine pool: keeps engines alive across the destroy/create cycle Home Assistant performs on every editor `config-changed` commit.
-//
-//Diagnostic (see issue #162): HA does not simply detach + re-attach the same helios-card custom-element instance when the editor
-//commits a change. It destroys the old element entirely and constructs a fresh one with the new config. The fresh element has no
-//`_engine`, so the `updated()` pass takes the respawn branch and allocates a new WebGL context. Counted by `enginesCreated`: one
-//cycle per slider release on a single-card dashboard, two on a dashboard that shows both the live tile and the editor preview.
-//
-//The pool short-circuits the cycle: instead of cleaning up on disconnect, we stash the engine into a module-level pool keyed by
-//home coordinates. When a freshly-mounted helios-card hits `initEngineNow`, it tries to claim a matching engine from the pool
-//first. If one is available we transplant its MapLibre container into the new shadow root via
-//`HeliosEngine.transplantToContainer`, re-wire the engine callbacks against the new host, and skip the new-engine allocation
-//entirely. Net: zero `enginesCreated` per editor commit on the steady state.
-//
-//Multi-card support: the pool stores a FIFO array per home key so two helios-cards at the same coordinates each get their own
-//stash. A grace cleanup timer per entry destroys the engine if no claim arrives within `ENGINE_POOL_GRACE_MS` (real navigation
-//away from the dashboard).
-
-//Pool keying: a card running in HA's editor preview pane and a card mounted on the live dashboard never share an engine, they each
-//have their own rendering pipeline and DOM presence simultaneously. Keying purely on `homeKey` would let a fresh preview steal the
-//live dashboard's engine the first time the editor opens. The `mode` discriminator scopes the pool by (home, surface) so the
-//preview pane only ever reuses ITS previous engine and the live dashboard only ever reuses ITS previous engine.
-function poolKey(homeKey: string, mode: 'preview' | 'live'): string
-{
-    return `${homeKey}@${mode}`;
-}
-
-
-//Owner-handshake pool: an engine in the pool has a `lastOwner` reference. Claiming reassigns the owner; releasing is a no-op when
-//the current owner is not the releaser (someone else has claimed it). Without the handshake, the natural race where Home Assistant
-//constructs the new helios-card BEFORE removing the old one (see `hui-card.ts:121-166`) would have the old card's
-//`disconnectedCallback` dispose an engine the new card has just taken ownership of.
-interface PooledEngineEntry
-{
-    engine:       HeliosEngine;
-    lastOwner:    object;
-    disposeTimer: number;   // 0 means "actively owned, no dispose scheduled"
-}
-
-const _enginePool: Map<string, PooledEngineEntry> = new Map();
-const ENGINE_POOL_GRACE_MS = 2500;
-
-
-//Register an engine in the pool under (homeKey, mode). Called from `initEngineNow` immediately after `new HeliosEngine(...)` so the
-//pool has the entry BEFORE any subsequent helios-card construction races against it. Also called after a successful claim so the
-//new owner stays the registered one.
-export function registerEngineInPool(homeKey: string, mode: 'preview' | 'live', engine: HeliosEngine, owner: object): void
-{
-    const key = poolKey(homeKey, mode);
-    const existing = _enginePool.get(key);
-    if (existing)
-    {
-        if (existing.disposeTimer !== 0) window.clearTimeout(existing.disposeTimer);
-        if (existing.engine !== engine)
-        {
-            //A different engine for the same (home, mode) was already in the pool. The new registration wins; the displaced one
-            //must be disposed so its WebGL context does not leak.
-            existing.engine.cleanup();
-        }
-    }
-    _enginePool.set(key, { engine, lastOwner: owner, disposeTimer: 0 });
-}
-
-
-//Attempt to claim a pooled engine for (homeKey, mode). Returns null when the pool has no matching entry, or when the calling host
-//is already the registered owner (calling without intent to take over). The claim cancels any pending dispose timer and reassigns
-//the owner so a subsequent release from the previous owner becomes a no-op.
-export function claimEngineFromPool(homeKey: string, mode: 'preview' | 'live', claimant: object): HeliosEngine | null
-{
-    const key = poolKey(homeKey, mode);
-    const entry = _enginePool.get(key);
-    if (!entry) return null;
-    if (entry.lastOwner === claimant) return null;
-    if (entry.disposeTimer !== 0) window.clearTimeout(entry.disposeTimer);
-    entry.lastOwner    = claimant;
-    entry.disposeTimer = 0;
-    return entry.engine;
-}
-
-
-//Called from `disconnectedCallback`. If `owner` is still the registered owner of this engine, schedule its dispose after the grace
-//window so a remount within the grace can reclaim. If `owner` is no longer the registered owner (a remount already claimed),
-//this is a no-op. If the engine is not in the pool at all, fall back to immediate cleanup so it does not leak.
-export function releaseEngineFromPool(homeKey: string, mode: 'preview' | 'live', engine: HeliosEngine, owner: object): void
-{
-    const key = poolKey(homeKey, mode);
-    const entry = _enginePool.get(key);
-    if (!entry || entry.engine !== engine)
-    {
-        engine.cleanup();
-        return;
-    }
-    if (entry.lastOwner !== owner)
-    {
-        //Someone else claimed; leave the engine in the pool, do not dispose.
-        return;
-    }
-    entry.disposeTimer = window.setTimeout(() =>
-    {
-        const current = _enginePool.get(key);
-        if (current && current.engine === engine && current.lastOwner === owner)
-        {
-            _enginePool.delete(key);
-            engine.cleanup();
-        }
-    }, ENGINE_POOL_GRACE_MS);
-}
-
-
-//Returns whether `owner` is currently the registered pool owner for (homeKey, mode). Used by `helios-card.ts` to know whether the
-//engine has already been claimed by a different mount before scheduling a release.
-export function isCurrentPoolOwner(homeKey: string, mode: 'preview' | 'live', engine: HeliosEngine, owner: object): boolean
-{
-    const entry = _enginePool.get(poolKey(homeKey, mode));
-    return entry !== undefined && entry.engine === engine && entry.lastOwner === owner;
-}
-
 export function initEngine(host: InitHost): void
 {
     const now    = performance.now();
@@ -559,29 +439,6 @@ export function initEngineNow(host: InitHost): void
         //letting Open-Meteo fall back to its own DEM.
         const elevation = host.hass.config.elevation;
 
-        //Engine pool short-circuit: a previous helios-card instance at the same home coordinates and the same surface mode (preview
-        //vs live dashboard tile) may already have an engine in the pool. Reuse it via DOM re-parenting and skip the heavy
-        //`new HeliosEngine(...)` path entirely. See the pool header comment above for the diagnostic on why HA's editor preview
-        //pane forces the per-commit rebuild.
-        const homeKey = `${lat.toFixed(5)},${lon.toFixed(5)}`;
-        const mode: 'preview' | 'live' = host.preview === true ? 'preview' : 'live';
-        const pooled  = claimEngineFromPool(homeKey, mode, host);
-        if (pooled)
-        {
-            //Re-parent the pooled engine's existing container DOM node into the slot Lit just rendered. The new shadow root ends
-            //up holding the SAME element the previous instance was using, MapLibre's internal `_container` reference stays valid,
-            //no private-field access needed. The handshake-style claim already cancelled the previous owner's pending dispose.
-            pooled.reparentInto(container);
-            host._engine = pooled;
-            host._lastEngineSpawnAt = performance.now();
-            wireEngineCallbacks(host);
-            host._initInflight = false;
-            //Re-register under our ownership so subsequent claims (next slider commit) find us as the lastOwner and the handshake
-            //works correctly.
-            registerEngineInPool(homeKey, mode, pooled, host);
-            return;
-        }
-
         const hadPreviousEngine = host._engine !== undefined;
         host._engine?.cleanup();
         host._engine = undefined;
@@ -607,12 +464,6 @@ export function initEngineNow(host: InitHost): void
             host._lastEngineSpawnAt = performance.now();
             wireEngineCallbacks(host);
             host._initInflight = false;
-            //Eager registration: the new engine joins the pool as soon as it is created so a subsequent helios-card construction
-            //(slider commit destroys + recreates the preview pane via `hui-card._loadElement`) can claim it before allocating
-            //a fresh WebGL context. The previous attempt registered only at `disconnectedCallback`, by which point HA had
-            //already called `setConfig` on the new element AND the new element's `updated()` ran one mount-debounce-window
-            //later, well past the point where a claim would help. See `init.ts:_enginePool` comment block.
-            registerEngineInPool(homeKey, mode, host._engine, host);
         };
 
         if (hadPreviousEngine)
