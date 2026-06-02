@@ -14,6 +14,13 @@ export function formatLocalisedNumber(
     integer: boolean = false
 ): string
 {
+    //Guard against NaN / Infinity / undefined-coerced-to-number coming from cold-cache reads or upstream parser failures. Without
+    //this guard `Intl.NumberFormat.format(NaN)` returns the literal "NaN" string which surfaces in chips; we render a neutral
+    //zero placeholder instead so the chip stays readable until real data lands.
+    if (!isFinite(value))
+    {
+        return integer ? '0' : (0).toFixed(fractionDigits);
+    }
     const locale = (hass?.locale?.language as string | undefined)
         ?? (hass?.language as string | undefined)
         ?? undefined;

@@ -10,7 +10,7 @@ import
 } from './helios-config';
 import { pickTranslations } from './i18n';
 import { heliosCardStyles } from './css/helios-card-css';
-import { formatDate, darkenHex } from './card/format';
+import { darkenHex } from './card/format';
 import
 {
     refreshPv,
@@ -21,7 +21,8 @@ import
     pvInverterMaxW,
     computePvPowerWeighted,
     wipeLegacyPvCalibStorage,
-    formatPvValue
+    formatPvValue,
+    clearPvModuleCaches
 } from './card/pv';
 import
 {
@@ -29,9 +30,10 @@ import
     batterySampleAtTime,
     formatBatteryPower,
     effectiveBatteryBanks,
+    clearBatteryModuleCaches,
     type BatteryBank
 } from './card/battery';
-import { refreshSolarRadiation } from './card/radiation';
+import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
 import { computeForecastCalibration } from './card/calibration';
 import
 {
@@ -42,6 +44,7 @@ import
     renderTimelineNightZones,
     renderTimelineFutureMask,
     renderTimelineHoverTooltip,
+    renderTimelineBackToLiveTab,
     handleChartHoverMove,
     handleChartHoverLeave
 } from './card/charts';
@@ -71,7 +74,7 @@ import
     timelineWidthPct
 } from './card/timeline';
 import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
-import { refreshGrid, formatGridValue, gridWattsAtTime } from './card/grid';
+import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime, clearGridModuleCaches } from './card/grid';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -96,7 +99,7 @@ import
     cancelPendingRespawn,
     initVisibilityObserver
 } from './card/init';
-//Side-effect import: registers <helios-color-picker> and <helios-card-editor> as custom elements.
+//Side-effect import: registers <helios-card-editor> as a custom element.
 import './card/editor';
 
 
@@ -357,6 +360,23 @@ export class HeliosCard extends LitElement
     //`window.heliosStats()` (raw entries returned, samples kept after
     //unit / unavailable filtering, window covered in hours).
     _pvHistoryDiagnostics: { rawEntries: number; samples: number; windowH: number } | null = null;
+    //Hourly long-term-statistics series feeding the 5-day forecast
+    //calibration. Same shape as `_pvHistory` but populated via
+    //`recorder/statistics_during_period`, ~120 rows for 5 days vs
+    //potentially millions on the raw path for high-frequency
+    //sensors. Null while the first fetch is in flight; consumers
+    //(calibration.ts) degrade to `_pvHistory` when this is null or
+    //empty.
+    @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
+    _pvCalibStatsFetchKey  = '';
+    _pvCalibStatsFetching  = false;
+    //5-minute long-term-statistics series feeding the 30-day
+    //shading-map trainer. Same contract as `_pvCalibStats`, just at
+    //a finer period and over a longer window. ~8.6k rows for 30
+    //days, vs the legacy raw 30-day path.
+    @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
+    _pvTrainerStatsFetchKey  = '';
+    _pvTrainerStatsFetching  = false;
     //Per-bank companion battery SoC histories fetched alongside PV history when the user has at least one battery configured AND armed
     //the inverter-cutoff guard (`inverter-cutoff-soc-pct`). One entry per bank, parallel to parseBatteryBanks(config). Empty when the
     //guard is off or no battery is configured; the shading trainer reads it to skip buckets where ALL banks were at or above the cutoff
@@ -406,6 +426,12 @@ export class HeliosCard extends LitElement
     //independently of the slot's overall normalised unit.
     _gridImportUnits: Map<string, string> = new Map();
     _gridExportUnits: Map<string, string> = new Map();
+    //Combined signed grid-power slot (grid-power-entity). When wired,
+    //refreshGrid derives the net signed watts from these buffers and
+    //routes the sign to the import / export chips; the directional
+    //slots above stay empty.
+    _gridCombinedSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
+    _gridCombinedUnits:   Map<string, string> = new Map();
     //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
     //when both are set.
     @state() _batterySocHistory: {
@@ -591,14 +617,6 @@ export class HeliosCard extends LitElement
     private _lastRefreshTimeRangeRef:      unknown = undefined;
     private _lastRefreshEnergyDefaultsRef: unknown = undefined;
 
-    //Clock-label memoisation. The date+time strings in the top-left
-    //change at most once per minute, but render() ran formatDate +
-    //toLocaleTimeString on every cycle (every overlay @state move
-    //during auto-rotate). Cached on epoch-minute + format flags.
-    private _cachedClockLabelKey:  string = '';
-    private _cachedClockDateLabel: string = '';
-    private _cachedClockTimeLabel: string = '';
-
     //Arc-segment scratch buffers. The sun arc is split by altitude
     //(below-horizon goes BEHIND the chip cluster, above-horizon goes
     //in FRONT) on every render. Naive filter() pair allocated two
@@ -702,10 +720,26 @@ export class HeliosCard extends LitElement
     {
         //Drop in-memory PV state so the next refreshPv() refetches
         //from scratch instead of pulling from the cached fetch key.
-        this._pvHistory             = null;
-        this._pvSampleBuffer        = [];
-        this._pvFetchKey            = '';
-        this._pvHistoryDiagnostics  = null;
+        this._pvHistory                   = null;
+        this._pvCalibStats                = null;
+        this._pvTrainerStats              = null;
+        this._pvSampleBuffer              = [];
+        this._pvFetchKey                  = '';
+        this._pvCalibStatsFetchKey        = '';
+        this._pvTrainerStatsFetchKey      = '';
+        this._pvHistoryDiagnostics        = null;
+        this._batterySocHistory           = null;
+        this._batteryPowerHistory         = null;
+        this._batteryFetchKey             = '';
+        this._batteryHistories            = [];
+        this._solarRadiationHistory       = null;
+        this._solarRadiationFetchKey      = '';
+        //Drop the module-level caches too. Without these calls the per-LitElement state above is reset but the next refresh hits the
+        //cross-mount cache and rehydrates the slot from the exact stale entry the user just asked to clear.
+        clearPvModuleCaches();
+        clearBatteryModuleCaches();
+        clearRadiationModuleCaches();
+        clearGridModuleCaches();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         this.requestUpdate();
@@ -851,7 +885,12 @@ export class HeliosCard extends LitElement
             window.clearTimeout(this._connectSettleTimer);
             this._connectSettleTimer = undefined;
         }
-        if (this._engine)
+        //Engine cleanup on disconnect. Home Assistant's editor preview pane destroys + re-creates the helios-card element on every
+        //`config-changed` commit (see `hui-card.ts:195`, the rebuild is hard-coded and no opt-out hook exists, confirmed by
+        //investigation in #162). We accept the cost of allocating a fresh MapLibre + WebGL context per commit, which is the same
+        //trade-off apexcharts-card, mini-graph-card and Mushroom make. The live dashboard tile is NOT recreated (`hui-card` takes
+        //the `_updateElement` branch when `preview === false`), so the user-facing surface stays smooth.
+        if (this._engine !== undefined)
         {
             this._engine.cleanup();
             this._engine = undefined;
@@ -1188,45 +1227,6 @@ export class HeliosCard extends LitElement
         const hasApiKey = getHomeCoords(this.config, this.hass) !== null;
 
 
-        //Date+time shown bottom-right: tracks the timeline cursor.
-        //  - In live mode it follows wall-clock time (re-rendered every
-        //    second by _tick).
-        //  - In scrubbed mode it shows the selected instant exactly.
-        //Both date and time follow the user-defined date format.
-        const displayDate = !this._isLiveMode && this._selectedTime
-            ? this._selectedTime
-            : this._now;
-        //time-format: '12h' or '24h' (default). hourCycle is more
-        //authoritative than hour12, which some locales silently
-        //ignore (fr-FR falls back to 24h regardless of hour12).
-        const is12h = String(this.config?.['time-format'] ?? '24h').toLowerCase() === '12h';
-        //Memoise the date+time labels keyed on (epoch-minute, format
-        //flags) so a rotation that only mutates camera state does
-        //not re-run Intl.DateTimeFormat (2-5 ms per call on Safari)
-        //or our formatDate helper. Both labels only change once per
-        //minute in live mode and once per scrub-step in scrub mode.
-        const dateFmt = String(this.config?.['date-format'] ?? '');
-        const labelKey = `${Math.floor(displayDate.getTime() / 60_000)}|${is12h ? '12' : '24'}|${dateFmt}`;
-        let displayDateLabel: string;
-        let displayTimeLabel: string;
-        if (this._cachedClockLabelKey === labelKey)
-        {
-            displayDateLabel = this._cachedClockDateLabel;
-            displayTimeLabel = this._cachedClockTimeLabel;
-        }
-        else
-        {
-            displayDateLabel = formatDate(displayDate, this.config?.['date-format']);
-            displayTimeLabel = displayDate.toLocaleTimeString([], {
-                hour:      '2-digit',
-                minute:    '2-digit',
-                hourCycle: is12h ? 'h12' : 'h23'
-            } as Intl.DateTimeFormatOptions);
-            this._cachedClockLabelKey   = labelKey;
-            this._cachedClockDateLabel  = displayDateLabel;
-            this._cachedClockTimeLabel  = displayTimeLabel;
-        }
-
         //The on-ground disc self-encodes the low/mid/high breakdown
         //via three concentric bands (proportional radial widths,
         //three shades of the cloud colour); no hover tooltip
@@ -1396,14 +1396,40 @@ export class HeliosCard extends LitElement
         //quantises in the "wrong" direction by one Wh. A negative
         //IMPORT at scrub time is an EXPORT moment that the export
         //chip already reports; clamping to 0 keeps the slot honest.
-        const rawImport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
-            : this._gridImportValue;
-        const rawExport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
-            : this._gridExportValue;
-        const gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
-        const gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
+        //
+        //Combined mode (grid-power-entity) derives ONE signed net
+        //from a single buffer set and splits the sign across the two
+        //chips, exactly mirroring the live readCombined split: a
+        //non-negative net shows on import only, a negative net on
+        //export only. Live values already carry that split in
+        //_gridImportValue / _gridExportValue.
+        let gridImportDisplayWatts: number | null;
+        let gridExportDisplayWatts: number | null;
+        if (isGridCombined(this.config))
+        {
+            if (gridScrubTimeMs !== null)
+            {
+                const signed = gridCombinedWattsAtTime(this, gridScrubTimeMs);
+                gridImportDisplayWatts = signed === null ? null : (signed >= 0 ? signed : null);
+                gridExportDisplayWatts = signed === null ? null : (signed <  0 ? -signed : null);
+            }
+            else
+            {
+                gridImportDisplayWatts = this._gridImportValue;
+                gridExportDisplayWatts = this._gridExportValue;
+            }
+        }
+        else
+        {
+            const rawImport = gridScrubTimeMs !== null
+                ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
+                : this._gridImportValue;
+            const rawExport = gridScrubTimeMs !== null
+                ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
+                : this._gridExportValue;
+            gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
+            gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
+        }
         const gridImportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridImportUnit;
         const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridExportUnit;
 
@@ -1754,6 +1780,7 @@ export class HeliosCard extends LitElement
                               area and the PV area visually balance
                               each other.  -->
                         ${renderTimelineHoverTooltip(this)}
+                        ${renderTimelineBackToLiveTab(this, () => resetToLive(this))}
                         ${pvEntityId ? html`
                             <div
                                 class="tb-chart-card tb-pv-card"
@@ -1875,7 +1902,23 @@ export class HeliosCard extends LitElement
                     //sun, partly-cloudy, cloudy or pouring depending on
                     //the current home reading. The user reads the sky
                     //state at a glance without opening the dome.
+                    //Camera lock chip sits top-left. Tapping the chip flips the lock state and asks the engine to persist the new
+                    //pose (bearing + pitch + lock flag) to localStorage so the next reload restores it. No tooltip, no title, no
+                    //localised label, the open/closed padlock glyph already carries the meaning and a tooltip on a touchscreen is
+                    //useless.
+                    const cameraLocked  = this._isCameraLocked();
+                    const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
                     return html`
+                        <div class="overlay-top-left">
+                            <button
+                                type="button"
+                                class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
+                                aria-pressed="${cameraLocked ? 'true' : 'false'}"
+                                @click="${this._onCameraLockToggle}"
+                            >
+                                <ha-icon icon="${lockIcon}"></ha-icon>
+                            </button>
+                        </div>
                         <div class="overlay-top-right">
                             <div class="mode-bar" role="radiogroup" aria-label="View mode">
                                 <button
@@ -1898,7 +1941,7 @@ export class HeliosCard extends LitElement
                                     aria-label="${lidarTitle}"
                                     @click="${onLidar}"
                                 >
-                                    <ha-icon icon="${lidarIcon}"></ha-icon>
+                                    <ha-icon class="${lidarLoading ? 'is-spinning' : ''}" icon="${lidarIcon}"></ha-icon>
                                 </button>
                                 <button
                                     type="button"
@@ -1915,31 +1958,6 @@ export class HeliosCard extends LitElement
                         </div>
                     `;
                 })() : nothing}
-
-                <!--  Top-left cluster: clock chip showing the active
-                      timeline instant + (in scrub mode) a back-to-
-                      live button right beside it. The clock takes a
-                      blue / white "is-scrub" theme when scrubbing
-                      so the same chip doubles as the mode signal,
-                      no separate scrub-time chip needed lower on
-                      the card.  -->
-                ${hasApiKey ? html`
-                    <div class="overlay-top-left">
-                        <div class="clock ${!this._isLiveMode ? 'is-scrub' : ''}">
-                            <span class="clock-date">${displayDateLabel}</span>
-                            <span class="clock-time">${displayTimeLabel}</span>
-                        </div>
-                        ${!this._isLiveMode ? html`
-                            <button
-                                class="live-return-btn"
-                                @click="${() => resetToLive(this)}"
-                                aria-label="Back to live"
-                            >
-                                <ha-icon icon="mdi:restore"></ha-icon>
-                            </button>
-                        ` : nothing}
-                    </div>
-                ` : nothing}
 
                 <!--  Solar arc, BACK pass. Renders only the dotted
                       below-horizon segments (the sun's path through
@@ -2075,7 +2093,7 @@ export class HeliosCard extends LitElement
                                   a disc has no orientation.  -->
                             <circle
                                 class="pv-home-leader-bead"
-                                r="4"
+                                r="3"
                                 fill="${pvColor}"
                             >
                                 <animateMotion
@@ -2131,7 +2149,7 @@ export class HeliosCard extends LitElement
                             ${!batteryIdle ? svg`
                                 <circle
                                     class="battery-leader-bead"
-                                    r="4"
+                                    r="3"
                                     style="fill:${batteryLeaderColor}"
                                 >
                                     <animateMotion
@@ -2181,7 +2199,7 @@ export class HeliosCard extends LitElement
                               import flows FROM the grid INTO the home,
                               so the bead travels chip → home. -->
                         ${gridImportBeadDur !== null ? svg`
-                            <circle class="grid-import-leader-bead" r="3.5">
+                            <circle class="grid-import-leader-bead" r="3">
                                 <animateMotion dur="${gridImportBeadDur.toFixed(2)}s" repeatCount="indefinite"
                                                path="${gridImportLeaderPath}" />
                             </circle>
@@ -2191,7 +2209,7 @@ export class HeliosCard extends LitElement
                         class="grid-import-label"
                         style="left:${layout!.gridImportLabel.x}px; top:${layout!.gridImportLabel.y}px"
                     >
-                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
+                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
                         <span>${formatGridValue(gridImportDisplayWatts, gridImportDisplayUnit)}</span>
                     </div>
                 ` : nothing}
@@ -2205,7 +2223,7 @@ export class HeliosCard extends LitElement
                               traversal so the bead starts at the home
                               end of the path and ends at the chip.  -->
                         ${gridExportBeadDur !== null ? svg`
-                            <circle class="grid-export-leader-bead" r="3.5">
+                            <circle class="grid-export-leader-bead" r="3">
                                 <animateMotion dur="${gridExportBeadDur.toFixed(2)}s" repeatCount="indefinite"
                                                keyPoints="1;0" keyTimes="0;1"
                                                path="${gridExportLeaderPath}" />
@@ -2216,7 +2234,7 @@ export class HeliosCard extends LitElement
                         class="grid-export-label"
                         style="left:${layout!.gridExportLabel.x}px; top:${layout!.gridExportLabel.y}px"
                     >
-                        <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
+                        <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
                         <span>${formatGridValue(gridExportDisplayWatts, gridExportDisplayUnit)}</span>
                     </div>
                 ` : nothing}
@@ -2319,7 +2337,7 @@ export class HeliosCard extends LitElement
                               during camera rotation. -->
                         <circle
                             class="solar-ray-bead"
-                            r="5"
+                            r="3"
                             fill="${sunColor}"
                         >
                             <animateMotion
@@ -2452,11 +2470,11 @@ export class HeliosCard extends LitElement
                 ${hasApiKey && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
                     const sunColor = DEFAULT_SUN_COLOR_HEX;
                     const silhouettePts = this._getSilhouettePoints();
-                    //Pulse on bead arrival retired in alpha.18: the
-                    //flash carved a hot spot on the home silhouette
-                    //that competed with the steady HA-Energy-blue
-                    //identity, hard to read against the cloud-cover
-                    //wash. Glow is now a static hover-only halo.
+                    //Static hover-only halo. The earlier pulse-on-bead-
+                    //arrival was carving a hot spot on the home
+                    //silhouette that competed with the steady HA-Energy-
+                    //blue identity and was hard to read against the
+                    //cloud-cover wash.
                     const glowClasses = [
                         'home-glow-svg',
                         this._homeHover ? 'is-hovered' : '',
@@ -2644,6 +2662,27 @@ export class HeliosCard extends LitElement
         if (this._lidarViewMode)   toggleLidarView(this);
         this._cloudDomeMode = false;
         if (!this._shadingDomeMode) toggleShadingDome(this);
+    };
+    //Camera lock state used by the top-left lock button. Delegates
+    //to the engine, which itself prefers localStorage over the legacy
+    //YAML flag, so the button icon always matches what MapLibre is
+    //actually doing.
+    private _isCameraLocked(): boolean
+    {
+        if (this._engine) return this._engine.isCameraLocked();
+        return false;
+    }
+    //Lock-button click handler. Asks the engine to flip its lock
+    //state; the engine takes care of persisting the current bearing,
+    //pitch and lock flag to localStorage (HA's lovelace does NOT
+    //persist `config-changed` from a live card, so a YAML round-trip
+    //would be silently dropped on disk). The next reload reads the
+    //same localStorage entry and restores the pose.
+    private _onCameraLockToggle = (): void =>
+    {
+        if (!this._engine) return;
+        this._engine.setCameraLocked(!this._engine.isCameraLocked());
+        this.requestUpdate();
     };
 
     static styles = heliosCardStyles;

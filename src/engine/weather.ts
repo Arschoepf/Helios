@@ -392,7 +392,20 @@ export async function fetchHomePointData(
     try
     {
         const res = await fetch(url, { signal });
-        if (!res.ok) return null;
+        if (!res.ok)
+        {
+            //Re-throw HTTP 429 with the status code attached so the engine catch can route it to the exponential back-off table
+            //(`RATE_LIMIT_BACKOFF_MS`). Returning `null` here would short-circuit the engine's catch and the back-off would never
+            //arm, leaving the card hammering Open-Meteo at the normal cadence under a rate-limit. Other non-OK statuses fall
+            //through to the silent null path, treated the same as a generic network error.
+            if (res.status === 429)
+            {
+                const err: Error & { status?: number } = new Error('Open-Meteo rate limit (HTTP 429)');
+                err.status = 429;
+                throw err;
+            }
+            return null;
+        }
         const json = await res.json();
         const row = Array.isArray(json) ? json[0] : json;
 
@@ -427,10 +440,12 @@ export async function fetchHomePointData(
         writeCache(lat, lon, precision, data);
         return data;
     }
-    catch
+    catch (e)
     {
-        //AbortError on cancellation, network errors, JSON parse errors , all swallowed silently. The caller treats null as "no data available" and
-        //renders the timeline ramps as empty.
+        //AbortError on cancellation, network errors, JSON parse errors, all swallowed silently. The caller treats null as "no data
+        //available" and renders the timeline ramps as empty. Rate-limit errors (HTTP 429) are NOT swallowed: they propagate to the
+        //engine so the back-off table arms.
+        if (e && typeof e === 'object' && (e as { status?: number }).status === 429) throw e;
         return null;
     }
 }

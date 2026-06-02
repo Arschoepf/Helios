@@ -89,7 +89,12 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
         //did time pass?". The user has to explicitly opt in via
         //the editor toggle. Detail mode also suppresses it.
         const autoRotateEnabled = host.cfg['auto-rotate-enabled'] === true;
+        //camera-locked overrides auto-rotate too: the whole point of the
+        //lock is "the camera stays exactly where I dialled it in", so a
+        //slow idle orbit would defeat the user's intent.
+        const cameraLocked      = (host.cfg as Record<string, unknown>)['camera-locked'] === true;
         if (autoRotateEnabled
+            && !cameraLocked
             && !host._detailMode
             && sinceUser >= AUTO_ROTATE_INACTIVITY_MS)
         {

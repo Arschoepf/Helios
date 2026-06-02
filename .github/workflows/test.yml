@@ -21,7 +21,7 @@ jobs:
           node-version: "24"
           cache: npm
 
-      #npm ci is strict — fails if package-lock.json is out of sync.
+      #npm ci is strict, fails if package-lock.json is out of sync.
       #We use npm install instead so a fresh checkout always builds.
       - name: Install dependencies
         run: npm install
@@ -38,7 +38,7 @@ jobs:
       - name: Verify HACS-compatible artifact
         run: |
           if [ ! -f dist/helios.js ]; then
-            echo "::error::Expected dist/helios.js not found — HACS will not be able to find the plugin"
+            echo "::error::Expected dist/helios.js not found, HACS will not be able to find the plugin"
             ls -la dist/ || true
             exit 1
           fi

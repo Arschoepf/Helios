@@ -107,6 +107,71 @@ const MAX_LIVE_ENGINES = 4;
 const _liveEngines = new Set<HeliosEngine>();
 
 
+//-----------------------------------------------------------------
+//Shared fetch caches: HA's editor preview pane destroys and re-creates the helios-card element on every config-changed commit
+//(slider release, picker write, see #162 and `hui-card.ts:195`). The map's WebGL context is unavoidably re-allocated each time
+//because the cycle is hard-coded in HA, but the expensive PARSED fetch payloads (buildings GeoJSON, LiDAR raster) do not need to
+//be re-downloaded and re-parsed. Stashing them at module scope lets the fresh engine pick them up synchronously and skip the
+//network round-trip entirely.
+//
+//The browser already caches the underlying HTTP responses (MapTiler tile JSONs, OFM basemap tiles, IGN LiDAR tiles) under its
+//normal cache headers, so reuse here only saves the parsing + projection cost. For buildings that is a 10-50 ms hit. For LiDAR
+//raster that is several megabytes of binary decoded into typed arrays, between 100 ms and 1 s depending on the resolution. Both
+//show up as a noticeable flash in the preview when not cached; with the shared cache the flash disappears.
+//
+//TTL is wide (30 minutes) because the underlying physical data does not change. The cache key encodes home position + radius +
+//raster size so any meaningful change (user moves home, edits radius, switches precision) invalidates the entry naturally.
+
+const SHARED_FETCH_CACHE_TTL_MS = 30 * 60_000;
+
+interface SharedBuildingsCacheEntry
+{
+    data: BuildingsResult;
+    ts:   number;
+}
+
+interface SharedLidarCacheEntry
+{
+    features:    GeoJSON.FeatureCollection;
+    diagnostics: {
+        cellsKept:         number;
+        cellsPerClumpCap:  number;
+        heightRangeM:      [number, number] | null;
+    };
+    raster:      unknown;
+    ts:          number;
+}
+
+const _sharedBuildingsCache: Map<string, SharedBuildingsCacheEntry> = new Map();
+const _sharedLidarCache:     Map<string, SharedLidarCacheEntry>     = new Map();
+
+
+function sharedBuildingsCacheGet(key: string): BuildingsResult | null
+{
+    const entry = _sharedBuildingsCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > SHARED_FETCH_CACHE_TTL_MS)
+    {
+        _sharedBuildingsCache.delete(key);
+        return null;
+    }
+    return entry.data;
+}
+
+
+function sharedLidarCacheGet(key: string): SharedLidarCacheEntry | null
+{
+    const entry = _sharedLidarCache.get(key);
+    if (!entry) return null;
+    if (Date.now() - entry.ts > SHARED_FETCH_CACHE_TTL_MS)
+    {
+        _sharedLidarCache.delete(key);
+        return null;
+    }
+    return entry;
+}
+
+
 export type CloudIntensity = 'clear' | 'light' | 'moderate' | 'heavy' | 'storm' | 'fog';
 
 //Sources of the irradiance value displayed in the PV legend.
@@ -505,6 +570,136 @@ export class HeliosEngine
         return this.map !== undefined;
     }
 
+    //Camera pose persistence. HA's lovelace does NOT persist
+    //`config-changed` events emitted from a live card (only from the
+    //editor preview), so a YAML round-trip is not an option for a
+    //control that lives outside the editor. localStorage keyed on the
+    //home coordinates is the right fit: instant write, instant read on
+    //the next boot, scoped per-card by lat/lon. The 3-decimal rounding
+    //gives ~111 m precision, enough to keep two homes on the same
+    //street apart while tolerating tiny GPS jitter on the config side.
+    private _cameraPoseStorageKey(): string
+    {
+        const lat = Math.round(this.homeLat * 1000) / 1000;
+        const lon = Math.round(this.homeLon * 1000) / 1000;
+        return `helios:camera-pose:${lat}:${lon}`;
+    }
+    private _readStoredPose(): { bearing?: number; pitch?: number; locked?: boolean } | null
+    {
+        try
+        {
+            const raw = window.localStorage.getItem(this._cameraPoseStorageKey());
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object') return parsed as { bearing?: number; pitch?: number; locked?: boolean };
+        }
+        catch
+        {
+            //Quota errors, disabled storage, private windows: any of
+            //these silently degrade to "no stored pose, use defaults".
+        }
+        return null;
+    }
+    private _writeStoredPose(pose: { bearing: number; pitch: number; locked: boolean }): void
+    {
+        try
+        {
+            window.localStorage.setItem(this._cameraPoseStorageKey(), JSON.stringify(pose));
+        }
+        catch
+        {
+            //Same silent-degrade rationale as the reader. The live
+            //engine state is already mutated in setCameraLocked /
+            //setCameraBearing / setCameraPitch, only persistence
+            //across reloads is lost.
+        }
+    }
+    //Resting pose, applied on map init. Reads localStorage first
+    //(the runtime lock chip writes there), then the legacy YAML
+    //`camera-bearing-deg` / `camera-pitch-deg` keys for older
+    //installs, then the hemisphere-aware default (north up in SH,
+    //south up in NH). All values are wrapped / clamped so a stale
+    //read can never put the camera in an unrenderable pose.
+    private _initialBearing(): number
+    {
+        const stored = this._readStoredPose();
+        const rawStored = stored && typeof stored.bearing === 'number' ? stored.bearing : NaN;
+        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-bearing-deg']);
+        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
+        if (Number.isFinite(raw))
+        {
+            return ((raw % 360) + 360) % 360;
+        }
+        return this.homeLat >= 0 ? 180 : 0;
+    }
+    private _initialPitch(): number
+    {
+        const stored = this._readStoredPose();
+        const rawStored = stored && typeof stored.pitch === 'number' ? stored.pitch : NaN;
+        const rawCfg    = Number((this.cfg as Record<string, unknown>)['camera-pitch-deg']);
+        const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
+        if (Number.isFinite(raw))
+        {
+            return Math.max(15, Math.min(85, raw));
+        }
+        return 55;
+    }
+    //True when manual drag-rotate / drag-pitch + the idle auto-orbit
+    //should all be suppressed because the user opted into a locked
+    //camera pose. Reads the localStorage flag first (live lock chip),
+    //then the legacy YAML key as fallback.
+    public isCameraLocked(): boolean
+    {
+        const stored = this._readStoredPose();
+        if (stored && typeof stored.locked === 'boolean') return stored.locked;
+        return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+    }
+    //Live setter so the editor's slider can preview a new bearing
+    //without waiting for the next config commit. Wraps to [0, 360).
+    public setCameraBearing(deg: number): void
+    {
+        if (!this.map || !Number.isFinite(deg)) return;
+        const wrapped = ((deg % 360) + 360) % 360;
+        this.map.setBearing(wrapped);
+    }
+    //Live setter for the editor's pitch slider, clamped to the same
+    //bounds the drag-pitch handler enforces.
+    public setCameraPitch(deg: number): void
+    {
+        if (!this.map || !Number.isFinite(deg)) return;
+        const clamped = Math.max(15, Math.min(85, deg));
+        this.map.setPitch(clamped);
+    }
+    //Toggle the lock at runtime so the lock chip applies immediately
+    //without a respawn. Flips the pinch-rotate handler; the pointer
+    //drag-rotate gate re-evaluates isCameraLocked() on every
+    //pointerdown so its branch picks up the new state too. The cfg
+    //is mutated in-place AND the localStorage record refreshed so the
+    //next boot restores the same state without a config round-trip.
+    public setCameraLocked(locked: boolean): void
+    {
+        if (!this.map) return;
+        (this.cfg as Record<string, unknown>)['camera-locked'] = locked;
+        this._writeStoredPose({
+            bearing: this.map.getBearing(),
+            pitch:   this.map.getPitch(),
+            locked,
+        });
+        if (locked) this.map.touchZoomRotate.disable();
+        else        this.map.touchZoomRotate.enable({ around: 'center' });
+    }
+    //Out-of-config defaults that the editor's reset button restores.
+    //Always the hemisphere-aware boot pose, never the user's
+    //customised values; reading from _initialBearing / _initialPitch
+    //here would simply echo back whatever the user just changed.
+    public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }
+    public getDefaultPitch():   number { return 55; }
+    //Live camera pose readers so the editor can pre-fill its sliders
+    //with whatever the user is currently looking at, not just the
+    //value committed to the YAML config.
+    public getCameraBearing(): number { return this.map ? this.map.getBearing() : this.getDefaultBearing(); }
+    public getCameraPitch():   number { return this.map ? this.map.getPitch()   : this.getDefaultPitch(); }
+
     //Auto-rotation state. The map slowly orbits the home in the
     //opposite direction to the sun's apparent motion (decreasing
     //bearing, ~1.5°/s) when the user has been idle for a few
@@ -759,8 +954,8 @@ export class HeliosEngine
             style:           styleInfo.url,
             center:          haCoords,
             zoom:            18,
-            pitch:           55,
-            bearing:         this.homeLat >= 0 ? 180 : 0,
+            pitch:           this._initialPitch(),
+            bearing:         this._initialBearing(),
             //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
             //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
             //its dive animation and resets it on exit.
@@ -826,10 +1021,22 @@ export class HeliosEngine
         try { (window as unknown as { __heliosMap?: MapLibreMap }).__heliosMap = this.map; }
         catch (_) {}
 
+        //Sibling global for the editor's UI: the camera slider /
+        //lock toggle needs setCameraBearing / setCameraPitch /
+        //setCameraLocked, which live on this engine instance, not on
+        //the bare map. Same cheap "anyone with dev-tools already has
+        //the page" argument as __heliosMap above.
+        try { (window as unknown as { __heliosEngine?: HeliosEngine }).__heliosEngine = this; }
+        catch (_) {}
+
         //Lock the pinch-rotate pivot to the canvas centre. By default, TwoFingersTouchZoomRotateHandler rotates around the centroid of the two
         //fingers, visually, the home orbits around the pinch point during the gesture, very obvious on small cards. `around: 'center'` forces the
         //pivot to be the screen centre, which is exactly where the home projects, so the home stays pinned no matter where the fingers land.
-        this.map.touchZoomRotate.enable({ around: 'center' });
+        //
+        //When camera-locked is true the pinch-rotate is disabled too so
+        //the configured pose is the only pose the user ever sees.
+        if (this.isCameraLocked()) this.map.touchZoomRotate.disable();
+        else                       this.map.touchZoomRotate.enable({ around: 'center' });
 
         //Hard pin the map centre on every user-driven transform: the
         //home must never leave the dead-centre of the card during a
@@ -995,6 +1202,12 @@ export class HeliosEngine
             //Swallow gestures during the post-exit cooldown so the click that dismissed the dashboard panel can't bleed into a fresh drag-rotate on
             //the canvas behind.
             if (this.isUserGestureSuppressed()) return;
+            //camera-locked: the user opted into a fixed pose so manual
+            //drag-rotate / drag-pitch are inert. The toggle is exposed
+            //in the editor UI section and is re-evaluated on every
+            //pointerdown so flipping it in live preview disengages
+            //immediately without an engine respawn.
+            if (this.isCameraLocked()) return;
             dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
@@ -2204,21 +2417,14 @@ export class HeliosEngine
         }
     }
 
-    //Resolves the configured building radius (metres). Falls back to
-    //DEFAULT_BUILDING_RADIUS_M and clamps to a sane range so a stray
-    //editor value can't accidentally trigger fetching dozens of tiles.
+    //Display radius is fixed at DEFAULT_BUILDING_RADIUS_M (300 m).
+    //The editor no longer exposes a slider for it; the constant is
+    //the single source of truth so every consumer (basemap bbox,
+    //LiDAR fetch extent, projection clip, MapLibre bounds) stays in
+    //lockstep.
     private _buildingRadiusMeters(): number
     {
-        const v = Number(this.cfg['building-radius']);
-        if (!Number.isFinite(v) || v <= 0)
-        {
-            return DEFAULT_BUILDING_RADIUS_M;
-        }
-        //Hard ceiling at 500 m. Past that the basemap / LiDAR fetch
-        //and the per-frame projection start to chug; the slider in
-        //the editor also caps at 500 so anything above can only come
-        //from a hand-edited YAML config.
-        return Math.min(500, Math.max(20, v));
+        return DEFAULT_BUILDING_RADIUS_M;
     }
 
     //Clamp MapLibre's camera bounds to a tight bbox around the home,
@@ -2548,6 +2754,20 @@ export class HeliosEngine
             return;
         }
 
+        //Shared module-level cache short-circuit. When HA destroys + re-creates the helios-card element on an editor commit, a
+        //fresh engine instance pays the buildings parse cost again unless we serve from the shared cache here. The browser HTTP
+        //cache covers the underlying tile request; this map skips the parsed result so we do not re-walk the GeoJSON either.
+        const sharedBuildings = sharedBuildingsCacheGet(key);
+        if (sharedBuildings)
+        {
+            this._buildingsFetchKey = key;
+            this._buildingsData     = sharedBuildings;
+            this._pushRenderableSources();
+            this._lastAtmosphereAlt = -999;
+            this._refreshShadowsAndAtmosphere();
+            return;
+        }
+
         //Abort any in-flight request so a rapid radius change doesn't leave a slow tile from the previous fetch racing the new one to populate the
         //sources.
         this._buildingsAbort?.abort();
@@ -2568,6 +2788,7 @@ export class HeliosEngine
         {
             if (ac.signal.aborted || !this.map) return;
             this._buildingsData = result;
+            _sharedBuildingsCache.set(key, { data: result, ts: Date.now() });
             this._pushRenderableSources();
             //Buildings just arrived, the shadow source is still empty, bypass the "sun hardly moved" guard so the next call paints a full atmosphere
             //pass and populates the shadow polygons.
@@ -2642,12 +2863,33 @@ export class HeliosEngine
             RASTER_DEFAULTS.maxRasterSize,
             Math.max(RASTER_DEFAULTS.minRasterSize, rawCells)
         );
-        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}`;
+        const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}|${provider.id ?? ''}`;
         //Bail if we already have a fresh successful payload for this key.
         if (this._lidarShadowKey === key && this._lidarShadowFeatures) return;
         //Bail if we are inside the backoff window for the SAME failed key. A key change (user moved home / edited radius / etc.)
         //bypasses the backoff because it represents a fresh request the failed key knows nothing about.
         if (this._lidarShadowFailedKey === key && Date.now() < this._lidarShadowBackoffUntil) return;
+
+        //Shared module-level cache short-circuit. The LiDAR fetch is the heaviest single network + parse step in the engine boot,
+        //a fresh-engine path after an editor commit re-pays that cost end-to-end unless we serve from the shared cache here.
+        const sharedLidar = sharedLidarCacheGet(key);
+        if (sharedLidar)
+        {
+            this._lidarShadowKey          = key;
+            this._lidarShadowFeatures     = sharedLidar.features;
+            this._lidarShadowDiagnostics  = sharedLidar.diagnostics;
+            this._lidarRaster             = (sharedLidar.raster as typeof this._lidarRaster) ?? null;
+            this._lidarShadowFailedKey    = '';
+            this._lidarShadowFailureCount = 0;
+            this._lidarShadowBackoffUntil = 0;
+            this._lidarViewLayer?.setData(this._lidarRaster);
+            this._lastLidarExposureAlt    = -999;
+            this._lastLidarExposureAz     = -999;
+            this._scheduleLidarExposureRecompute();
+            this._lastAtmosphereAlt       = -999;
+            this._refreshShadowsAndAtmosphere();
+            return;
+        }
 
         this._lidarShadowAbort?.abort();
         const ac = new AbortController();
@@ -2671,6 +2913,13 @@ export class HeliosEngine
             this._lidarShadowFeatures    = res.features;
             this._lidarShadowDiagnostics = res.diagnostics;
             this._lidarRaster            = res.raster ?? null;
+            //Promote to the shared cache so a fresh engine after an editor commit can serve from memory.
+            _sharedLidarCache.set(key, {
+                features:    res.features,
+                diagnostics: res.diagnostics,
+                raster:      res.raster ?? null,
+                ts:          Date.now()
+            });
             //Reset the failure / backoff state, this key is now known-good.
             this._lidarShadowFailedKey    = '';
             this._lidarShadowFailureCount = 0;
@@ -3021,9 +3270,11 @@ export class HeliosEngine
         {
             center:   [this.homeLon, this.homeLat],
             zoom:     18,
-            pitch:    55,
-            //Same hemisphere-aware bearing as the initial setup above, recentering must restore the resting pose, not flip the orientation.
-            bearing:  this.homeLat >= 0 ? 180 : 0,
+            //Restores the configured resting pose (camera-pitch-deg /
+            //camera-bearing-deg) when set, otherwise falls back to the
+            //hemisphere-aware defaults the initial map() init uses.
+            pitch:    this._initialPitch(),
+            bearing:  this._initialBearing(),
             duration: dur
         });
     }
@@ -3203,20 +3454,27 @@ export class HeliosEngine
         //    home, stacked vertically: Import on top of Export.
         //That keeps "what is in" (grid + sun) on one side and "what
         //is stored / consumed" on the other.
-        const CHIP_SIDE_X_OFFSET_PX = 70;
+        //Pixel offsets driving the chip cluster around the home.
+        //All four constants are scaled by `_heliosScale()` so the
+        //cluster spreads on a fullscreen / kiosk layout instead of
+        //clumping at the centre of an otherwise empty canvas. See
+        //issue #33. At standard Lovelace grid sizes scale = 1.0,
+        //so the cluster geometry stays exactly as before.
+        const scale = this._heliosScale();
+        const CHIP_SIDE_X_OFFSET_PX = 70 * scale;
         //Vertical distance between the top and bottom rows of chips.
         //Bumped to 60 so the L-shape leaders below have enough room
         //to render their rounded fillet without overlapping the
         //home pill.
-        const CHIP_STACK_GAP_PX     = 60;
+        const CHIP_STACK_GAP_PX     = 60 * scale;
         //Lift the entire home cluster (pill + chips) above the
         //projected home centre so the icon sits above the roof
         //silhouette, with enough breathing room for a visible solid
         //leader to drop from the pill down to the building top below.
-        const CLUSTER_LIFT_PX = 60;
+        const CLUSTER_LIFT_PX = 60 * scale;
         const clusterY = home.y - CLUSTER_LIFT_PX;
         const pvX = home.x;
-        const pvY = clusterY - PV_CHIP_OFFSET_PX;
+        const pvY = clusterY - PV_CHIP_OFFSET_PX * scale;
         //Battery column on the right.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
         const batterySocY       = clusterY - CHIP_STACK_GAP_PX / 2;
@@ -3347,6 +3605,44 @@ export class HeliosEngine
     private _invalidateProjCache(): void
     {
         this._projCache = null;
+    }
+
+    //Linear ramp on the card's min CSS dimension so the home chip
+    //cluster expands on a fullscreen / kiosk layout instead of
+    //staying pinned to the tuned-for-grid pixel sizes. Below
+    //FLOOR the scale is fixed at 1.0 (standard Lovelace grid
+    //cell); above FLOOR it ramps linearly to MAX at TOP. See
+    //issue #33.
+    private _heliosScale(): number
+    {
+        const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
+        if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
+        const FLOOR = 600;
+        const TOP   = 1200;
+        const MAX   = 1.6;
+        if (minDim <= FLOOR) return 1.0;
+        if (minDim >= TOP)   return MAX;
+        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
+    }
+    //Dedicated ramp for the sun arc. The chip cluster scale (1.6 max)
+    //is too conservative for the arc because the arc is computed in
+    //world metres, projected by MapLibre at a fixed zoom: at standard
+    //card sizes 40 m maps to ~120-160 CSS px which fills the lower
+    //half of the canvas nicely, but on a kiosk-sized canvas the same
+    //40 m still reads as ~120-160 px, lost in the empty space. The
+    //arc needs a bigger multiplier to keep its visual share of the
+    //canvas constant. Same FLOOR / TOP breakpoints as the chip
+    //scale so the two transitions happen on the same hinge.
+    private _sunArcScale(): number
+    {
+        const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
+        if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
+        const FLOOR = 600;
+        const TOP   = 1200;
+        const MAX   = 3.0;
+        if (minDim <= FLOOR) return 1.0;
+        if (minDim >= TOP)   return MAX;
+        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
     }
 
     private _projectScenePoint(
@@ -3752,9 +4048,11 @@ export class HeliosEngine
         const a   = sun.altitude * D;
         const z   = sun.azimuth  * D;
 
-        const east  = SUN_ARC_RADIUS_M * Math.cos(a) * Math.sin(z);
-        const north = SUN_ARC_RADIUS_M * Math.cos(a) * Math.cos(z);
-        const up    = SUN_ARC_RADIUS_M * Math.sin(a);
+        //Scale the celestial radius on fullscreen / kiosk layouts so the arc reads from across the room instead of sitting at its grid-tuned size. See issue #33.
+        const R = SUN_ARC_RADIUS_M * this._sunArcScale();
+        const east  = R * Math.cos(a) * Math.sin(z);
+        const north = R * Math.cos(a) * Math.cos(z);
+        const up    = R * Math.sin(a);
 
         //Local metres-per-degree.
         const mPerDegLat = 111_320;
@@ -3779,9 +4077,11 @@ export class HeliosEngine
         const D = Math.PI / 180;
         const a = altitudeDeg * D;
         const z = azimuthDeg  * D;
-        const east  = SUN_ARC_RADIUS_M * Math.cos(a) * Math.sin(z);
-        const north = SUN_ARC_RADIUS_M * Math.cos(a) * Math.cos(z);
-        const up    = SUN_ARC_RADIUS_M * Math.sin(a);
+        //Same scale as the sun arc so the shading-dome cells line up with the arc on fullscreen layouts. See issue #33.
+        const R = SUN_ARC_RADIUS_M * this._sunArcScale();
+        const east  = R * Math.cos(a) * Math.sin(z);
+        const north = R * Math.cos(a) * Math.cos(z);
+        const up    = R * Math.sin(a);
         const mPerDegLat = 111_320;
         const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
         const lon = this.homeLon + east  / mPerDegLon;

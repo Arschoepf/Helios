@@ -71,7 +71,13 @@ const _calibCache = new WeakMap<ChartHost, CalibCacheEntry>();
 export function computeForecastCalibration(host: ChartHost): ForecastCalibration | null
 {
     const series  = host._chartSeries;
-    const hist    = host._pvHistory;
+    //Prefer the hourly long-term-statistics series (5 days, ~120 rows) when available; fall back to the raw `_pvHistory` window when the
+    //statistics are absent or empty. Entities without `state_class` (`measurement` / `total` / `total_increasing`) are not LTS-tracked and
+    //will surface as an empty stats array, in which case the legacy raw path still drives the calibration over whatever past days
+    //`_pvHistory` covers. The fallback preserves coverage for non-tracked entities at the cost of a narrower window.
+    const hist    = (host._pvCalibStats && host._pvCalibStats.times.length > 0)
+        ? host._pvCalibStats
+        : host._pvHistory;
     const hassCfg = host.hass?.config;
     const raster  = host._engine?.getLidarRaster() ?? null;
 
@@ -195,17 +201,18 @@ function actualKwhForDay(
 
     if (isCumulativeEnergy)
     {
-        //Cumulative energy: sum positive deltas where BOTH samples fall inside the day. Gating on the previous sample too (not just the
-        //current) prevents the first sample of each day from crediting the entire delta-since-the-last-evening-sample to the new day,
-        //which on a sparse 1-sample-per-hour sensor could over-count up to an hour of the previous evening's production into today.
-        //Counter resets drop the delta.
+        //Cumulative energy: sum positive deltas where the current sample lands inside the day. The previous-sample guard tolerates a
+        //sample that lands in the immediately preceding bucket (within one hour) so the cross-day slice that straddles midnight is
+        //attributed once instead of being dropped on both sides of the boundary. On hourly bucket-midpoint statistics, the slice 23:30
+        //of day D to 00:30 of day D+1 is real production for D+1's early morning at high latitudes / late sunsets, and PV at midnight
+        //is zero across realistic configs so any residual mis-attribution stays at zero. Counter resets drop the delta.
         let kwh = 0;
         for (let i = 1; i < hist.times.length; i++)
         {
             const tMs     = hist.times[i].getTime();
             const tPrevMs = hist.times[i - 1].getTime();
             if (tMs < startMs || tMs >= endMs) continue;
-            if (tPrevMs < startMs) continue;
+            if (tPrevMs < startMs - HOUR_MS) continue;
             const dv = hist.values[i] - hist.values[i - 1];
             if (!isFinite(dv) || dv < 0) continue;
             kwh += dv * energyFactor;

@@ -306,10 +306,13 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     //tomorrow just because that was the panel's reading at 16:00
     //yesterday (the late-afternoon tail of the last seen day).
     const hist = host._pvHistory;
+    const rawFirstMs = (hist && hist.times.length >= 1)
+        ? hist.times[0].getTime()
+        : Infinity;
     const lastObsMs = (hist && hist.times.length >= 1)
         ? hist.times[hist.times.length - 1].getTime()
         : -Infinity;
-    if (hist && hist.times.length >= 2 && targetMs <= lastObsMs)
+    if (hist && hist.times.length >= 2 && targetMs >= rawFirstMs && targetMs <= lastObsMs)
     {
         if (isCumulative)
         {
@@ -333,6 +336,21 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
             {
                 return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
             }
+        }
+    }
+    //Older past, before the head of the raw 6-hour window: fall
+    //back to the hourly LTS slot the calibration already fetched.
+    //The LTS values are already in native power units (mean for
+    //power sensors, differentiated state for cumulative-energy
+    //sensors) so a linear interpolation at the cursor instant is
+    //the right thing to do regardless of the source entity type.
+    const calib = host._pvCalibStats;
+    if (calib && calib.times.length >= 2 && targetMs <= lastObsMs)
+    {
+        const v = interpAt(calib.times, calib.values, targetMs);
+        if (isFinite(v))
+        {
+            return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
         }
     }
 
@@ -392,18 +410,40 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
-    const hoverPct = host._chartHoverPct;
-    if (!range || !series || hoverPct === null) return html``;
-    if (hoverPct < 0 || hoverPct > 100)         return html``;
+    if (!range || !series) return html``;
 
     const startMs = range.start.getTime();
     const rangeMs = range.end.getTime() - startMs;
     if (rangeMs <= 0) return html``;
-    const hoverMs = startMs + (hoverPct / 100) * rangeMs;
 
-    const irrV = interpAt(series.times, series.irradiance, hoverMs);
-    const cldV = interpAt(series.times, series.cloud,      hoverMs);
-    const pv   = pvValueAtTime(host, hoverMs);
+    //Two-mode anchor. Hover pin (cursor inside the chart) takes
+    //precedence so the user always sees readings under their finger
+    //or mouse; otherwise the tooltip parks itself on the scrubbed
+    //instant so the moment the user clicked stays labeled (date +
+    //time + values). In live mode with no hover, no tooltip.
+    const hoverPct  = host._chartHoverPct;
+    const scrubbing = !host._isLiveMode && host._selectedTime !== null;
+    let pct:  number;
+    let atMs: number;
+    if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
+    {
+        pct  = hoverPct;
+        atMs = startMs + (pct / 100) * rangeMs;
+    }
+    else if (scrubbing)
+    {
+        atMs = host._selectedTime!.getTime();
+        pct  = ((atMs - startMs) / rangeMs) * 100;
+        if (pct < 0 || pct > 100) return html``;
+    }
+    else
+    {
+        return html``;
+    }
+
+    const irrV = interpAt(series.times, series.irradiance, atMs);
+    const cldV = interpAt(series.times, series.cloud,      atMs);
+    const pv   = pvValueAtTime(host, atMs);
     const hasPv = isFinite(pv.value);
 
     //Colour configs no longer consulted, HA Energy palette via the
@@ -424,11 +464,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             : lerpHexToward(pvBaseColor, '#000000', 0.35))
         : pvBaseColor;
 
-    const timeLabel = new Date(hoverMs).toLocaleTimeString([], {
+    const atDate    = new Date(atMs);
+    const timeLabel = atDate.toLocaleTimeString([], {
         hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
     });
+    const dateLabel = formatDate(atDate, host.config?.['date-format']);
 
-    const clampedPct = Math.max(8, Math.min(92, hoverPct));
+    const clampedPct = Math.max(8, Math.min(92, pct));
 
     //PV decimals: 1 for kW/MW under three digits, 0 otherwise. The user reads "1.2 kW" on residential gear but "1234 W" on the raw W entity, both
     //compact.
@@ -441,6 +483,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             class="tb-hover-tooltip"
             style="left:${clampedPct.toFixed(2)}%"
         >
+            <div class="tb-hover-tooltip-date">${dateLabel}</div>
             <div class="tb-hover-tooltip-time">${timeLabel}</div>
             ${isFinite(irrV) ? html`
                 <div class="tb-hover-tooltip-row">
@@ -461,6 +504,40 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                 </div>
             ` : nothing}
         </div>
+    `;
+}
+
+
+//Back-to-live tab. Rendered inside the time-bar overlay only when
+//the user is scrubbing (selected an instant that is not live), as
+//a true tab attached to the top edge of the time-bar (rounded top
+//corners only, flat bottom merging with the time-bar border).
+//Anchors at the OPPOSITE end of the timeline from the scrub
+//tooltip so the two never collide: scrub on the left half, tab on
+//the right; scrub on the right half, tab on the left. The click
+//and pointerdown both stop propagation so they don't bubble up to
+//the time-bar's scrub handler (`onTimelinePointerDown`), which
+//would otherwise re-scrub to the tab's X coordinate and the tap
+//would feel like a no-op.
+export function renderTimelineBackToLiveTab(host: ChartHost, onClick: () => void): TemplateResult
+{
+    if (host._isLiveMode || host._selectedTime === null || !host._timeRange) return html``;
+    const startMs = host._timeRange.start.getTime();
+    const rangeMs = host._timeRange.end.getTime() - startMs;
+    if (rangeMs <= 0) return html``;
+    const selPct  = ((host._selectedTime.getTime() - startMs) / rangeMs) * 100;
+    const onLeft  = selPct >= 50;
+    return html`
+        <button
+            type="button"
+            class="tb-back-to-live ${onLeft ? 'is-left' : 'is-right'}"
+            aria-label="Back to live"
+            @pointerdown="${(e: PointerEvent) => { e.stopPropagation(); }}"
+            @click="${(e: MouseEvent) => { e.stopPropagation(); onClick(); }}"
+        >
+            <ha-icon icon="mdi:restore"></ha-icon>
+            <span>Live</span>
+        </button>
     `;
 }
 
@@ -487,6 +564,12 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
+    //Hourly long-term-statistics series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` because it
+    //carries the same 5-day window with two orders of magnitude fewer rows on high-frequency installs. Null while the stats fetch is in
+    //flight, or empty when the entity is not LTS-tracked, in both cases the consumer degrades to `_pvHistory`.
+    readonly _pvCalibStats:   PvHistory | null;
+    //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same fallback contract as `_pvCalibStats`.
+    readonly _pvTrainerStats: PvHistory | null;
     //Optional per-bank companion battery SoC histories, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
     //One entry per bank (parallel to parseBatteryBanks(config)); empty when the guard is off or no battery is configured. The shading
     //trainer reads it to skip buckets where ALL banks reached the cutoff (min SoC across banks).
@@ -885,19 +968,100 @@ export function renderPvChart(host: ChartHost): TemplateResult
     }
 
     const samples: Array<{ t: Date; v: number }> = [];
+    //Blend in the hourly LTS slot (`_pvCalibStats`, 5 days) for the
+    //past portion of the timeline that the narrow raw window does
+    //not cover. The raw fetch is capped at the last 6 hours so the
+    //recorder stays responsive on 1 Hz installs (Victron Cerbo and
+    //friends); without the LTS fallback the chart would just stop
+    //at the head of the raw window and leave the rest of the past
+    //blank. The LTS series carries a mean per hour, so we feed it
+    //in below the raw samples and let the raw samples paint over
+    //them where the two overlap. Already in native power units
+    //(the LTS path picks `mean` for power sensors, differentiates
+    //`state` for cumulative-energy sensors), so the values feed the
+    //chart Y axis on the same scale as the raw samples.
+    const rawFirstMs = rawTimes.length > 0 ? rawTimes[0].getTime() : Infinity;
+    const calib      = host._pvCalibStats;
+    if (calib && calib.times.length > 0)
+    {
+        for (let i = 0; i < calib.times.length; i++)
+        {
+            const t  = calib.times[i];
+            const tMs = t.getTime();
+            if (tMs < startMs)    continue;
+            if (tMs > endMsAbs)   continue;
+            //The raw fetch already carries the live tail at full
+            //resolution; the LTS row would just double up the
+            //paint underneath. Drop LTS rows once we cross into
+            //the raw window.
+            if (tMs >= rawFirstMs) continue;
+            const v = calib.values[i];
+            if (!isFinite(v))     continue;
+            samples.push({ t, v });
+        }
+    }
     for (let i = 0; i < rawTimes.length; i++)
     {
         const t = rawTimes[i];
         const v = rawValues[i];
-        if (t.getTime() < startMs || t.getTime() > endMsAbs)
-        {
-            continue;
-        }
-        if (!isFinite(v))
-        {
-            continue;
-        }
+        if (t.getTime() < startMs || t.getTime() > endMsAbs) continue;
+        if (!isFinite(v))                                     continue;
         samples.push({ t, v });
+    }
+    //Sort by time so the painted line and area trace monotonically
+    //left-to-right; the LTS pass and the raw pass append in their
+    //natural orders but interleave around the boundary if a stats
+    //bucket midpoint sits just inside the raw window.
+    samples.sort((a, b) => a.t.getTime() - b.t.getTime());
+
+    //Decimate to at most MAX_POINTS samples before serialising into
+    //the SVG `d` attribute. A 1 Hz power sensor over 6 hours alone
+    //produces 21 600 samples; the resulting path string overflows
+    //Safari / Firefox SVG rasterisers (the path silently renders
+    //nothing) and burns layout time on every frame. We bucket by
+    //pixel column at the chart's viewBox width and keep the local
+    //min + max per bucket so the visible curve still reflects the
+    //peaks and troughs even at heavy compression.
+    const MAX_POINTS = 1500;
+    if (samples.length > MAX_POINTS)
+    {
+        const buckets = Math.floor(MAX_POINTS / 2);
+        const bucketMs = rangeMs / buckets;
+        const slim: Array<{ t: Date; v: number }> = [];
+        let bIdx = 0;
+        let bMinV = Infinity, bMaxV = -Infinity;
+        let bMinT: Date | null = null, bMaxT: Date | null = null;
+        const flush = (): void =>
+        {
+            if (bMinT && bMaxT)
+            {
+                if (bMinT.getTime() <= bMaxT.getTime())
+                {
+                    slim.push({ t: bMinT, v: bMinV });
+                    if (bMinT.getTime() !== bMaxT.getTime()) slim.push({ t: bMaxT, v: bMaxV });
+                }
+                else
+                {
+                    slim.push({ t: bMaxT, v: bMaxV });
+                    slim.push({ t: bMinT, v: bMinV });
+                }
+            }
+            bMinV = Infinity; bMaxV = -Infinity; bMinT = null; bMaxT = null;
+        };
+        for (const s of samples)
+        {
+            const idx = Math.min(buckets - 1, Math.floor((s.t.getTime() - startMs) / bucketMs));
+            if (idx !== bIdx)
+            {
+                flush();
+                bIdx = idx;
+            }
+            if (s.v < bMinV) { bMinV = s.v; bMinT = s.t; }
+            if (s.v > bMaxV) { bMaxV = s.v; bMaxT = s.t; }
+        }
+        flush();
+        samples.length = 0;
+        samples.push(...slim);
     }
 
     const xOf = (t: Date): number =>
@@ -1269,23 +1433,35 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         return d.getTime();
     };
 
-    //Pass 1: past + today-so-far from the observed history.
-    const hist = host._pvHistory;
-    if (hist && hist.times.length >= 2)
-    {
-        const unit = (host._pvUnit || '').toLowerCase();
-        const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+    //Pass 1: past + today-so-far from the observed history. Combines two sources so days that fall outside the narrow raw window
+    //still get a value:
+    //  - `_pvHistory` (~2 days raw, finest resolution) covers today and yesterday.
+    //  - `_pvCalibStats` (5 days hourly stats) covers days 2-5 in the past so the per-day chips on the timeline keep showing real
+    //    figures instead of falling silently to zero.
+    //Days covered by `_pvHistory` are integrated from that slot only; the stats slot fills in days the raw window does not reach.
+    const unit = (host._pvUnit || '').toLowerCase();
+    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
 
+    const rawHist = host._pvHistory;
+    const rawFirstMs = (rawHist && rawHist.times.length > 0) ? rawHist.times[0].getTime() : null;
+    const rawLastMs  = (rawHist && rawHist.times.length > 0) ? rawHist.times[rawHist.times.length - 1].getTime() : null;
+
+    const integrate = (
+        h:           PvHistory,
+        bucketGuard: (tMs: number) => boolean,
+    ): void =>
+    {
         if (isCumulativeEnergy)
         {
             //Cumulative energy sensor: difference consecutive
             //samples and sum the deltas per day. Counter resets
             //(dv < 0) are dropped, same convention the chart uses.
-            for (let i = 1; i < hist.times.length; i++)
+            for (let i = 1; i < h.times.length; i++)
             {
-                const tMs = hist.times[i].getTime();
+                const tMs = h.times[i].getTime();
                 if (tMs < startMs || tMs > endMsAbs) continue;
-                const dv = hist.values[i] - hist.values[i - 1];
+                if (!bucketGuard(tMs)) continue;
+                const dv = h.values[i] - h.values[i - 1];
                 if (!isFinite(dv) || dv < 0) continue;
                 const kwh = unit === 'mwh' ? dv * 1000
                           : unit === 'wh'  ? dv / 1000
@@ -1300,21 +1476,38 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             //instantaneous reading over each consecutive pair.
             //Skip gaps > 6 h (likely sensor outage, integrating
             //across them would invent energy).
-            for (let i = 1; i < hist.times.length; i++)
+            for (let i = 1; i < h.times.length; i++)
             {
-                const tCurrMs = hist.times[i].getTime();
+                const tCurrMs = h.times[i].getTime();
                 if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
-                const tPrevMs = hist.times[i - 1].getTime();
+                if (!bucketGuard(tCurrMs)) continue;
+                const tPrevMs = h.times[i - 1].getTime();
                 const dtH = (tCurrMs - tPrevMs) / 3_600_000;
                 if (dtH <= 0 || dtH > 6) continue;
-                const wPrev = pvNormalizeToWatts(hist.values[i - 1], host._pvUnit);
-                const wCurr = pvNormalizeToWatts(hist.values[i],     host._pvUnit);
+                const wPrev = pvNormalizeToWatts(h.values[i - 1], host._pvUnit);
+                const wCurr = pvNormalizeToWatts(h.values[i],     host._pvUnit);
                 if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
                 const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
                 const k = dayKey(tCurrMs);
                 out.set(k, (out.get(k) ?? 0) + kwh);
             }
         }
+    };
+
+    if (rawHist && rawHist.times.length >= 2)
+    {
+        //Full integration over the raw slot; no gating, raw is authoritative for the days it covers.
+        integrate(rawHist, () => true);
+    }
+    const calib = host._pvCalibStats;
+    if (calib && calib.times.length >= 2)
+    {
+        //Stats slot fills the wider days only. A sample whose timestamp falls within the raw window is already counted; skip it.
+        integrate(calib, (tMs) =>
+        {
+            if (rawFirstMs === null || rawLastMs === null) return true;
+            return tMs < rawFirstMs || tMs > rawLastMs;
+        });
     }
 
     //Pass 2: future + today-remainder from the forecast model.

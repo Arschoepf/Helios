@@ -7,100 +7,8 @@ import { css } from 'lit';
 //in distinct Shadow DOM trees and share zero selectors, so the
 //split is purely organisational, not functional.
 //
-//Two exports:
-//  - colorPickerStyles: applied to the <helios-color-picker>
-//    custom element used by every color-picker field in the editor.
-//  - editorStyles: applied to the <helios-card-editor> root element
-//    that hosts the whole config UI.
-
-export const colorPickerStyles = css`
-    :host { position: relative; display: inline-block; }
-
-    .swatch
-    {
-        width: 44px;
-        height: 30px;
-        padding: 0;
-        border: 1px solid var(--divider-color, rgba(0,0,0,0.2));
-        border-radius: 4px;
-        cursor: pointer;
-        background-clip: padding-box;
-    }
-
-    .swatch:focus-visible
-    {
-        outline: 2px solid var(--primary-color, #03a9f4);
-        outline-offset: 2px;
-    }
-
-    .pop
-    {
-        position: absolute;
-        top: calc(100% + 6px);
-        right: 0;
-        z-index: 1000;
-        background: var(--card-background-color, #fff);
-        border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
-        border-radius: 6px;
-        padding: 10px;
-        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
-        min-width: 220px;
-    }
-
-    .grid
-    {
-        display: grid;
-        grid-template-columns: repeat(7, 1fr);
-        gap: 4px;
-    }
-
-    .cell
-    {
-        width: 22px;
-        height: 22px;
-        border-radius: 3px;
-        border: 1px solid rgba(0,0,0,0.12);
-        cursor: pointer;
-        padding: 0;
-    }
-
-    .cell:hover    { transform: scale(1.1); }
-    .cell.selected
-    {
-        outline: 2px solid var(--primary-color, #03a9f4);
-        outline-offset: 1px;
-    }
-
-    .hex-row
-    {
-        margin-top: 10px;
-        display: flex;
-        align-items: center;
-        gap: 4px;
-        border: 1px solid var(--divider-color, rgba(0,0,0,0.18));
-        border-radius: 4px;
-        padding: 4px 6px;
-    }
-
-    .hex-prefix
-    {
-        color: var(--secondary-text-color, #727272);
-        font-family: monospace;
-        font-size: 13px;
-    }
-
-    .hex-input
-    {
-        border: none;
-        outline: none;
-        background: transparent;
-        font-family: monospace;
-        font-size: 13px;
-        width: 100%;
-        color: var(--primary-text-color, #212121);
-        text-transform: lowercase;
-    }
-`;
+//Single export: `editorStyles`, applied to the <helios-card-editor>
+//root element that hosts the whole config UI.
 
 
 export const editorStyles = css`
@@ -369,6 +277,14 @@ export const editorStyles = css`
         background: var(--secondary-background-color, rgba(0,0,0,0.05));
         padding: 1px 4px;
         border-radius: 3px;
+    }
+
+    /*  Breathing room under the entity picker row in every grid slot
+        (combined, import, export) so the invert toggle / "add source"
+        button does not crowd the dropdown. */
+    .grid-source-row
+    {
+        margin-bottom: 12px;
     }
 
     /*  One bordered card per PV array entry. Now a <details> so

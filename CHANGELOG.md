@@ -5,6 +5,944 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.8.2
+
+> Hardening release on top of v1.8.1. The cycle focuses on three
+> things: recorder relief for installs with high-frequency
+> sensors (1 Hz Victron Cerbo, JK BMS, Ecowitt feeds and
+> similar) so loading Helios no longer blocks every other card
+> on the dashboard for 30 to 100 seconds on each mount, camera
+> pose + lock persistence to localStorage so the framing
+> survives page reloads, and a chip family harmonisation pass
+> (cloud chip joins the canonical recipe, leader-bead radii
+> unified, sun arc gets its own fullscreen ramp). The dashboard
+> panel's today's battery totals are back to a full-day window
+> after beta.4 over-trimmed them, and the back-to-live
+> affordance is now a real tab anchored to the chart card.
+>
+> The full beta-by-beta narrative is preserved below. Upcoming
+> work is tracked live on the public roadmap at
+> [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
+> pulled directly from the GitHub Project and refreshed every
+> five minutes.
+>
+> Special thanks to **LBDG_** and **JJAsond** for the relentless
+> field testing on 1 Hz installs throughout the entire beta
+> cycle. They turned the recorder pressure investigation from
+> "intermittent, slow, weird" into a precise diagnosis (the
+> grid module's 72 h raw window being the last hot path, the
+> raw-window cap anchor mis-sourced from the forecast horizon,
+> the LTS arm being over-capped in beta.4) and validated each
+> beta in production before it shipped. v1.8.2 would not be
+> where it is without their patience.
+
+### beta.8
+
+### Cloud chip joins the canonical chip family
+
+The cloud-cover chip and its three layer sub-chips (low / mid /
+high) read with a different visual recipe than the rest of the
+chip family: 1 px divider-grey border vs the canonical 2 px
+coloured ring used by PV, SoC, Grid In and Grid Out. The cloud
+chip also lifted by 1 px on hover (translateY) which left the
+top-anchored pill bouncing visually each time the cursor entered
+or left it.
+
+The cloud chip now uses the same compact pill recipe as PV / SoC
+/ Grid: 2 px ring in the configured cloud colour
+(`--helios-cloud-color`, falling back to the HA secondary text
+token then `#727272`), `gap: 4px`, `min-width: 56px`, `padding:
+3px 10px`, `ha-icon` sized at 16 px to match. The 22 px fixed
+height is gone, the padding now drives the chip dimensions
+exactly like the other chips.
+
+The hover transform is gone. On hover the chip stays anchored at
+its X-centred top spot and the box-shadow softens from
+`0 1px 3px` to `0 2px 8px`; on active the shadow drops back
+flat. The user explicitly asked for shadow-only feedback so the
+chip does not move around.
+
+The three layer sub-chips get the same 2 px coloured ring so the
+detail view reads as a coherent group with the parent chip.
+
+### beta.7
+
+### Sun arc gets its own fullscreen ramp
+
+beta.5 scaled both the sun arc radius and the home chip cluster
+offsets through a single helper `_heliosScale()` that ramped
+from 1.0 at min(width, height) <= 600 px to 1.6 at >= 1200 px.
+The chip cluster looked right at that ramp, but the arc still
+read as small on a fullscreen / kiosk canvas.
+
+The arc is computed in world metres, projected by MapLibre at a
+fixed zoom: at the standard 440 px-wide card 40 m maps to ~140
+CSS px and fills the lower half of the canvas. On a 1500 px-wide
+kiosk canvas the same 40 m still maps to ~140 px and gets lost
+in the empty space. The chip cluster, which is computed directly
+in pixel offsets, did NOT need the same multiplier.
+
+A dedicated helper `_sunArcScale()` ramps the arc on its own from
+1.0 at <= 600 px to 3.0 at >= 1200 px, applied at the two call
+sites (`_sunSpherePoint` for the arc itself,
+`_projectSpherePoint` for the shading-dome cells that share the
+same celestial hemisphere).
+
+The chip cluster ramp (`_heliosScale()`) stays at 1.6 max so the
+home chips do not over-spread on a wide canvas.
+
+### beta.6
+
+### Battery dashboard panel today's totals, restore full-day integration
+
+The dashboard panel (the dive-in view opened by clicking the
+home) shows today's charged / discharged kWh totals for the
+battery, computed by `computeBatteryToday` integrating the
+signed power curve from `_batteryPowerHistory` between local
+midnight and now.
+
+beta.4 capped every history fetch at the last 6 hours to keep
+the recorder responsive on 1 Hz installs. That cap applied to
+BOTH arms of `fetchBatteryHistory`: the LTS arm
+(`recorder/statistics_during_period`, 5-minute period) and the
+raw fallback. The LTS arm is near-free on the recorder
+regardless of source frequency, so capping it served no perf
+purpose; what it cost was the morning portion of today's
+battery curve, and the panel reported a fraction of the day's
+true charged / discharged energy as a result.
+
+`fetchBatteryHistory` now takes two start anchors:
+
+- `ltsStart`: the full visible timeline range (typically midnight
+  or earlier). The LTS arm queries the recorder over this
+  broader window so today's totals integrate across the full
+  current day.
+- `rawStart`: the last 6 hours. The raw fallback (used only
+  when the entity is not LTS-tracked) keeps its cap so a 1 Hz
+  BMS without `state_class` does not drag the recorder.
+
+PV, grid and W/m² were not affected: PV's chart blend already
+falls through to the 5-day hourly LTS slot for past beyond 6 h,
+grid's two-tier backfill (24 h LTS + 6 h raw) landed in beta.3,
+W/m² is not surfaced on the dashboard panel.
+
+### beta.5
+
+### Uniform beads, fullscreen polish (#33)
+
+**Leader-bead radii unified.** The animated discs that ride the
+solid leaders between the home and its chips were sized
+inconsistently across the family: `r=4` on PV and battery,
+`r=3.5` on grid import / export, `r=5` on the solar ray. All five
+classes now use `r=3` (6 px diameter), matching the visual weight
+HA Energy gives to its own flow circles when rendered at the
+typical card size.
+
+**Fullscreen / kiosk layout polish (#33).** When the card is
+rendered above 900 CSS px wide (a dedicated solar dashboard view,
+a kiosk panel, mobile portrait on a tablet), the layout used to
+keep the chip cluster clumped in the central 25 % of the canvas
+and the sun arc pinned to its grid-tuned 40 m radius.
+
+A new engine helper `_heliosScale()` ramps a multiplier from 1.0
+at min(width, height) <= 600 px to 1.6 at >= 1200 px, fed by the
+existing ResizeObserver-backed canvas dimension cache. The
+multiplier scales:
+
+- `SUN_ARC_RADIUS_M`: the celestial hemisphere the sun arc and
+  the shading-dome paint on stretches with the card, so the arc
+  reads from across the room.
+- `PV_CHIP_OFFSET_PX`, `CHIP_SIDE_X_OFFSET_PX`, `CHIP_STACK_GAP_PX`,
+  `CLUSTER_LIFT_PX`: the chip cluster around the home spreads
+  proportionally, so the PV / battery / grid pills no longer
+  collide in the centre.
+
+At standard Lovelace grid sizes scale = 1.0 and the geometry
+stays exactly as before.
+
+CSS-side, a new `@container helios-card (min-width: 900px)` rule
+bumps the typography on the value chips (PV / battery / grid /
+cloud / solar), the day-strip, the hover tooltip and the cloud
+layer chips so they stay readable at the same distance. The
+container query targets the card's own width via
+`container-type: inline-size` on `ha-card`, so a Helios card
+sitting in a wide section view alongside narrower cards flips
+on its own size, not the viewport's.
+
+### beta.4
+
+### Fix the beta.1 raw-window cap anchor, restores past chart history
+
+beta.1 capped the PV, W/m² and battery raw fetches at the last
+6 hours and computed the cap as `fetchEnd - 6 h`, where
+`fetchEnd` was sourced from `host._timeRange.end` (the forecast
+horizon, typically next day 23:59) rather than wall-clock time.
+On any timeline where `end > now`, the resulting `fetchStart`
+fell in the FUTURE.
+
+Each `fetch*History` helper then ran its own "clamp end to now"
+pass, and the resulting `start >= fetchEnd` condition tripped
+the early-return that blanks the slot to `{times: [], values:
+[]}`. The chart's past portion stayed empty and the curve only
+started painting from the moment live state pushes began
+landing (i.e. from the refresh instant forward).
+
+The three sites (`refreshPv`, `refreshBattery`,
+`refreshSolarRadiation`) now anchor the cap on `Date.now()`
+directly, so `fetchStart` always sits 6 hours back from real
+wall-clock time and the inner clamp leaves the slot populated.
+
+### beta.3
+
+### Grid LTS backfill, restores past-scrub coverage to 24 h
+
+beta.2 capped the grid raw backfill at 6 h to unblock the
+recorder on 1 Hz installs. The trade-off was that scrubbing the
+home card timeline past 6 h returned no value on the grid
+import / export chips (pickBracket refused to extrapolate
+beyond the buffer edge). This release adds the missing piece
+without re-introducing the recorder stall.
+
+The grid backfill is now two-tiered, mirroring the recipe the PV
+chart already uses:
+
+- LTS at 5-minute period covers the 24 h..6 h slice
+  (~216 buckets per entity). Pulled from HA's pre-aggregated
+  `statistics_short_term` table, near-free on the recorder
+  regardless of source frequency.
+- Raw, full resolution + `significant_changes_only`, covers the
+  6 h..now slice. Bounded at ~10 to 20 k rows per entity on a
+  1 Hz meter, completes in 1 to 2 s.
+
+Both arms fire in parallel through the existing module-level
+WS semaphore (cap 2 in-flight). The LTS arm is wrapped in a
+silent `.catch` so a custom sensor without `state_class` (no
+LTS available) degrades to raw-only and the user-facing
+behaviour stays as-is.
+
+LTS samples land in the same `Sample[]` buffer as the raw
+samples, so `pickBracket` works as-is. Cumulative-energy meters
+anchor LTS samples at the bucket end (consecutive `state`
+deltas attribute to the correct bucket); power-native meters
+anchor at the bucket midpoint and use `mean` directly.
+
+The buffer retention window also bumps from 6 h to 24 h so the
+live accumulation does not trim off bracket-relevant history
+mid-session.
+
+### beta.2
+
+### Grid history window 72 h -> 6 h, the last recorder hot path
+
+beta.1 capped the PV, W/m² and battery raw fetches at 6 hours and
+the user-visible 100-second IO stall shrank but did not go away.
+A re-audit of every WebSocket recorder call on the card surfaced
+the remaining offender: the grid module
+(`src/card/grid.ts`) was still fetching a 72-hour raw window
+per grid entity on every card load. On a Victron Cerbo or
+similar setup at 1 Hz that's ~250 000 rows scanned per import
++ export + optional combined entity, dwarfing every other fetch
+the card issues.
+
+`GRID_HISTORY_WINDOW_MS` (and the matching in-memory
+`GRID_SAMPLE_WINDOW_MS`) drop from 72 h to 6 h. The trade-off
+accepted is that scrubbing the timeline beyond 6 hours past now
+returns a flat extrapolated watt value (the bracket-pick hits
+the buffer edge), instead of a true historical bracket. Live
+chips, recent past chart and short-scrub tooltips stay
+accurate.
+
+Combined with beta.1's caps, every recorder-bound call the card
+issues on load is now at most 6 hours of raw data per entity,
+and the LTS slots (calibration, trainer) keep the
+multi-day past covered for the chart and the tooltip. A reload
+mid-fetch no longer piles a fresh 100-second query onto the
+queue; each query completes in 1 to 2 seconds even on 1 Hz
+installs, so 5 rapid reloads cost ~10 seconds of recorder time
+instead of ~500.
+
+### beta.1
+
+### Recorder relief on 1 Hz installs, camera persistence, back-to-live tab, polish
+
+Direct follow-up to the beta.0 regressions and the high-frequency
+sensor story. The card now leans on the LTS slots it already
+fetched for everything older than the last 6 hours, so a Victron
+Cerbo, JK BMS or Ecowitt setup at 1 Hz no longer drags the HA
+recorder for tens of seconds every time the card loads. Camera
+pose actually persists this time, the back-to-live control is a
+real tab, and a handful of polish items land alongside.
+
+**Recorder relief on 1 Hz installs.** The raw `history_during_period`
+fetch behind the PV chart, the W/m² entity and the battery banks
+used to ask HA for the full visible timeline (multiple days). On
+a sensor pushing one value per second that scan dragged the
+single-threaded recorder for 30 to 100 seconds on every card
+load, blocking every other card reading the same entities for
+the duration. The user reported disk IO jumping from 20 % to
+67 % on InfluxDB-backed setups.
+
+Three pieces:
+
+- The raw window is capped at the last 6 hours per fetch site
+  (PV, radiation, battery). The recent past keeps full
+  resolution for tooltip and chart-head accuracy.
+- The PV chart blends in the hourly LTS slot
+  (`_pvCalibStats`, 5 days) for the past that the 6-hour raw
+  window does not cover. The LTS slot was already fetched for
+  the calibration ratio, so this is a free reuse, no extra
+  recorder hit.
+- The hover tooltip's `pvValueAtTime` falls through the same
+  way: raw within the 6-hour window, LTS outside, forecast
+  beyond "now".
+
+Net IO drops by orders of magnitude on 1 Hz installs without any
+visible quality loss on the chart or the tooltip.
+
+**Past PV chart visible again.** A 1 Hz sensor over 6 hours
+produces ~21 600 raw samples. The resulting SVG `d` path string
+overflows Safari and Firefox's path rasterisers (the path
+silently renders nothing), so the past portion of the chart was
+showing up empty even though the tooltip read the correct
+values. `renderPvChart` now decimates to at most 1 500 points
+via per-pixel min/max bucketing so the visible curve still
+reflects peaks and troughs at heavy compression. Same fix
+incidentally speeds up every layout pass on the timeline by
+~10×.
+
+**Camera pose actually persists (#166 follow-up).** The
+beta.0 fix wrote the pose under the engine's expected keys but
+HA's lovelace does NOT persist `config-changed` events emitted
+from a live card, only from the editor preview. The lock chip
+now writes directly to `localStorage` under the key
+`helios:camera-pose:<lat>:<lon>`. The engine reads the same
+key on init, falls back to the legacy YAML keys for older
+installs, and finally to the hemisphere-aware default. Locking
+the camera, dragging it, reloading: the same pose comes back.
+
+**Back-to-live is a real tab now.** The previous round
+shipped a rounded capsule that read as a deformed button. The
+new control is a proper tab: rounded TOP corners only, flat
+bottom that overlaps the chart card's top border by 1 px so
+the tab looks physically attached. Side still flips based on
+the scrub position (scrub on the right -> tab on the left, and
+vice versa). The tab's pointerdown and click both
+`stopPropagation()` so a tap on the tab no longer bubbles up
+to the time-bar's scrub handler (which used to re-scrub to
+the tab's X coordinate and silently swallow the click).
+
+**Lock button stripped of tooltip + i18n.** The `title=`
+attribute and the two i18n keys (`cameraLockEnable`,
+`cameraLockDisable`) are gone. A tooltip on a touch device
+never shows, and the padlock glyph already carries the
+meaning. `aria-label` for accessibility is implicit via the
+icon's HA semantics, no localised string is generated on the
+critical render path.
+
+**Home glow z-index lowered.** The hover glow + production
+pulse used to paint over the home cluster chips (PV, battery,
+grid import/export). z-index drops from 9 to 6 so the glow sits
+above the basemap and the solar ray but below all chips at z 8.
+
+**Solar incidence ray thinner.** The dashed sun -> PV connector
+was at `stroke-width: 1.5`, thicker than the other solid
+leaders (which dropped to 1 in #164). Now also at 1 so the
+connector family reads at one weight.
+
+### beta.0
+
+### Chrome simplification, camera pose persistence, CSS audit pass
+
+First beta of the v1.8.2 line. Closes the alpha cycle by tightening
+the on-card chrome in preparation for the upcoming HA Energy
+integration: fewer chips on screen, the camera pose actually
+sticks across reloads, the editor surface area shrinks, and a CSS
+audit pass aligns the styling on HA's design tokens so the card
+flips polarity cleanly with the host theme.
+
+**Camera pose + lock state are now persistent (#166).** The lock
+chip introduced in alpha.13 wrote the bearing and pitch under
+`camera-bearing` and `camera-pitch`. The engine, on init, reads
+`camera-bearing-deg` and `camera-pitch-deg` (the legacy editor
+keys). The mismatch silently dropped the saved pose on every page
+reload. The lock click handler now writes the `-deg` keys, so
+locking + reloading restores the exact bearing, pitch and lock
+state.
+
+**Top-left chrome simplified (#167).** The date / time chip and
+its scrub-mode "back to live" button are gone. The date is
+promoted to the scrub tooltip (which now shows date + time +
+readings) and the tooltip pins itself at the scrub cursor when
+the user is not actively hovering, so the moment selected on the
+timeline stays labeled. The back-to-live button moves to a small
+scrub-blue tab on the time-bar that swaps side based on the
+scrub position: cursor in the right half, tab on the left;
+cursor in the left half, tab on the right, the two never
+collide.
+
+**Overlay layout restored (#168).** The camera lock chip moves
+to the top-left rail (replacing the deleted clock chip) and the
+three view-mode toggles (default layer, LiDAR view, shading
+dome) move back to the top-right rail. The middle-right rail
+introduced in alpha.13 is gone.
+
+**Timeline day-strip tightened for phone widths (#169).** The
+day-strip cells at the bottom of the timeline still overflowed on
+narrow phones. The font-size clamp drops from `clamp(6px, 6.5cqw,
+9px)` to `clamp(6px, 5.5cqw, 8px)`, the inline gap between the
+date and the kWh value drops to 1 px, the cell padding to 1 px,
+the `·` separator margin to 2 px, and the letter-spacing to 0.
+The hierarchy (bold date, lighter italic forecast kWh) is
+unchanged.
+
+**Display radius locked at 300 m (#170).** Past 300 m the
+basemap + LiDAR fetch and the per-frame projection start to
+chug on mid-range phones, and the home cluster stops reading as
+"near home" anyway. The editor slider is removed, the engine
+returns the constant directly, and the two i18n keys
+(`displayRadius` + `displayRadiusHint`) are dropped from every
+locale.
+
+**CSS audit pass.** A pass on the stylesheet against HA's design
+tokens:
+
+- Dead CSS removed: the `.lidar-view-toggle-btn` / `.lidar-view-chip`
+  family is gone (the LiDAR toggle has been part of the
+  `.mode-bar` radio group for several releases). Its dark-theme
+  override is gone too.
+- Token rename: `--text-primary-color` was a typo for
+  `--text-on-primary-color`. Every consumer (`.mode-bar-seg.is-on`,
+  `.camera-lock-btn.is-on`, `.tb-back-to-live`) now uses the
+  correct token. The `#ffffff` fallback masked the typo so the
+  visual output is unchanged.
+- Hard-coded dark plate (`#191a1b` / `#e6e6e6`) on
+  `.detail-close-btn`, `.dash-card` and the four bead strokes
+  (`.pv-home-leader-bead`, `.battery-leader-bead`,
+  `.solar-svg .solar-ray-bead`, `.dash-today-chart-hover-dot`)
+  routed through `var(--card-background-color)` /
+  `var(--primary-text-color)` / `var(--divider-color)` with the
+  original hex as fallback.
+- Missing fallbacks added on every `var(--primary-color)`,
+  `var(--dark-primary-color)`, `var(--darker-primary-color)`
+  occurrence so a theme that does not define the token (some
+  community themes ship only the light grays) still gets the
+  HA brand-blue palette.
+
+### alpha.13
+
+### Camera lock on the live card, hairline leaders, instant cloud-toggle
+
+Three UI changes shipped together, each tracked in a dedicated
+issue.
+
+**Camera lock button on the permanent card UI (#163).** The
+camera rotation X / Y sliders + lock switch are removed from the
+editor "Camera" section (and the i18n keys that drove them are
+gone with them). The same intent now lives directly on the live
+card as a single lock chip pinned top-right: open padlock when
+the camera is free, closed padlock when the pose is held.
+Clicking the chip captures the bearing and pitch that the user
+just dragged to, flips the lock state, persists the three values
+to YAML through a normal `config-changed` event, and applies the
+new lock to the live MapLibre instance in the same frame so the
+button feel matches the visible map. Reload re-applies the saved
+pose, since the values landed in YAML. The three view-mode
+toggles (default layer, LiDAR view, shading dome) keep the same
+X coordinate but move from the top-right rail to a new
+middle-right rail, leaving the corner free for the lock chip.
+
+**Hairline leader strokes (#164).** All six solid leader lines
+on the home cluster move from `stroke-width: 2` down to
+`stroke-width: 1` to match the connector lines on the Home
+Assistant Energy dashboard. The card now reads as part of the
+same Energy visual family when dropped on the same dashboard
+view. The chart curves are untouched, their widths are tuned for
+chart legibility rather than leader weight.
+
+- `.pv-home-leader-line`
+- `.battery-leader-line`
+- `.grid-import-leader-line`
+- `.grid-export-leader-line`
+- `.home-drop-leader-line`
+- `.cloud-layer-leader`
+
+**Instant cloud-cover toggle (#165).** Tapping the central cloud
+percentage chip used to expand the three layer chips (low / mid
+/ high) and their L-shape leaders through a ~0.6 s cascade. The
+cascade is removed entirely: the three chips and their leaders
+appear and disappear in the same frame as the click. The
+`transition` + every `transition-delay` rule on
+`.cloud-layer-chips` and `.cloud-layer-leaders` are dropped, the
+elements simply flip between `opacity: 0` and `opacity: 1`.
+
+### alpha.12
+
+### Pool reverted, shared fetch caches added
+
+A deeper investigation into the Home Assistant frontend source
+(see issue #162) confirmed that `hui-card.ts:195` hard-codes the
+helios-card rebuild on every editor preview commit, with no
+opt-out hook available. Cross-shadow-root DOM transplant of the
+MapLibre container reliably broke rendering (basemap turned
+black, timeline / solar arc overlays vanished), because the
+moved node loses its old shadow root's CSS scoping AND lands in
+a freshly-mounted parent whose layout has not yet resolved a
+non-zero height, hitting the standard "container at 0 px causes
+black canvas" failure mode.
+
+Alphas 8 through 11 attempted to keep the engine alive across
+the rebuild cycle and all introduced visible side effects.
+Reverting to the simple lifecycle: every helios-card instance
+owns its engine, creates it on mount, destroys it on disconnect.
+The editor preview pane re-allocates a WebGL context per
+config-changed commit, which is exactly what apexcharts-card,
+mini-graph-card and Mushroom accept too. The live dashboard
+tile is untouched, `hui-card` takes the `_updateElement` branch
+when `preview === false` and the engine survives every
+config-changed commit.
+
+To make the per-commit recreation cheap, the parsed fetch
+payloads are now cached at module scope:
+
+- **Buildings**: the OpenMapTiles GeoJSON for the home is
+  cached for 30 minutes per (homeLat, homeLon, radius,
+  clusterRadius). A fresh engine after a slider commit picks up
+  the cached payload synchronously and skips the network +
+  parse round-trip.
+- **LiDAR raster and shadow features**: same 30-min cache per
+  (homeLat, homeLon, radius, rasterSize, providerId). The
+  multi-megabyte typed array decode that the IGN COG provider
+  performs is now paid once per session, not once per commit.
+
+OpenFreeMap basemap tiles are already cached by the browser's
+HTTP cache. The MapLibre `setStyle` re-fetch on a fresh engine
+resolves from disk, not from network.
+
+Removed: the engine pool, the DOM reparent helpers
+(`HeliosEngine.reparentInto`, `HeliosEngine.getMapContainer`),
+the engine pool API on `init.ts`
+(`registerEngineInPool` / `claimEngineFromPool` /
+`releaseEngineFromPool`). The `preview` field on `InitHost`.
+
+### alpha.11
+
+### Engine pool with eager registration and ownership handshake, fixes the per-commit WebGL respawn for real
+
+The previous attempts failed because they registered the engine
+into the pool from `disconnectedCallback`. The Home Assistant
+frontend source (`hui-card.ts:121-166`, dev branch) confirms HA
+constructs the new helios-card element, calls `setConfig` on it,
+and only THEN removes the old element. By the time the OLD card's
+`disconnectedCallback` fires, the NEW card has already been
+constructed and is about to run its own `updated()`. The pool
+push was always too late.
+
+Alpha.11 inverts the timing.
+
+- Eager registration: every engine pushes itself into the pool the
+  moment it is created in `initEngineNow`, not at disconnect.
+  When the slider commit destroys the preview pane, the NEW
+  helios-card construction finds the OLD preview's engine already
+  waiting in the pool.
+
+- Pool key: (homeKey, mode) where mode is `preview` when HA
+  sets `element.preview = true` (which the editor preview pane
+  does, line `hui-card.ts:136-138`) and `live` for the dashboard
+  tile. The preview pane never claims the live dashboard's
+  engine, and vice versa.
+
+- Owner handshake: each pool entry tracks `lastOwner`. Claim
+  reassigns the owner and cancels any pending dispose. Release
+  is a no-op when the releaser is not the registered owner (the
+  old card releasing after a new card has already claimed). When
+  the releaser IS the owner (real navigation away), release
+  schedules dispose after the grace window.
+
+The previous `pushEngineToPool` / `tryClaimPooledEngine` helpers
+are replaced by `registerEngineInPool` /
+`claimEngineFromPool` / `releaseEngineFromPool` /
+`isCurrentPoolOwner`. The 1.5 second grace window is widened to
+2.5 seconds to absorb the 1 second mount-debounce a fresh card
+incurs before its first engine pass.
+
+### alpha.10
+
+### Pool transplant moves the container, not its children, basemap stops going black
+
+Diagnostic on alpha.9 confirmed the pool itself works (the slider
+drag stopped incrementing `enginesCreated`). The visible artefact
+that remained was the basemap turning black when entering edit
+mode, the engine pool was successfully grafting the previous
+MapLibre stack into the editor preview pane but the transplant
+broke MapLibre's rendering.
+
+The alpha.9 transplant moved every CHILD of the old container into
+a freshly-rendered new container, then poked MapLibre's private
+`_container` field so future `appendChild` calls would land on the
+new node. The trouble is that the new container started life at
+0x0 dimensions in the new shadow root, `map.resize()` baked that
+into the canvas, the basemap requested its tiles at the wrong
+viewport, and the result was a black square (see also the project
+memory rule "Black-map = check container height FIRST").
+
+Alpha.10 instead moves the WHOLE old container DOM node into the
+new shadow root, replacing the freshly-rendered empty
+`<div id="map-container">` wholesale. MapLibre's `_container`
+reference stays valid because we never reach into the private
+field. The moved container keeps its existing children, its CSS
+class names and its ResizeObserver wiring. A `requestAnimationFrame`
+follow-up resize handles the typically-identical new dimensions
+once the new shadow root completes its first layout pass.
+
+### alpha.9
+
+### Engine pool with MapLibre transplant, real fix for the per-commit WebGL respawn
+
+Alpha.8 deferred the engine cleanup on `disconnectedCallback` and
+cancelled it on the subsequent `connectedCallback`. The diagnostic
+in #162 confirmed Home Assistant actually destroys the helios-card
+element on every editor `config-changed` event and constructs a
+fresh one. A new element instance never sees the old timer, so the
+fix from alpha.8 covered only the same-instance reattach case
+(rare in practice).
+
+Replaces alpha.8's same-instance soft cleanup with a module-level
+engine pool keyed by home coordinates. On disconnect the engine is
+pushed to the pool, the next mount tries to claim it. When the
+claim succeeds, `HeliosEngine.transplantToContainer(newContainer)`
+moves the MapLibre stack (canvas, overlay divs, marker root) from
+the orphaned container into the new shadow root's
+`<div id="map-container">`, updates the MapLibre map's internal
+container reference, and calls `map.resize()` so dimensions
+follow. The new helios-card instance walks `wireEngineCallbacks`
+to re-bind the engine to itself. No `new HeliosEngine(...)`, no
+fresh WebGL context, no buildings refetch, no basemap reload.
+
+The pool entry's cleanup timer destroys the engine after a 1.5 s
+grace if no remount claims it (real navigation away). FIFO array
+per home key supports multiple cards at the same coordinates.
+
+### alpha.8
+
+### Soft cleanup on disconnect, stops the per-commit WebGL respawn
+
+Diagnosed via the in-card `window.heliosStats()` counters
+(#162). Home Assistant detaches and re-attaches the same
+helios-card custom-element instance on every `config-changed`
+event emitted by the editor, slider commits and toggle flips
+included, not only on the documented edit-mode entry. Each
+detach was tearing the engine down and the immediate re-attach
+was creating a fresh one, burning one full WebGL context
+allocation per user input. With two cards on the dashboard the
+counter incremented by 2 on every slider release.
+
+`disconnectedCallback` now defers the engine cleanup by a
+1 second grace instead of firing it immediately.
+`connectedCallback` cancels the deferred cleanup if the same
+element re-attaches within the grace, the engine, its MapLibre
+stack and its WebGL context remain alive, and `updated()`
+short-circuits the respawn branch because `_engine` is still
+defined and `_lastHomeKey` still matches. If the grace expires
+without a re-attach (real navigation away) the cleanup fires
+exactly as before. Net result: zero WebGL context recreation on
+slider drags, picker writes, toggle flips and the other editor
+events that previously triggered a respawn cycle.
+
+### alpha.7
+
+### Resilience pass + hygiene cleanup
+
+Block B (preventive resilience fixes) and block C (hygiene) batched
+in one alpha.
+
+Resilience:
+
+- Open-Meteo rate-limit (HTTP 429) is no longer swallowed silently
+  inside the weather fetch. The error now propagates with its
+  status code so the engine catch arms the exponential back-off
+  table instead of letting the card keep hammering Open-Meteo at
+  the normal cadence under a rate-limit.
+- `VISUAL_CONFIG_KEYS` extended to every key the engine actually
+  consumes (PV layout, grid wiring, battery banks, inverter cutoff,
+  timeline preferences, shadows, LiDAR precision). Live edits in
+  the visual editor now reach the engine immediately instead of
+  waiting for the next natural respawn (page reload, theme flip).
+- Grid history backfill latch tracks a per-entity wall-clock and
+  re-issues the 72 h fetch on a 24 h cadence so the buffer head
+  stays fresh on long-uptime sessions. A `WsTimeoutError` arms a
+  2 min cooldown so the next `refreshGrid` tick does not hammer
+  the recorder with retries.
+- Radiation statistics parser is strict on the `mean` column and
+  no longer falls back to `state`. Pushing a cumulative MJ/m²
+  counter through the engine would feed monotonically increasing
+  values that look like 10000+ W/m² and distort every downstream
+  derivation. Out-of-shape entities now degrade cleanly to the
+  raw-history fallback.
+
+Hygiene cleanups (no user-facing behaviour change):
+
+- Removed the user-facing `v1.6.2` legacy-path reference from the
+  `pvArrayPeakKwpHelp` editor hint in all 11 locales.
+- Removed inline `1.8.0` / `alpha.18` version references from
+  source comments. Comments now describe current state only.
+- Corrected the `auto-rotate-enabled` schema default from `true`
+  to `false` in both the schema doc comment and the README.
+- Deleted the `HeliosColorPicker` custom element and its style
+  block. The pre-1.8.0 editor color pickers are gone; the class
+  was dead code in the bundle (~3-4 KB minified) and registered a
+  globally-scoped custom element with no consumers. Bundle drops
+  by 12 KB raw / 3 KB gzipped.
+- Deleted 9 dead i18n keys from `i18n/index.ts` and all 11
+  locales: `pvArrayShare`, `pvArrayShareHelp`, `gridSourceTitle`,
+  `uiColorsHint`, `sunColor`, `cloudColor`, `pvColor`,
+  `batteryColor`, `buildingColor`. Each was declared in the
+  `Translations` interface and provided in every locale but never
+  read anywhere in the source.
+- Updated the README colour defaults (`sun-color`, `cloud-color`,
+  `pv-color`, `battery-color`) to match the runtime constants.
+  The previous palette values (`#EF9F27`, `#5A8DC4`, `#27B36B`,
+  `#FF5252`) had been retired but the doc was not updated.
+- Removed em-dashes from `.github/workflows/test.yml` (`—` would
+  surface in CI failure logs).
+- Dropped the hardcoded `open` attribute on the Timeline
+  sub-section inside the editor UI accordion so it follows the
+  same collapse contract as every other section.
+- Added a NaN guard in `formatLocalisedNumber` so cold-cache or
+  upstream parse failures render a neutral zero placeholder
+  instead of surfacing the literal "NaN" string in chips.
+
+### alpha.6
+
+### Multi-fix on top of the recorder unblock series
+
+A comprehensive audit on top of the alpha.2 to alpha.5 perf
+migration surfaced seven issues that this release fixes in one
+batch.
+
+- The editor "Reset data cache" button now actually resets. The
+  per-instance state was already cleared, but the cross-mount
+  module caches added since alpha.3 kept the previous data alive,
+  so the button looked broken. The reset now wipes PV, battery,
+  radiation, and grid module caches in addition to the
+  per-instance state.
+
+- Chip values at scrub time stay populated across a wider range.
+  The PV chip cursor reader used to fall back to the trainer
+  stats slot only (30 days, but idle-deferred so it lands a beat
+  after mount). It now consults the calibration stats slot first
+  (5 days, fetched immediately), so a user who scrubs right
+  after the page loads sees historical chip values without
+  waiting on the idle queue.
+
+- PV statistics fetch asks for both `mean` and `state` columns
+  instead of an exclusive heuristic driven by the entity unit.
+  Power sensors land via `mean`, cumulative-energy sensors land
+  via `state`, the parser prefers whichever is populated.
+  Removes a class of silent failures where the entity unit had
+  not yet propagated to the card state at the time of the first
+  fetch and a cumulative entity returned all-null `mean` buckets,
+  leaving the slot empty and the calibration affiné value
+  disappearing for the user.
+
+- Calibration cross-day cumulative bucket no longer dropped.
+  On hourly stats with bucket-midpoint anchor, the slice
+  straddling midnight (23:30 of day D to 00:30 of day D+1) used
+  to fail both day D's bucket guard and day D+1's previous-sample
+  guard, losing one hour of cumulative energy per calibration
+  day. The guard now tolerates the cross-day slice.
+
+- Per-day kWh chips on the timeline no longer read 0 kWh for
+  days beyond the narrow raw window. `computeDailyKwhTotals`
+  now integrates `_pvCalibStats` (5 days hourly) for days the
+  raw slot does not reach, while staying on the raw slot for
+  the days it covers. The "3 days ago" chips now reflect what
+  was actually produced instead of silently rounding to zero.
+
+- Shading-map trainer no longer trains buckets that fall
+  outside the battery SoC coverage when the inverter-cutoff
+  guard is armed. The SoC histories piggyback on the raw PV
+  fetch and only cover ~2 days; the trainer walks back 30
+  days. For the 28-day gap, the cutoff guard used to fall
+  through silently, accumulating phantom shadows at sun bins
+  where the inverter was actually clamping batteries-full
+  output. When the guard is configured and any SoC entity is
+  wired, an out-of-coverage bucket now skips (advances the
+  watermark) instead of training blind.
+
+- Live tail of `_pvHistory` no longer reallocates on every
+  tick. Pushing the live sample used to spread the entire
+  arrays into fresh ones at up to 50 Hz, growing unbounded over
+  long-uptime sessions. Push is now in-place and the tail
+  trims entries that age out of `_timeRange.start` so the
+  array stays bounded to the visible window.
+
+### alpha.5
+
+### Chip scrub coverage on cumulative-energy entities and outside-raw scrubs
+
+Field follow-up on alpha.3 / alpha.4. The recorder freeze fix from
+alpha.2 (#155) carried two latent regressions for users scrubbing
+the timeline cursor:
+
+- The PV chip resolver (`pvRateAtTime`) read `_pvHistory` only.
+  Since the raw history slot is bounded to the chart's visible
+  past (~2 days) the chip turned blank as soon as the cursor
+  landed outside that window. The 5-min trainer-grade statistics
+  slot covering the past 30 days is now consulted as a fallback,
+  so scrub-time chip values resolve anywhere within the
+  recorder's long-term-statistics retention (#161).
+- The battery and radiation statistics fetches requested only
+  the `mean` column. For entities with `state_class:
+  total_increasing` (a cumulative kWh counter wired as battery
+  power, an irradiance source surfaced as a Wh meter, etc.)
+  `mean` is null per bucket and the parser dropped every row,
+  even though HA returned non-empty arrays. Both fetches now
+  request `['mean', 'state']` and the parser prefers the
+  populated one. Slots land populated regardless of the source
+  entity's class.
+
+### alpha.4
+
+### LiDAR polish + grid chip icons
+
+- LiDAR mode-bar (#152): when the shadow fetch finishes loading,
+  the satellite (or harddisk) glyph that replaces the spinner no
+  longer inherits a frame of rotation animation. The
+  `is-spinning` class now lives on the `ha-icon` itself so the
+  animation drops in the exact frame the icon attribute swaps.
+- LiDAR opacity slider (#153): the percent readout next to the
+  slider thumb now tracks the drag. `_lidarViewOpacity` is
+  intentionally not a Lit `@state` (the slider fires up to
+  50 input events / s and a state coupling would re-render the
+  entire card on every tick), so the readout span gets an
+  imperative DOM write inside the input handler.
+- Grid import / export chip icons (#154): from a home-centric
+  reading, the previous icons pointed in the wrong direction.
+  Swapped so the chip glyph matches its label.
+
+### alpha.3
+
+### Battery, radiation, semaphore: extending the alpha.2 recorder fix
+
+Follow-up to alpha.2 after field validation against a Victron
+Cerbo GX setup. The PV-path fix from alpha.2 worked (adaptive
+calibration applied, recorder no longer globally frozen), but
+two symptoms remained: battery data took several minutes to
+populate, and each card mount caused a brief lag. A related
+report described every apex-charts card on the same dashboard
+flatlining while Helios was loading, the signature of Helios
+still monopolising the recorder on cards that share the
+connection.
+
+- Battery and radiation fetches now follow the same statistics-
+  first pattern as PV (#159). 5-minute buckets, ~576 rows per
+  entity for a 2-day window vs ~150-200k raw on a 1 Hz BMS.
+  Raw history fallback for entities without long-term statistics
+  tracking. Module-level cache mirroring the PV pattern, no
+  more refetch on every card mount.
+- Global concurrency semaphore on the WebSocket fetch path
+  (#160). Caps Helios's in-flight history / statistics fetches
+  at 2, so the recorder retains headroom for other history-bound
+  cards on the same dashboard.
+- The 30-day shading-map trainer fetch defers behind the
+  user-facing PV history and calibration fetches via
+  `requestIdleCallback` (1 s timeout fallback). The chip and
+  chart paint first, the trainer catches up in the background.
+
+### alpha.2
+
+### Recorder unblock on high-frequency PV sensors
+
+- Tracked as #155. On installs whose PV entity reports more than
+  one sample per second (e.g. a Victron Cerbo GX MPPT), the
+  Helios card never finished loading and the HA recorder went
+  unresponsive for unrelated entities while the card was open.
+  Root cause was a single 30-day raw history fetch that ballooned
+  to millions of state rows on high-frequency installs.
+- The PV calibration and the 30-day shading-map trainer now
+  consume `recorder/statistics_during_period` instead of raw
+  history. ~120 hourly rows for the 5-day calibration, ~8.6k
+  5-min rows for the 30-day trainer, vs potentially millions on
+  the legacy path. Both consumers fall back to the raw window
+  when the source entity is not long-term-statistics tracked
+  (no `state_class`).
+- Raw history fetches on the PV / grid / battery / radiation
+  paths are now bound to the chart's visible window (~2 days)
+  and pass `significant_changes_only: true` so HA drops
+  bucket-internal duplicates server-side. Roughly 30 to 70 %
+  fewer rows on noisy sensors.
+- Module-level cache for the three PV slots survives the user
+  navigating away from the Helios card and back (the previous
+  per-LitElement cache reset on every mount). 15-minute TTL.
+- WebSocket calls now have a 30-second timeout. On a stalled
+  recorder the card degrades to live chip values rather than
+  hanging on a loading state forever.
+
+### alpha.1
+
+- Editor polish: 16 px bottom margin on the Camera block so it
+  no longer kisses the pixel-ratio segmented toggle below, and a
+  12 px bottom margin on every `grid-source-row` so the combined
+  entity picker (and the import / export pickers next to it) get
+  air before the invert toggle / "add source" row underneath.
+- Combined grid entity hint: dropped the inline brand list
+  (Fronius P_Grid, Shelly EM, P1 net power, ...) from all 11
+  locales; the YAML config doc carries the example list, the
+  in-editor hint stays focused on what the field expects.
+
+### alpha.0
+
+### Camera pose control
+
+New UI section in the editor for pinning the resting camera pose
+and / or locking it. Three new config keys:
+
+- `camera-pitch-deg` (15..85), vertical tilt baked into every
+  engine init. The slider in the editor previews live as you drag.
+- `camera-bearing-deg` (0..359), horizontal rotation, same live
+  preview. Wraps to `[0, 360)` so a stale 720 deg in the YAML
+  reads as 0 instead of putting the map in an unreachable pose.
+- `camera-locked` (boolean), when on, manual drag-rotate +
+  drag-pitch are inert on the canvas, pinch-rotate is disabled
+  too, and the idle auto-orbit is suspended so the configured pose
+  is the only pose the user ever sees. Lock + auto-rotate are
+  mutually exclusive at runtime, the auto-orbit code reads the
+  lock flag every tick.
+
+Editor: "Camera" block inside the UI section with a pitch slider,
+a bearing slider, a lock toggle, and a "Reset" button anchored
+bottom-right that clears all three keys, releases the lock and
+drives the engine back to the hemisphere-aware default pose
+(north up in SH, south up in NH, pitch 55).
+
+Live preview rides the engine directly via setCameraBearing /
+setCameraPitch / setCameraLocked instead of going through a
+config commit, so a slider drag never respawns the WebGL context.
+The values are written to YAML in parallel (debounced) so the
+next natural respawn boots from the chosen pose.
+
+### Combined signed grid entity
+
+- New `grid-power-entity` accepts a single signed sensor whose value
+  carries the flow direction (Fronius `P_Grid`, Shelly EM, P1 net
+  power, …) instead of two separate import / export meters. When it
+  is set it owns both chips and supersedes `grid-import-entity` /
+  `grid-export-entity`: a non-negative reading lights the IMPORT chip
+  (the EXPORT chip hides), a negative reading lights the EXPORT chip,
+  so only the active direction shows.
+- Works with a power sensor (W / kW / MW, the value IS the signed
+  watts) or a signed net-energy sensor (Wh / kWh / MWh whose total
+  falls while exporting, the bracketed slope IS the signed watts). A
+  list is summed, e.g. three signed per-phase sensors into one net.
+  The whole live + scrub derivation rides the existing per-entity
+  buffer / recorder-backfill machinery, so multi-tariff and combined
+  installs share the same slope path.
+- `grid-power-invert` flips the sign convention for meters that
+  report grid feed-in as positive (default: positive = import).
+- Editor grid section gains a combined-entity picker plus a sign
+  toggle; the directional import / export pickers collapse while a
+  combined entity is wired.
+
 ## v1.8.1
 
 > Point-fix release on top of v1.8.0. v1.8.0 is withdrawn from the

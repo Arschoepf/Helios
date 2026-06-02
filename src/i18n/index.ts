@@ -118,9 +118,6 @@ export interface Translations
         //section), plus the date and time format toggles for the
         //clock chip + the timeline labels.
         uiSection:                string;
-        uiColorsHint:             string;
-        sunColor:                 string;
-        cloudColor:               string;
         //Optional photovoltaic production overlay.
         pvSection:                string;
         pvHint:                   string;
@@ -153,9 +150,8 @@ export interface Translations
         pvArrayNameHelp:          string;
         pvArrayTilt:              string;
         pvArrayAzimuth:           string;
-        pvArrayShare:             string;
-        //Per-string peak power in kWp. Preferred over `share`; the
-        //total install power is the sum across rows.
+        //Per-string peak power in kWp. The total install power is
+        //the sum across rows.
         pvArrayPeakKwp:           string;
         pvArrayPeakKwpHelp:       string;
         pvArrayAdd:               string;
@@ -165,7 +161,6 @@ export interface Translations
         //know that 50/50 and 1/1 give the same forecast.
         pvArrayTiltHelp:          string;
         pvArrayAzimuthHelp:       string;
-        pvArrayShareHelp:         string;
         //Optional per-array GPS coordinates. Used when the panels
         //sit a meaningful distance away from the home (e.g. ground-
         //mounted in a clearing while the home is under trees) so
@@ -179,7 +174,6 @@ export interface Translations
         //per-array shading check.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
-        pvColor:                  string;
         batterySection:           string;
         batteryHint:              string;
         //Multi-bank battery editor. The section renders one collapsible card per bank (same widget as pv-arrays) so a user with house +
@@ -211,7 +205,6 @@ export interface Translations
         //train as phantom shadow. Leave the field empty to keep the legacy "train every bucket" behaviour.
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;
-        batteryColor:             string;
         //Grid section: import / export power readouts. Both sides
         //accept multiple entities; the chip displays whichever entity
         //last changed (typical for peak / off-peak indexes that never
@@ -222,9 +215,18 @@ export interface Translations
         gridImportHint:           string;
         gridExportTitle:          string;
         gridExportHint:           string;
-        gridSourceTitle:          string;
         gridSourceAdd:            string;
         gridSourceRemove:         string;
+        //Combined signed grid-power entity: one sensor whose sign
+        //routes to the import (>=0) or export (<0) chip, superseding
+        //the two directional slots. The invert toggle flips the sign
+        //convention for meters that report feed-in as positive.
+        gridCombinedTitle:        string;
+        gridCombinedHint:         string;
+        gridInvertLabel:          string;
+        gridInvertStandard:       string;
+        gridInvertInverted:       string;
+        gridInvertHelp:           string;
         //Weather section. Hosts the optional solar-radiation entity
         //override: when wired to a physical W/m² sensor at the home
         //(typical Ecowitt / Davis / personal weather station), the
@@ -235,14 +237,6 @@ export interface Translations
         weatherHint:              string;
         solarRadiationEntity:     string;
         solarRadiationEntityHelp: string;
-        //Display radius (m) around the home: everything outside this
-        //disc is hidden by an opaque crop mask, regardless of what
-        //the basemap would otherwise show. Originally a buildings-
-        //only setting, hence the legacy `building-radius` config
-        //key; now also drives the LiDAR fetch bbox, the shadow clip,
-        //and the cropped viewport.
-        displayRadius:            string;
-        displayRadiusHint:        string;
         //Timeline sub-section, nested inside the UI section. Hosts the visibility toggle, the width slider and the per-day consumption-chip toggle.
         timelineSection:          string;
         timelineEnabled:          string;
@@ -261,7 +255,6 @@ export interface Translations
         buildingsHint:            string;
         buildingClusterRadius:    string;
         buildingOpacity:          string;
-        buildingColor:            string;
         //Pixel-ratio toggle replacing the old performance-mode
         //switch. 'Auto' uses the device's devicePixelRatio capped at
         //2 / 1.25 (desktop / mobile). '1x' forces 1.0 for the

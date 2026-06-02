@@ -56,7 +56,13 @@ export function trainShadingMap(host: ChartHost): number
 {
     const k      = pvCalibK(host.config);
     const series = host._chartSeries;
-    const hist   = host._pvHistory;
+    //Prefer the 5-min long-term-statistics series (30 days, ~8.6k rows) when available; fall back to the raw `_pvHistory` window when the
+    //statistics are absent or empty. The trainer's 30-min buckets walk 6 consecutive 5-min stats rows where the legacy path used to walk
+    //potentially thousands of raw samples per bucket; on a non-LTS-tracked entity the fallback covers fewer past days but the trainer's
+    //watermark still advances safely.
+    const hist   = (host._pvTrainerStats && host._pvTrainerStats.times.length > 0)
+        ? host._pvTrainerStats
+        : host._pvHistory;
     const coords = getHomeCoords(host.config, host.hass);
     if (k === null || k <= 0 || !series || !hist || !coords) return 0;
     if (hist.times.length < 2 || series.times.length < 2)    return 0;
@@ -145,25 +151,46 @@ export function trainShadingMap(host: ChartHost): number
             const sun = getSunPosition(tMid, coords.lat, coords.lon);
             if (!sun || sun.altitude <= 0) continue;
 
-            //Inverter-cutoff inhibit. If the user's hybrid setup is configured to clamp PV when the battery hits a certain SoC, the bucket is
-            //tainted: actual production is artificially low even though the sun is shining, and feeding that to the shading model would teach it
-            //"strong shadow at this azimuth/altitude" forever. We drop the bucket entirely; the cell falls back to either the scalar calibration
-            //or its existing prior. The watermark still advances so we don't re-evaluate the same bucket on the next refresh.
+            //Inverter-cutoff inhibit. If the user's hybrid setup is configured to clamp PV when the battery hits a certain SoC, the
+            //bucket is tainted: actual production is artificially low even though the sun is shining, and feeding that to the
+            //shading model would teach it "strong shadow at this azimuth/altitude" forever. We drop the bucket entirely; the cell
+            //falls back to either the scalar calibration or its existing prior. The watermark still advances so we do not
+            //re-evaluate the same bucket on the next refresh.
+            //
+            //The SoC histories piggyback on the raw PV fetch and therefore only cover roughly the chart's visible past window
+            //(~2 days). The trainer itself walks back 30 days. For any bucket older than the SoC window the lookup returns null
+            //on every bank, `anyBank` stays false, and pre-#155 the bucket trained without the guard, accumulating phantom shadows
+            //at the bound sun bins. When the user has explicitly armed the cutoff (`inverter-cutoff-soc-pct` configured and at
+            //least one bank with a SoC entity), we now treat "no SoC coverage for this bucket" as "skip the bucket" rather than
+            //train it blind. The trainer will pick up the same buckets again on the next 30-day pass; once the SoC window catches
+            //up on the chart side, they get trained with the guard active.
             if (cutoffPct !== null && socSeries.length > 0)
             {
-                //Min SoC across banks at the bucket midpoint. A bank with no sample at this instant (empty series) is skipped so a half-
-                //reporting setup degrades to "skip the bucket if every reporting bank is full" rather than poisoning the gate. We mark
-                //blocked only when every bank that DID report sits at or above the cutoff.
+                //Min SoC across banks at the bucket midpoint. A bank with no sample at this instant (empty series) is skipped so a
+                //half-reporting setup degrades to "skip the bucket if every reporting bank is full" rather than poisoning the
+                //gate. We mark blocked when every bank that DID report sits at or above the cutoff, OR when no bank reported at
+                //all (out-of-window) and the user has the guard armed.
                 let minSoc:  number | null = null;
                 let anyBank: boolean = false;
+                let anySocConfigured: boolean = false;
                 for (const s of socSeries)
                 {
+                    if (s.times.length > 0) anySocConfigured = true;
                     const v = valueAtMs(s, tMid.getTime());
                     if (v === null) continue;
                     anyBank = true;
                     if (minSoc === null || v < minSoc) minSoc = v;
                 }
                 if (anyBank && minSoc !== null && minSoc >= cutoffPct)
+                {
+                    skippedInhibit++;
+                    if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+                    continue;
+                }
+                //No bank reported at this bucket midpoint. With the cutoff guard armed and at least one bank wired, "no coverage"
+                //means we cannot prove the inverter was not clamping. Skip the bucket and advance the watermark so we revisit it
+                //once the SoC window expands.
+                if (!anyBank && anySocConfigured)
                 {
                     skippedInhibit++;
                     if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;

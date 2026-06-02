@@ -1,10 +1,9 @@
 import { LitElement, html, TemplateResult, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { colorPickerStyles, editorStyles } from '../css/helios-card-editor-css';
+import { editorStyles } from '../css/helios-card-editor-css';
 import
 {
     type HeliosConfig,
-    DEFAULT_BUILDING_RADIUS_M,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_LIDAR_PRECISION,
@@ -29,154 +28,6 @@ const LIDAR_VIEW_LEGACY_KEYS = [
 ] as const;
 
 
-//Custom color picker.
-//
-//Why custom: <input type="color"> opens a native popover, which iOS
-//Safari crashes on when invoked from a deeply nested Shadow DOM ,
-//exactly HA's setup (dashboard editor → custom card editor → Lit
-//root). We replace it with an in-shadow swatch + popover exposing a
-//curated 42-colour palette plus a hex text input for free entry.
-@customElement('helios-color-picker')
-export class HeliosColorPicker extends LitElement
-{
-    @property({ type: String }) public value:    string  = '#888888';
-    @property({ type: String }) public ariaLabel: string = 'Color';
-    @state()                    private _open    = false;
-    @state()                    private _hexDraft = '';
-
-    private static readonly PRESETS: string[] = [
-        '#ffffff', '#f5f5f4', '#d4d4d8', '#a8a29e', '#52525b', '#1f2937', '#000000',
-        '#fef3c7', '#fcd34d', '#f59e0b', '#ea580c', '#dc2626', '#991b1b', '#7c2d12',
-        '#dcfce7', '#86efac', '#22c55e', '#16a34a', '#15803d', '#064e3b', '#052e16',
-        '#dbeafe', '#93c5fd', '#3b82f6', '#2563eb', '#1d4ed8', '#1e3a8a', '#172554',
-        '#ede9fe', '#c4b5fd', '#8b5cf6', '#7c3aed', '#6d28d9', '#4c1d95', '#2e1065',
-        '#fce7f3', '#f9a8d4', '#ec4899', '#db2777', '#be185d', '#9d174d', '#500724'
-    ];
-
-    //Capturing document handler so a click outside closes the popover.
-    private _onDocClick = (e: MouseEvent) =>
-    {
-        const path = e.composedPath();
-        if (!path.includes(this))
-        {
-            this._open = false;
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-    };
-
-    public disconnectedCallback(): void
-    {
-        super.disconnectedCallback();
-        document.removeEventListener('click', this._onDocClick, true);
-    }
-
-    private _toggle(e: Event): void
-    {
-        e.stopPropagation();
-        this._open = !this._open;
-        this._hexDraft = this.value;
-        if (this._open)
-        {
-            //Defer one tick so the click that opened the popover doesn't immediately close it.
-            setTimeout(() => document.addEventListener('click', this._onDocClick, true), 0);
-        }
-        else
-        {
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-    }
-
-    private _emit(value: string): void
-    {
-        this.value = value;
-        this.dispatchEvent(new CustomEvent('value-changed',
-            { detail: { value }, bubbles: true, composed: true }));
-    }
-
-    private _selectPreset(hex: string, e: Event): void
-    {
-        e.stopPropagation();
-        this._emit(hex);
-        this._open = false;
-        document.removeEventListener('click', this._onDocClick, true);
-    }
-
-    private _onHexInput(e: Event): void
-    {
-        this._hexDraft = (e.target as HTMLInputElement).value;
-    }
-
-    private _commitHex(): void
-    {
-        const v = this._hexDraft.trim();
-        const m = /^#?([0-9a-fA-F]{6})$/.exec(v);
-        if (m)
-        {
-            this._emit('#' + m[1].toLowerCase());
-        }
-    }
-
-    private _onHexKey(e: KeyboardEvent): void
-    {
-        if (e.key === 'Enter')
-        {
-            this._commitHex();
-            this._open = false;
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-        else if (e.key === 'Escape')
-        {
-            this._open = false;
-            document.removeEventListener('click', this._onDocClick, true);
-        }
-    }
-
-    protected render(): TemplateResult
-    {
-        return html`
-            <button
-                type="button"
-                class="swatch"
-                style="background:${this.value}"
-                aria-label="${this.ariaLabel}"
-                aria-haspopup="dialog"
-                aria-expanded="${this._open}"
-                @click="${this._toggle}"
-            ></button>
-            ${this._open ? html`
-                <div class="pop" role="dialog" @click="${(e: Event) => e.stopPropagation()}">
-                    <div class="grid">
-                        ${HeliosColorPicker.PRESETS.map(c => html`
-                            <button
-                                type="button"
-                                class="cell ${c.toLowerCase() === this.value.toLowerCase() ? 'selected' : ''}"
-                                style="background:${c}"
-                                aria-label="${c}"
-                                @click="${(e: Event) => this._selectPreset(c, e)}"
-                            ></button>
-                        `)}
-                    </div>
-                    <div class="hex-row">
-                        <span class="hex-prefix">#</span>
-                        <input
-                            class="hex-input"
-                            type="text"
-                            spellcheck="false"
-                            autocomplete="off"
-                            maxlength="7"
-                            .value="${this._hexDraft.replace(/^#/, '')}"
-                            @input="${this._onHexInput}"
-                            @blur="${this._commitHex}"
-                            @keydown="${this._onHexKey}"
-                        />
-                    </div>
-                </div>
-            ` : nothing}
-        `;
-    }
-
-    static styles = colorPickerStyles;
-}
 
 
 //Render a localised hint string that may contain markdown-style
@@ -434,6 +285,7 @@ export class HeliosCardEditor extends LitElement
         }, HeliosCardEditor.SLIDER_COMMIT_DELAY_MS);
         this._sliderDebounce.set(k, t);
     }
+
 
     //Reads the configured PV layout into the shape the editor's
     //repeatable section consumes. Always returns at least one entry
@@ -986,6 +838,61 @@ export class HeliosCardEditor extends LitElement
         this._writeGridSources(slot, list);
     }
 
+    //Combined signed grid-power entity (grid-power-entity). A single
+    //picker rather than the multi-source list above: one signed
+    //sensor whose sign encodes the direction is the whole point, the
+    //array form (summed phases) stays a YAML-only power-user path.
+    //An array already in the config is collapsed to its first entry
+    //for display so the editor never silently drops the others.
+    private _readGridPowerEntity(): string
+    {
+        const raw = (this._cfg as Record<string, unknown> | undefined)?.['grid-power-entity'];
+        if (Array.isArray(raw))
+        {
+            const first = (raw as unknown[]).find(s => typeof s === 'string' && s.trim() !== '');
+            return typeof first === 'string' ? first.trim() : '';
+        }
+        return typeof raw === 'string' ? raw.trim() : '';
+    }
+
+    private _writeGridPowerEntity(value: string): void
+    {
+        if (!this._cfg) return;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        const trimmed = value.trim();
+        //Clearing the picker drops the combined slot entirely (and its
+        //sign flag with it) so the directional import / export pickers
+        //below reappear; the YAML stays clean of an empty key.
+        if (trimmed === '')
+        {
+            delete next['grid-power-entity'];
+            delete next['grid-power-invert'];
+        }
+        else
+        {
+            next['grid-power-entity'] = trimmed;
+        }
+        this._cfg = next as HeliosConfig;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+    }
+
+    private _readGridPowerInvert(): boolean
+    {
+        return (this._cfg as Record<string, unknown> | undefined)?.['grid-power-invert'] === true;
+    }
+
+    private _writeGridPowerInvert(invert: boolean): void
+    {
+        if (!this._cfg) return;
+        const next = { ...this._cfg } as Record<string, unknown>;
+        //Default (false) is the absent state, so we only persist the
+        //flag when the user picks the inverted convention.
+        if (invert) next['grid-power-invert'] = true;
+        else        delete next['grid-power-invert'];
+        this._cfg = next as HeliosConfig;
+        this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
+    }
+
     private _renderGridSlot(slot: 'import' | 'export'): TemplateResult
     {
         const t = pickTranslations(this.hass?.language);
@@ -1039,6 +946,71 @@ export class HeliosCardEditor extends LitElement
                         >+ ${t.editor.gridSourceAdd}</button>
                     ` : nothing}
                 `}
+            </div>
+        `;
+    }
+
+    //Combined signed-entity block at the top of the grid section. A
+    //single picker plus a sign-convention toggle; the toggle and its
+    //help only appear once an entity is wired so the empty state stays
+    //compact. When an entity is set the directional import / export
+    //blocks below are collapsed by the caller (the combined slot owns
+    //both chips).
+    private _renderGridCombined(): TemplateResult
+    {
+        const t      = pickTranslations(this.hass?.language);
+        const entity = this._readGridPowerEntity();
+        const invert = this._readGridPowerInvert();
+        return html`
+            <div class="grid-slot-block">
+                <div class="grid-slot-title">${t.editor.gridCombinedTitle}</div>
+                <div class="hint">${t.editor.gridCombinedHint}</div>
+                <div class="grid-source-row">
+                    <div class="grid-source-picker">
+                        ${this._pickerReady ? html`
+                            <ha-entity-picker
+                                allow-custom-entity
+                                .hass="${this.hass}"
+                                .value="${entity}"
+                                .includeDomains="${['sensor', 'input_number']}"
+                                @value-changed="${(e: CustomEvent) => this._writeGridPowerEntity(e.detail.value ?? '')}"
+                            ></ha-entity-picker>
+                        ` : html`
+                            <input
+                                type="text"
+                                .value="${entity}"
+                                placeholder="sensor.grid_power"
+                                @change="${(e: Event) => this._writeGridPowerEntity((e.target as HTMLInputElement).value)}"
+                            />
+                        `}
+                    </div>
+                    ${entity !== '' ? html`
+                        <button
+                            type="button"
+                            class="pv-array-remove"
+                            aria-label="${t.editor.gridSourceRemove}"
+                            @click="${() => this._writeGridPowerEntity('')}"
+                        >${t.editor.gridSourceRemove}</button>
+                    ` : nothing}
+                </div>
+                ${entity !== '' ? html`
+                    <div class="field">
+                        <span class="label">${t.editor.gridInvertLabel}</span>
+                        <div class="segmented-toggle">
+                            <button
+                                type="button"
+                                class="seg-option ${(!invert) ? 'active' : ''}"
+                                @click="${() => this._writeGridPowerInvert(false)}"
+                            >${t.editor.gridInvertStandard}</button>
+                            <button
+                                type="button"
+                                class="seg-option ${(invert) ? 'active' : ''}"
+                                @click="${() => this._writeGridPowerInvert(true)}"
+                            >${t.editor.gridInvertInverted}</button>
+                        </div>
+                    </div>
+                    <div class="field-help">${t.editor.gridInvertHelp}</div>
+                ` : nothing}
             </div>
         `;
     }
@@ -1171,6 +1143,7 @@ export class HeliosCardEditor extends LitElement
                         </div>
                     </div>
                     <div class="hint">${t.editor.autoRotateHint}</div>
+
                     <div class="field">
                         <span class="label">${t.editor.pixelRatio}</span>
                         <div class="segmented-toggle">
@@ -1187,20 +1160,8 @@ export class HeliosCardEditor extends LitElement
                         </div>
                     </div>
                     <div class="hint">${t.editor.pixelRatioHint}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.displayRadius}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="20" max="500" step="10"
-                                .value="${String(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M)}"
-                                @input="${(e: Event) => this._numSlider('building-radius', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['building-radius'] ?? DEFAULT_BUILDING_RADIUS_M), 1)} m</span>
-                        </div>
-                    </label>
-                    <div class="hint">${t.editor.displayRadiusHint}</div>
 
-                    <details class="advanced-section" open>
+                    <details class="advanced-section">
                         <summary class="section-title section-title-collapse">${t.editor.timelineSection}</summary>
                         <div class="field">
                             <span class="label">${t.editor.timelineEnabled}</span>
@@ -1522,8 +1483,11 @@ export class HeliosCardEditor extends LitElement
                 <details class="advanced-section" ?open="${this._openSection === 'grid'}" @toggle="${(e: Event) => this._onSectionToggle('grid', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.gridSection}</summary>
                     <div class="hint">${t.editor.gridHint}</div>
-                    ${this._renderGridSlot('import')}
-                    ${this._renderGridSlot('export')}
+                    ${this._renderGridCombined()}
+                    ${this._readGridPowerEntity() === '' ? html`
+                        ${this._renderGridSlot('import')}
+                        ${this._renderGridSlot('export')}
+                    ` : nothing}
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'shading'}" @toggle="${(e: Event) => this._onSectionToggle('shading', e)}">

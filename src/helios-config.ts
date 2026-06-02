@@ -167,6 +167,33 @@ export interface HeliosConfig
     //visual placement of the readouts is being reworked.
     'grid-import-entity'?:    unknown;
     'grid-export-entity'?:    unknown;
+    //Optional. Single COMBINED grid power/energy entity whose sign
+    //encodes the direction: many smart meters and inverters expose
+    //one signed sensor (Fronius P_Grid, Shelly EM, P1 net power,
+    //...) instead of two separate import / export indexes. When set,
+    //this entity drives BOTH chips: the card reads its sign and
+    //routes a positive value to the IMPORT chip and a negative value
+    //to the EXPORT chip (one direction at a time, the other chip is
+    //hidden). It takes precedence over grid-import-entity /
+    //grid-export-entity, which are ignored while it is configured.
+    //
+    //Accepts a power sensor (W / kW / MW, the value IS the signed
+    //watts) or a signed net-energy sensor (Wh / kWh / MWh whose
+    //running total can go down when exporting, the slope IS the
+    //signed watts). An array is summed (e.g. three signed per-phase
+    //power sensors -> net grid power).
+    //
+    //Default sign convention: positive = import (drawing from the
+    //grid), negative = export (feeding the grid), matching the most
+    //common meter / inverter convention. Flip it with
+    //grid-power-invert when the upstream sensor reports the opposite.
+    'grid-power-entity'?:     unknown;
+    //Optional boolean. When true, the combined grid-power-entity sign
+    //is flipped at ingest so a positive reading is treated as EXPORT
+    //and a negative reading as IMPORT. Use it when the meter reports
+    //grid feed-in as positive. Default false. Ignored when
+    //grid-power-entity is not set.
+    'grid-power-invert'?:     unknown;
     'date-format'?:           unknown;
     //'12h' | '24h'. Default: '24h'. Picks between locale-
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
@@ -182,11 +209,29 @@ export interface HeliosConfig
     //the Fiord dark style is auto-selected so the basemap matches the
     //frontend chrome without a per-card override.
     'map-style'?:             unknown;
-    //Opts the idle-camera orbit in or out. Default: true (orbit
-    //enabled). When false, the camera stays at the user's bearing
-    //forever; pinch-rotate still works normally. Useful on low-power
-    //devices or for users who find the constant motion distracting.
+    //Opts the idle-camera orbit in or out. Default: false (orbit
+    //disabled). When true, the camera slowly orbits around the home
+    //while idle; pinch-rotate still works normally. Useful on hero
+    //dashboards where the constant motion reads as alive.
     'auto-rotate-enabled'?:    unknown;
+    //Optional camera pose pinned at every engine init. Numeric values
+    //in degrees; when set they override the auto-default (pitch 55,
+    //bearing south in NH / north in SH) so the camera always boots
+    //from the same angle the user dialled in.
+    //  camera-pitch-deg   : 15..85 (tilt; clamp matches the manual
+    //                       drag-pitch bounds).
+    //  camera-bearing-deg : 0..359 (compass rotation; 0 = north up,
+    //                       90 = east up, 180 = south up, ...).
+    //Either can be set independently of the other. Either still
+    //allows the user to drag-rotate / drag-pitch at runtime; the
+    //pose only locks when camera-locked is true.
+    'camera-pitch-deg'?:       unknown;
+    'camera-bearing-deg'?:     unknown;
+    //Optional boolean. When true, manual drag-rotate AND drag-pitch
+    //are disabled on the canvas, and the idle auto-orbit is also
+    //suppressed, so the camera stays at the configured (or default)
+    //bearing + pitch forever. Default false.
+    'camera-locked'?:          unknown;
     //Timeline visibility toggle. Default: true. When false the whole
     //time-bar (chart card, day labels, scrub cursors) is hidden so
     //the card focuses on the live scene only.
@@ -356,8 +401,10 @@ export const DEFAULT_GRID_IMPORT_COLOR_HEX: string = '#488fc2';  //--energy-grid
 export const DEFAULT_GRID_EXPORT_COLOR_HEX: string = '#8353d1';  //--energy-grid-return-color
 
 
-//Default values for the building config, exposed so the visual editor can render the matching placeholder / slider defaults.
-export const DEFAULT_BUILDING_RADIUS_M         = 100;
+//Display radius is locked at 300 m: past that the basemap + LiDAR fetch and the per-frame projection start to chug on mid-range
+//phones, and the home cluster stops reading as "near home" anyway. The constant stays exported so any leftover legacy reader sees
+//the new value; the editor radius slider is gone (the user no longer chooses).
+export const DEFAULT_BUILDING_RADIUS_M         = 300;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
