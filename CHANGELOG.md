@@ -5,6 +5,109 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.8.3
+
+> Patch-and-polish release on top of v1.8.2. The cycle delivers
+> three regression fixes for the grid history backfill that
+> shipped in v1.8.2 (a raw arm that could fail silently leaving
+> the buffer empty, a scrub buffer that never populated for
+> power-native grid sensors, and a 24 h LTS window that capped
+> scrub coverage shorter than users expected), a deeper alignment
+> pass that mirrors the HA Energy dashboard live grid read so the
+> LIVE chip matches the official Energy dashboard to the watt
+> when a `stat_rate` sensor is configured on the grid source, and
+> four UI polish items for fullscreen / kiosk canvases.
+>
+> Upcoming work is tracked live on the public roadmap at
+> [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
+> refreshed every five minutes.
+
+### Live grid chip matches HA Energy dashboard (#172)
+
+When the HA Energy dashboard config exposes a `stat_rate` signed
+power sensor on any grid source, Helios now reads it directly
+from `hass.states` (no slope, no aggregation) and routes the sign
+across the IMPORT / EXPORT chips the same way HA does in its
+own `hui-power-sankey-card.ts`. The directional `grid-import-entity`
+/ `grid-export-entity` cumulative kWh buffers populated by
+`readSlot` keep driving scrub and chart history, only the LIVE
+chip value is overridden.
+
+Priority order in `refreshGrid` (highest to lowest):
+
+1. `grid-power-entity` (user-explicit combined signed sensor) routes
+   through `readCombined` and wins outright.
+2. `readSlot('import')` + `readSlot('export')` run unconditionally
+   so the scrub / chart-history buffers stay warm regardless of
+   which path drives LIVE.
+3. When `_energyDefaults.gridStatRates` is non-empty, `readStatRates`
+   overrides the LIVE chip values with HA-aligned instantaneous reads.
+
+`EnergyDefaults` gains a `gridStatRates: string[]` field collected
+from every grid source's `stat_rate`, populated through the existing
+long-running `energy/get_prefs` subscription in `card/energy-prefs.ts`.
+When no `stat_rate` is configured on any Energy dashboard source,
+the v1.8.2 legacy kWh-slope behaviour is preserved exactly.
+
+### Grid backfill resilience (#173, #174, #175)
+
+The raw arm of `ensureHistoryFetched` is now wrapped in
+`.catch(() => null)` symmetrically with the LTS arm. A single
+transient failure (recorder timeout, network glitch, custom
+sensor without `state_class`) no longer wipes both arms via
+`Promise.all` rejection; whichever arm returned data populates
+the buffer. A `WsTimeoutError` on either arm arms the cooldown
+gate the same way as before.
+
+Effect on the two-windows-disagree symptom users reported on
+v1.8.2: when one card's raw fetch timed out and the other's
+succeeded, only one buffer got populated and the chip values
+diverged. The symmetric catch closes that gap.
+
+`readSlot` records the sample BEFORE the per-unit derivation so
+the scrub buffer is populated for power-native sensors too. The
+previous gate inside the kWh branch left the scrub buffer empty
+when the user wired a `W` / `kW` / `MW` sensor on `grid-import-entity`
+or `grid-export-entity`, the closest-sample-wins lookup in
+`gridWattsAtTime` returned null and the chip during scrub mode
+showed nothing.
+
+`GRID_LTS_WINDOW_MS` extended from 24 hours to 5 days, matching
+`GRID_SAMPLE_WINDOW_MS` retention. Scrub coverage on grid chips
+returns to a 5-day past window. LTS bucket queries hit HA's
+pre-aggregated `statistics_short_term` table so the recorder
+stays unaffected (1440 buckets per entity served from a single
+SQLite read, sub-second on a healthy install).
+
+### Fullscreen polish (#176, #177, #178, #179)
+
+Chip cluster gains a dedicated `_clusterLiftScale()` (max 2.4x
+vs the horizontal `_heliosScale()` 1.6x). On fullscreen / kiosk
+canvases the chip-to-home leader length grows faster than the
+horizontal chip spread; the home stays visually anchored in the
+lower half of the scene instead of pinching up next to the chip
+cluster. The horizontal chip-spread ramp stays at 1.6x max so
+the cluster does not run off-centre.
+
+Sun arc max ramp drops from 3.0x to 2.2x. The arc no longer
+overshoots the chip cluster on a 1500 px-wide canvas. Both call
+sites (`_sunSpherePoint` for the arc itself, `_projectSpherePoint`
+for the shading-dome cells) consume the same updated constant.
+
+Sun disc + halo consume the sun-arc scale via a new
+`getSunArcScale()` public engine method, so the disc keeps the
+same fraction of the arc length regardless of canvas size. No
+more tiny dot on a gigantic curve.
+
+Mode-bar handlers (Layer / LiDAR / Dome) call a new
+`_exitScrubMode()` helper before swapping mode, the scrub
+tooltip no longer floats orphaned at the bottom of the card
+after the timeline geometry shifts.
+
+At standard Lovelace grid sizes (<= 600 px wide), all the scale
+ramps stay at 1.0 and the geometry is identical to v1.8.2, no
+regression on regular dashboards.
+
 ## v1.8.2
 
 > Hardening release on top of v1.8.1. The cycle focuses on three

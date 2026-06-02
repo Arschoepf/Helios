@@ -2382,8 +2382,19 @@ export class HeliosCard extends LitElement
                             //     colour) so the disc has a clear edge
                             //     against the basemap regardless of
                             //     contrast.
-                            const r = HeliosCard.SUN_R_FAR
-                                    + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene!.sun.nearness;
+                            //Scale the disc + halo with the same ramp the
+                            //sun arc consumes engine-side. Without this
+                            //the disc stays at its grid-tuned pixel size
+                            //while the arc grows on a fullscreen canvas,
+                            //the sun reads as a tiny dot on a gigantic
+                            //curve. Multiplying here keeps the disc-to-arc
+                            //ratio constant across canvas sizes; at
+                            //standard Lovelace grid sizes the scale is
+                            //1.0 and the disc keeps its current size.
+                            const sunArcScale = this._engine?.getSunArcScale() ?? 1;
+                            const r = (HeliosCard.SUN_R_FAR
+                                    + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene!.sun.nearness)
+                                    * sunArcScale;
                             const rInner = r * sunFillRatio;
                             //Halo proportional to live irradiance,
                             //saturating at 1000 W/m² (clear-sky noon).
@@ -2631,8 +2642,17 @@ export class HeliosCard extends LitElement
     //expressions inside render() so Lit sees a stable identity and
     //does not re-attach the four @click handlers on every render
     //cycle (template re-attach cost + closure allocation).
+    //
+    //Each handler drops the scrub state up front via `_exitScrubMode`:
+    //a mode switch repositions the timeline visually (the dashboard
+    //panel shifts when the mode changes) and the absolutely-positioned
+    //scrub tooltip would otherwise stay pinned to the previous
+    //timeline location, floating orphaned at the bottom of the card.
+    //Returning to live before the mode swap hides the tooltip cleanly
+    //in the same render cycle.
     private _onModeLayer = (): void =>
     {
+        this._exitScrubMode();
         if (this._lidarViewMode)   toggleLidarView(this);
         if (this._shadingDomeMode) toggleShadingDome(this);
         //Cloud detail toggle is a simple ON/OFF, not a full-screen
@@ -2649,6 +2669,7 @@ export class HeliosCard extends LitElement
     };
     private _onModeLidar = (): void =>
     {
+        this._exitScrubMode();
         if (this._shadingDomeMode) toggleShadingDome(this);
         //LiDAR and Shading replace the whole HUD; force the per-layer
         //cloud expansion back to OFF so the 3 layer chips don't leak
@@ -2659,9 +2680,20 @@ export class HeliosCard extends LitElement
     };
     private _onModeShadingDome = (): void =>
     {
+        this._exitScrubMode();
         if (this._lidarViewMode)   toggleLidarView(this);
         this._cloudDomeMode = false;
         if (!this._shadingDomeMode) toggleShadingDome(this);
+    };
+    //Reset the timeline scrub state so the absolutely-positioned
+    //scrub tooltip element disappears in the next render. Called
+    //from the mode-bar handlers because a mode swap shifts the
+    //timeline geometry and the tooltip would otherwise stay
+    //pinned to the previous on-screen position.
+    private _exitScrubMode = (): void =>
+    {
+        if (this._selectedTime !== null) this._selectedTime = null;
+        if (!this._isLiveMode) this._isLiveMode = true;
     };
     //Camera lock state used by the top-left lock button. Delegates
     //to the engine, which itself prefers localStorage over the legacy
