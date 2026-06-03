@@ -33,6 +33,22 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Drop raw history fetch + boot loading overlay
+
+Two complementary cleanups now that the card is wired to the HA Energy dashboard end-to-end:
+
+- `refreshPv` no longer fires the `history/history_during_period` raw 6 h fetch. That call was the single
+  heaviest WS round-trip the card made (4-source 1 Hz Victron install = ~5-10 MB payload, single-threaded
+  SQLite recorder scan blocking every other read for the duration). With HA Energy as the source of truth the
+  raw window is no longer load-bearing for any single feature, the chart already blends `_pvCalibStats` /
+  `_pvTrainerStats` for the past portion and the right-edge live tail keeps extending via the
+  `hass.states[entity]` pushes appended directly to `_pvHistory`. Same approach the HA Energy panel itself uses.
+- Boot loading overlay (spinner + warning panel) removed. The overlay was waiting on the slow raw fetch; with
+  that gone the user-perceived first paint is sub-second and the overlay was flashing for nothing.
+- The `_energyDefaultsLoaded` flag + `refreshHaDailyTotals` early kickoff stay around as an internal perf win
+  (the recorder daily-totals query now lands the moment the HA Energy prefs snapshot parses, instead of
+  waiting up to 30 s for the next periodic tick).
+
 ### Boot spinner = the 3D card sun, fills with progress + Helios casing in HA catalog
 
 - The boot loading spinner is now the exact same 4-layer sun disc the engine paints over the home on the 3D

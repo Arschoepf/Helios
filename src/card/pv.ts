@@ -153,21 +153,6 @@ const _pvCalibStatsCache:     Map<string, PvStatsCacheEntry>   = new Map();
 const _pvTrainerStatsCache:   Map<string, PvStatsCacheEntry>   = new Map();
 
 
-function pvHistoryCacheGet(key: string): PvHistoryCacheEntry | null
-{
-    const e = _pvHistoryCache.get(key);
-    if (!e)
-    {
-        return null;
-    }
-    if (Date.now() - e.ts > PV_CACHE_TTL_MS)
-    {
-        _pvHistoryCache.delete(key);
-        return null;
-    }
-    return e;
-}
-
 function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): PvStatsCacheEntry | null
 {
     const e = cache.get(key);
@@ -214,6 +199,15 @@ export function refreshPv(host: PvHost): void
         }
         host._pvFetchKey = '';
         return;
+    }
+
+    //Seed `_pvHistory` as an empty pair so the boot gate clears immediately on entity resolution and the live tail
+    //extension below can append without a null guard each cycle. The raw 6 h fetch that used to populate this slot
+    //is removed (see the long comment further down); the chart pulls its past portion from `_pvCalibStats` /
+    //`_pvTrainerStats` LTS and the right-edge live tail from the `hass.states[entity]` pushes appended here.
+    if (host._pvHistory === null)
+    {
+        host._pvHistory = { times: [], values: [] };
     }
 
     //Multi-source LIVE aggregation. A user with a split E/W install (or any other multi-string install with one
@@ -397,75 +391,22 @@ export function refreshPv(host: PvHost): void
     //orders of magnitude faster. Raw only needs to cover the live
     //tail accurately enough for the tooltip and the head of the
     //chart curve.
-    //Hoisted out of the `_pvFetching` block so the calibration + trainer paths below see the same entity set for
-    //their cache keys. A drift between the raw / LTS keys would re-fetch one path on every refresh, defeating the
-    //hourly / 5-min cadence guarantees.
+    //Hoisted out of the LTS fetch blocks below so the calibration + trainer paths see the same entity set for
+    //their cache keys. A drift between the keys would re-fetch one path on every refresh, defeating the hourly /
+    //5-min cadence guarantees.
     const sortedLive   = [...liveEntities].sort();
     const fetchKeyPart = sortedLive.length > 0 ? sortedLive.join(',') : entity;
 
-    const RAW_WINDOW_H = 6;
-    if (!host._pvFetching)
-    {
-        //Cap anchored on NOW, not on the visible timeline end. The
-        //timeline end is the forecast horizon (e.g. tomorrow 23:59),
-        //so anchoring the cap there would place fetchStart in the
-        //future, fetchPvHistory would see `start >= fetchEnd` after
-        //its own "clamp end to now" pass, blank `_pvHistory` and
-        //leave the chart's past portion empty until live state
-        //pushes start landing. The window we actually want is
-        //"the last 6 h of real wall-clock time".
-        const visibleStart = host._timeRange.start;
-        //Round `now` to the minute boundary so the fetch key only flips at most once per minute. The earlier
-        //unrounded `Date.now()` was changing the cap by milliseconds on every Lit cycle, the fetch key flipped on
-        //every hass push (one per state change of any HA entity on busy buses) and the gate at `fullFetchKey !==
-        //host._pvFetchKey` fired a new WS round-trip every time, queuing async resolutions that raced each other on
-        //the `_pvHistory` write. The visible symptom was the "data outdated on first card open" report: a stale
-        //in-flight fetch from a brief boot-window resolved on top of a fresh one, the user saw the older snapshot
-        //until navigating away long enough for the stale promises to settle. Minute granularity is plenty fine for
-        //the chart's tail tracking, the live state read inside refreshPv still updates the chip on every push.
-        const FETCH_KEY_GRANULARITY_MS = 60_000;
-        const nowRoundedMs = Math.floor(Date.now() / FETCH_KEY_GRANULARITY_MS) * FETCH_KEY_GRANULARITY_MS;
-        const cap          = new Date(nowRoundedMs - RAW_WINDOW_H * HOUR_MS);
-        const fetchStart   = visibleStart < cap ? cap : visibleStart;
-        const rangeKey   = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
-        //Optional battery SoC companion fetch. We only ask HA for the SoC history when the user has explicitly armed the
-        //inverter-cutoff guard (cutoff percent configured AND a battery SoC source resolved from the HA Energy defaults); otherwise
-        //the trainer doesn't need it and the extra entity in the WS payload would be a waste of HA recorder bandwidth. The fetch
-        //key includes the SoC entity id so swapping it forces a re-fetch on the next refresh.
-        const battSocId = batterySocEntityForInhibit(host.config, host._energyDefaults);
-        //Multi-source aggregation: the fetch key embeds every wired entity id so adding / removing a source flips the
-        //key and invalidates the previous single- or differently-sourced cache entry. Sort to make the key stable
-        //regardless of HA Energy storage order. The caller (`fetchPvHistory`) now consumes the array directly and
-        //sums the per-entity histories via LKCF at the union of timestamps.
-        const fullFetchKey = `${fetchKeyPart}@${rangeKey}`
-            + (battSocId ? '|bsoc:' + battSocId : '');
-        if (fullFetchKey !== host._pvFetchKey)
-        {
-            host._pvFetchKey = fullFetchKey;
-            //Cache hit short-circuits the WS round-trip: the user navigates away from the card and back, the module-level cache still
-            //has the previous fetch parsed and ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (entity / range /
-            //SoC) change since that flips the key.
-            const cached = pvHistoryCacheGet(fullFetchKey);
-            if (cached)
-            {
-                host._pvHistory             = cached.history;
-                host._batteryHistory        = cached.batteryHistory;
-                host._pvHistoryDiagnostics  = cached.diagnostics;
-                host._pvHistoryPerEntity.clear();
-                for (const [id, h] of Object.entries(cached.historyPerEntity ?? {}))
-                {
-                    host._pvHistoryPerEntity.set(id, h);
-                }
-            }
-            else
-            {
-                const fetchIds       = sortedLive.length > 0 ? sortedLive : [entity];
-                const unitLow        = (host._pvUnit || '').toLowerCase();
-                const isCumulative   = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
-                fetchPvHistory(host, fetchIds, fetchStart, fetchEnd, battSocId, fullFetchKey, isCumulative);
-            }
-        }
-    }
+    //Raw `history/history_during_period` fetch removed. The card is now wired to the HA Energy dashboard end-to-end
+    //(daily totals via recorder `change`, headlines via `_haSolarTodayKwh`, calibration via `_pvCalibStats`,
+    //shading-map trainer via `_pvTrainerStats`, and the live chip via `hass.states[entity]` direct read), so the
+    //raw 6 h scan that was kept around to feed the chart tail + scrub past at 1 Hz precision is no longer load-
+    //bearing for any single feature. It was also the single heaviest WS round-trip the card fired (4-source 1 Hz
+    //Victron install = ~5-10 MB payload, single-threaded SQLite recorder scan on every card mount). The chart
+    //rendering already blends `_pvCalibStats` for any portion `_pvHistory` does not cover; with `_pvHistory` empty
+    //the whole past portion of the curve flows through LTS. The right-edge live tail is still extended via the
+    //`hass.states[entity]` push appended directly to `_pvHistory.times` / `.values` higher up in this function,
+    //so the curve still tracks the live state at the cadence HA fires state_changed events.
 
     //Hourly LTS for calibration (5 days). Multi-source aggregation matches the raw-history path so the calibration
     //ratio is learned against the SUMMED predicted-vs-actual instead of the first-entity-only fraction.

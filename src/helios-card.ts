@@ -520,21 +520,13 @@ export class HeliosCard extends LitElement
     //lock so the user cannot change modes mid-compute.
     @state() _lidarExposureBusy = false;
 
-    //Boot-time loading state. Card starts in `loading`: only the map basemap renders, the rest of the UI (chips,
-    //leaders, timeline, dashboard) is hidden behind opacity 0 and a centred home-outline build animation indicates
-    //"chargement en cours". When every configured data source has landed (engine ready + HA Energy prefs parsed +
-    //PV / battery / grid history fetched as applicable + LTS calib + LTS trainer), state flips to `ready` and the
-    //UI fades in over 500 ms. If the boot timeout elapses without reaching `ready`, state flips to `failed` and a
-    //warning panel takes over the same overlay.
-    @state() _bootPhase: 'loading' | 'ready' | 'failed' = 'loading';
-    //Per-source boot status for the warning panel readout. Only populated when state is `failed`.
-    @state() _bootMissing:  string[] = [];
-    //Flag flipped by `fetchEnergyPrefs` after the first parse lands. Used by the boot gate alongside the various
-    //fetch-state fields on the card itself.
-    _energyDefaultsLoaded = false;
-    private _bootTimeoutTimer?: number;
+    //Flag flipped by `fetchEnergyPrefs` after the first parse lands. The card uses it to kick `refreshHaDailyTotals`
+    //immediately when the HA Energy defaults snapshot first appears, instead of waiting up to 30 s for the next
+    //tick. Boot-time loading overlay is gone (the raw 6 h `history/history_during_period` fetch, which was the
+    //heavy round-trip the overlay was waiting on, is also gone, so the visible boot delay is now sub-second and
+    //the overlay was just flashing for nothing).
+    _energyDefaultsLoaded   = false;
     private _dailyTotalsKicked = false;
-    private static readonly BOOT_TIMEOUT_MS = 30_000;
     //True while the home is "focused": the existing overlay HUD is
     //hidden, the camera is eased to a closer / more pitched pose,
     //and a detail dashboard panel takes over. Toggled by clicking
@@ -901,26 +893,10 @@ export class HeliosCard extends LitElement
         super.connectedCallback();
         _liveCards.add(this);
         this._connectedAt = performance.now();
-        //Boot-loading state. The map basemap shows immediately, every other UI piece is hidden behind opacity 0 +
-        //a centred home-outline build animation until every configured data source has landed. Re-fresh evaluation
-        //runs on every `updated()` cycle; if the timeout fires first the state flips to `failed` and the warning
-        //panel surfaces the missing pieces.
-        this._bootPhase          = 'loading';
-        this._bootMissing        = [];
-        this._dailyTotalsKicked  = false;
-        if (this._bootTimeoutTimer !== undefined)
-        {
-            window.clearTimeout(this._bootTimeoutTimer);
-        }
-        this._bootTimeoutTimer = window.setTimeout(() =>
-        {
-            if (this._bootPhase === 'loading')
-            {
-                this._bootMissing = this._computeBootStatus().missing;
-                this._bootPhase   = 'failed';
-                this.requestUpdate();
-            }
-        }, HeliosCard.BOOT_TIMEOUT_MS);
+        //Reset the daily-totals kickoff flag so a remount re-fires `refreshHaDailyTotals` the moment the HA Energy
+        //defaults snapshot lands again. The early kickoff was the load-bearing piece of the previous boot overlay,
+        //and it stays around as a perf win even after the overlay was removed.
+        this._dailyTotalsKicked = false;
         tick(this);
         //30 s tick: the clock displays HH:MM only (seconds dropped),
         //the sun moves ~0.13° per refresh (visually smooth at that
@@ -958,11 +934,6 @@ export class HeliosCard extends LitElement
         super.disconnectedCallback();
         _liveCards.delete(this);
         window.clearInterval(this._timer);
-        if (this._bootTimeoutTimer !== undefined)
-        {
-            window.clearTimeout(this._bootTimeoutTimer);
-            this._bootTimeoutTimer = undefined;
-        }
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
         if (this._onVisibilityChange)
@@ -1054,32 +1025,15 @@ export class HeliosCard extends LitElement
             subscribeEnergyPrefs(this);
         }
 
-        //Boot gate: re-evaluate readiness every Lit cycle while still loading. As soon as every configured data
-        //source has landed, flip to `ready` and let the fade-in run via the CSS transition on .boot-loading. The
-        //timeout watchdog set in connectedCallback handles the unhappy path independently.
-        //
-        //Daily-totals kickoff: refreshHaDailyTotals at connectedCallback time is a no-op because the parsed HA
-        //Energy defaults have not landed yet (subscribeEnergyPrefs is async). The 30 s tick is too far in the
-        //future for the boot gate, so the moment we see `_energyDefaultsLoaded` flip true here we fire one
-        //immediate refresh so the three `*_today` slots land within the boot window instead of waiting for the
-        //next tick. The static flag prevents a second fire on subsequent cycles.
+        //Daily-totals kickoff: `refreshHaDailyTotals` at connectedCallback time is a no-op because the parsed HA
+        //Energy defaults have not landed yet (`subscribeEnergyPrefs` is async). The 30 s tick is too far in the
+        //future for the user-perceived first paint, so the moment we see `_energyDefaultsLoaded` flip true here we
+        //fire one immediate refresh so the three `*_today` slots land before the user has a chance to notice. The
+        //flag prevents a second fire on subsequent cycles.
         if (this._energyDefaultsLoaded && !this._dailyTotalsKicked)
         {
             this._dailyTotalsKicked = true;
             refreshHaDailyTotals(this);
-        }
-        if (this._bootPhase === 'loading')
-        {
-            const missing = this._computeBootStatus().missing;
-            if (missing.length === 0)
-            {
-                this._bootPhase = 'ready';
-                if (this._bootTimeoutTimer !== undefined)
-                {
-                    window.clearTimeout(this._bootTimeoutTimer);
-                    this._bootTimeoutTimer = undefined;
-                }
-            }
         }
 
         if (!this.hass?.config || !this.config)
@@ -1254,135 +1208,6 @@ export class HeliosCard extends LitElement
     //typeof + property read so caching it adds risk for no gain.
     //setCardThemeIsDark is invoked on every call so the engine
     //stays in sync even when the engine spawns mid-session.
-    //Computes the loading status for the boot gate: the list of data sources that have not landed yet AND the
-    //total number of required sources currently known. The progress ratio `(total - missing) / total` drives the
-    //sun-disc fill on the spinner. Empty `missing` list = ready, non-empty list = either still loading or, on
-    //timeout, surfaced inside the warning panel so the user can see which piece failed (HA Energy not configured,
-    //recorder timeout on a specific entity, MapLibre style fetch blocked by a corporate proxy, etc.). The check
-    //skips sources the install does not configure (no battery wired → battery rows omitted) so a PV-only setup
-    //does not block on a never-arriving battery history.
-    private _computeBootStatus(): { missing: string[]; total: number }
-    {
-        const missing: string[] = [];
-        let   total            = 0;
-
-        //Engine + basemap. Until the MapLibre style finishes loading and the engine has projected its first sun
-        //scene + label layout, the camera-driven SVG overlays cannot be positioned, so the whole UI stays in
-        //loading state regardless of the data fetches.
-        total++;
-        if (!this._engine || this._timeRange === null)
-        {
-            missing.push('engine');
-        }
-        total++;
-        if (this._chartSeries === null)
-        {
-            missing.push('weather');
-        }
-
-        //HA Energy prefs snapshot. Flips on the first fetchEnergyPrefs resolution (success or RBAC-denied), so an
-        //install without HA Energy still escapes the gate.
-        total++;
-        if (!this._energyDefaultsLoaded)
-        {
-            missing.push('energy_prefs');
-        }
-
-        //Per-source data: only required when the install actually configures the source. PV / battery / grid each
-        //gate independently on the relevant HA Energy default array being non-empty and on the corresponding
-        //history slot being non-null.
-        const ed = this._energyDefaults;
-        const hasPv      = ed.solarStatRates.length > 0 || ed.solarStatEnergyFroms.length > 0;
-        const hasBattery = ed.batteryStatRates.length > 0
-                        || ed.batteryStatEnergyFroms.length > 0
-                        || ed.batteryStatEnergyTos.length > 0
-                        || ed.batteryStatSocs.length > 0;
-        const hasGrid    = ed.gridStatRates.length > 0
-                        || ed.gridStatEnergyFroms.length > 0
-                        || ed.gridStatEnergyTos.length > 0;
-
-        if (hasPv)
-        {
-            total++;
-            if (this._pvHistory === null)
-            {
-                missing.push('pv_history');
-            }
-            total++;
-            if (this._pvCalibStats === null)
-            {
-                missing.push('pv_calib');
-            }
-            total++;
-            if (this._pvTrainerStats === null)
-            {
-                missing.push('pv_trainer');
-            }
-            total++;
-            if (this._haSolarTodayKwh === null)
-            {
-                missing.push('pv_today');
-            }
-        }
-        if (hasBattery)
-        {
-            const battEd = this._energyDefaults;
-            if (battEd.batteryStatSocs.length > 0)
-            {
-                total++;
-                if (this._batterySocHistory === null)
-                {
-                    missing.push('battery_soc_history');
-                }
-            }
-            if (battEd.batteryStatRates.length > 0 || battEd.batteryStatEnergyFroms.length > 0 || battEd.batteryStatEnergyTos.length > 0)
-            {
-                total++;
-                if (this._batteryPowerHistory === null)
-                {
-                    missing.push('battery_power_history');
-                }
-            }
-        }
-        if (hasGrid)
-        {
-            if (ed.gridStatEnergyFroms.length > 0)
-            {
-                total++;
-                if (this._haGridImportTodayKwh === null)
-                {
-                    missing.push('grid_import_today');
-                }
-            }
-            if (ed.gridStatEnergyTos.length > 0)
-            {
-                total++;
-                if (this._haGridExportTodayKwh === null)
-                {
-                    missing.push('grid_export_today');
-                }
-            }
-        }
-        return { missing, total };
-    }
-
-
-    //Convenience read used by the renderer + the warning panel. The progress ratio is monotonic over a single
-    //boot run because once the HA Energy prefs land the `total` only grows (new required slots come into scope),
-    //and `missing` only shrinks (fetches resolve, never un-resolve). The denominator floor (`Math.max(1, total)`)
-    //keeps the ratio defined while `_computeBootStatus` returns 0 known requirements during the brief boot window
-    //before the engine has spawned its first checks.
-    private _bootProgress(): number
-    {
-        const { missing, total } = this._computeBootStatus();
-        if (total <= 0)
-        {
-            return 0;
-        }
-        return Math.max(0, Math.min(1, (total - missing.length) / total));
-    }
-
-
     private _resolveIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
     {
         let isDark: boolean;
@@ -2053,60 +1878,11 @@ export class HeliosCard extends LitElement
             this._detailMode      ? 'detail-active'        : '',
             this._lidarViewMode   ? 'lidar-view-active'    : '',
             this._shadingDomeChipMask ? 'shading-dome-active'  : '',
-            this._bootPhase === 'loading'  ? 'boot-loading' : '',
-            this._bootPhase === 'failed'   ? 'boot-failed'  : '',
-            this._bootPhase === 'ready'    ? 'boot-ready'   : '',
         ].filter(Boolean).join(' ');
-
-        const bootProgress = this._bootPhase === 'loading' ? this._bootProgress() : 0;
-        //Sun spinner geometry, mirrors the 4-layer disc the engine paints over the home (halo + bg + inner fill +
-        //rim) so the loading-state visual reads as "the same sun is being built up" instead of an unrelated
-        //placeholder. The inner fill `rInner = r * sunFillRatio` is what the engine ties to live irradiance; we
-        //tie it to boot progress instead so the disc literally fills as data lands. Halo radius + alpha scale with
-        //the same ratio so the irradiation reads as growing with the disc.
-        const bootR        = 28;
-        const bootRInner   = bootR * bootProgress;
-        const bootHaloR    = bootR * (1.4 + 1.6 * bootProgress);
-        const bootHaloA    = bootProgress * 0.22;
-        const bootGradId   = `boot-sun-halo-${this._instanceId}`;
-        const bootOverlay = this._bootPhase === 'loading'
-            ? html`
-                <div class="boot-overlay" aria-hidden="true">
-                    <svg class="boot-spinner-sun" viewBox="-50 -50 100 100" preserveAspectRatio="xMidYMid meet">
-                        <defs>
-                            <radialGradient id="${bootGradId}">
-                                <stop offset="0%"   stop-color="currentColor" stop-opacity="${bootHaloA}"></stop>
-                                <stop offset="100%" stop-color="currentColor" stop-opacity="0"></stop>
-                            </radialGradient>
-                        </defs>
-                        <circle class="boot-sun-halo" cx="0" cy="0" r="${bootHaloR}" fill="url(#${bootGradId})"></circle>
-                        <circle class="boot-sun-bg"   cx="0" cy="0" r="${bootR}"     fill="currentColor" fill-opacity="0.18"></circle>
-                        <circle class="boot-sun-fill" cx="0" cy="0" r="${bootRInner}" fill="currentColor"></circle>
-                        <circle class="boot-sun-rim"  cx="0" cy="0" r="${bootR}"     fill="none" stroke="currentColor" stroke-width="1.2"></circle>
-                    </svg>
-                </div>
-              `
-            : this._bootPhase === 'failed'
-                ? html`
-                    <div class="boot-overlay boot-overlay-failed" role="alert">
-                        <ha-icon class="boot-warning-icon" icon="mdi:alert-circle-outline"></ha-icon>
-                        <div class="boot-warning-title">Helios , le chargement a échoué</div>
-                        <div class="boot-warning-body">
-                            Certaines données n'ont pas pu être récupérées avant le délai d'attente (15 s). Vérifiez votre dashboard HA Energy + votre connexion Home Assistant.
-                        </div>
-                        ${this._bootMissing.length > 0 ? html`
-                            <ul class="boot-warning-missing">
-                                ${this._bootMissing.map(m => html`<li>${m}</li>`)}
-                            </ul>
-                        ` : nothing}
-                    </div>
-                  `
-                : nothing;
 
         return html`
             <ha-card class="${cardClasses}">
 
-                ${bootOverlay}
                 <div id="map-container"></div>
 
                 ${hasApiKey && this._timeRange ? html`
