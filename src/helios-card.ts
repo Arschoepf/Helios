@@ -1838,8 +1838,8 @@ export class HeliosCard extends LitElement
                         @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
                     >
                         <!--  Optional PV production graph, only
-                              rendered when the user has set the
-                              pv-power-entity config. Same chip
+                              rendered when the HA Energy dashboard
+                              exposes a solar source. Same chip
                               styling as the main chart card; sits
                               just above it with a 4 px gap so the
                               two read as a stacked instrument. The

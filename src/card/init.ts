@@ -27,7 +27,6 @@ import type { ChartSeries } from './charts';
 //have a runtime effect.
 export const VISUAL_CONFIG_KEYS = [
     'show-labels',
-    'pv-power-entity',
     //PV layout, every change must reach the engine so the per-array shading geometry, the forecast and the calibration ratio
     //recompute against the new tilt / azimuth / kWp / inverter cap.
     'pv-arrays',
@@ -36,17 +35,9 @@ export const VISUAL_CONFIG_KEYS = [
     'pv-inverter-max-kw',
     //map-style triggers a MapLibre setStyle(), the engine reloads the cloud disc, buildings and labels on the resulting `style.load`.
     'map-style',
-    //Battery flat keys + the multi-bank array + the inverter-cutoff guard. Any of them changes the trainer guard or the chip wiring.
-    'battery-soc-entity',
-    'battery-power-entity',
-    'battery-power-invert',
-    'batteries',
+    //Inverter-cutoff guard: when set, the shading trainer skips buckets where SoC reached the cutoff so the inverter-blocked
+    //production does not pollute the shading map.
     'inverter-cutoff-soc-pct',
-    //Grid wiring: chips and flow leader paths follow these directly.
-    'grid-import-entity',
-    'grid-export-entity',
-    'grid-power-entity',
-    'grid-power-invert',
     //solar-radiation-entity, when set, feeds the engine sensor samples that override Open-Meteo for the live + past irradiance
     //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
     'solar-radiation-entity',

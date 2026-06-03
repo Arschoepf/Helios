@@ -14,7 +14,6 @@ import type { HeliosEngine } from '../helios-engine';
 import
 {
     DEFAULT_SUN_COLOR_HEX,
-    DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX,
     DEFAULT_BATTERY_COLOR_HEX
 } from '../helios-config';
@@ -24,7 +23,8 @@ import
     pvCalibK,
     pvNormalizeToWatts,
     pvInverterMaxW,
-    computePvPowerWeighted
+    computePvPowerWeighted,
+    resolvePvLiveEntity
 } from './pv';
 import { computeBatteryToday, resolveBatteryEntities, type BatteryHost } from './battery';
 import { effectiveForecastRatio, type ChartHost } from './charts';
@@ -124,12 +124,10 @@ export function dashCountUpPhase(host: DashboardHost): number
 export function renderDashboard(host: DashboardHost): TemplateResult
 {
     const t            = pickTranslations(host.hass?.language);
-    //Colour configs are no longer consulted; the dashboard inherits
-    //the HA Energy palette via the CSS tokens consumed by every chip
-    /// leader / chart style. Locals stay so downstream callers that
-    //expect a string colour for inline SVG attributes still build.
+    //Colour configs are no longer consulted; the dashboard inherits the HA Energy palette via the CSS tokens consumed by
+    //every chip / leader / chart style. Locals stay so downstream callers that expect a string colour for inline SVG
+    //attributes still build.
     const sunColor     = DEFAULT_SUN_COLOR_HEX;
-    const cloudColor   = DEFAULT_CLOUD_COLOR_HEX;
     const pvColor      = DEFAULT_PV_COLOR_HEX;
     const batteryColor = DEFAULT_BATTERY_COLOR_HEX;
 
@@ -152,10 +150,10 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                 ${renderDashTodaySection(host, t, pvColor, sunColor)}
                 ${hasBattery ? html`
                     <div class="dash-row">
-                        ${renderDashTomorrowSection(host, t, sunColor, cloudColor, pvColor)}
+                        ${renderDashTomorrowSection(host, t, sunColor, pvColor)}
                         ${renderDashBatterySection(host, t, batteryColor)}
                     </div>
-                ` : renderDashTomorrowSection(host, t, sunColor, cloudColor, pvColor)}
+                ` : renderDashTomorrowSection(host, t, sunColor, pvColor)}
             </div>
         </div>
     `;
@@ -594,7 +592,7 @@ export function renderDashTodaySection(
     //show a skeleton in place of the produced value, so users
     //don't read a transient 0,0 kWh as fact. Once the fetch lands
     //(empty or not), we fall back to rendering the number.
-    const pvConfigured = String(host.config?.['pv-power-entity'] ?? '').trim() !== '';
+    const pvConfigured = resolvePvLiveEntity(host._energyDefaults) !== '';
     const historyLoading = pvConfigured && host._pvHistory === null;
 
     //"Not started yet" hint: produced is effectively zero but the forecast knows a peak is still ahead. Avoids the confusing "0,0 kWh / 12,1 kWh
@@ -1111,7 +1109,6 @@ export function renderDashTomorrowSection(
     host:      DashboardHost,
     t:         ReturnType<typeof pickTranslations>,
     sunColor:  string,
-    _cloudColor: string,
     pvColor:   string
 ): TemplateResult
 {
