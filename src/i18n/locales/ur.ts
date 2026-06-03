@@ -50,7 +50,7 @@ export const ur: Translations = {
         autoRotateOn:       'آن',
         autoRotateOff:      'آف',
         installationSection: 'PV تنصیب',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'انورٹر کا زیادہ سے زیادہ آؤٹ پٹ (kW)',
         pvInverterMaxKwHelp:'پیشن گوئی پر اختیاری کلپ۔ جب آپ کے پینل انورٹر کی فراہمی سے زیادہ پیدا کر سکیں تو اسے اپنے انورٹر کے نام پلیٹ AC آؤٹ پٹ پر سیٹ کریں (عام یورپی جوڑا: 5 kW انورٹر کے پیچھے 6.4 kWp DC)۔ مشاہدہ کو بے تبدیل چھوڑتا ہے (انورٹر پہلے ہی ہارڈویئر میں کلپ کرتا ہے) لیکن متوقع وکر، روزانہ kWh کے مجموعے اور ٹول ٹپ کی قدروں کو محدود کرتا ہے تاکہ ریڈ آؤٹ کبھی بھی حقیقت سے زیادہ نہ ہو۔',
         pvArraysSection:    'پینل کی سمت',

@@ -50,7 +50,7 @@ export const es419: Translations = {
         autoRotateOn:       'Activada',
         autoRotateOff:      'Desactivada',
         installationSection: 'Instalación FV',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Potencia máxima del inversor (kW)',
         pvInverterMaxKwHelp:'Recorte opcional del pronóstico. Indica la potencia AC nominal de tu inversor cuando los paneles pueden producir más de lo que el inversor entrega (combinación europea típica: 6,4 kWp DC detrás de un inversor de 5 kW). No afecta la observación (el inversor ya recorta por hardware), pero limita la curva pronosticada, los totales diarios en kWh y los valores del tooltip para que la lectura nunca supere la realidad.',
         pvArraysSection:    'Orientación de los paneles',

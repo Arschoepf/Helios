@@ -50,7 +50,7 @@ export const eu: Translations = {
         autoRotateOn:       'Piztuta',
         autoRotateOff:      'Itzalita',
         installationSection: 'FV instalazioa',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Inberterearen gehienezko irteera (kW)',
         pvInverterMaxKwHelp:'Aurreikuspenaren aukerako muga. Ezarri inberterearen plakako AC irteera panelek inberterea entregatzeko gai dena baino gehiago ekoiztu dezaketenean (Europako konbinazio tipikoa: 6,4 kWp DC 5 kW-eko inberter baten atzean). Ez du behaketarik ukitzen (inberterea hardwarean mozten du dagoeneko), baina aurreikusitako kurba, eguneko kWh totalak eta tooltip-aren balioak mugatzen ditu, irakurketa errealitatea inoiz gainditu ez dezan.',
         pvArraysSection:    'Panelen orientazioa',

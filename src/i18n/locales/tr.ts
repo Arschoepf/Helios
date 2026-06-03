@@ -50,7 +50,7 @@ export const tr: Translations = {
         autoRotateOn:       'Açık',
         autoRotateOff:      'Kapalı',
         installationSection: 'FV tesisat',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'İnvertörün maksimum çıkışı (kW)',
         pvInverterMaxKwHelp:'Tahmin için isteğe bağlı sınırlama. Panelleriniz invertörün verebileceğinden daha fazla üretebildiğinde (tipik Avrupa eşleşmesi: 5 kW invertörün arkasında 6,4 kWp DC), bunu invertörünüzün etiket AC çıkışına ayarlayın. Gözlemi etkilemez (invertör donanımda zaten kırpar), ancak tahmin edilen eğriyi, günlük kWh toplamlarını ve tooltip değerlerini sınırlandırır, böylece okuma gerçekliği aşmaz.',
         pvArraysSection:    'Panel yönlendirmesi',

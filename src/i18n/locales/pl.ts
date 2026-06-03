@@ -47,7 +47,7 @@ export const pl: Translations = {
         autoRotateOn:       'Włączona',
         autoRotateOff:      'Wyłączona',
         installationSection: 'Instalacja PV',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Maks. moc falownika (kW)',
         pvInverterMaxKwHelp:'Opcjonalne ograniczenie prognozy. Ustaw na nominalną moc AC swojego falownika, gdy Twoje panele mogą produkować więcej niż falownik może dostarczyć (typowe europejskie połączenie: 6,4 kWp DC za falownikiem 5 kW). Nie wpływa na obserwację (falownik już ogranicza sprzętowo), ale ogranicza przewidywaną krzywą, dzienne sumy kWh i wartości tooltipa, aby odczyt nigdy nie przekraczał rzeczywistości.',
         pvArraysSection:    'Orientacja paneli',

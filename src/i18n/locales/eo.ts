@@ -50,7 +50,7 @@ export const eo: Translations = {
         autoRotateOn:       'Ŝaltita',
         autoRotateOff:      'Malŝaltita',
         installationSection: 'FV-instalaĵo',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Maksimuma eligo de la invertilo (kW)',
         pvInverterMaxKwHelp:'Nedeviga limigo de la prognozo. Agordu tion al la AC-nomvalora eligo de via invertilo kiam la paneloj povas produkti pli ol la invertilo povas liveri (tipa eŭropa kombino: 6,4 kWp DC malantaŭ 5 kW invertilo). Ne tuŝas observadon (la invertilo jam limigas en aparato), sed limigas la prognozitan kurbon, la tagajn kWh-totalojn kaj la valorojn en la priklarigilo, por ke la legaĵo neniam superu la realon.',
         pvArraysSection:    'Orientiĝo de la paneloj',

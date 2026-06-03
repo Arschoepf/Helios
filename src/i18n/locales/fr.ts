@@ -52,7 +52,7 @@ export const fr: Translations = {
         autoRotateOn:       'Activée',
         autoRotateOff:      'Désactivée',
         installationSection: 'Installation photovoltaïque',
-        installationHint:   'Tous les réglages natifs (production, grid, batterie) sont désormais issus du dashboard Énergie de Home Assistant. Cette section sert uniquement à ajouter des détails sur ton installation pour affiner la prévision : puissance max onduleur, orientation des panneaux, capteur d\'irradiance optionnel.',
+        installationHint:   'Toutes les entités lues par Helios (production PV, import / export grid, puissance batterie et SoC) sont récupérées depuis le [dashboard Énergie de Home Assistant](/config/energy). Cette section sert uniquement à ajouter des détails sur ton installation pour affiner la prévision : puissance max onduleur, orientation des panneaux, capteur d\'irradiance optionnel.',
         pvInverterMaxKw:    'Puissance max onduleur (kW)',
         pvInverterMaxKwHelp:'Écrêtage optionnel sur la prévision. Renseigne la puissance AC nominale de ton onduleur si tes panneaux peuvent produire plus que ce qu\'il peut sortir (cas classique en Europe : 6,4 kWp DC derrière un onduleur 5 kW). N\'affecte pas l\'observation (l\'onduleur écrête déjà côté matériel) mais plafonne la courbe prévue, les totaux kWh quotidiens et la tooltip pour qu\'ils ne dépassent jamais la réalité matérielle.',
         pvArraysSection:    'Orientation des panneaux',

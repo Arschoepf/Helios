@@ -45,7 +45,7 @@ export const nl: Translations = {
         autoRotateOn:       'Aan',
         autoRotateOff:      'Uit',
         installationSection: 'PV-installatie',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Max omvormervermogen (kW)',
         pvInverterMaxKwHelp:'Optionele begrenzing van de voorspelling. Vul het nominale AC-vermogen van je omvormer in wanneer je panelen meer DC kunnen leveren dan de omvormer aankan (typische Europese combinatie: 6,4 kWp DC achter een 5 kW omvormer). Beïnvloedt waarnemingen niet (de omvormer begrenst al in hardware), maar limiteert de voorspellingscurve, de dagelijkse kWh-totalen en de tooltip-waarden zodat de uitlezing nooit de hardwarewerkelijkheid overschrijdt.',
         pvArraysSection:    'Paneeloriëntatie',

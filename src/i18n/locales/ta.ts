@@ -50,7 +50,7 @@ export const ta: Translations = {
         autoRotateOn:       'இயக்கப்பட்டுள்ளது',
         autoRotateOff:      'நிறுத்தப்பட்டுள்ளது',
         installationSection: 'PV நிறுவல்',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'இன்வர்ட்டர் அதிகபட்ச வெளியீடு (kW)',
         pvInverterMaxKwHelp:'முன்னறிவிப்பின் மீது விருப்பத்தேர்வு கிளிப். உங்கள் பேனல்கள் இன்வர்ட்டர் வழங்கக்கூடியதை விட அதிகமாக உற்பத்தி செய்ய முடியும் போது இதை உங்கள் இன்வர்ட்டரின் நேம்பிளேட் AC வெளியீட்டிற்கு அமைக்கவும் (வழக்கமான ஐரோப்பிய இணைப்பு: 5 kW இன்வர்ட்டருக்குப் பின்னால் 6.4 kWp DC). கண்காணிப்பை தொடாமல் விடுகிறது (இன்வர்ட்டர் ஏற்கனவே வன்பொருளில் கிளிப் செய்கிறது) ஆனால் கணித்த வளைவு, தினசரி kWh மொத்தங்கள் மற்றும் டூல்டிப் மதிப்புகளை வரம்பிடுகிறது, இதனால் வாசிப்பு உண்மையை ஒருபோதும் மீறாது.',
         pvArraysSection:    'பேனல் திசை',

@@ -50,7 +50,7 @@ export const uk: Translations = {
         autoRotateOn:       'Увімкнено',
         autoRotateOff:      'Вимкнено',
         installationSection: 'PV-установка',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Макс. вихід інвертора (kW)',
         pvInverterMaxKwHelp:'Необов\'язкове обмеження прогнозу. Задайте номінальну AC-потужність інвертора, коли панелі можуть видавати більше, ніж інвертор здатний передати (типова європейська пара: 6.4 kWp DC за 5 kW інвертором). Не торкається спостереження (інвертор уже обмежує апаратно), але обрізає прогнозовану криву, добові kWh і значення підказок, щоб показання ніколи не перевищували реальність.',
         pvArraysSection:    'Орієнтація панелей',

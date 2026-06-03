@@ -55,7 +55,7 @@ export const en: Translations = {
         autoRotateOn:       'On',
         autoRotateOff:      'Off',
         installationSection: 'PV installation',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Inverter max output (kW)',
         pvInverterMaxKwHelp:'Optional clip on the forecast. Set this to your inverter\'s nameplate AC output when your panels can produce more than the inverter can deliver (typical European pairing: 6.4 kWp DC behind a 5 kW inverter). Leaves observation untouched (the inverter already clips in hardware) but caps the predicted curve, the daily kWh totals and the tooltip values so the readout never overshoots reality.',
         pvArraysSection:    'Panel orientation',

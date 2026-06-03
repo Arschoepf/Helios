@@ -45,7 +45,7 @@ export const de: Translations = {
         autoRotateOn:       'Ein',
         autoRotateOff:      'Aus',
         installationSection: 'PV-Anlage',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Wechselrichter-Maximalleistung (kW)',
         pvInverterMaxKwHelp:'Optionale Deckelung der Prognose. Gib hier die AC-Nennleistung deines Wechselrichters ein, wenn deine Module mehr DC erzeugen können als der Wechselrichter abgibt (typische europäische Kombination: 6,4 kWp DC hinter einem 5-kW-Wechselrichter). Beeinflusst die Messwerte nicht (der Wechselrichter begrenzt bereits in Hardware), deckelt aber die Prognosekurve, die täglichen kWh-Summen und die Tooltip-Werte, damit der Wert nie die Hardware-Realität überschreitet.',
         pvArraysSection:    'Modulausrichtung',

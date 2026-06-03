@@ -54,7 +54,7 @@ export const no: Translations = {
         autoRotateOn:       'På',
         autoRotateOff:      'Av',
         installationSection: 'Solcelleanlegg',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Maks vekselretter-effekt (kW)',
         pvInverterMaxKwHelp:'Valgfri begrensning på prognosen. Sett inn vekselretterens nominelle AC-effekt når panelene kan produsere mer enn vekselretteren kan levere (typisk europeisk kombinasjon: 6,4 kWp DC bak en 5 kW vekselretter). Påvirker ikke observasjon (vekselretteren begrenser allerede i maskinvare), men kapper prognosekurven, daglige kWh-summer og tooltip-verdier slik at avlesningen aldri overstiger maskinvarens virkelighet.',
         pvArraysSection:    'Panelorientering',

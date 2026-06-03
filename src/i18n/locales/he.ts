@@ -50,7 +50,7 @@ export const he: Translations = {
         autoRotateOn:       'פעיל',
         autoRotateOff:      'כבוי',
         installationSection: 'התקנת PV',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'הספק יציאה מרבי של המהפך (kW)',
         pvInverterMaxKwHelp:'חיתוך אופציונלי על התחזית. הגדר זאת ליציאת AC הנקובה של המהפך שלך כאשר הפאנלים שלך יכולים לייצר יותר ממה שהמהפך מסוגל לספק (זיווג אירופי טיפוסי: 6.4 kWp DC מאחורי מהפך 5 kW). משאיר את התצפיות ללא שינוי (המהפך כבר חותך בחומרה) אך מגביל את העקומה החזויה, את סכומי kWh היומיים ואת ערכי הטיפים כדי שהקריאה לעולם לא תחרוג מהמציאות.',
         pvArraysSection:    'כיוון פאנלים',

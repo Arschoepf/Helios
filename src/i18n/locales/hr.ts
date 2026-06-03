@@ -50,7 +50,7 @@ export const hr: Translations = {
         autoRotateOn:       'Uključeno',
         autoRotateOff:      'Isključeno',
         installationSection: 'PV instalacija',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'Maksimalna izlazna snaga izmjenjivača (kW)',
         pvInverterMaxKwHelp:'Neobavezno ograničenje prognoze. Postavite ovo na nazivni AC izlaz vašeg izmjenjivača kada vaši paneli mogu proizvesti više nego što izmjenjivač može isporučiti (tipičan europski par: 6.4 kWp DC iza 5 kW izmjenjivača). Ne dira opažanje (izmjenjivač već ograničava hardverski) ali ograničava prognoziranu krivulju, dnevne kWh zbrojeve i vrijednosti u oblačićima tako da očitanja nikad ne premaše stvarnost.',
         pvArraysSection:    'Orijentacija panela',

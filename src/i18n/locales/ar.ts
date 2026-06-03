@@ -50,7 +50,7 @@ export const ar: Translations = {
         autoRotateOn:       'مُفعّل',
         autoRotateOff:      'مُعطّل',
         installationSection: 'التركيب الكهروضوئي',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'أقصى خرج للعاكس (kW)',
         pvInverterMaxKwHelp:'تقييد اختياري على التوقعات. اضبط هذا على خرج AC الاسمي للعاكس عندما تستطيع الألواح إنتاج أكثر مما يستطيع العاكس تسليمه (ازدواج أوروبي نموذجي: 6.4 kWp DC خلف عاكس 5 kW). لا يمس الرصد (العاكس يقيّد فعلاً على المستوى المادي) لكنه يحد من المنحنى المتوقع ومجاميع kWh اليومية وقيم تلميحات الأدوات بحيث لا يتجاوز الواقع.',
         pvArraysSection:    'توجيه اللوحات',

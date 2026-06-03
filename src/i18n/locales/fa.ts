@@ -50,7 +50,7 @@ export const fa: Translations = {
         autoRotateOn:       'روشن',
         autoRotateOff:      'خاموش',
         installationSection: 'نصب PV',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'Every entity Helios reads (PV production, grid import / export, battery power and state of charge) is pulled from the [Home Assistant Energy dashboard](/config/energy). This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
         pvInverterMaxKw:    'حداکثر خروجی اینورتر (kW)',
         pvInverterMaxKwHelp:'محدودیت اختیاری روی پیش‌بینی. این را روی خروجی AC نامی اینورتر تنظیم کنید اگر پنل‌های شما می‌توانند بیش از آنچه اینورتر قادر به تحویل است تولید کنند (جفت‌بندی اروپایی معمول: 6.4 kWp DC پشت یک اینورتر 5 kW). مشاهدات را دست‌نخورده می‌گذارد (اینورتر در سخت‌افزار قبلاً محدود می‌کند) اما منحنی پیش‌بینی، مجموع kWh روزانه و مقادیر راهنماها را محدود می‌کند تا خوانش هرگز از واقعیت فراتر نرود.',
         pvArraysSection:    'جهت پنل‌ها',

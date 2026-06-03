@@ -54,6 +54,12 @@ function renderMarkdownLinks(text: string): unknown[]
         {
             parts.push(html`<a href="${url}" target="_blank" rel="noopener noreferrer">${label}</a>`);
         }
+        else if (/^\/[a-zA-Z0-9_\-/.]*$/.test(url))
+        {
+            //Same-origin in-app navigation (e.g. /config/energy to jump to the Home Assistant Energy dashboard editor).
+            //No target=_blank so the user stays inside the HA SPA and the dashboard's own navigation history works.
+            parts.push(html`<a href="${url}">${label}</a>`);
+        }
         else
         {
             //Suspicious scheme, render as plain text so the user can see the URL but the browser doesn't follow it.
@@ -843,7 +849,7 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'installation'}" @toggle="${(e: Event) => this._onSectionToggle('installation', e)}">
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:solar-power-variant"></ha-icon>${t.editor.installationSection}</summary>
-                <div class="hint">${t.editor.installationHint}</div>
+                <div class="hint">${renderMarkdownLinks(t.editor.installationHint)}</div>
                 <label class="field">
                     <span class="label">${t.editor.pvInverterMaxKw}</span>
                     <input
