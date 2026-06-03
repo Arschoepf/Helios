@@ -2331,6 +2331,253 @@ ha-icon
         margin-bottom: 2px;
     }
 
+        it never blocks pointer events. Fade alpha comes from inline
+        style driven by the dome fade RAF.                          */
+    .shading-dome-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        z-index: 7;
+    }
+    /*  Wireframe + cell outlines paint via currentColor so the dome
+        flips polarity with the theme: black ink on a bright basemap
+        in light mode, white ink against a darkened basemap in dark
+        mode. Per-cell opacities live inline so the wipe + decay
+        envelope stays a pure paint-property and doesn't bleed into
+        the theme switch. */
+    .shading-dome-cells-wire,
+    .shading-dome-cells-color
+    {
+        color: var(--primary-text-color, #212121);
+    }
+    ha-card.theme-dark .shading-dome-cells-wire,
+    ha-card.theme-dark .shading-dome-cells-color
+    {
+        color: #ffffff;
+    }
+    /*  Cloud-bin picker: small segmented control hugging the top
+        edge under the dome chip cluster. Pills mirror the dome's
+        accent so it reads as part of the same widget.             */
+    /*  Continuous cloud-cover slider, bottom-centre of the card
+        while the dome is on. Sun glyph on the LEFT, heavy-cloud
+        glyph on the RIGHT, the slider in between reads as the
+        cloud-cover knob driving the dome's view. Percent value
+        chip on the far RIGHT is the immediate readout. Shares the
+        same pill, same z, same bottom anchor as the LiDAR opacity
+        slider so the two modes feel mounted to the same rail. */
+    .shading-dome-cloud-slider
+    {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        /*  translateY(60px) parks the pill below the card so the
+            slide-in animation can lift it back into view when the
+            mode becomes active. The .is-active class below resets
+            translateY to 0; the transition on transform + opacity
+            runs in both directions. */
+        transform: translate(-50%, 60px);
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.35s ease, opacity 0.35s ease;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        min-height: 28px;
+        box-sizing: border-box;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+    }
+    .shading-dome-cloud-slider.is-active
+    {
+        transform: translate(-50%, 0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+    /*  Tick wrapper: the slider sits in a relative container so
+        the tick spans can be absolutely positioned over the
+        track without disturbing the slider's native thumb
+        hit-area. --thumb-r feeds the calc() positions on each
+        tick so they land on the actual thumb centre at every
+        snap point, not on the wrap's geometric percentage. The
+        native thumb's centre travels between (thumb-r) and
+        (track-width - thumb-r), so we use the same offset for
+        the tick positions.                                       */
+    .shading-dome-cloud-track-wrap
+    {
+        --thumb-r: 7px;
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        height: 14px;
+    }
+    .shading-dome-cloud-tick
+    {
+        position: absolute;
+        top: 50%;
+        width: 2px;
+        height: 8px;
+        background: rgba(255, 255, 255, 0.35);
+        border-radius: 1px;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        /*  Stack below the slider thumb so the knob always reads as
+            the foreground, the ticks as reference marks behind it. */
+        z-index: 0;
+    }
+    .shading-dome-cloud-icon
+    {
+        --mdc-icon-size: 16px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .shading-dome-cloud-icon--sun   { color: #fde68a; }
+    .shading-dome-cloud-icon--cloud { color: #cbd5e1; }
+    .shading-dome-cloud-range
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, #fde68a 0%, #cbd5e1 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .shading-dome-cloud-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary-color, #03a9f4);
+        border: 2px solid var(--card-background-color, #ffffff);
+        box-shadow: 0 1px 3px var(--shadow-color);
+        cursor: pointer;
+        position: relative;
+        z-index: 2;
+    }
+    .shading-dome-cloud-range::-moz-range-thumb
+    {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary-color, #03a9f4);
+        border: 2px solid var(--card-background-color, #ffffff);
+        box-shadow: 0 1px 3px var(--shadow-color);
+        cursor: pointer;
+        position: relative;
+        z-index: 2;
+    }
+    .shading-dome-cloud-value
+    {
+        min-width: 36px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  LiDAR View opacity slider. Painted at the bottom of the card
+        while the LiDAR view is active. Same capsule pill as the dome
+        cloud picker for visual consistency between the two modes;
+        ungated (continuous, no ticks) because opacity is a free
+        analog tune, not a binned pick.                              */
+
+    .lidar-view-opacity-slider
+    {
+        position: absolute;
+        bottom: 14px;
+        left: 50%;
+        /*  Same parked-below-the-card resting state as the dome
+            slider so the two modes share one slide-in animation. */
+        transform: translate(-50%, 60px);
+        opacity: 0;
+        pointer-events: none;
+        transition: transform 0.35s ease, opacity 0.35s ease;
+        z-index: 50;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        min-height: 28px;
+        box-sizing: border-box;
+        background: rgba(0, 0, 0, 0.55);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 999px;
+    }
+    .lidar-view-opacity-slider.is-active
+    {
+        transform: translate(-50%, 0);
+        opacity: 1;
+        pointer-events: auto;
+    }
+    .lidar-view-opacity-icon
+    {
+        --mdc-icon-size: 16px;
+        color: rgba(255, 255, 255, 0.85);
+        display: inline-flex;
+        align-items: center;
+    }
+    .lidar-view-opacity-icon--low  { opacity: 0.7; }
+    .lidar-view-opacity-icon--high { opacity: 1.0; }
+    .lidar-view-opacity-range
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 160px;
+        height: 4px;
+        background: linear-gradient(to right, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0.9) 100%);
+        border-radius: 999px;
+        outline: none;
+        cursor: pointer;
+        margin: 0;
+    }
+    .lidar-view-opacity-range::-webkit-slider-thumb
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary-color, #03a9f4);
+        border: 2px solid var(--card-background-color, #ffffff);
+        box-shadow: 0 1px 3px var(--shadow-color);
+        cursor: pointer;
+        position: relative;
+        z-index: 2;
+    }
+    .lidar-view-opacity-range::-moz-range-thumb
+    {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary-color, #03a9f4);
+        border: 2px solid var(--card-background-color, #ffffff);
+        box-shadow: 0 1px 3px var(--shadow-color);
+        cursor: pointer;
+        position: relative;
+        z-index: 2;
+    }
+    .lidar-view-opacity-value
+    {
+        min-width: 36px;
+        text-align: right;
+        font-size: 11px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.85);
+        font-variant-numeric: tabular-nums;
+    }
+
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
         text + icon) for instant identification.
