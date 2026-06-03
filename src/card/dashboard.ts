@@ -200,11 +200,12 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const rotY     = sign * (absDelta === 1 ? 30 : absDelta === 2 ? 65 : 0);
     const zIdx     = 10 - absDelta;
     const opacity  = 1;
-    //Soft blur on the side cards, stronger on the back pair so the focal hierarchy reads cleanly even with full
-    //opacity: front sharp, ±1 lightly out of focus, ±2 more defocused. The filter is applied via the inline
-    //style so it stays applied through the enter / exit animations (keyframes never touch `filter`).
-    const blurPx   = absDelta === 0 ? 0 : absDelta === 1 ? 1.5 : 4;
     const isFront  = absDelta === 0;
+    //Perspective-driven gradient blur: each side card gets a ::after overlay (CSS rule keyed off the data-delta
+    //attribute) that backdrop-blurs the half of the card facing AWAY from the centre, while leaving the half
+    //facing TOWARDS the centre sharp. The data-delta value lets the CSS pick the right gradient direction +
+    //blur strength.
+    const deltaAttr = delta;
 
     //Date label: this card represents `today + cardOffset` days. Computed off a fresh midnight Date so day
     //rollover at midnight does not leave a stale offset cached.
@@ -223,8 +224,7 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     //plane), then translateX as a percent of the SCALED bounding box, then the centring translate(-50%, -50%) on
     //the parent. The percent translate is applied AFTER scale, which means a sibling at 105 % sits roughly one
     //full card width to the side at its rendered (scaled) size, the right behaviour for the fan.
-    const filterStr = blurPx > 0 ? `filter: blur(${blurPx}px);` : '';
-    const style = `transform: translate(-50%, -50%) translateX(${txPct}%) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity}; ${filterStr}`;
+    const style = `transform: translate(-50%, -50%) translateX(${txPct}%) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity};`;
 
     const t = pickTranslations(host.hass?.language);
     return html`
@@ -232,6 +232,7 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
             class="dash-cf-card ${isFront ? 'dash-cf-card-front' : ''}"
             style="${style}"
             data-day-offset="${cardOffset}"
+            data-delta="${deltaAttr}"
             @click="${(e: Event) => { if (!isFront) { e.stopPropagation(); navigateDashDay(host, cardOffset); } }}"
         >
             ${isFront ? html`
@@ -251,9 +252,14 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
 
 
 //Day-offset navigation. Clamps to the [-2..+2] window and triggers a Lit re-render via requestUpdate so the
-//transforms animate from the previous active offset to the new one.
+//transforms animate from the previous active offset to the new one. Swallowed during the enter / exit
+//animation window so an in-flight fade cannot navigate mid-animation.
 export function navigateDashDay(host: DashboardHost, nextOffset: number): void
 {
+    if (host._dashAnimPhase !== 'idle')
+    {
+        return;
+    }
     const next = clampDayOffset(nextOffset);
     if (next === host._dashDayOffset)
     {
@@ -1801,33 +1807,44 @@ export function handleExitDetail(host: DashboardHost, e: Event): void
 {
     e.stopPropagation();
     if (!host._detailMode) { return; }
-    //Stage the exit animation: phase 'exiting' kicks the staged retreat (back tucks behind mid first, then mid
-    //behind front, finally the front fades out). Lasts 1 s; only after that do we actually unmount the panel
-    //and tell the engine to leave detail mode.
     if (host._dashAnimPhase === 'exiting')
     {
         return;
+    }
+    //Re-centre on today first if the user is sitting on a different day, so the exit animation always plays
+    //from the canonical front=today state. The transform transition (420 ms) on each card runs concurrently;
+    //we delay the staged fade-out by that much so the cards do not start fading before they have reached
+    //their resting position. When already on today, no re-centre delay.
+    const TRANSFORM_TRANSITION_MS = 420;
+    const recenterDelay = host._dashDayOffset !== 0 ? TRANSFORM_TRANSITION_MS : 0;
+    if (recenterDelay > 0)
+    {
+        host._dashDayOffset = 0;
+        (host as unknown as { requestUpdate(): void }).requestUpdate();
     }
     if (host._dashAnimTimer !== undefined)
     {
         window.clearTimeout(host._dashAnimTimer);
     }
-    host._dashAnimPhase = 'exiting';
-    (host as unknown as { requestUpdate(): void }).requestUpdate();
     host._dashAnimTimer = window.setTimeout(() =>
     {
-        host._detailMode    = false;
-        host._dashOpenedAtMs = null;
-        host._dashAnimPhase = 'idle';
-        host._dashAnimTimer = undefined;
-        if (host._dashCountUpRaf !== undefined)
-        {
-            cancelAnimationFrame(host._dashCountUpRaf);
-            host._dashCountUpRaf = undefined;
-        }
-        host._engine?.setDetailMode(false);
+        host._dashAnimPhase = 'exiting';
         (host as unknown as { requestUpdate(): void }).requestUpdate();
-    }, 1000);
+        host._dashAnimTimer = window.setTimeout(() =>
+        {
+            host._detailMode    = false;
+            host._dashOpenedAtMs = null;
+            host._dashAnimPhase = 'idle';
+            host._dashAnimTimer = undefined;
+            if (host._dashCountUpRaf !== undefined)
+            {
+                cancelAnimationFrame(host._dashCountUpRaf);
+                host._dashCountUpRaf = undefined;
+            }
+            host._engine?.setDetailMode(false);
+            (host as unknown as { requestUpdate(): void }).requestUpdate();
+        }, 1000);
+    }, recenterDelay);
 }
 
 

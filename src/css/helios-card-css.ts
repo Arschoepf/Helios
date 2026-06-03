@@ -559,84 +559,96 @@ export const heliosCardStyles = css`
     }
 
     /*  Hover highlight on every card: border picks up the active theme primary so the user gets a clear
-        visual cue that the card is interactive. Inline style still drives the transform / opacity / filter,
-        only the border colour changes here. The transition runs against the existing 420 ms ease on the
-        transform too so the hover lift feels smooth. */
+        visual cue that the card is interactive. */
     .dash-cf-card:hover
     {
         border-color: var(--primary-color, #03a9f4);
     }
 
-    /*  Enter animation, 1 s total, staged in three phases:
-        - 0 - 300 ms: the front (today) card fades in.
-        - 300 - 650 ms: ±1 cards slide out from behind the front card to their resting position.
-        - 650 - 1000 ms: ±2 cards slide out from behind the ±1 cards.
-        Each keyframe's "to" state matches the inline transform so the handover to inline-only styling at
-        animation end is seamless. animation-fill-mode: both keeps the from-state visible during the delay and
-        the to-state visible after the animation completes (until the .dash-cf-entering class drops off).      */
-    @keyframes dash-cf-enter-front
+    /*  Perspective-driven gradient blur. A ::after overlay sits on top of every side card with a
+        backdrop-filter blur and a linear-gradient mask that fades from opaque on the AWAY-from-centre edge to
+        transparent on the TOWARDS-centre edge. The overlay therefore blurs only the half of the card that is
+        further from the focal centre, giving the depth-of-field cue the user asked for, while the other half
+        stays sharp. ±1 cards get a softer blur (3 px), ±2 get a stronger one (6 px). */
+    .dash-cf-card::after
+    {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: inherit;
+        pointer-events: none;
+    }
+    .dash-cf-card[data-delta="0"]::after { display: none; }
+
+    /*  delta = -1 → card sits to the LEFT of the focal centre. Far side = left, near side = right. Blur fades
+        from blurred on the left to sharp on the right. */
+    .dash-cf-card[data-delta="-1"]::after
+    {
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        mask-image: linear-gradient(to right, black 0%, black 25%, transparent 90%);
+        -webkit-mask-image: linear-gradient(to right, black 0%, black 25%, transparent 90%);
+    }
+    /*  delta = 1 → card sits to the RIGHT. Far side = right, near side = left. */
+    .dash-cf-card[data-delta="1"]::after
+    {
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
+        mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
+        -webkit-mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
+    }
+    /*  delta = -2 → back left card. Stronger blur, mask covers more so the sharp area is smaller. */
+    .dash-cf-card[data-delta="-2"]::after
+    {
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        mask-image: linear-gradient(to right, black 0%, black 55%, transparent 100%);
+        -webkit-mask-image: linear-gradient(to right, black 0%, black 55%, transparent 100%);
+    }
+    /*  delta = 2 → back right card. */
+    .dash-cf-card[data-delta="2"]::after
+    {
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        mask-image: linear-gradient(to left, black 0%, black 55%, transparent 100%);
+        -webkit-mask-image: linear-gradient(to left, black 0%, black 55%, transparent 100%);
+    }
+
+    /*  Enter / exit animation, fade-only at the final transform position. 1 s total, staged in three phases:
+        - 0 - 300 ms: front (today) card fades in (or out on exit).
+        - 300 - 650 ms: ±1 cards fade in (or out on exit, after their reverse delay).
+        - 650 - 1000 ms: ±2 cards fade in (or out, first).
+        No transform animation; each card materialises at its inline-style resting transform via opacity alone.
+        animation-fill-mode: both keeps the from-state visible during the delay and the to-state visible after
+        the animation completes (until the .dash-cf-entering / .dash-cf-exiting class drops off). Cards stop
+        accepting click during the animation window (pointer-events: none) so an in-flight fade cannot navigate
+        to a different day half-way through.                                                                    */
+    @keyframes dash-cf-fade-in
     {
         0%   { opacity: 0; }
         100% { opacity: 1; }
     }
-    @keyframes dash-cf-enter-mid-left
-    {
-        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 1; }
-    }
-    @keyframes dash-cf-enter-mid-right
-    {
-        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 1; }
-    }
-    @keyframes dash-cf-enter-back-left
-    {
-        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-75%) scale(0.65) rotateY(-65deg); opacity: 1; }
-    }
-    @keyframes dash-cf-enter-back-right
-    {
-        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(75%) scale(0.65) rotateY(65deg); opacity: 1; }
-    }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-enter-mid-right  350ms ease-out 300ms both; }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-enter-back-left  350ms ease-out 650ms both; }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-enter-back-right 350ms ease-out 650ms both; }
-
-    /*  Exit animation, same 1 s budget but reverse order: back cards tuck behind mid first, then mid behind
-        front, finally the front fades out. The panel only actually unmounts after the full second elapses. */
-    @keyframes dash-cf-exit-back-left
-    {
-        0%   { transform: translate(-50%, -50%) translateX(-75%) scale(0.65) rotateY(-65deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 0; }
-    }
-    @keyframes dash-cf-exit-back-right
-    {
-        0%   { transform: translate(-50%, -50%) translateX(75%) scale(0.65) rotateY(65deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 0; }
-    }
-    @keyframes dash-cf-exit-mid-left
-    {
-        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
-    }
-    @keyframes dash-cf-exit-mid-right
-    {
-        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
-    }
-    @keyframes dash-cf-exit-front
+    @keyframes dash-cf-fade-out
     {
         0%   { opacity: 1; }
         100% { opacity: 0; }
     }
-    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-exit-back-left  350ms ease-in 0ms   both; }
-    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-exit-back-right 350ms ease-in 0ms   both; }
-    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-exit-mid-left   350ms ease-in 350ms both; }
-    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-exit-mid-right  350ms ease-in 350ms both; }
-    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-exit-front      300ms ease-in 700ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card,
+    .dash-cf-stage.dash-cf-exiting  .dash-cf-card
+    {
+        pointer-events: none;
+    }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-fade-in 300ms ease-out 0ms   both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"],
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-fade-in 350ms ease-out 300ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-2"],
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-fade-in 350ms ease-out 650ms both; }
+
+    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="-2"],
+    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-fade-out 350ms ease-in 0ms   both; }
+    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="-1"],
+    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-fade-out 350ms ease-in 350ms both; }
+    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-fade-out 300ms ease-in 700ms both; }
 
     /*  Each dashboard section is rendered with the HA card frame:
         same background, border colour, border radius and box-shadow
