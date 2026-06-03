@@ -2059,24 +2059,18 @@ ha-card.detail-active .solar-svg,
     .cloud-cover-toggle.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .cloud-cover-toggle.is-on:active { background: var(--darker-primary-color, #01579b); }
 
-    /*  Mode bar (Layer / LiDAR / Shading). Segmented pill of three
-        icon-only toggles glued together. Same visual recipe as the
-        cloud-cover toggle: HA-toolbar-style transparent buttons that
-        light up to the brand pastille when active. The pill itself
-        carries a soft tinted backdrop so the three segments read as
-        one control even when none of them are active. */
+    /*  Mode bar (Layer / LiDAR / Shading). Vertical column of three
+        icon-only toggles, anchored top-right, no backplate so the
+        column reads as a quiet HA-toolbar trio sitting on the map.
+        Each button uses the same transparent-circle recipe as the
+        camera-lock and cloud-cover toggles so all three corner
+        controls speak the same language. */
     .mode-bar
     {
         display: inline-flex;
-        flex-direction: row;
+        flex-direction: column;
         align-items: center;
-        padding: 2px;
-        gap: 2px;
-        background-color: rgba(var(--rgb-card-background-color, 255, 255, 255), 0.85);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        border-radius: 24px;
-        box-shadow: var(--ha-card-box-shadow, 0 1px 2px rgba(0,0,0,0.08));
+        gap: 4px;
         pointer-events: auto;
     }
     .mode-bar-seg
@@ -2086,26 +2080,37 @@ ha-card.detail-active .solar-svg,
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width:  36px;
-        height: 36px;
+        width:  40px;
+        height: 40px;
         box-sizing: border-box;
         padding: 0;
         background-color: transparent;
+        background-clip: padding-box;
         color: var(--primary-text-color, #212121);
         border: 0;
         outline: 0 !important;
+        outline-offset: 0;
         border-radius: 50%;
+        overflow: hidden;
         cursor: pointer;
         position: relative;
         opacity: 1;
         -webkit-tap-highlight-color: transparent;
         transition: background-color 0.15s, color 0.15s, opacity 0.15s;
     }
+    .mode-bar-seg:hover,
+    .mode-bar-seg:focus,
+    .mode-bar-seg:focus-visible,
+    .mode-bar-seg:active
+    {
+        outline: 0 !important;
+        box-shadow: none !important;
+    }
     .mode-bar-seg:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
     .mode-bar-seg:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
     .mode-bar-seg ha-icon
     {
-        --mdc-icon-size: 20px;
+        --mdc-icon-size: 22px;
         color: inherit;
         display: inline-flex;
         align-items: center;
