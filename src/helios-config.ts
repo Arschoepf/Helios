@@ -14,6 +14,11 @@
 //constants below provide the values used when a key is absent.
 export interface HeliosConfig
 {
+    //Index signature so consumers (and stale references to retired keys during the v1.8.3 entity refonte) can read
+    //arbitrary string keys off the config as `unknown` without TypeScript widening errors. The named keys below are the
+    //schema the editor + runtime know about; legacy YAML carrying retired keys is allowed through here and the migration
+    //path strips it on the next editor open.
+    [key: string]: unknown;
     //When false, all of OpenFreeMap's label layers
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
@@ -38,7 +43,6 @@ export interface HeliosConfig
     //                    (chip icon tint, dedicated graph fill /
     //                    stroke). Defaults to a vivid green chosen
     //                    to read cleanly on the white chart card.
-    'pv-power-entity'?:       unknown;
     'pv-color'?:              unknown;
     //Installed peak power of the PV array in kWp (kilowatt-peak).
     //Optional; when set, it scales the predicted clear-sky percentage
@@ -117,8 +121,6 @@ export interface HeliosConfig
     //  battery-color        : single colour used everywhere battery
     //                         appears (chip text, border, leader,
     //                         flow arrow). Defaults to a vivid purple.
-    'battery-soc-entity'?:    unknown;
-    'battery-power-entity'?:  unknown;
     //Optional. Multi-bank battery support. When present, takes
     //precedence over the flat battery-soc-entity / battery-power-
     //entity / battery-power-invert keys above (which become a
@@ -145,14 +147,12 @@ export interface HeliosConfig
     //    ALL banks are at or above the threshold (min SoC across
     //    banks ≥ cutoff), so a half-full bank correctly trains
     //    even while a sibling bank is full.
-    'batteries'?:             unknown;
     //Optional. When true, the live and historical battery power
     //readings are multiplied by -1 before being stored. Use this
     //when the upstream entity reports charging as negative and
     //discharging as positive (some GivEnergy / GivTCP setups), so
     //Helios's internal "positive = charging" convention keeps
     //holding without a template sensor in front. Default false.
-    'battery-power-invert'?:  unknown;
     //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops feeding the battery and clamps PV
     //output (almost no production from the panels even when the sun is up). When set AND `battery-soc-entity` is also configured, the shading map
     //trainer skips every observation bucket where the battery SoC reached or exceeded this value. Without the skip, those zero-production buckets
@@ -165,8 +165,6 @@ export interface HeliosConfig
     //meters the user already exposes through a sensor (or the HA
     //Energy dashboard). The card reads the live values, the
     //visual placement of the readouts is being reworked.
-    'grid-import-entity'?:    unknown;
-    'grid-export-entity'?:    unknown;
     //Optional. Single COMBINED grid power/energy entity whose sign
     //encodes the direction: many smart meters and inverters expose
     //one signed sensor (Fronius P_Grid, Shelly EM, P1 net power,
@@ -187,13 +185,11 @@ export interface HeliosConfig
     //grid), negative = export (feeding the grid), matching the most
     //common meter / inverter convention. Flip it with
     //grid-power-invert when the upstream sensor reports the opposite.
-    'grid-power-entity'?:     unknown;
     //Optional boolean. When true, the combined grid-power-entity sign
     //is flipped at ingest so a positive reading is treated as EXPORT
     //and a negative reading as IMPORT. Use it when the meter reports
     //grid feed-in as positive. Default false. Ignored when
     //grid-power-entity is not set.
-    'grid-power-invert'?:     unknown;
     'date-format'?:           unknown;
     //'12h' | '24h'. Default: '24h'. Picks between locale-
     //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
