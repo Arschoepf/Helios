@@ -1,82 +1,69 @@
-//Home Assistant Energy dashboard preferences subscription. The
-//Energy dashboard stores its source configuration (which entity is
-//"solar production", "grid import", "grid export", "battery charge"
-//and "battery discharge") in a single object reachable through the
-//`energy/get_prefs` WebSocket call. Helios uses that object as a
-//fallback for the chip entities: when the user deletes a value in
-//the card editor, the chip automatically falls back to the matching
-//Energy dashboard entity instead of going blank.
-//
-//Subscribed once per card at connectedCallback. The result is
-//cached on the host so every refresh path reads from the same
-//snapshot; a subsequent push via the long-running subscription
-//(HA broadcasts `config_entry_updated` when the user edits the
-//Energy dashboard) replaces the snapshot and triggers a re-render.
-
-import type { HeliosConfig } from '../helios-config';
+//Home Assistant Energy dashboard preferences subscription. Helios reads its data exclusively from the HA Energy dashboard
+//global settings (Settings -> Dashboards -> Energy): no more per-card entity slots for PV, grid or battery, the card just
+//resolves whatever the dashboard already declares. Subscribed once per card at connectedCallback; HA broadcasts an
+//`energy_preferences_updated` event when the user edits the dashboard, the subscription pulls a fresh snapshot and the
+//render cascade picks it up.
 
 
 export interface EnergyDefaults
 {
-    //First entity of type 'solar' under energy_sources[].
-    pvPowerEntity:     string | null;
-    //First grid source's stat_energy_from (consumption / import).
-    gridImportEntity:  string | null;
-    //First grid source's stat_energy_to (return / export). Often
-    //declared on a separate grid entry from the import meter on
-    //installs with split tariffs / split meters.
-    gridExportEntity:  string | null;
-    //First battery source's stat_energy_from (discharge / out).
-    batteryPowerEntity: string | null;
-    //Battery state of charge sensor (stat_soc). Exposed by HA
-    //core 2024+ on the battery source so the dashboard can show a
-    //live percentage gauge.
-    batterySocEntity:  string | null;
-    //Signed live grid power sensors collected from every grid
-    //source's `stat_rate` field. The HA Energy dashboard reads
-    //these directly from `hass.states` and splits the sign across
-    //its IMPORT / EXPORT chips with no slope derivation, see
-    //`hui-power-sankey-card.ts` in the home-assistant/frontend
-    //repo. Helios consumes the same field to make its LIVE chip
-    //match the value the official Energy dashboard renders.
-    //Multi-source installs (split tariffs, separate import / export
-    //meters that each expose their own rate) contribute one rate
-    //per source and the consumer sums them.
-    gridStatRates:     string[];
-    //Cumulative-kWh meters collected from each solar source's
-    //`stat_energy_from`. Helios uses these to query the recorder
-    //for today's produced-kWh change (HA's own daily-total
-    //convention) and reports the result on the detail-panel
-    //headline, matching the value the Energy dashboard shows
-    //regardless of the in-browser PV integration drift on sparse
-    //high-frequency installs. The PV chart curve, the forecast and
-    //the adaptive 5-day calibration are NOT touched; the local
-    //integration still drives them. Only the headline kWh adopts
-    //the HA-aligned value.
-    solarStatEnergyFroms: string[];
-    //Cumulative-kWh discharge meters collected from each battery
-    //source's `stat_energy_from`. Same recorder-statistics
-    //convention as `solarStatEnergyFroms`; consumed by the battery
-    //card's headline "discharged today" total.
+    //Solar live signed power sensors, one per source's `stat_rate` when declared. Preferred over the cumulative
+    //`stat_energy_from` for the live chip + chart because the instantaneous read matches the HA Energy tile to the watt
+    //and avoids the trapezoidal slope artefacts on sparse high-frequency inverters.
+    solarStatRates:         string[];
+    //Cumulative kWh meters from every solar source. Drives the buffer backfill for the chart, the adaptive 5-day
+    //forecast calibration, and the detail-panel `produced today` total via `recorder/statistics_during_period` change
+    //aggregation.
+    solarStatEnergyFroms:   string[];
+    //Grid live signed power sensors, one per source's `stat_rate`. Positive splits to the IMPORT chip, negative to the
+    //EXPORT chip, exactly like the HA Energy dashboard's own live grid tile.
+    gridStatRates:          string[];
+    //Grid import kWh meters per source (`stat_energy_from`). Backfilled via the 5-day LTS arm + 6-hour raw arm; consumed
+    //by the scrub past derivation and the detail-panel `imported today` total.
+    gridStatEnergyFroms:    string[];
+    //Grid export kWh meters per source (`stat_energy_to`). Same backfill pattern as the import side.
+    gridStatEnergyTos:      string[];
+    //Battery live signed power sensors per source via `power_config.stat_rate`. Positive convention matches the source
+    //(charge positive, discharge negative). Helios applies the same split as the grid LIVE path.
+    batteryStatRates:       string[];
+    //Battery discharge kWh meters (`stat_energy_from`). Drives the detail-panel `discharged today` headline via the
+    //recorder `change` aggregation.
     batteryStatEnergyFroms: string[];
-    //Cumulative-kWh charge meters collected from each battery
-    //source's `stat_energy_to`. Consumed by the battery card's
-    //headline "charged today" total.
+    //Battery charge kWh meters (`stat_energy_to`). Drives the `charged today` headline the same way.
     batteryStatEnergyTos:   string[];
+    //Battery state-of-charge sensors via `stat_soc`. Aggregated by uniform average across configured sources for the SoC
+    //chip + vessel visualisation. Multi-bank weighting by capacity is no longer supported, HA Energy has no concept of
+    //per-source capacity.
+    batteryStatSocs:        string[];
+    //Transitional single-entity slots derived from the arrays above. The refonte to the array-only model is staged
+    //across multiple consumer rewires (refreshPv, refreshGrid, refreshBattery, dashboard headlines); these slots keep
+    //the older single-entity consumers compiling against the new shape. Each slot picks the first array entry,
+    //matching the historical "first non-null" behaviour of the previous parser. Future cleanup pass collapses the
+    //consumers onto the arrays directly and these fields disappear.
+    pvPowerEntity:          string | null;
+    gridImportEntity:       string | null;
+    gridExportEntity:       string | null;
+    batteryPowerEntity:     string | null;
+    batterySocEntity:       string | null;
 }
 
 
 export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
 {
+    solarStatRates:         [],
+    solarStatEnergyFroms:   [],
+    gridStatRates:          [],
+    gridStatEnergyFroms:    [],
+    gridStatEnergyTos:      [],
+    batteryStatRates:       [],
+    batteryStatEnergyFroms: [],
+    batteryStatEnergyTos:   [],
+    batteryStatSocs:        [],
     pvPowerEntity:          null,
     gridImportEntity:       null,
     gridExportEntity:       null,
     batteryPowerEntity:     null,
     batterySocEntity:       null,
-    gridStatRates:          [],
-    solarStatEnergyFroms:   [],
-    batteryStatEnergyFroms: [],
-    batteryStatEnergyTos:   [],
 };
 
 
@@ -89,18 +76,14 @@ export interface EnergyPrefsHost
 }
 
 
-//Fetch the Energy dashboard preferences and update the host's
-//cached defaults snapshot. Safe to call multiple times; bails out
-//silently when hass is not yet attached or the call fails.
-//
-//Logs the resolved defaults to the console under a `[HELIOS energy
-//prefs]` tag so users can confirm the dashboard auto-detect is
-//working without diving into the source. Errors are surfaced too
-//(the previous silent catch hid common setups where the WS call
-//is denied by RBAC or the Energy dashboard is not yet configured).
+//Fetch the HA Energy dashboard preferences and update the host's cached snapshot. Safe to call multiple times; bails out
+//silently when hass is not yet attached or the call fails (RBAC denied, dashboard not configured, etc.).
 export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
 {
-    if (!host.hass?.callWS) return;
+    if (!host.hass?.callWS)
+    {
+        return;
+    }
     try
     {
         const prefs = await host.hass.callWS({ type: 'energy/get_prefs' }) as {
@@ -110,24 +93,22 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
         host._energyDefaults = next;
         host.requestUpdate();
     }
-    catch
+    catch (_)
     {
-        //Silent: the HA Energy auto-detect is no longer used by the
-        //chips. The subscription stays wired so any future opt-in
-        //surface (editor entity-picker "Use HA Energy default"
-        //toggle, etc.) has the snapshot ready, but failures should
-        //not flood the console.
+        //Subscription stays wired; a transient WS error or a not-yet-configured dashboard collapses the chips silently
+        //and the next push from `energy_preferences_updated` will retry.
     }
 }
 
 
-//Open a long-running subscription so the snapshot stays in sync
-//when the user edits the Energy dashboard from another tab. Falls
-//back to a single fetch when the subscribe path is missing (older
-//HA cores).
+//Open a long-running subscription so the snapshot stays in sync when the user edits the Energy dashboard from another
+//tab. Falls back to a single fetch when the subscribe path is missing (older HA cores).
 export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
 {
-    if (!host.hass?.connection || host._energyPrefsUnsub) return;
+    if (!host.hass?.connection || host._energyPrefsUnsub)
+    {
+        return;
+    }
     fetchEnergyPrefs(host);
     try
     {
@@ -138,36 +119,55 @@ export function subscribeEnergyPrefs(host: EnergyPrefsHost): void
     }
     catch (_)
     {
-        //Event subscription not supported, the one-shot fetch above already populated the cache.
+        //Event subscription not supported on this HA core; the one-shot fetch above already populated the cache.
     }
 }
 
 
-//Host shape consumed by `refreshHaDailyTotals`. The card writes
-//the three slots when the recorder query lands; downstream render
-//functions (`renderDashTodaySection` for PV, `computeBatteryToday`
-//for battery) prefer these over the local-integration values.
+export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
+{
+    if (host._energyPrefsUnsub)
+    {
+        try
+        {
+            host._energyPrefsUnsub();
+        }
+        catch (_)
+        {
+        }
+        host._energyPrefsUnsub = undefined;
+    }
+}
+
+
+//Host shape consumed by `refreshHaDailyTotals`. The card writes the four slots when the recorder query lands; downstream
+//render functions prefer these over the local-integration values for the detail-panel headline figures.
 export interface HaDailyTotalsHost
 {
     readonly hass: any;
     readonly _energyDefaults: EnergyDefaults;
     _haSolarTodayKwh:          number | null;
+    _haGridImportTodayKwh:     number | null;
+    _haGridExportTodayKwh:     number | null;
     _haBatteryChargedKwh:      number | null;
     _haBatteryDischargedKwh:   number | null;
     requestUpdate(): void;
 }
 
 
-//Recorder query helper. Sums the `change` field of
-//`recorder/statistics_during_period` over today (local midnight to
-//now) across every statistic_id in the list. Returns null when
-//the list is empty, when no `hass.callWS` is available, or when
-//the call rejects, so callers fall back to their existing
-//in-browser integration cleanly.
+//Recorder query helper. Sums the `change` field of `recorder/statistics_during_period` over today (local midnight to now)
+//across every statistic_id in the list. Returns null when the list is empty, when no `hass.callWS` is available, or when
+//the call rejects, so callers fall back cleanly.
 async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string[]): Promise<number | null>
 {
-    if (statisticIds.length === 0) return null;
-    if (!host.hass?.callWS) return null;
+    if (statisticIds.length === 0)
+    {
+        return null;
+    }
+    if (!host.hass?.callWS)
+    {
+        return null;
+    }
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
     const now = new Date();
@@ -178,48 +178,52 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
             start_time:    midnight.toISOString(),
             end_time:      now.toISOString(),
             statistic_ids: statisticIds,
-            //Day-period query returns at most one bucket per statistic
-            //covering today's window. `types: ['change']` returns the
-            //net delta the recorder computed across the bucket using
-            //the same Riemann sum HA Energy itself consumes, so the
-            //result matches the dashboard tile to the watt-hour.
+            //Day-period query returns at most one bucket per statistic covering today's window. `types: ['change']`
+            //returns the net delta the recorder computed across the bucket using the same Riemann sum HA Energy itself
+            //consumes, so the result matches the dashboard tile to the watt-hour.
             period:        'day',
             types:         ['change'],
         }) as Record<string, Array<{ change?: number | null }>>;
-        let total = 0;
+        let total  = 0;
         let anyHit = false;
         for (const id of statisticIds)
         {
             const buckets = result?.[id];
-            if (!Array.isArray(buckets)) continue;
+            if (!Array.isArray(buckets))
+            {
+                continue;
+            }
             for (const bucket of buckets)
             {
                 const v = typeof bucket?.change === 'number' ? bucket.change : null;
-                if (v === null) continue;
+                if (v === null)
+                {
+                    continue;
+                }
                 total += v;
                 anyHit = true;
             }
         }
         return anyHit ? total : null;
     }
-    catch
+    catch (_)
     {
-        //Statistic missing, recorder under load or RBAC denied. The
-        //caller already paints a working value from the local buffer
-        //integration, so failing silently keeps the chip readable.
+        //Statistic missing, recorder under load or RBAC denied. The caller leaves the previous value untouched, the
+        //chip stays readable on the last good snapshot until the next refresh succeeds.
         return null;
     }
 }
 
 
-//Refresh the three HA Energy daily-total slots from the recorder.
-//Fired periodically from the card's tick loop; cheap to call (a
-//single WS round-trip per non-empty list).
+//Refresh the five HA Energy daily-total slots from the recorder. Fired periodically from the card's tick loop; cheap to
+//call (one WS round-trip per non-empty list, fired in parallel).
 export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<void>
 {
     const defaults = host._energyDefaults;
-    const [solar, charged, discharged] = await Promise.all([
+    const [solar, imp, exp, charged, discharged] = await Promise.all([
         fetchTodayKwhChange(host, defaults.solarStatEnergyFroms),
+        fetchTodayKwhChange(host, defaults.gridStatEnergyFroms),
+        fetchTodayKwhChange(host, defaults.gridStatEnergyTos),
         fetchTodayKwhChange(host, defaults.batteryStatEnergyTos),
         fetchTodayKwhChange(host, defaults.batteryStatEnergyFroms),
     ]);
@@ -227,6 +231,16 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
     if (solar !== null && solar !== host._haSolarTodayKwh)
     {
         host._haSolarTodayKwh = solar;
+        changed = true;
+    }
+    if (imp !== null && imp !== host._haGridImportTodayKwh)
+    {
+        host._haGridImportTodayKwh = imp;
+        changed = true;
+    }
+    if (exp !== null && exp !== host._haGridExportTodayKwh)
+    {
+        host._haGridExportTodayKwh = exp;
         changed = true;
     }
     if (charged !== null && charged !== host._haBatteryChargedKwh)
@@ -239,177 +253,179 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
         host._haBatteryDischargedKwh = discharged;
         changed = true;
     }
-    if (changed) host.requestUpdate();
-}
-
-
-export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
-{
-    if (host._energyPrefsUnsub)
+    if (changed)
     {
-        try { host._energyPrefsUnsub(); }
-        catch (_) {}
-        host._energyPrefsUnsub = undefined;
+        host.requestUpdate();
     }
 }
 
 
-//Parse `energy/get_prefs` payload into the five entity slots Helios
-//cares about.
+//Parse `energy/get_prefs` payload into the nine arrays above. Each Energy source contributes whichever of its declared
+//meters Helios consumes; multi-source installs (split tariffs, separate import / export meters, multi-bank batteries)
+//all aggregate by simple sum across the arrays at the consumer.
 //
-//Real-world format (matches HA core 2024+):
-//  - solar source: { type: 'solar', stat_energy_from: 'sensor...' }
-//  - grid source : { type: 'grid', stat_energy_from: 'sensor...',
-//                    stat_energy_to: 'sensor...' or null }
-//  - battery     : { type: 'battery', stat_energy_from: '...',
-//                    stat_energy_to: '...', stat_soc: 'sensor...' }
+//Real-world shapes (HA core 2024+):
+//  - solar:   { type: 'solar', stat_energy_from, stat_rate?, config_entry_solar_forecast? }
+//  - grid:    { type: 'grid', stat_energy_from, stat_energy_to?, stat_rate?, power_config? }
+//  - battery: { type: 'battery', stat_energy_from, stat_energy_to, stat_soc?, power_config? }
 //
-//Note that a single dashboard can list MULTIPLE 'grid' sources
-//(one per tariff: Linky EASF01 hours pleines, EASF02 heures
-//creuses, an export-only meter, etc.). We walk every one and keep
-//the FIRST non-null entity for import (stat_energy_from) and
-//for export (stat_energy_to). Same fan-out for solar in case a
-//user has both an inverter sensor and a meter-side sensor.
+//`power_config.stat_rate` is the post-2026 grid + battery live-power slot (PR home-assistant/core#160432). The top-level
+//`stat_rate` on grid sources is the legacy slot still served by the official sankey card today; we read both so any
+//Energy dashboard config Helios encounters maps cleanly into our model.
 export function parseEnergyPrefs(prefs: {
     energy_sources?: Array<Record<string, unknown>>;
 }): EnergyDefaults
 {
-    //Fresh literal rather than `{ ...EMPTY_ENERGY_DEFAULTS }` so the
-    //array fields are not aliased on the shared empty default,
-    //avoiding cross-call contamination when multiple parses run in
-    //the same lifecycle (the subscription path can trigger a parse
-    //while a previous one is still settling).
+    //Fresh literal rather than `{ ...EMPTY_ENERGY_DEFAULTS }` so the array fields are not aliased on the shared empty
+    //default, avoiding cross-call contamination when multiple parses run in the same lifecycle (the subscription path
+    //can trigger a parse while a previous one is still settling).
     const out: EnergyDefaults =
     {
+        solarStatRates:         [],
+        solarStatEnergyFroms:   [],
+        gridStatRates:          [],
+        gridStatEnergyFroms:    [],
+        gridStatEnergyTos:      [],
+        batteryStatRates:       [],
+        batteryStatEnergyFroms: [],
+        batteryStatEnergyTos:   [],
+        batteryStatSocs:        [],
         pvPowerEntity:          null,
         gridImportEntity:       null,
         gridExportEntity:       null,
         batteryPowerEntity:     null,
         batterySocEntity:       null,
-        gridStatRates:          [],
-        solarStatEnergyFroms:   [],
-        batteryStatEnergyFroms: [],
-        batteryStatEnergyTos:   [],
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
     for (const src of sources)
     {
-        if (!src || typeof src !== 'object') continue;
+        if (!src || typeof src !== 'object')
+        {
+            continue;
+        }
         const type = String(src['type'] ?? '').toLowerCase();
 
         if (type === 'solar')
         {
-            //First non-null stat_energy_from drives the legacy
-            //pvPowerEntity slot used by the multi-array auto-detect.
-            //Every solar source's stat_energy_from also feeds the
-            //daily-total alignment list consumed by the detail
-            //panel headline.
-            const e = pickFirstString(src['stat_energy_from']);
-            if (e)
+            const meter = pickFirstString(src['stat_energy_from']);
+            if (meter)
             {
-                if (!out.pvPowerEntity) out.pvPowerEntity = e;
-                out.solarStatEnergyFroms.push(e);
+                out.solarStatEnergyFroms.push(meter);
+            }
+            const rate = pickFirstString(src['stat_rate']);
+            if (rate)
+            {
+                out.solarStatRates.push(rate);
             }
         }
         else if (type === 'grid')
         {
-            //Import side: stat_energy_from directly on the grid source.
-            if (!out.gridImportEntity)
+            const imp = pickFirstString(src['stat_energy_from']);
+            if (imp)
             {
-                const e = pickFirstString(src['stat_energy_from']);
-                if (e) out.gridImportEntity = e;
+                out.gridStatEnergyFroms.push(imp);
             }
-            //Export side: stat_energy_to directly on the grid source.
-            if (!out.gridExportEntity)
+            const exp = pickFirstString(src['stat_energy_to']);
+            if (exp)
             {
-                const e = pickFirstString(src['stat_energy_to']);
-                if (e) out.gridExportEntity = e;
+                out.gridStatEnergyTos.push(exp);
             }
-            //Live signed power sensor (HA Energy dashboard reads
-            //this for its own live chip, no slope, no aggregation).
-            //One per source so multi-tariff installs that expose a
-            //rate per tariff each contribute to the LIVE sum.
-            const rate = pickFirstString(src['stat_rate']);
-            if (rate) out.gridStatRates.push(rate);
+            const rate = pickFirstString(src['stat_rate']) ?? pickPowerConfigRate(src['power_config']);
+            if (rate)
+            {
+                out.gridStatRates.push(rate);
+            }
         }
         else if (type === 'battery')
         {
-            //Live power side: discharge (stat_energy_from) is the
-            //"battery is producing" semantic, same as the live-power
-            //chip displays for a positive value.
-            if (!out.batteryPowerEntity)
+            const discharge = pickFirstString(src['stat_energy_from']);
+            if (discharge)
             {
-                const e = pickFirstString(src['stat_energy_from'])
-                       ?? pickFirstString(src['stat_energy_to']);
-                if (e) out.batteryPowerEntity = e;
+                out.batteryStatEnergyFroms.push(discharge);
             }
-            //Daily-total alignment list (battery card headline
-            //"charged today" / "discharged today"). Every source's
-            //two cumulative meters contribute; the consumer queries
-            //the recorder for today's change per direction.
-            const dischargeMeter = pickFirstString(src['stat_energy_from']);
-            if (dischargeMeter) out.batteryStatEnergyFroms.push(dischargeMeter);
-            const chargeMeter = pickFirstString(src['stat_energy_to']);
-            if (chargeMeter) out.batteryStatEnergyTos.push(chargeMeter);
-            //State of charge: HA core 2024+ exposes this as
-            //`stat_soc` on the battery source. Read it when present
-            //so Helios can drive the SoC chip from the dashboard
-            //default without a per-card configuration.
-            if (!out.batterySocEntity)
+            const charge = pickFirstString(src['stat_energy_to']);
+            if (charge)
             {
-                const e = pickFirstString(src['stat_soc']);
-                if (e) out.batterySocEntity = e;
+                out.batteryStatEnergyTos.push(charge);
+            }
+            const soc = pickFirstString(src['stat_soc']);
+            if (soc)
+            {
+                out.batteryStatSocs.push(soc);
+            }
+            const rate = pickPowerConfigRate(src['power_config']);
+            if (rate)
+            {
+                out.batteryStatRates.push(rate);
             }
         }
     }
+    //Derive the transitional single-entity slots from the arrays so the consumers that have not yet migrated to the
+    //multi-source model keep reading sensible values. Picks the first usable entity in each array, matching the legacy
+    //"first non-null" parser behaviour.
+    out.pvPowerEntity      = out.solarStatRates[0]         ?? out.solarStatEnergyFroms[0]   ?? null;
+    out.gridImportEntity   = out.gridStatEnergyFroms[0]    ?? null;
+    out.gridExportEntity   = out.gridStatEnergyTos[0]      ?? null;
+    out.batteryPowerEntity = out.batteryStatRates[0]       ?? out.batteryStatEnergyFroms[0] ?? out.batteryStatEnergyTos[0] ?? null;
+    out.batterySocEntity   = out.batteryStatSocs[0]        ?? null;
     return out;
+}
+
+
+//Resolve `power_config.stat_rate` (preferred, signed convention) with a fall-back through the paired form. Returns null
+//when the source has no power_config block or none of the slots carry a usable entity id.
+function pickPowerConfigRate(raw: unknown): string | null
+{
+    if (!raw || typeof raw !== 'object')
+    {
+        return null;
+    }
+    const pc = raw as Record<string, unknown>;
+    return pickFirstString(pc['stat_rate'])
+        ?? pickFirstString(pc['stat_rate_inverted'])
+        ?? pickFirstString(pc['stat_rate_from'])
+        ?? null;
 }
 
 
 function pickFirstString(v: unknown): string | null
 {
-    if (typeof v === 'string' && v.trim() !== '') return v.trim();
+    if (typeof v === 'string' && v.trim() !== '')
+    {
+        return v.trim();
+    }
     if (Array.isArray(v))
     {
         for (const item of v)
         {
-            if (typeof item === 'string' && item.trim() !== '') return item.trim();
+            if (typeof item === 'string' && item.trim() !== '')
+            {
+                return item.trim();
+            }
         }
     }
     return null;
 }
 
 
-//Resolve the effective entity id for one of the five Helios slots:
-//returns the user-configured entity when present, otherwise the
-//cached Energy dashboard default. Empty string when neither is
-//set (the corresponding chip stays hidden).
+//Transitional helper. Returns the resolved entity for the given Helios slot, reading from the HA Energy dashboard
+//defaults. The refonte removed every user-configurable entity from the card YAML, the `config` argument is kept on the
+//signature only to keep existing call sites compiling, it is not consulted any more. Consumers that need to fan out
+//across multiple HA sources read the arrays directly on `EnergyDefaults`.
 export function resolveEffectiveEntity(
-    config: HeliosConfig | undefined,
-    _defaults: EnergyDefaults,
+    _config: unknown,
+    defaults: EnergyDefaults,
     key: 'pv-power-entity' | 'battery-soc-entity' | 'battery-power-entity'
        | 'grid-import-entity' | 'grid-export-entity',
 ): string
 {
-    //User-config entity ONLY. The HA Energy dashboard auto-detect
-    //fallback is not consulted: it was a steady source of bug
-    //reports ("the chip reads from sensor X but my dashboard uses
-    //sensor Y") and the resolution logic for daily-total vs
-    //cumulative-since-install sensors was always wrong half the
-    //time anyway. The user-configured entity is the only
-    //input; an empty string here collapses the corresponding chip.
-    const raw = String(config?.[key] ?? '').trim();
-    //grid-import-entity can be an array (heures pleines / creuses
-    //in France, time-of-use bands elsewhere). For the single-entity
-    //resolver we only return the FIRST one; multi-entity handling
-    //happens inside refreshGrid() where each entity gets its own
-    //rolling buffer and the slopes are summed.
-    if (Array.isArray((config as Record<string, unknown>)?.[key]))
+    switch (key)
     {
-        const arr = (config as unknown as Record<string, string[]>)[key];
-        const first = arr.find(s => typeof s === 'string' && s.trim() !== '');
-        return first ? first.trim() : '';
+        case 'pv-power-entity':      return defaults.pvPowerEntity      ?? '';
+        case 'grid-import-entity':   return defaults.gridImportEntity   ?? '';
+        case 'grid-export-entity':   return defaults.gridExportEntity   ?? '';
+        case 'battery-power-entity': return defaults.batteryPowerEntity ?? '';
+        case 'battery-soc-entity':   return defaults.batterySocEntity   ?? '';
     }
-    return raw;
 }

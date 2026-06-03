@@ -484,15 +484,13 @@ export class HeliosCard extends LitElement
     //in the card YAML / editor is empty.
     @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
     _energyPrefsUnsub?: () => void;
-    //HA Energy daily-total alignment cache. Three slots fed by
-    //`refreshHaDailyTotals()`: the headline "kWh produit aujourd'hui"
-    //for the PV detail panel (#180), and the charged / discharged
-    //totals for the battery card (#181). Null while no HA stat is
-    //configured or the recorder call has not yet landed; consumers
-    //(`renderDashTodaySection`, `computeBatteryToday`) fall back to
-    //the local-buffer integration in that case so the values keep
-    //rendering on standalone-only setups.
+    //HA Energy daily-total alignment cache populated by `refreshHaDailyTotals()` against the recorder. Five headline
+    //figures: PV produced today, grid imported today, grid exported today, battery charged today, battery discharged
+    //today. Null while no HA stat is configured or the recorder call has not yet landed, the consumer chips collapse
+    //silently in that case (the refonte dropped every local-integration fallback).
     @state() _haSolarTodayKwh:        number | null = null;
+    @state() _haGridImportTodayKwh:   number | null = null;
+    @state() _haGridExportTodayKwh:   number | null = null;
     @state() _haBatteryChargedKwh:    number | null = null;
     @state() _haBatteryDischargedKwh: number | null = null;
     //Projected screen-space positions of each configured PV array
