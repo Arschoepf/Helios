@@ -520,7 +520,7 @@ export const heliosCardStyles = css`
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        border-radius: 12px;
+        border-radius: var(--ha-card-border-radius, 12px);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         display: grid;
         grid-template-columns: auto 1fr auto;
@@ -643,7 +643,9 @@ export const heliosCardStyles = css`
         align-items: center;
         gap: 10px;
         padding: 10px 12px;
-        border-radius: 14px;
+        /*  HA default --ha-card-border-radius is 12 px, match it exactly so the inner tiles share the same
+            corner radius as the surrounding ha-card. */
+        border-radius: var(--ha-card-border-radius, 12px);
         background: var(--secondary-background-color, var(--ha-card-background, rgba(255, 255, 255, 0.04)));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
@@ -653,7 +655,9 @@ export const heliosCardStyles = css`
     {
         width: 36px;
         height: 36px;
-        border-radius: 12px;
+        /*  HA frontend tile-card icon badges (state-badge, mushroom-shape-icon) render as full circles by
+            default, not rounded squares; match that here so the tiles read as native HA. */
+        border-radius: 50%;
         display: inline-flex;
         align-items: center;
         justify-content: center;
