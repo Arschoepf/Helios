@@ -1493,32 +1493,22 @@ export const heliosCardStyles = css`
         align-self: stretch;
     }
 
-    /*  Future-cursor variant: the whole tooltip dims so the user reads
-        the upcoming-time state at a glance and the past-vs-future
-        distinction does not rely on the forecast icons alone. The live
-        chip sits on the same opacity layer so the fade stays uniform. */
-    .tb-hover-tooltip.is-future-cursor
-    {
-        opacity: 0.78;
-    }
-
-    /*  Date heading at the top of the tooltip body, left-aligned with a
-        calendar glyph in front and a hairline separator under it so the
-        date / time pair reads as a heading block above the data rows.
-        Bold + tabular numerals match the time row. */
-    .tb-hover-tooltip-date
+    /*  Time heading at the top of the tooltip body, left-aligned with a
+        clock glyph in front and a hairline separator under it so the
+        time reads as a heading block above the data rows. Bold + tabular
+        numerals + left-aligned to match the data rows below. */
+    .tb-hover-tooltip-time
     {
         display: flex;
         align-items: center;
         gap: 6px;
         font-weight: 700;
         letter-spacing: 0.3px;
-        text-transform: capitalize;
         padding-bottom: 4px;
         margin-bottom: 4px;
         border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
     }
-    .tb-hover-tooltip-date-icon
+    .tb-hover-tooltip-time-icon
     {
         --mdc-icon-size: 14px;
         display: inline-flex;
@@ -1528,22 +1518,11 @@ export const heliosCardStyles = css`
         color: var(--primary-text-color, #212121);
         --mdc-icon-color: var(--primary-text-color, #212121);
     }
-    .tb-hover-tooltip-date-label
+    .tb-hover-tooltip-time-label
     {
         display: inline-flex;
         align-items: center;
         line-height: 1;
-    }
-
-    /*  Inner layout: time row centered, a small gap, then one row per
-        data series. No banded backgrounds, no row separators, the
-        surrounding card frame is the only visible chrome. */
-    .tb-hover-tooltip-time
-    {
-        font-weight: 700;
-        text-align: center;
-        letter-spacing: 0.3px;
-        margin-bottom: 4px;
     }
     .tb-hover-tooltip-row
     {

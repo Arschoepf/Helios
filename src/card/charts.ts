@@ -509,11 +509,6 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const timeLabel  = new Intl.DateTimeFormat(haLanguage, {
         hour: '2-digit', minute: '2-digit',
     }).format(atDate);
-    //Date heading carries weekday + day + month so the user sees which day the scrub points at without having to count
-    //hours past midnight. Year stays implicit, the scrub range never spans across years.
-    const dateLabel  = new Intl.DateTimeFormat(haLanguage, {
-        weekday: 'short', day: 'numeric', month: 'short',
-    }).format(atDate);
 
     //Day total split into observed (past scrub) and forecast (future scrub). The split key is the cursor instant vs
     //"now", not the day boundary, so scrubbing later-today hours shows the day's forecast projection (full-day kWh) and
@@ -579,7 +574,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             class="tb-hover-tooltip-wrapper"
             style="left:${pct.toFixed(2)}%; transform: translateX(-${pct.toFixed(2)}%)"
         >
-            <div class="tb-hover-tooltip ${isFutureCursor ? 'is-future-cursor' : ''}">
+            <div class="tb-hover-tooltip">
                 <span
                     class="tb-hover-tooltip-live-chip ${inMagnetZone ? 'is-visible' : ''}"
                     title="${liveText}"
@@ -589,11 +584,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                     <ha-icon class="tb-hover-tooltip-live-chip-dot" icon="mdi:circle-medium"></ha-icon>
                     <span class="tb-hover-tooltip-live-chip-label">${liveLabel}</span>
                 </span>
-                <div class="tb-hover-tooltip-date">
-                    <ha-icon class="tb-hover-tooltip-date-icon" icon="mdi:calendar-blank-outline"></ha-icon>
-                    <span class="tb-hover-tooltip-date-label">${dateLabel}</span>
+                <div class="tb-hover-tooltip-time">
+                    <ha-icon class="tb-hover-tooltip-time-icon" icon="mdi:clock-outline"></ha-icon>
+                    <span class="tb-hover-tooltip-time-label">${timeLabel}</span>
                 </div>
-                <div class="tb-hover-tooltip-time">${timeLabel}</div>
                 ${showProduction && dayKwhText ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>
