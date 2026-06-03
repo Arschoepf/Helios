@@ -415,7 +415,17 @@ export function refreshPv(host: PvHost): void
         //pushes start landing. The window we actually want is
         //"the last 6 h of real wall-clock time".
         const visibleStart = host._timeRange.start;
-        const cap          = new Date(Date.now() - RAW_WINDOW_H * HOUR_MS);
+        //Round `now` to the minute boundary so the fetch key only flips at most once per minute. The earlier
+        //unrounded `Date.now()` was changing the cap by milliseconds on every Lit cycle, the fetch key flipped on
+        //every hass push (one per state change of any HA entity on busy buses) and the gate at `fullFetchKey !==
+        //host._pvFetchKey` fired a new WS round-trip every time, queuing async resolutions that raced each other on
+        //the `_pvHistory` write. The visible symptom was the "data outdated on first card open" report: a stale
+        //in-flight fetch from a brief boot-window resolved on top of a fresh one, the user saw the older snapshot
+        //until navigating away long enough for the stale promises to settle. Minute granularity is plenty fine for
+        //the chart's tail tracking, the live state read inside refreshPv still updates the chip on every push.
+        const FETCH_KEY_GRANULARITY_MS = 60_000;
+        const nowRoundedMs = Math.floor(Date.now() / FETCH_KEY_GRANULARITY_MS) * FETCH_KEY_GRANULARITY_MS;
+        const cap          = new Date(nowRoundedMs - RAW_WINDOW_H * HOUR_MS);
         const fetchStart   = visibleStart < cap ? cap : visibleStart;
         const rangeKey   = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
         //Optional battery SoC companion fetch. We only ask HA for the SoC history when the user has explicitly armed the
@@ -449,8 +459,10 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                const fetchIds = sortedLive.length > 0 ? sortedLive : [entity];
-                fetchPvHistory(host, fetchIds, fetchStart, fetchEnd, battSocId, fullFetchKey);
+                const fetchIds       = sortedLive.length > 0 ? sortedLive : [entity];
+                const unitLow        = (host._pvUnit || '').toLowerCase();
+                const isCumulative   = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
+                fetchPvHistory(host, fetchIds, fetchStart, fetchEnd, battSocId, fullFetchKey, isCumulative);
             }
         }
     }
@@ -471,8 +483,10 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                const calibIds = sortedLive.length > 0 ? sortedLive : [entity];
-                fetchPvStatistics(host, calibIds, calibStart, fetchEnd, 'hour', 'calib', calibKey);
+                const calibIds     = sortedLive.length > 0 ? sortedLive : [entity];
+                const unitLow      = (host._pvUnit || '').toLowerCase();
+                const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
+                fetchPvStatistics(host, calibIds, calibStart, fetchEnd, 'hour', 'calib', calibKey, isCumulative);
             }
         }
     }
@@ -496,10 +510,12 @@ export function refreshPv(host: PvHost): void
                 //Defer to browser idle time so the user-facing fetches (raw PV history + calib stats) land first and the chart paints
                 //quickly. The trainer feeds the shading-map heuristic which the engine can rebuild from any non-empty sample stream, so
                 //the trainer is effectively a background optimisation, not a blocker for the chip / chart render.
-                const trainerIds = sortedLive.length > 0 ? sortedLive : [entity];
+                const trainerIds   = sortedLive.length > 0 ? sortedLive : [entity];
+                const unitLow      = (host._pvUnit || '').toLowerCase();
+                const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
                 scheduleIdle(() =>
                 {
-                    fetchPvStatistics(host, trainerIds, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
+                    fetchPvStatistics(host, trainerIds, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey, isCumulative);
                 });
             }
         }
@@ -636,9 +652,17 @@ export function valueAtMs(series: PvHistory | null, ms: number): number | null
 //Last-known-carry-forward aggregator. Walks the union of all per-entity timestamps and at each tick reads each
 //entity's most recent sample at or before the cursor, then sums. The cursor monotonicity (every series is sorted by
 //time) makes the walk O((entities + timestamps) total) instead of O(entities * timestamps). Works equally well for
-//power sensors (instantaneous reading at each tick) and cumulative kWh sensors (sum of cumulative counters is also
-//cumulative; the downstream differentiation derives total power from neighbour-pair deltas).
-function aggregatePvHistoriesLkcf(perEntity: PvHistory[]): PvHistory
+//power sensors (instantaneous reading at each tick) and cumulative kWh sensors.
+//
+//`cumulative` flag enables per-entity baselining: each entity is baselined at its first observed value within the
+//window before its contribution is summed. Without this, a multi-source install where one entity comes online
+//mid-window (e.g., a Victron MPPT that boots up at 13:00 with a lifetime cumulative of 1000 kWh) would inject a
+//phantom 1000 kWh jump into the aggregated series at 13:00, and the dashboard's today-kWh integration would
+//attribute that whole jump to "today's production starting at 13:00". With baselining each entity contributes 0 at
+//its first appearance and only its delta-since-arrival from there, so the aggregated curve grows smoothly. Power
+//sensors must use `cumulative: false` because baselining a W reading turns it into "delta-W since the first sample",
+//which is meaningless.
+function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = false): PvHistory
 {
     if (perEntity.length === 0)
     {
@@ -660,8 +684,11 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[]): PvHistory
     }
     const sortedTs = Array.from(tsSet).sort((a, b) => a - b);
     //One walking index per entity; advances monotonically through the sorted timestamps.
-    const cursors = new Array<number>(perEntity.length).fill(-1);
-    const summed:  number[] = [];
+    const cursors   = new Array<number>(perEntity.length).fill(-1);
+    //Per-entity baseline captured at the first observed value when `cumulative` mode is on. `null` means the
+    //entity has not yet contributed a sample within the window.
+    const baselines = cumulative ? new Array<number | null>(perEntity.length).fill(null) : null;
+    const summed:   number[] = [];
     for (const ts of sortedTs)
     {
         let sum = 0;
@@ -677,7 +704,18 @@ function aggregatePvHistoriesLkcf(perEntity: PvHistory[]): PvHistory
             cursors[i] = c;
             if (c >= 0 && isFinite(h.values[c]))
             {
-                sum += h.values[c];
+                if (baselines)
+                {
+                    if (baselines[i] === null)
+                    {
+                        baselines[i] = h.values[c];
+                    }
+                    sum += h.values[c] - baselines[i]!;
+                }
+                else
+                {
+                    sum += h.values[c];
+                }
             }
         }
         summed.push(sum);
@@ -702,6 +740,11 @@ export async function fetchPvHistory(
     end: Date,
     batterySocId: string | null = null,
     cacheKey: string = '',
+    //Whether the wired entities are cumulative energy counters (Wh/kWh/MWh). Multi-source aggregation baselines
+    //each entity at its first observed value within the window before summing, so a source that comes online
+    //mid-window cannot inject its lifetime cumulative as a phantom jump. Power entities pass false and the
+    //aggregator falls back to a plain raw sum.
+    cumulative: boolean = false,
 ): Promise<void>
 {
     if (!host.hass?.callWS || entityIds.length === 0)
@@ -752,7 +795,7 @@ export async function fetchPvHistory(
             perEntity.push(parsed);
             perEntityById[id] = parsed;
         }
-        const history: PvHistory = aggregatePvHistoriesLkcf(perEntity);
+        const history: PvHistory = aggregatePvHistoriesLkcf(perEntity, cumulative);
 
         const batteryHistory: PvHistory | null = batterySocId
             ? parseHistoryEntries((result && result[batterySocId]) ?? [])
@@ -840,6 +883,10 @@ export async function fetchPvStatistics(
     period: '5minute' | 'hour' | 'day' | 'week' | 'month',
     role: 'calib' | 'trainer',
     cacheKey: string = '',
+    //Same `cumulative` flag as fetchPvHistory. For LTS this matters because cumulative entities populate the `state`
+    //field with the bucket-end lifetime value, which mirrors the multi-source phantom-jump risk if one source comes
+    //online mid-window. Power entities populate `mean` directly and stay on the raw-sum path.
+    cumulative: boolean = false,
 ): Promise<void>
 {
     if (!host.hass?.callWS || entityIds.length === 0)
@@ -922,7 +969,7 @@ export async function fetchPvStatistics(
             perEntity.push({ times, values });
         }
 
-        const stats: PvHistory = aggregatePvHistoriesLkcf(perEntity);
+        const stats: PvHistory = aggregatePvHistoriesLkcf(perEntity, cumulative);
         host[targetSlot] = stats;
         if (cacheKey)
         {

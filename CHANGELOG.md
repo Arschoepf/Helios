@@ -33,6 +33,31 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Critical fixes , "data outdated on first open" + "production curve shifted in time"
+
+Two regressions converged into one root-cause investigation kicked off by LBDG_'s reports.
+
+**1. Fetch key was changing every millisecond.** `refreshPv` was anchoring its raw-history fetch window on
+`new Date(Date.now() - 6 h)`, which differs by milliseconds on every Lit cycle. The `fullFetchKey` flipped on every
+hass push (one per state change of any HA entity on busy buses), the gate at `fullFetchKey !== _pvFetchKey` fired a
+new WS round-trip every time, and the async resolutions raced each other on the `_pvHistory` write. The visible
+symptom was the "data outdated on first card open" report: a stale in-flight fetch from a brief boot-window resolved
+on top of a fresh one, the user saw the older snapshot until navigating away long enough for the stale promises to
+settle. Fix: round the cap to a 1-minute boundary so the key flips at most once per minute, the live chip + tooltip
+keep updating on every push from the unrelated live-state read.
+
+**2. Multi-source cumulative aggregation injected phantom kWh jumps.** When one of several solar sources came online
+mid-window (e.g., a Victron MPPT booting up at 13:00 with a lifetime cumulative of 1000 kWh), `aggregatePvHistoriesLkcf`
+was summing the raw cumulatives and the 1000 kWh "appeared" at 13:00 as if produced in that instant. The dashboard's
+today-kWh integration then attributed the whole jump to "today's production starting at 13:00", which is exactly the
+shape LBDG_ reported, "Je n'ai pas commencé à produire après midi mais bien avant". Fix: per-entity baselining inside
+`aggregatePvHistoriesLkcf` when the `cumulative` flag is on: each entity is captured at its first observed value
+within the window and only its delta-since-arrival contributes to the sum from there. Power sensors pass `cumulative:
+false` and keep the raw-sum path because baselining a W reading is meaningless.
+
+`fetchPvHistory` and `fetchPvStatistics` (calibration LTS + trainer LTS) accept and forward the flag; `refreshPv`
+detects cumulative from `_pvUnit` and passes it through.
+
 ### Dashboard cumulative chart , per-source breakdown on hover
 
 The today-card cumulative kWh chart now lists every HA Energy solar source under the aggregate "actual" value in
