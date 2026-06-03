@@ -1477,6 +1477,7 @@ export const heliosCardStyles = css`
     }
     .tb-hover-tooltip
     {
+        position: relative;
         background: var(--card-background-color, #ffffff);
         color: var(--primary-text-color, #212121);
         border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
@@ -1532,30 +1533,27 @@ export const heliosCardStyles = css`
         bottom border is dropped so the seam between the tab and the
         tooltip reads as one continuous frame. -1 px margin pulls the
         tab down onto the tooltip's top border, sharing the 1 px line. */
-    /*  Time row inside the scrub tooltip. Time on the left, optional LIVE chip pinned top-right. Flex row keeps the chip
-        baseline-aligned with the timestamp at any zoom level. */
-    .tb-hover-tooltip-time-row
-    {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 8px;
-    }
-    /*  Compact "LIVE" pill rendered to the right of the timestamp when the scrub pointer enters the magnet-snap zone.
-        Brand-blue plate, on-primary glyph + label, pulsing red-style dot. Same colour vocabulary as the magnet tab it
-        replaced, just shrunk + flat-cornered so it sits inside the tooltip without elbowing the time out of place. */
+    /*  Compact LIVE chip pinned to the top-right corner of the scrub tooltip when the pointer enters the magnet-snap
+        zone. Outline recipe: transparent backdrop + 1 px theme primary border + primary-colour glyph + label, so the
+        chip stays readable across light + dark themes without ever clashing with the tooltip's own background. The
+        dot pulses to mirror the HA Energy dashboard's live-data vocabulary. */
     .tb-hover-tooltip-live-chip
     {
+        position: absolute;
+        top: 3px;
+        right: 3px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 3px;
-        height: 14px;
-        padding: 0 6px 0 4px;
-        background: var(--primary-color, #03a9f4);
-        color: var(--text-on-primary-color, #ffffff);
-        border-radius: 7px;
-        font-size: 9px;
+        gap: 2px;
+        height: 12px;
+        padding: 0 4px 0 3px;
+        box-sizing: border-box;
+        background: transparent;
+        color: var(--primary-color, #03a9f4);
+        border: 1px solid var(--primary-color, #03a9f4);
+        border-radius: 2px;
+        font-size: 8px;
         font-weight: 700;
         letter-spacing: 0.4px;
         text-transform: uppercase;
@@ -1575,7 +1573,7 @@ export const heliosCardStyles = css`
     }
     .tb-hover-tooltip-live-chip-dot
     {
-        --mdc-icon-size: 10px;
+        --mdc-icon-size: 9px;
         color: inherit;
         display: inline-flex;
         align-items: center;
@@ -1585,9 +1583,9 @@ export const heliosCardStyles = css`
     }
     .tb-hover-tooltip-live-chip-label
     {
-        line-height: 1;
         display: inline-flex;
         align-items: center;
+        line-height: 1;
     }
     @keyframes tb-hover-tooltip-live-pulse
     {
