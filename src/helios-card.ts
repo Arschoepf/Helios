@@ -2091,50 +2091,30 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 ${hasApiKey && this._cloudCover >= 0 ? html`
-                    <button class="cloud-pct-label${this._cloudDomeMode ? ' is-on' : ''}"
+                    <div class="overlay-top-right">
+                        <button
                             type="button"
-                            @click="${this._onCloudChipToggle}"
+                            class="cloud-cover-toggle ${this._cloudDomeMode ? 'is-on' : ''}"
                             aria-pressed="${this._cloudDomeMode ? 'true' : 'false'}"
-                            aria-label="Per-layer cloud cover">
-                        <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
-                        <span>${cloudPctRound}%</span>
-                    </button>
-                ` : nothing}
-                ${hasApiKey && this._cloudScene ? html`
-                    <svg class="cloud-layer-leaders${this._cloudDomeMode ? ' is-on' : ''}"
-                         viewBox="0 0 180 22" preserveAspectRatio="xMidYMid meet">
-                        <!--  Four-segment leader system:
-                              - Trunk: a single vertical from the toggle
-                                bottom (x=90 y=0) down to a central
-                                junction point (x=90 y=11), the halfway
-                                line between the toggle and the layer
-                                chips.
-                              - From the junction, three branches reach
-                                each chip: an L (with Q fillet) toward
-                                the low chip on the left, a straight
-                                vertical to the mid chip, and a mirrored
-                                L toward the high chip on the right.
-                              Chip-center x positions: low at 27, mid at
-                              90, high at 153 (fixed-width chips, see
-                              .cloud-layer-chip min-width).             -->
-                        <path d="M 90,0 L 90,11"                          class="cloud-layer-leader cloud-layer-leader--trunk" fill="none" stroke="currentColor"/>
-                        <path d="M 90,11 L 35,11 Q 27,11 27,19 L 27,22"   class="cloud-layer-leader cloud-layer-leader--low"   fill="none" stroke="currentColor"/>
-                        <path d="M 90,11 L 90,22"                          class="cloud-layer-leader cloud-layer-leader--mid"   fill="none" stroke="currentColor"/>
-                        <path d="M 90,11 L 145,11 Q 153,11 153,19 L 153,22" class="cloud-layer-leader cloud-layer-leader--high" fill="none" stroke="currentColor"/>
-                    </svg>
-                    <div class="cloud-layer-chips${this._cloudDomeMode ? ' is-on' : ''}">
-                        <div class="cloud-layer-chip cloud-layer-chip--low">
-                            <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
-                            <span>${Math.round(this._cloudScene.cloudLow)}%</span>
-                        </div>
-                        <div class="cloud-layer-chip cloud-layer-chip--mid">
-                            <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
-                            <span>${Math.round(this._cloudScene.cloudMid)}%</span>
-                        </div>
-                        <div class="cloud-layer-chip cloud-layer-chip--high">
-                            <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
-                            <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
-                        </div>
+                            aria-label="Per-layer cloud cover"
+                            @click="${this._onCloudChipToggle}"
+                        >
+                            <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
+                        </button>
+                        ${this._cloudScene ? html`
+                            <div class="cloud-layer-chip cloud-layer-chip--high ${this._cloudDomeMode ? 'is-on' : ''}">
+                                <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
+                                <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
+                            </div>
+                            <div class="cloud-layer-chip cloud-layer-chip--mid ${this._cloudDomeMode ? 'is-on' : ''}">
+                                <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
+                                <span>${Math.round(this._cloudScene.cloudMid)}%</span>
+                            </div>
+                            <div class="cloud-layer-chip cloud-layer-chip--low ${this._cloudDomeMode ? 'is-on' : ''}">
+                                <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
+                                <span>${Math.round(this._cloudScene.cloudLow)}%</span>
+                            </div>
+                        ` : nothing}
                     </div>
                 ` : nothing}
 
