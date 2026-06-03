@@ -594,7 +594,7 @@ export class HeliosCard extends LitElement
     //Cloud-cover dome overlay state. Mutually exclusive with the
     //LiDAR view and the shading dome (click handlers below close
     //any other active mode before opening this one).
-    @state() _cloudDomeMode = false;
+    @state() _cloudMode = false;
     _cloudDomeFadeInStartMs:  number | null = null;
     _cloudDomeFadeOutStartMs: number | null = null;
     _cloudDomeFadeRaf?:       number;
@@ -1107,7 +1107,7 @@ export class HeliosCard extends LitElement
             {
                 this._lidarViewMode   = false;
                 this._shadingDomeMode = false;
-                this._cloudDomeMode   = false;
+                this._cloudMode   = false;
                 this._detailMode      = false;
             }
             this._lastHomeKey   = homeKey;
@@ -1321,12 +1321,6 @@ export class HeliosCard extends LitElement
         //have what we need to project the home onto the map".
         const hasApiKey = getHomeCoords(this.config, this.hass) !== null;
 
-
-        //The on-ground disc self-encodes the low/mid/high breakdown
-        //via three concentric bands (proportional radial widths,
-        //three shades of the cloud colour); no hover tooltip
-        //needed.
-        const cloudPctRound    = Math.max(0, Math.round(this._cloudCover));
 
         //Always-visible cloud-cover percentage label, overlaid in HTML
         //above the home marker, with an SVG leader line tying it to
@@ -1850,7 +1844,7 @@ export class HeliosCard extends LitElement
             this._detailMode      ? 'detail-active'        : '',
             this._lidarViewMode   ? 'lidar-view-active'    : '',
             this._shadingDomeChipMask ? 'shading-dome-active'  : '',
-            this._cloudDomeMode   ? 'cloud-dome-active'    : '',
+            this._cloudMode       ? 'cloud-mode-active'    : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -1978,7 +1972,7 @@ export class HeliosCard extends LitElement
                                        : lidarLoading ? 'LiDAR view, loading shadows...'
                                        : isLocal      ? 'LiDAR view, local nDSM'
                                                       : 'LiDAR view, online provider';
-                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode && !this._cloudDomeMode;
+                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode && !this._cloudMode;
                     //Lock mode-switching while the exposure sweep is in
                     //flight: the user cannot exit / re-enter / swap
                     //modes until the LiDAR view has finished computing.
@@ -2094,23 +2088,23 @@ export class HeliosCard extends LitElement
                     <div class="overlay-top-right">
                         <button
                             type="button"
-                            class="cloud-cover-toggle ${this._cloudDomeMode ? 'is-on' : ''}"
-                            aria-pressed="${this._cloudDomeMode ? 'true' : 'false'}"
+                            class="cloud-cover-toggle ${this._cloudMode ? 'is-on' : ''}"
+                            aria-pressed="${this._cloudMode ? 'true' : 'false'}"
                             aria-label="Per-layer cloud cover"
                             @click="${this._onCloudChipToggle}"
                         >
                             <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
                         </button>
                         ${this._cloudScene ? html`
-                            <div class="cloud-layer-chip cloud-layer-chip--high ${this._cloudDomeMode ? 'is-on' : ''}">
+                            <div class="cloud-layer-chip cloud-layer-chip--high ${this._cloudMode ? 'is-on' : ''}">
                                 <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
                                 <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
                             </div>
-                            <div class="cloud-layer-chip cloud-layer-chip--mid ${this._cloudDomeMode ? 'is-on' : ''}">
+                            <div class="cloud-layer-chip cloud-layer-chip--mid ${this._cloudMode ? 'is-on' : ''}">
                                 <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
                                 <span>${Math.round(this._cloudScene.cloudMid)}%</span>
                             </div>
-                            <div class="cloud-layer-chip cloud-layer-chip--low ${this._cloudDomeMode ? 'is-on' : ''}">
+                            <div class="cloud-layer-chip cloud-layer-chip--low ${this._cloudMode ? 'is-on' : ''}">
                                 <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
                                 <span>${Math.round(this._cloudScene.cloudLow)}%</span>
                             </div>
@@ -2740,24 +2734,23 @@ export class HeliosCard extends LitElement
     //toggle button (see render block + _onCloudChipToggle below).
     private _onCloudChipToggle = (): void =>
     {
-        this._cloudDomeMode = !this._cloudDomeMode;
+        this._cloudMode = !this._cloudMode;
     };
     private _onModeLidar = (): void =>
     {
         this._exitScrubMode();
         if (this._shadingDomeMode) toggleShadingDome(this);
-        //LiDAR and Shading replace the whole HUD; force the per-layer
-        //cloud expansion back to OFF so the 3 layer chips don't leak
-        //through. The aggregate cloud chip itself is already hidden
-        //by the .cloud-dome-active CSS family.
-        this._cloudDomeMode = false;
+        //LiDAR and Shading replace the whole HUD; force the cloud mode
+        //OFF so the per-layer chips don't leak through. The aggregate
+        //cloud chip itself is hidden via .cloud-mode-active CSS.
+        this._cloudMode = false;
         if (!this._lidarViewMode)  toggleLidarView(this);
     };
     private _onModeShadingDome = (): void =>
     {
         this._exitScrubMode();
         if (this._lidarViewMode)   toggleLidarView(this);
-        this._cloudDomeMode = false;
+        this._cloudMode = false;
         if (!this._shadingDomeMode) toggleShadingDome(this);
     };
     //Reset the timeline scrub state so the absolutely-positioned

@@ -550,7 +550,7 @@ function wireEngineCallbacks(host: InitHost): void
     type ModeAwareHost = InitHost & {
         readonly _lidarViewMode?:   boolean;
         readonly _shadingDomeMode?: boolean;
-        readonly _cloudDomeMode?:   boolean;
+        readonly _cloudMode?:   boolean;
     };
     host._engine.onMapTransform = () =>
     {
@@ -577,7 +577,7 @@ function wireEngineCallbacks(host: InitHost): void
             {
                 refreshShadingDomeScene(host as unknown as ShadingDomeHost);
             }
-            if (mh._cloudDomeMode)
+            if (mh._cloudMode)
             {
                 refreshCloudDomeScene(host as unknown as CloudDomeHost);
             }

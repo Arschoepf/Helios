@@ -45,7 +45,7 @@ export interface CloudDomeHost extends OverlaysHost
 {
     readonly _engine?: HeliosEngine;
 
-    _cloudDomeMode:           boolean;
+    _cloudMode:           boolean;
     _cloudDomeFadeInStartMs:  number | null;
     _cloudDomeFadeOutStartMs: number | null;
     _cloudDomeFadeRaf?:       number;
@@ -65,11 +65,11 @@ export interface CloudDomeHost extends OverlaysHost
 export function toggleCloudDome(host: CloudDomeHost): void
 {
     if (!host._engine) return;
-    if (!host._cloudDomeMode)
+    if (!host._cloudMode)
     {
         host._cloudDomeFadeOutStartMs = null;
         host._cloudDomeFadeInStartMs  = performance.now();
-        host._cloudDomeMode = true;
+        host._cloudMode = true;
         refreshCloudDomeScene(host);
         refreshOverlays(host);
         startCloudDomeFadeLoop(host);
@@ -95,7 +95,7 @@ export function startCloudDomeFadeLoop(host: CloudDomeHost): void
         if (outStart !== null && now - outStart >= CLOUD_DOME_FADE_OUT_MS)
         {
             host._cloudDomeFadeOutStartMs = null;
-            host._cloudDomeMode = false;
+            host._cloudMode = false;
             host._cloudDomeScene = null;
             refreshOverlays(host);
         }
@@ -123,7 +123,7 @@ export function startCloudDomeFadeLoop(host: CloudDomeHost): void
 //camera moves while the dome is active plus once at toggle-on.
 export function refreshCloudDomeScene(host: CloudDomeHost): void
 {
-    if (!host._cloudDomeMode || !host._engine)
+    if (!host._cloudMode || !host._engine)
     {
         host._cloudDomeScene = null;
         return;
@@ -147,7 +147,7 @@ export function refreshCloudDomeScene(host: CloudDomeHost): void
 
 function shouldRenderCloudDome(host: CloudDomeHost): boolean
 {
-    return host._cloudDomeMode
+    return host._cloudMode
         || host._cloudDomeFadeInStartMs !== null
         || host._cloudDomeFadeOutStartMs !== null;
 }
@@ -166,7 +166,7 @@ export function cloudDomeFadeAlpha(host: CloudDomeHost): number
         const t = Math.max(0, Math.min(1, (now - host._cloudDomeFadeOutStartMs) / CLOUD_DOME_FADE_OUT_MS));
         return 1 - easeOutQuad(t);
     }
-    return host._cloudDomeMode ? 1 : 0;
+    return host._cloudMode ? 1 : 0;
 }
 
 
@@ -243,7 +243,7 @@ export function renderCloudDomeOverlay(host: CloudDomeHost): TemplateResult | ty
     const perLayerAlpha = (index: number): number =>
     {
         if (outStart !== null) return globalAlpha;
-        if (inStart === null) return host._cloudDomeMode ? 1 : 0;
+        if (inStart === null) return host._cloudMode ? 1 : 0;
         const elapsed = now - inStart - LAYER_DELAY_MS[index];
         if (elapsed <= 0) return 0;
         const t = Math.min(1, elapsed / LAYER_FADE_DUR_MS);
