@@ -553,6 +553,9 @@ export class HeliosCard extends LitElement
     //animations per card.
     @state() _dashAnimPhase:        'idle' | 'entering' | 'exiting' = 'idle';
     _dashAnimTimer?:                number;
+    //Hover fraction over the FRONT CoverFlow card's chart, in [0..1]. Null when no cursor is on the chart.
+    //Drives the chart header value readout + the vertical guide line at the cursor X.
+    @state() _dashChartHoverFrac:   number | null = null;
     //True while the LiDAR View overlay is showing: the map UI fades
     //out, the engine's WebGL custom layer paints every loaded LiDAR
     //cell as a dot, and the same toggle button (top-right) brings the

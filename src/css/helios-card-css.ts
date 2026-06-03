@@ -730,6 +730,20 @@ export const heliosCardStyles = css`
         background: color-mix(in srgb, var(--energy-battery-out-color, #1b6c75) 18%, transparent);
         color: var(--energy-battery-out-color, #1b6c75);
     }
+    /*  Grid import / export, same recipe as battery: HA Energy palette token tinted at 18 %. */
+    .dash-cf-card-stat-icon-grid-in
+    {
+        background: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 18%, transparent);
+        color: var(--energy-grid-consumption-color, #488fc2);
+    }
+    .dash-cf-card-stat-icon-grid-out
+    {
+        background: color-mix(in srgb, var(--energy-grid-return-color, #8353d1) 18%, transparent);
+        color: var(--energy-grid-return-color, #8353d1);
+    }
+    /*  Single-tile grid row (only import OR only export configured) spans both columns of the 2x2 grid so
+        the tile reads as a horizontal banner instead of an orphan half-row. */
+    .dash-cf-card-stat-grid-solo { grid-column: 1 / -1; }
     .dash-cf-card-stat-body
     {
         display: flex;
@@ -773,10 +787,84 @@ export const heliosCardStyles = css`
         border-radius: 16px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
-        /*  overflow: hidden so the stacked area + forecast line never bleed past the rounded corners; the
-            inner SVG fills the chart box edge-to-edge. */
         overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    /*  Chart header: title + live W value on the left, mdi:lightning-bolt badge on the right. Same recipe
+        as the HA tile-card power-curve cards the user referenced. The value below the title swaps between
+        the day's peak W (no hover) and the interpolated stacked W at cursor X (hover on front card). */
+    .dash-cf-card-chart-header
+    {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px 6px;
+        flex-shrink: 0;
+    }
+    .dash-cf-card-chart-meta
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    .dash-cf-card-chart-title
+    {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        opacity: 0.85;
+    }
+    .dash-cf-card-chart-value
+    {
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1.1;
+        color: var(--primary-text-color, #ffffff);
+        font-variant-numeric: tabular-nums;
+    }
+    .dash-cf-card-chart-unit
+    {
+        font-size: 12px;
+        font-weight: 500;
+        margin-left: 2px;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+    }
+    .dash-cf-card-chart-icon
+    {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        line-height: 0;
+        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 18%, transparent);
+        color: var(--energy-solar-color, #ff9800);
+    }
+    .dash-cf-card-chart-icon ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    /*  Plot frame fills the remaining vertical space, the SVG inside paints absolutely to its edges. The
+        vertical cursor sits absolutely positioned at the hover X percent so it always tracks the user's
+        cursor regardless of the SVG's non-uniform stretch. */
+    .dash-cf-card-chart-plot
+    {
         position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
     }
     .dash-cf-card-chart-svg
     {
@@ -785,6 +873,29 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         display: block;
+    }
+    .dash-cf-card-chart-cursor
+    {
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        width: 1px;
+        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 35%, transparent);
+        pointer-events: none;
+        transform: translateX(-0.5px);
+    }
+    /*  Open animation: the SVG grows from the bottom edge upward, replaying the entering reveal in sync
+        with the rest of the CoverFlow card. Anchors transform-origin to the bottom so the W=0 baseline
+        does not move during the scaleY, only the peaks reach up. */
+    @keyframes dash-cf-chart-grow
+    {
+        from { transform: scaleY(0); }
+        to   { transform: scaleY(1); }
+    }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card-chart-svg
+    {
+        transform-origin: bottom;
+        animation: dash-cf-chart-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) 280ms both;
     }
     /*  Forecast trace: thin dashed line in the same solar palette as the stacked areas, slightly darker so
         it reads as a separate trace on top of the fills. The vector-effect non-scaling-stroke attribute is

@@ -27,9 +27,11 @@ import { getHomeCoords } from './init';
 import type { DashboardHost } from './dashboard';
 
 
-//15-min grid over 24 h so areas stay smooth enough at the tiny in-card render size without forcing big SVG
-//path strings (97 points x 5 cards = ~485 path nodes total, well under the browser path-parser sweet spot).
-const CHART_GRID_STEPS = 96;
+//5-min grid over 24 h (288 steps + 1 end-of-day endpoint). HA's native power-curve cards land in this same
+//ballpark, the chart reads as detailed enough to show the morning ramp-up + every cloud dip without forcing
+//huge SVG path strings. 289 points x 4 sources x 5 cards = ~5780 path nodes worst case, comfortably within
+//the browser path-parser sweet spot.
+const CHART_GRID_STEPS = 288;
 
 
 export interface DayChartData
@@ -292,10 +294,46 @@ function interpAtMs(timesMs: number[], values: number[], tMs: number): number
 }
 
 
+//Total stacked W at the given grid index, summed across all sources. Used by the hover header readout AND
+//by the per-source dot positions on hover so both share the exact same arithmetic.
+export function stackedAtIndex(data: DayChartData, i: number): number
+{
+    let sum = 0;
+    for (const src of data.sources)
+    {
+        sum += src.valuesW[i] ?? 0;
+    }
+    return sum;
+}
+
+
+//Peak stacked W across the entire day (max of stacked actual OR forecast at any grid step). Drives the
+//default value shown in the chart header when the user is not hovering the curve.
+export function peakOfDay(data: DayChartData): number
+{
+    let peak = 0;
+    const N = data.forecastW.length || (data.sources[0]?.valuesW.length ?? 0);
+    for (let i = 0; i < N; i++)
+    {
+        const stacked = stackedAtIndex(data, i);
+        const fc      = data.forecastW[i] ?? 0;
+        if (stacked > peak) peak = stacked;
+        if (fc      > peak) peak = fc;
+    }
+    return peak;
+}
+
+
 //Render the SVG for a single CoverFlow card. viewBox is normalised 0 to 100 on both axes so the inner
 //area + line paths express points as percentages and the CSS sizes the SVG to fill its parent (the
-//.dash-cf-card-chart frame). `preserveAspectRatio="none"` lets the chart stretch to whatever shape the
+//.dash-cf-card-chart-plot frame). preserveAspectRatio="none" lets the chart stretch to whatever shape the
 //frame ends up at after the container queries swap the card aspect ratio.
+//
+//A bottom padding of ~6 % keeps the W=0 baseline off the chart frame's lower edge so the orange baseline
+//is visibly inset (the HA frontend's native power-curve cards do the same). A top padding of ~4 % stops the
+//peak from kissing the upper edge for the same reason.
+const CHART_BOTTOM_PAD = 6;
+const CHART_TOP_PAD    = 4;
 export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateResult
 {
     const W = 100;
@@ -305,12 +343,14 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
     {
         return html``;
     }
+    const plotH  = H - CHART_BOTTOM_PAD - CHART_TOP_PAD;
     const xPctOf = (i: number) => (i / (N - 1)) * W;
-    const yPctOf = (w: number) => H - Math.max(0, Math.min(1, w / yMaxW)) * H;
+    const yPctOf = (w: number) => H - CHART_BOTTOM_PAD - Math.max(0, Math.min(1, w / yMaxW)) * plotH;
 
     //Build stacked areas from bottom to top so each layer paints over the previous one with the right
     //vertical offset. The fill is the per-source color at ~38 % opacity (legible without drowning the
-    //forecast line) plus a thin stroke at the top for definition; same colour for both.
+    //forecast line) plus a thicker stroke on the area's TOP edge (the production curve drawn over the
+    //fill) so the curve has a defined upper border per the HA reference card.
     const areaPaths: TemplateResult[] = [];
     const bottomValues = new Array(N).fill(0);
     for (const src of data.sources)
@@ -320,24 +360,34 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
         {
             topValues[i] = bottomValues[i] + (src.valuesW[i] ?? 0);
         }
-        let d = `M ${xPctOf(0).toFixed(2)} ${yPctOf(bottomValues[0]).toFixed(2)}`;
+        //Fill path: closes back along the bottom edge of this stacked layer.
+        let dFill = `M ${xPctOf(0).toFixed(2)} ${yPctOf(bottomValues[0]).toFixed(2)}`;
         for (let i = 0; i < N; i++)
         {
-            d += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(topValues[i]).toFixed(2)}`;
+            dFill += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(topValues[i]).toFixed(2)}`;
         }
         for (let i = N - 1; i >= 0; i--)
         {
-            d += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(bottomValues[i]).toFixed(2)}`;
+            dFill += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(bottomValues[i]).toFixed(2)}`;
         }
-        d += ' Z';
+        dFill += ' Z';
+        //Stroke path: only the TOP edge (the production curve), drawn as a separate open polyline so the
+        //bottom + side edges of the fill polygon stay invisible. Without this the side closing lines of the
+        //fill polygon would render as ugly vertical strokes at the chart edges.
+        let dStroke = `M ${xPctOf(0).toFixed(2)} ${yPctOf(topValues[0]).toFixed(2)}`;
+        for (let i = 1; i < N; i++)
+        {
+            dStroke += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(topValues[i]).toFixed(2)}`;
+        }
         areaPaths.push(svg`
+            <path d="${dFill}" fill="${src.color}" fill-opacity="0.32" stroke="none"></path>
             <path
-                d="${d}"
-                fill="${src.color}"
-                fill-opacity="0.42"
+                d="${dStroke}"
+                fill="none"
                 stroke="${src.color}"
-                stroke-width="0.6"
-                stroke-opacity="0.85"
+                stroke-width="1.6"
+                stroke-linejoin="round"
+                stroke-linecap="round"
                 vector-effect="non-scaling-stroke"
             ></path>
         `);

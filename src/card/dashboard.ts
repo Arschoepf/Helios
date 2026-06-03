@@ -27,7 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { buildDashCharts, renderDayChartSVG, type DayChartData } from './dashboardChart';
+import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, type DayChartData } from './dashboardChart';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -66,6 +66,11 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //phase flips to 'idle' and the cards sit at their inline-style resting transforms.
     _dashAnimPhase:        'idle' | 'entering' | 'exiting';
     _dashAnimTimer?:       number;
+    //Hover fraction over the FRONT card's chart, in [0..1]. Null when the cursor is not on the chart. Drives
+    //the value readout in the chart header + the vertical guide line at the cursor X. Hover is intentionally
+    //limited to the front card so the mid / back cards never compete for the cursor (they sit behind the
+    //front card visually anyway).
+    _dashChartHoverFrac:   number | null;
 }
 
 
@@ -455,67 +460,264 @@ function renderCoverflowCard(
             </header>
 
             <section class="dash-cf-card-stats">
-                <div class="dash-cf-card-stat dash-cf-card-stat-produced">
-                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-solar" aria-hidden="true">
-                        <ha-icon icon="mdi:solar-power-variant"></ha-icon>
-                    </span>
-                    <span class="dash-cf-card-stat-body">
-                        <span class="dash-cf-card-stat-label">Production</span>
-                        <span class="dash-cf-card-stat-value">
-                            ${formatLocalisedNumber(host.hass, stats.producedKwh, 1)} kWh
-                            ${stats.refinedKwh !== null ? html`
-                                <span class="dash-cf-card-stat-refined">
-                                    (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
-                                </span>
-                            ` : nothing}
+                ${hasSolarConfigured(host) ? html`
+                    <div class="dash-cf-card-stat dash-cf-card-stat-produced">
+                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-solar" aria-hidden="true">
+                            <ha-icon icon="mdi:solar-power-variant"></ha-icon>
                         </span>
-                    </span>
-                </div>
-                <div class="dash-cf-card-stat dash-cf-card-stat-forecast">
-                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-forecast" aria-hidden="true">
-                        <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
-                    </span>
-                    <span class="dash-cf-card-stat-body">
-                        <span class="dash-cf-card-stat-label">Prévision</span>
-                        <span class="dash-cf-card-stat-value">
-                            ${formatLocalisedNumber(host.hass, stats.forecastKwh, 1)} kWh
-                            ${stats.refinedKwh !== null ? html`
-                                <span class="dash-cf-card-stat-refined">
-                                    (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
-                                </span>
-                            ` : nothing}
+                        <span class="dash-cf-card-stat-body">
+                            <span class="dash-cf-card-stat-label">Production</span>
+                            <span class="dash-cf-card-stat-value">
+                                ${formatLocalisedNumber(host.hass, stats.producedKwh, 1)} kWh
+                                ${stats.refinedKwh !== null ? html`
+                                    <span class="dash-cf-card-stat-refined">
+                                        (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
+                                    </span>
+                                ` : nothing}
+                            </span>
                         </span>
-                    </span>
-                </div>
-                <div class="dash-cf-card-stat dash-cf-card-stat-battery-in">
-                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-in" aria-hidden="true">
-                        <ha-icon icon="mdi:battery-arrow-up"></ha-icon>
-                    </span>
-                    <span class="dash-cf-card-stat-body">
-                        <span class="dash-cf-card-stat-label">Charge</span>
-                        <span class="dash-cf-card-stat-value">
-                            ${formatLocalisedNumber(host.hass, battery.chargedKwh, 1)} kWh
+                    </div>
+                    <div class="dash-cf-card-stat dash-cf-card-stat-forecast">
+                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-forecast" aria-hidden="true">
+                            <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
                         </span>
-                    </span>
-                </div>
-                <div class="dash-cf-card-stat dash-cf-card-stat-battery-out">
-                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-out" aria-hidden="true">
-                        <ha-icon icon="mdi:battery-arrow-down"></ha-icon>
-                    </span>
-                    <span class="dash-cf-card-stat-body">
-                        <span class="dash-cf-card-stat-label">Décharge</span>
-                        <span class="dash-cf-card-stat-value">
-                            ${formatLocalisedNumber(host.hass, battery.dischargedKwh, 1)} kWh
+                        <span class="dash-cf-card-stat-body">
+                            <span class="dash-cf-card-stat-label">Prévision</span>
+                            <span class="dash-cf-card-stat-value">
+                                ${formatLocalisedNumber(host.hass, stats.forecastKwh, 1)} kWh
+                                ${stats.refinedKwh !== null ? html`
+                                    <span class="dash-cf-card-stat-refined">
+                                        (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
+                                    </span>
+                                ` : nothing}
+                            </span>
                         </span>
-                    </span>
-                </div>
+                    </div>
+                ` : nothing}
+                ${hasBatteryConfigured(host) ? html`
+                    <div class="dash-cf-card-stat dash-cf-card-stat-battery-in">
+                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-in" aria-hidden="true">
+                            <ha-icon icon="mdi:battery-arrow-up"></ha-icon>
+                        </span>
+                        <span class="dash-cf-card-stat-body">
+                            <span class="dash-cf-card-stat-label">Charge</span>
+                            <span class="dash-cf-card-stat-value">
+                                ${formatLocalisedNumber(host.hass, battery.chargedKwh, 1)} kWh
+                            </span>
+                        </span>
+                    </div>
+                    <div class="dash-cf-card-stat dash-cf-card-stat-battery-out">
+                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-out" aria-hidden="true">
+                            <ha-icon icon="mdi:battery-arrow-down"></ha-icon>
+                        </span>
+                        <span class="dash-cf-card-stat-body">
+                            <span class="dash-cf-card-stat-label">Décharge</span>
+                            <span class="dash-cf-card-stat-value">
+                                ${formatLocalisedNumber(host.hass, battery.dischargedKwh, 1)} kWh
+                            </span>
+                        </span>
+                    </div>
+                ` : nothing}
+                ${renderGridTiles(host, cardOffset)}
             </section>
 
-            <section class="dash-cf-card-chart" aria-hidden="true">
-                ${renderDayChartSVG(chartData, chartYMaxW)}
-            </section>
+            ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW)}
         </article>
     `;
+}
+
+
+//Whether the HA Energy dashboard declares any solar / battery / grid-import / grid-export source. Drives
+//the conditional rendering of the matching mini-tile pairs on every CoverFlow card so an install without
+//(say) a battery does not show two empty 0.0 kWh tiles cluttering the section.
+function hasSolarConfigured(host: DashboardHost): boolean
+{
+    const def = host._energyDefaults;
+    return (def?.solarStatRates?.length ?? 0) > 0
+        || (def?.solarStatEnergyFroms?.length ?? 0) > 0;
+}
+
+function hasBatteryConfigured(host: DashboardHost): boolean
+{
+    const def = host._energyDefaults;
+    return (def?.batteryStatRates?.length ?? 0) > 0
+        || (def?.batteryStatEnergyFroms?.length ?? 0) > 0
+        || (def?.batteryStatEnergyTos?.length ?? 0) > 0;
+}
+
+function hasGridImport(host: DashboardHost): boolean
+{
+    return (host._energyDefaults?.gridStatEnergyFroms?.length ?? 0) > 0;
+}
+
+function hasGridExport(host: DashboardHost): boolean
+{
+    return (host._energyDefaults?.gridStatEnergyTos?.length ?? 0) > 0;
+}
+
+
+//Grid import / export tile pair, rendered above the chart and below the battery row. If only one of the
+//two sides is configured in the HA Energy dashboard the surviving tile spans both columns of the 2x2 grid
+//so it reads as a horizontal banner instead of an orphan half-row.
+function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResult | typeof nothing
+{
+    const hasIn  = hasGridImport(host);
+    const hasOut = hasGridExport(host);
+    if (!hasIn && !hasOut)
+    {
+        return nothing;
+    }
+
+    //Today's grid energy from the recorder day-totals refresh that energy-prefs.ts maintains. Past + future
+    //days fall back to 0 the same way the battery tiles do, an LTS-backed historical path will come later.
+    const importedKwh = cardOffset === 0 ? (host._haGridImportTodayKwh ?? 0) : 0;
+    const exportedKwh = cardOffset === 0 ? (host._haGridExportTodayKwh ?? 0) : 0;
+
+    const soloClass = (hasIn && !hasOut) || (!hasIn && hasOut) ? ' dash-cf-card-stat-grid-solo' : '';
+
+    return html`
+        ${hasIn ? html`
+            <div class="dash-cf-card-stat dash-cf-card-stat-grid-in${soloClass}">
+                <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-grid-in" aria-hidden="true">
+                    <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
+                </span>
+                <span class="dash-cf-card-stat-body">
+                    <span class="dash-cf-card-stat-label">Import</span>
+                    <span class="dash-cf-card-stat-value">
+                        ${formatLocalisedNumber(host.hass, importedKwh, 1)} kWh
+                    </span>
+                </span>
+            </div>
+        ` : nothing}
+        ${hasOut ? html`
+            <div class="dash-cf-card-stat dash-cf-card-stat-grid-out${soloClass}">
+                <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-grid-out" aria-hidden="true">
+                    <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
+                </span>
+                <span class="dash-cf-card-stat-body">
+                    <span class="dash-cf-card-stat-label">Export</span>
+                    <span class="dash-cf-card-stat-value">
+                        ${formatLocalisedNumber(host.hass, exportedKwh, 1)} kWh
+                    </span>
+                </span>
+            </div>
+        ` : nothing}
+    `;
+}
+
+
+//Bottom block of each CoverFlow card: header (title + live W value + lightning-bolt icon) + plot frame
+//(the rendered SVG + a vertical cursor on hover). The header value follows the cursor on the front card:
+//hover at a given X reads the interpolated stacked W at that X; cursor off-chart reverts to the day's
+//peak. Mid / back cards are static (no hover handlers, just the day's peak value in the header) since the
+//cursor naturally lives on the front card anyway.
+function renderCardChartBlock(
+    host:         DashboardHost,
+    cardOffset:   number,
+    activeOffset: number,
+    data:         DayChartData,
+    yMaxW:        number,
+): TemplateResult
+{
+    const isFront = cardOffset === activeOffset;
+    const N       = data.forecastW.length || (data.sources[0]?.valuesW.length ?? 0);
+
+    //Default headline = the day's peak stacked W (or peak forecast for future days where no actual exists).
+    //Hover on the front card overrides with the interpolated stacked W at the cursor X.
+    let displayW = peakOfDay(data);
+    let hoverPct: number | null = null;
+    if (isFront && host._dashChartHoverFrac !== null && N >= 2)
+    {
+        const frac  = Math.max(0, Math.min(1, host._dashChartHoverFrac));
+        const idxF  = frac * (N - 1);
+        const i0    = Math.floor(idxF);
+        const i1    = Math.min(N - 1, i0 + 1);
+        const f     = idxF - i0;
+        const v0    = stackedAtIndex(data, i0) || (data.forecastW[i0] ?? 0);
+        const v1    = stackedAtIndex(data, i1) || (data.forecastW[i1] ?? 0);
+        displayW    = v0 * (1 - f) + v1 * f;
+        hoverPct    = frac * 100;
+    }
+
+    const formatted = formatPowerForChart(host.hass, displayW);
+
+    return html`
+        <section class="dash-cf-card-chart" aria-hidden="${!isFront}">
+            <header class="dash-cf-card-chart-header">
+                <div class="dash-cf-card-chart-meta">
+                    <span class="dash-cf-card-chart-title">Puissance photovoltaïque</span>
+                    <span class="dash-cf-card-chart-value">
+                        ${formatted.value}<span class="dash-cf-card-chart-unit"> ${formatted.unit}</span>
+                    </span>
+                </div>
+                <span class="dash-cf-card-chart-icon" aria-hidden="true">
+                    <ha-icon icon="mdi:lightning-bolt"></ha-icon>
+                </span>
+            </header>
+            <div
+                class="dash-cf-card-chart-plot"
+                @pointermove="${isFront ? (e: PointerEvent) => handleChartHover(host, e) : null}"
+                @pointerleave="${isFront ? () => handleChartHoverLeave(host) : null}"
+            >
+                ${renderDayChartSVG(data, yMaxW)}
+                ${hoverPct !== null ? html`
+                    <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%"></span>
+                ` : nothing}
+            </div>
+        </section>
+    `;
+}
+
+
+//Power formatting for the chart header. Below 1 kW we show whole W ('342 W'); from 1 kW we switch to one
+//decimal kW ('2,3 kW'). Locale is pulled from the host hass so the decimal separator follows the user.
+function formatPowerForChart(hass: DashboardHost['hass'], watts: number): { value: string; unit: string }
+{
+    if (!isFinite(watts) || watts < 0)
+    {
+        return { value: '0', unit: 'W' };
+    }
+    if (watts >= 1000)
+    {
+        return { value: formatLocalisedNumber(hass, watts / 1000, 1), unit: 'kW' };
+    }
+    return { value: formatLocalisedNumber(hass, Math.round(watts), 0), unit: 'W' };
+}
+
+
+//Pointermove handler on the front card's plot frame. Reads the cursor's X position relative to the frame
+//and stores the [0..1] fraction on the host so the next render computes the interpolated W and positions
+//the vertical guide line. Coalesced via requestAnimationFrame so a fast mouse move does not trigger a
+//re-render per event (the cursor moves at screen refresh rate at most).
+export function handleChartHover(host: DashboardHost, e: PointerEvent): void
+{
+    const target = e.currentTarget as HTMLElement | null;
+    if (!target)
+    {
+        return;
+    }
+    const rect = target.getBoundingClientRect();
+    if (rect.width <= 0)
+    {
+        return;
+    }
+    const frac = (e.clientX - rect.left) / rect.width;
+    const clamped = Math.max(0, Math.min(1, frac));
+    if (host._dashChartHoverFrac !== clamped)
+    {
+        host._dashChartHoverFrac = clamped;
+        host.requestUpdate();
+    }
+}
+
+
+export function handleChartHoverLeave(host: DashboardHost): void
+{
+    if (host._dashChartHoverFrac !== null)
+    {
+        host._dashChartHoverFrac = null;
+        host.requestUpdate();
+    }
 }
 
 
