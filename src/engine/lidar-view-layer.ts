@@ -686,13 +686,13 @@ export class LidarViewLayer implements CustomLayerInterface
         const U_LIT_REAL    = 1.0;
         const U_SHADOW_REAL = 0.55;
         const U_WARM_R = 1.0, U_WARM_G = 0.6, U_WARM_B = 0.15;
-        //gl_PointSize is measured in framebuffer pixels. MapLibre
-        //sizes its framebuffer at map.getPixelRatio() x CSS, which the
-        //user can clamp via the `pixel-ratio` config (1x on mobile to
-        //save GPU). window.devicePixelRatio diverges from that on any
-        //device where the clamp kicks in (iOS DPR 3 with framebuffer
-        //at 1.25x), so dots come out 2-3x too big. Asking MapLibre
-        //directly keeps the dots at the same CSS size across devices.
+        //gl_PointSize is measured in framebuffer pixels. MapLibre sizes
+        //its framebuffer at map.getPixelRatio() x CSS, which the engine
+        //clamps (desktop 2, mobile 1.25). window.devicePixelRatio
+        //diverges from the clamped value on any device where the cap
+        //kicks in (iOS DPR 3 with framebuffer at 1.25x), so dots come
+        //out 2-3x too big. Asking MapLibre directly keeps the dots at
+        //the same CSS size across devices.
         const pixelRatio = this._map?.getPixelRatio?.()
                         ?? ((typeof window !== 'undefined' && window.devicePixelRatio) || 1);
         if (this._uPointSize)    gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);

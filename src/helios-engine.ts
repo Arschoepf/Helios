@@ -930,8 +930,7 @@ export class HeliosEngine
         //basemap, shadow raster), so the desktop cap sits at 2 (not
         //the native 2-3 of Retina) and mobile at 1.25, slashing per-
         //frame fragment work without a visible quality regression on
-        //the card-sized viewport. The user-exposed `pixel-ratio: 1x`
-        //forces 1.0 for the cheapest possible workload.
+        //the card-sized viewport.
         const pixelRatio = this._pixelRatio();
 
         const styleInfo = this._resolveMapStyle();
@@ -1370,16 +1369,11 @@ export class HeliosEngine
         };
     }
 
-    //Resolve the WebGL canvas pixel ratio. '1x' forces 1.0 (cheapest
-    //fragment workload), anything else (including unset) falls back
-    //to the device-native ratio capped at 2 on desktop / 1.25 on
-    //mobile so even retina screens stay within the per-frame budget.
+    //Resolve the WebGL canvas pixel ratio: device-native, capped at 2
+    //on desktop and 1.25 on mobile so even retina screens stay within
+    //the per-frame budget.
     private _pixelRatio(): number
     {
-        if (String(this.cfg['pixel-ratio'] ?? 'auto').toLowerCase() === '1x')
-        {
-            return 1.0;
-        }
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
         return IS_MOBILE
             ? Math.min(Math.max(dpr, 1), 1.25)

@@ -218,10 +218,6 @@ export interface Translations
         //switch. 'Auto' uses the device's devicePixelRatio capped at
         //2 / 1.25 (desktop / mobile). '1x' forces 1.0 for the
         //cheapest per-frame fragment workload.
-        pixelRatio:               string;
-        pixelRatioAuto:           string;
-        pixelRatio1x:             string;
-        pixelRatioHint:           string;
         //Third map-style segment: a curated minimal basemap (no POIs,
         //no place labels, no road shields) for low-end devices.
         mapStyleMinimal:          string;

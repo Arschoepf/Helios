@@ -160,6 +160,7 @@ export class HeliosCardEditor extends LitElement
         'timeline-consumption-enabled',
         'date-format',
         'time-format',
+        'pixel-ratio',
     ];
     private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
     {
@@ -664,23 +665,6 @@ export class HeliosCardEditor extends LitElement
                         </div>
                     </div>
                     <div class="hint">${t.editor.autoRotateHint}</div>
-
-                    <div class="field">
-                        <span class="label">${t.editor.pixelRatio}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() !== '1x' ? 'active' : ''}"
-                                @click="${() => this._update('pixel-ratio', 'auto')}"
-                            >${t.editor.pixelRatioAuto}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${(String(c['pixel-ratio'] ?? 'auto')).toLowerCase() === '1x' ? 'active' : ''}"
-                                @click="${() => this._update('pixel-ratio', '1x')}"
-                            >${t.editor.pixelRatio1x}</button>
-                        </div>
-                    </div>
-                    <div class="hint">${t.editor.pixelRatioHint}</div>
 
                     <details class="advanced-section">
                         <summary class="section-title section-title-collapse">${t.editor.timelineSection}</summary>

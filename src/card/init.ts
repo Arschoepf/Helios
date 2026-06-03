@@ -57,7 +57,6 @@ export const VISUAL_CONFIG_KEYS = [
     'building-opacity',
     //Render budget + LiDAR-View visuals. The slider that drives lidar-view-point-size lives on the LiDAR-View itself so the engine
     //picks up the change immediately.
-    'pixel-ratio',
     'shadows-enabled',
     'shadow-opacity',
     'lidar-precision',

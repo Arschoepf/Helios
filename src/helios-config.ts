@@ -257,7 +257,6 @@ export interface HeliosConfig
     //forces 1.0 ignoring the device, the cheapest possible per-
     //frame fragment workload, useful for low-end devices or long
     //sessions where battery / heat matters more than crispness.
-    'pixel-ratio'?:           unknown;
     //Cast-shadow master toggle. Default true. When false, no shadows
     //are projected at all (neither LiDAR nor MapTiler).
     'shadows-enabled'?:        unknown;
