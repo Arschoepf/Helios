@@ -597,58 +597,100 @@ export const heliosCardStyles = css`
         mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
         -webkit-mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
     }
-    /*  delta = -2 → back left card. Stronger blur, mask covers more so the sharp area is smaller. */
+    /*  delta = -2 → back left card. Slightly stronger blur than ±1, mask still covers less than half so the
+        card stays clearly visible alongside the depth cue. */
     .dash-cf-card[data-delta="-2"]::after
     {
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        mask-image: linear-gradient(to right, black 0%, black 55%, transparent 100%);
-        -webkit-mask-image: linear-gradient(to right, black 0%, black 55%, transparent 100%);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        mask-image: linear-gradient(to right, black 0%, black 35%, transparent 95%);
+        -webkit-mask-image: linear-gradient(to right, black 0%, black 35%, transparent 95%);
     }
     /*  delta = 2 → back right card. */
     .dash-cf-card[data-delta="2"]::after
     {
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
-        mask-image: linear-gradient(to left, black 0%, black 55%, transparent 100%);
-        -webkit-mask-image: linear-gradient(to left, black 0%, black 55%, transparent 100%);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+        mask-image: linear-gradient(to left, black 0%, black 35%, transparent 95%);
+        -webkit-mask-image: linear-gradient(to left, black 0%, black 35%, transparent 95%);
     }
 
-    /*  Enter / exit animation, fade-only at the final transform position. 1 s total, staged in three phases:
-        - 0 - 300 ms: front (today) card fades in (or out on exit).
-        - 300 - 650 ms: ±1 cards fade in (or out on exit, after their reverse delay).
-        - 650 - 1000 ms: ±2 cards fade in (or out, first).
-        No transform animation; each card materialises at its inline-style resting transform via opacity alone.
-        animation-fill-mode: both keeps the from-state visible during the delay and the to-state visible after
-        the animation completes (until the .dash-cf-entering / .dash-cf-exiting class drops off). Cards stop
-        accepting click during the animation window (pointer-events: none) so an in-flight fade cannot navigate
-        to a different day half-way through.                                                                    */
-    @keyframes dash-cf-fade-in
-    {
-        0%   { opacity: 0; }
-        100% { opacity: 1; }
-    }
-    @keyframes dash-cf-fade-out
-    {
-        0%   { opacity: 1; }
-        100% { opacity: 0; }
-    }
+    /*  Enter / exit animation, 1 s total, staged in three phases. The cards translate from BEHIND their forward
+        neighbour to their resting transform:
+        - 0 - 300 ms: front (today) card fades in at the centre (or out on exit).
+        - 300 - 650 ms: ±1 cards slide out from behind the front card to their resting position (reverse on exit).
+        - 650 - 1000 ms: ±2 cards slide out from behind the ±1 cards (reverse on exit).
+        Each keyframe's "to" state must match the inline transform / opacity (txPct 50 / 80, scale 0.85 / 0.70,
+        rotY 25 / 45 deg) so the handover to inline-only styling at animation end is seamless. fill-mode: both
+        keeps the from-state visible during the delay and the to-state visible after the animation completes.
+        Cards stop accepting click during the animation window (pointer-events: none) so an in-flight slide
+        cannot navigate to a different day half-way through.                                                    */
     .dash-cf-stage.dash-cf-entering .dash-cf-card,
     .dash-cf-stage.dash-cf-exiting  .dash-cf-card
     {
         pointer-events: none;
     }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-fade-in 300ms ease-out 0ms   both; }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"],
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-fade-in 350ms ease-out 300ms both; }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-2"],
-    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-fade-in 350ms ease-out 650ms both; }
+    @keyframes dash-cf-enter-front
+    {
+        0%   { opacity: 0; }
+        100% { opacity: 1; }
+    }
+    @keyframes dash-cf-enter-mid-left
+    {
+        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 1; }
+    }
+    @keyframes dash-cf-enter-mid-right
+    {
+        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 1; }
+    }
+    @keyframes dash-cf-enter-back-left
+    {
+        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-80%) scale(0.70) rotateY(-45deg); opacity: 1; }
+    }
+    @keyframes dash-cf-enter-back-right
+    {
+        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(80%) scale(0.70) rotateY(45deg); opacity: 1; }
+    }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-enter-mid-right  350ms ease-out 300ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-enter-back-left  350ms ease-out 650ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-enter-back-right 350ms ease-out 650ms both; }
 
-    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="-2"],
-    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-fade-out 350ms ease-in 0ms   both; }
-    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="-1"],
-    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-fade-out 350ms ease-in 350ms both; }
-    .dash-cf-stage.dash-cf-exiting  .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-fade-out 300ms ease-in 700ms both; }
+    @keyframes dash-cf-exit-back-left
+    {
+        0%   { transform: translate(-50%, -50%) translateX(-80%) scale(0.70) rotateY(-45deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 0; }
+    }
+    @keyframes dash-cf-exit-back-right
+    {
+        0%   { transform: translate(-50%, -50%) translateX(80%) scale(0.70) rotateY(45deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 0; }
+    }
+    @keyframes dash-cf-exit-mid-left
+    {
+        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+    }
+    @keyframes dash-cf-exit-mid-right
+    {
+        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+    }
+    @keyframes dash-cf-exit-front
+    {
+        0%   { opacity: 1; }
+        100% { opacity: 0; }
+    }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-exit-back-left  350ms ease-in 0ms   both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-exit-back-right 350ms ease-in 0ms   both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-exit-mid-left   350ms ease-in 350ms both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-exit-mid-right  350ms ease-in 350ms both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-exit-front      300ms ease-in 700ms both; }
 
     /*  Each dashboard section is rendered with the HA card frame:
         same background, border colour, border radius and box-shadow

@@ -190,14 +190,12 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const delta    = cardOffset - activeOffset;
     const absDelta = Math.abs(delta);
     const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
-    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the container size. The ±2
-    //cards sit close to ±1 (75 % vs 50 %) and rotate steeply (65 °) so they read as truly edge-on, the visible
-    //sliver between the mid card's far edge and the back card's far edge is enough depth cue without competing
-    //with the front for attention. Opacity is full on every card, the perspective + rotation alone carry the
-    //sense of distance.
-    const txPct    = sign * (absDelta === 1 ? 50 : absDelta === 2 ? 75 : 0);
-    const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.85 : 0.65;
-    const rotY     = sign * (absDelta === 1 ? 30 : absDelta === 2 ? 65 : 0);
+    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the container size. Tuned so
+    //the back ±2 cards stay clearly visible at rest (not too edge-on, not too small), the depth cue comes from
+    //rotation + gradient blur rather than from making them tiny / invisible.
+    const txPct    = sign * (absDelta === 1 ? 50 : absDelta === 2 ? 80 : 0);
+    const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.85 : 0.70;
+    const rotY     = sign * (absDelta === 1 ? 25 : absDelta === 2 ? 45 : 0);
     const zIdx     = 10 - absDelta;
     const opacity  = 1;
     const isFront  = absDelta === 0;
