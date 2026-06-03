@@ -440,6 +440,167 @@ export const heliosCardStyles = css`
         overflow-x: hidden;
     }
 
+    /*  CoverFlow dashboard. 5 cards stacked on a 3D perspective stage, the centre card represents today and is at
+        full size + opacity, the ±1 cards sit behind it slightly rotated, the ±2 cards sit further back still.
+        Navigation: chevron arrows on desktop, swipe on touch + trackpad, keyboard arrows when the stage has
+        focus. */
+    .dash-coverflow
+    {
+        position: relative;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 24px;
+        min-height: 0;
+        outline: none;
+        touch-action: pan-y;
+    }
+    .dash-cf-stage
+    {
+        position: relative;
+        flex: 1;
+        height: 100%;
+        max-height: 480px;
+        perspective: 1200px;
+        transform-style: preserve-3d;
+    }
+    .dash-cf-card
+    {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: min(360px, 75vw);
+        height: min(480px, 65vh);
+        border-radius: 18px;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+        box-shadow:
+            0 4px 12px rgba(0, 0, 0, 0.25),
+            0 12px 32px rgba(0, 0, 0, 0.18);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        padding: 32px;
+        cursor: pointer;
+        transition:
+            transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
+            opacity   420ms cubic-bezier(0.22, 1, 0.36, 1);
+        transform-origin: center center;
+        backface-visibility: hidden;
+        will-change: transform, opacity;
+    }
+    .dash-cf-card-front
+    {
+        cursor: default;
+        box-shadow:
+            0 8px 24px rgba(0, 0, 0, 0.35),
+            0 24px 48px rgba(0, 0, 0, 0.22);
+    }
+    .dash-cf-card-day
+    {
+        font-size: 28px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        color: var(--primary-text-color, #ffffff);
+        text-align: center;
+    }
+    .dash-cf-card-date
+    {
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 1.2px;
+        text-transform: uppercase;
+        opacity: 0.65;
+        color: var(--primary-text-color, #ffffff);
+    }
+
+    /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
+        .detail-close-btn shape (28 px round, primary tint, soft shadow) but now lives inside the front card so
+        it travels with the navigation rather than sitting in a fixed corner of the screen. */
+    .dash-cf-close-btn
+    {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: none;
+        border-radius: 50%;
+        background: var(--primary-color, #03a9f4);
+        color: var(--text-primary-color, #ffffff);
+        cursor: pointer;
+        padding: 0;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        transition: transform 160ms ease;
+        z-index: 2;
+    }
+    .dash-cf-close-btn:hover  { transform: scale(1.06); }
+    .dash-cf-close-btn:active { transform: scale(0.94); }
+    .dash-cf-close-btn ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+    }
+
+    /*  Navigation arrows. Sit on each side of the stage, full height so they catch clicks anywhere along the
+        edge. Chevron glyph centred, sized to feel comfortable on touch + mouse. Disabled state fades out so the
+        boundary at offset = ±2 reads as "you cannot go further". */
+    .dash-cf-arrow
+    {
+        flex: 0 0 auto;
+        width: 48px;
+        height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+        border-radius: 50%;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        cursor: pointer;
+        padding: 0;
+        transition: transform 160ms ease, opacity 160ms ease;
+        z-index: 5;
+    }
+    .dash-cf-arrow:hover:not(:disabled)
+    {
+        transform: scale(1.08);
+    }
+    .dash-cf-arrow:active:not(:disabled)
+    {
+        transform: scale(0.94);
+    }
+    .dash-cf-arrow:disabled
+    {
+        opacity: 0.25;
+        cursor: not-allowed;
+    }
+    .dash-cf-arrow ha-icon
+    {
+        --mdc-icon-size: 24px;
+        color: inherit;
+    }
+    @media (max-width: 640px)
+    {
+        .dash-cf-arrow
+        {
+            /*  On narrow screens the arrows steal too much width from the 75 vw cards; hide them and let the
+                user swipe to navigate. The keyboard fallback still works for connected keyboards. */
+            display: none;
+        }
+        .dash-coverflow
+        {
+            padding: 16px 8px;
+        }
+    }
+
     /*  Each dashboard section is rendered with the HA card frame:
         same background, border colour, border radius and box-shadow
         tokens that drive the cards on the native HA Energy dashboard.

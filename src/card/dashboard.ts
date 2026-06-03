@@ -11,12 +11,6 @@
 import { html, svg, nothing, TemplateResult } from 'lit';
 import { pickTranslations } from '../i18n';
 import type { HeliosEngine } from '../helios-engine';
-import
-{
-    DEFAULT_SUN_COLOR_HEX,
-    DEFAULT_PV_COLOR_HEX,
-    DEFAULT_BATTERY_COLOR_HEX
-} from '../helios-config';
 import { formatDate, formatLocalisedNumber, lerpHexToward } from './format';
 import
 {
@@ -26,7 +20,7 @@ import
     computePvPowerWeighted,
     resolvePvLiveEntity
 } from './pv';
-import { computeBatteryToday, resolveBatteryEntities, type BatteryHost } from './battery';
+import { computeBatteryToday, type BatteryHost } from './battery';
 import { effectiveForecastRatio, pvSourceColor, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
@@ -58,6 +52,13 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //Lit-side requestUpdate handle used during the count-up window; the dashboard handlers below set it via the host so a single rAF
     //loop drives re-renders for the 700 ms window then self-clears.
     _dashCountUpRaf?:      number;
+    //CoverFlow active day offset: integer in [-2..+2] where 0 = today, -1 = yesterday, +1 = tomorrow, etc. The
+    //dashboard renders 5 cards stacked with a 3D perspective effect; this offset picks which one sits at the
+    //front. Reset to 0 (today) every time the panel opens via `handleHomeClick`.
+    _dashDayOffset:        number;
+    //Touch / pointer swipe state, captured on pointerdown and consumed on pointerup. Null between gestures.
+    _dashSwipeStartX:      number | null;
+    _dashSwipeStartTime:   number;
 }
 
 
@@ -135,40 +136,180 @@ export function dashCountUpPhase(host: DashboardHost): number
 //already knows from the card itself.
 export function renderDashboard(host: DashboardHost): TemplateResult
 {
-    const t            = pickTranslations(host.hass?.language);
-    //Colour configs are no longer consulted; the dashboard inherits the HA Energy palette via the CSS tokens consumed by
-    //every chip / leader / chart style. Locals stay so downstream callers that expect a string colour for inline SVG
-    //attributes still build.
-    const sunColor     = DEFAULT_SUN_COLOR_HEX;
-    const pvColor      = DEFAULT_PV_COLOR_HEX;
-    const batteryColor = DEFAULT_BATTERY_COLOR_HEX;
-
-    //Battery card eligibility: the HA Energy defaults expose either a SoC source (`stat_soc`) or a power source (`stat_rate`,
-    //`stat_energy_from` or `stat_energy_to`). Either side alone lights the card; the renderer handles the missing-slot case
-    //by leaving the corresponding chip empty.
-    const batteryEntities = resolveBatteryEntities(host._energyDefaults);
-    const hasBattery = batteryEntities.socEntity !== null || batteryEntities.powerEntity !== null;
+    //CoverFlow skeleton: 5 cards on a 3D perspective stage. Offsets [-2..+2] map to (avant-hier, hier, today,
+    //demain, après-demain). The currently focused card is `host._dashDayOffset` (reset to 0 on each open).
+    //Cards render with translateX + rotateY + scale + opacity transitions so navigating glides them through the
+    //stack. Content is intentionally minimal for now (just the date); the user will iterate on the per-day
+    //payload once the perspective + animation feel is dialled in.
+    const DAY_OFFSETS = [-2, -1, 0, 1, 2];
+    const active = clampDayOffset(host._dashDayOffset ?? 0);
 
     return html`
         <div class="detail-panel">
-            <button
-                class="detail-close-btn"
-                @click="${(e: Event) => handleExitDetail(host, e)}"
-                aria-label="${t.detail.exitHint}"
+            <div class="dash-coverflow"
+                 @pointerdown="${(e: PointerEvent) => handleDashSwipeStart(host, e)}"
+                 @pointerup="${(e: PointerEvent) => handleDashSwipeEnd(host, e)}"
+                 @pointercancel="${() => handleDashSwipeCancel(host)}"
+                 @keydown="${(e: KeyboardEvent) => handleDashKey(host, e)}"
+                 tabindex="0"
             >
-                <ha-icon icon="mdi:close"></ha-icon>
-            </button>
-            <div class="detail-panel-inner">
-                ${renderDashTodaySection(host, t, pvColor, sunColor)}
-                ${hasBattery ? html`
-                    <div class="dash-row">
-                        ${renderDashTomorrowSection(host, t, sunColor, pvColor)}
-                        ${renderDashBatterySection(host, t, batteryColor)}
-                    </div>
-                ` : renderDashTomorrowSection(host, t, sunColor, pvColor)}
+                <button
+                    class="dash-cf-arrow dash-cf-arrow-prev"
+                    ?disabled="${active <= -2}"
+                    @click="${(e: Event) => { e.stopPropagation(); navigateDashDay(host, active - 1); }}"
+                    aria-label="Jour précédent"
+                >
+                    <ha-icon icon="mdi:chevron-left"></ha-icon>
+                </button>
+
+                <div class="dash-cf-stage">
+                    ${DAY_OFFSETS.map(offset => renderCoverflowCard(host, offset, active))}
+                </div>
+
+                <button
+                    class="dash-cf-arrow dash-cf-arrow-next"
+                    ?disabled="${active >= 2}"
+                    @click="${(e: Event) => { e.stopPropagation(); navigateDashDay(host, active + 1); }}"
+                    aria-label="Jour suivant"
+                >
+                    <ha-icon icon="mdi:chevron-right"></ha-icon>
+                </button>
             </div>
         </div>
     `;
+}
+
+
+//Clamp the day offset to the rendered range so external nudges (keyboard end-of-bounds, programmatic
+//navigation) cannot land the active card outside the [-2..+2] window.
+function clampDayOffset(offset: number): number
+{
+    if (offset < -2) return -2;
+    if (offset >  2) return  2;
+    return offset;
+}
+
+
+//Render a single CoverFlow card. The transform is driven by the delta between the card's day offset and the
+//currently active offset: 0 = front, ±1 = mid (rotated 35°), ±2 = back (rotated 50°). Z-index ordering keeps the
+//front card on top of its neighbours regardless of stacking order in the DOM. Opacity fades the back cards so
+//they read as background context rather than competing for the user's attention.
+function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult
+{
+    const delta    = cardOffset - activeOffset;
+    const absDelta = Math.abs(delta);
+    const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
+    //Step values chosen so a 5-card stack reads as a fan around the focused front card. Tweaked together with the
+    //CSS perspective depth (1200 px) so the off-axis cards keep their face partly visible instead of edge-on.
+    const tx       = sign * (absDelta === 1 ? 180 : absDelta === 2 ? 280 : 0);
+    const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.82 : 0.62;
+    const rotY     = sign * (absDelta === 1 ? 35 : absDelta === 2 ? 50 : 0);
+    const zIdx     = 10 - absDelta;
+    const opacity  = absDelta === 0 ? 1 : absDelta === 1 ? 0.85 : 0.5;
+    const isFront  = absDelta === 0;
+
+    //Date label: this card represents `today + cardOffset` days. Computed off a fresh midnight Date so day
+    //rollover at midnight does not leave a stale offset cached.
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(d.getDate() + cardOffset);
+    const dateLabel = formatDate(d, host.hass);
+
+    const friendlyLabel = cardOffset === -2 ? 'Avant-hier'
+                       : cardOffset === -1 ? 'Hier'
+                       : cardOffset ===  0 ? "Aujourd'hui"
+                       : cardOffset ===  1 ? 'Demain'
+                       :                     'Après-demain';
+
+    const style = `transform: translate(-50%, -50%) translateX(${tx}px) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity};`;
+
+    const t = pickTranslations(host.hass?.language);
+    return html`
+        <article
+            class="dash-cf-card ${isFront ? 'dash-cf-card-front' : ''}"
+            style="${style}"
+            data-day-offset="${cardOffset}"
+            @click="${(e: Event) => { if (!isFront) { e.stopPropagation(); navigateDashDay(host, cardOffset); } }}"
+        >
+            ${isFront ? html`
+                <button
+                    class="dash-cf-close-btn"
+                    @click="${(e: Event) => handleExitDetail(host, e)}"
+                    aria-label="${t.detail.exitHint}"
+                >
+                    <ha-icon icon="mdi:close"></ha-icon>
+                </button>
+            ` : nothing}
+            <div class="dash-cf-card-day">${friendlyLabel}</div>
+            <div class="dash-cf-card-date">${dateLabel}</div>
+        </article>
+    `;
+}
+
+
+//Day-offset navigation. Clamps to the [-2..+2] window and triggers a Lit re-render via requestUpdate so the
+//transforms animate from the previous active offset to the new one.
+export function navigateDashDay(host: DashboardHost, nextOffset: number): void
+{
+    const next = clampDayOffset(nextOffset);
+    if (next === host._dashDayOffset)
+    {
+        return;
+    }
+    host._dashDayOffset = next;
+    (host as unknown as { requestUpdate(): void }).requestUpdate();
+}
+
+
+//Pointer swipe handlers (mobile + trackpad). Capture clientX on pointerdown, compare on pointerup. A horizontal
+//motion > 50 px within 500 ms triggers a day-step in the swipe direction. Vertical swipes are ignored so
+//scrolling the page above the panel still works.
+export function handleDashSwipeStart(host: DashboardHost, e: PointerEvent): void
+{
+    host._dashSwipeStartX    = e.clientX;
+    host._dashSwipeStartTime = performance.now();
+}
+
+
+export function handleDashSwipeEnd(host: DashboardHost, e: PointerEvent): void
+{
+    if (host._dashSwipeStartX === null)
+    {
+        return;
+    }
+    const dx = e.clientX - host._dashSwipeStartX;
+    const dt = performance.now() - host._dashSwipeStartTime;
+    host._dashSwipeStartX = null;
+    if (Math.abs(dx) > 50 && dt < 500)
+    {
+        //Swipe LEFT (dx < 0) = next day; swipe RIGHT (dx > 0) = previous day. Mirrors the natural "drag the
+        //next-day card into view from the right edge" gesture.
+        const active = host._dashDayOffset ?? 0;
+        navigateDashDay(host, active + (dx < 0 ? 1 : -1));
+    }
+}
+
+
+export function handleDashSwipeCancel(host: DashboardHost): void
+{
+    host._dashSwipeStartX = null;
+}
+
+
+//Keyboard navigation as a bonus for desktop users.
+export function handleDashKey(host: DashboardHost, e: KeyboardEvent): void
+{
+    const active = host._dashDayOffset ?? 0;
+    if (e.key === 'ArrowLeft')
+    {
+        e.preventDefault();
+        navigateDashDay(host, active - 1);
+    }
+    else if (e.key === 'ArrowRight')
+    {
+        e.preventDefault();
+        navigateDashDay(host, active + 1);
+    }
 }
 
 
@@ -1631,6 +1772,9 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
     host._homeHover  = false;
     host._detailMode = true;
     host._dashOpenedAtMs = performance.now();
+    //Always re-centre on today when the panel opens, even if the user closed it on a different day mid-swipe.
+    host._dashDayOffset = 0;
+    host._dashSwipeStartX = null;
     host._engine?.setDetailMode(true);
     startDashCountUpLoop(host);
 }

@@ -543,6 +543,12 @@ export class HeliosCard extends LitElement
     //tick loop, also set by the dashboard helpers.
     _dashOpenedAtMs: number | null = null;
     _dashCountUpRaf?: number;
+    //CoverFlow active day offset (0 = today, ±1 = ±1 day, etc.). Reset to 0 every time the dashboard opens via
+    //`handleHomeClick`. Swipe gesture state captured between pointerdown / pointerup so the dashboard renderer
+    //can navigate the stack without a stateful child component.
+    @state() _dashDayOffset:        number       = 0;
+    _dashSwipeStartX:               number | null = null;
+    _dashSwipeStartTime:            number       = 0;
     //True while the LiDAR View overlay is showing: the map UI fades
     //out, the engine's WebGL custom layer paints every loaded LiDAR
     //cell as a dot, and the same toggle button (top-right) brings the
