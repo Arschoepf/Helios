@@ -520,7 +520,10 @@ export const heliosCardStyles = css`
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        border-radius: var(--ha-card-border-radius, 12px);
+        /*  Hard-coded 16 px because some installed themes set --ha-card-border-radius low (4-6 px) which made
+            the strip read as near-square. 16 px matches the rounded corners on the HA tile-card reference
+            the user shared. */
+        border-radius: 16px;
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         display: grid;
         grid-template-columns: auto 1fr auto;
@@ -643,9 +646,9 @@ export const heliosCardStyles = css`
         align-items: center;
         gap: 10px;
         padding: 10px 12px;
-        /*  Inherit the HA theme's card radius via --ha-card-border-radius (12 px default) so the inner tiles
-            share the same corner radius as the surrounding ha-card / bandeau. */
-        border-radius: var(--ha-card-border-radius, 12px);
+        /*  Hard-coded 16 px, matches the bandeau radius. Same reasoning: some themes set
+            --ha-card-border-radius low and the tiles read as near-square in those themes. */
+        border-radius: 16px;
         background: var(--secondary-background-color, var(--ha-card-background, rgba(255, 255, 255, 0.04)));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
