@@ -13,7 +13,6 @@ import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
 import { refreshShadingDomeScene, type ShadingDomeHost } from './shadingDome';
-import { refreshCloudDomeScene, type CloudDomeHost } from './cloudDome';
 import type { ChartSeries } from './charts';
 
 
@@ -527,7 +526,6 @@ function wireEngineCallbacks(host: InitHost): void
     type ModeAwareHost = InitHost & {
         readonly _lidarViewMode?:   boolean;
         readonly _shadingDomeMode?: boolean;
-        readonly _cloudMode?:   boolean;
     };
     host._engine.onMapTransform = () =>
     {
@@ -553,10 +551,6 @@ function wireEngineCallbacks(host: InitHost): void
             if (mh._shadingDomeMode)
             {
                 refreshShadingDomeScene(host as unknown as ShadingDomeHost);
-            }
-            if (mh._cloudMode)
-            {
-                refreshCloudDomeScene(host as unknown as CloudDomeHost);
             }
         });
     };

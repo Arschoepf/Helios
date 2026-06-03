@@ -84,10 +84,7 @@ import {
     toggleShadingDome,
     refreshShadingDomeScene,
 } from './card/shadingDome';
-import {
-    cloudCoverIcon,
-    cloudLayerIcon,
-} from './card/cloudDome';
+import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
 import
 {
     computeConfigSig,
@@ -577,10 +574,6 @@ export class HeliosCard extends LitElement
     //comes from localStorage so the per-layer chip view sticks across
     //page reloads.
     @state() _cloudMode = HeliosCard._readCloudModePref();
-    _cloudDomeFadeInStartMs:  number | null = null;
-    _cloudDomeFadeOutStartMs: number | null = null;
-    _cloudDomeFadeRaf?:       number;
-    _cloudDomeScene: unknown = null;
 
     private _timer?:           number;
     _lastHomeKey       = '';
@@ -938,11 +931,6 @@ export class HeliosCard extends LitElement
         {
             cancelAnimationFrame(this._shadingDomeFadeRaf);
             this._shadingDomeFadeRaf = undefined;
-        }
-        if (this._cloudDomeFadeRaf !== undefined)
-        {
-            cancelAnimationFrame(this._cloudDomeFadeRaf);
-            this._cloudDomeFadeRaf = undefined;
         }
         if (this._lidarOpacityRaf)
         {

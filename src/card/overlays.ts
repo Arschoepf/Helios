@@ -34,11 +34,9 @@ export interface SunScene
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
 }
 
-//Cloud-cover scene snapshot consumed by the card chip stack. The
-//on-map cloud-band polygons were retired in favour of the cloud-dome
-//celestial hemisphere overlay (see card/cloudDome.ts); the engine now
-//only exposes the per-altitude percentages and the resolved chip
-//colour, refreshed on every map transform and clock tick.
+//Cloud-cover scene snapshot consumed by the card chip stack. The engine exposes the per-altitude percentages and the
+//resolved chip colour, refreshed on every map transform and clock tick. The per-layer chips next to the cloud-cover
+//toggle display these values directly.
 export interface CloudScene
 {
     cloudHex:   string;

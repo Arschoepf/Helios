@@ -49,7 +49,7 @@ export const heliosCardStyles = css`
                         0 2px 1px -1px rgba(0, 0, 0, 0.2),
                         0 1px 1px 0 rgba(0, 0, 0, 0.14),
                         0 1px 3px 0 rgba(0, 0, 0, 0.12));
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-family: var(--ha-font-family-body, 'Roboto', sans-serif);
         height:     100%;
         width:      100%;
         /*  Floor that survives dashboard layouts where the parent
@@ -166,35 +166,6 @@ export const heliosCardStyles = css`
         filter: drop-shadow(0 0 8px var(--primary-color, #03a9f4));
     }
 
-    /*  Production pulse: while PV is producing, the home silhouette
-        pulses with the configured PV colour at the same cadence as
-        the bead sliding down the leader, so the bead's arrival has
-        a visible "landing" on the home itself rather than the
-        previous floor-disc that expanded under the building. The
-        pulse fires once per bead trip via the --pv-flow-duration
-        the renderer sets inline. Filter swaps the sun-colour drop-
-        shadow for the PV-colour one only during the pulse window
-        so the resting glow keeps its hover identity. */
-    .home-glow-svg.is-pv-pulsing
-    {
-        animation: home-glow-pv-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
-    }
-    @keyframes home-glow-pv-pulse
-    {
-        0%, 80% { opacity: 0; }
-        92%
-        {
-            opacity: 0.85;
-            filter: drop-shadow(0 0 10px var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800))));
-        }
-        100%    { opacity: 0; }
-    }
-    .home-glow-svg.is-pv-pulsing .home-glow-shape
-    {
-        fill:   var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
-        stroke: var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
-    }
-
     /*  Touch devices have no hover state, mouseenter / mouseleave
         never fire, so the .is-hovered class is never applied. Show
         the glow permanently at a softer opacity so the user still
@@ -239,7 +210,6 @@ export const heliosCardStyles = css`
         with no fade-in. */
 .solar-svg,
     .solar-pct-label,
-    .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -247,15 +217,13 @@ export const heliosCardStyles = css`
     .home-hitbox,
     .home-glow-svg,
     .home-drop-leader-svg,
-    .time-bar,
-    .shadow-busy-chip
+    .time-bar
     {
         transition: opacity 0.35s ease;
     }
-    ha-card.detail-active
-ha-card.detail-active .solar-svg,
+    ha-card.detail-active,
+    ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
-    ha-card.detail-active .pv-home-anchor-svg,
     ha-card.detail-active .pv-home-leader-svg,
     ha-card.detail-active .pv-pct-label,
     ha-card.detail-active .battery-leader-svg,
@@ -263,8 +231,7 @@ ha-card.detail-active .solar-svg,
     ha-card.detail-active .home-hitbox,
     ha-card.detail-active .home-glow-svg,
     ha-card.detail-active .home-drop-leader-svg,
-    ha-card.detail-active .time-bar,
-    ha-card.detail-active .shadow-busy-chip
+    ha-card.detail-active .time-bar
     {
         opacity: 0;
         pointer-events: none;
@@ -295,12 +262,9 @@ ha-card.detail-active .solar-svg,
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
-    .home-silhouette-svg,
     .home-drop-leader-svg,
     .solar-svg,
     .solar-pct-label,
-    .cloud-pct-label,
-    .pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -319,29 +283,28 @@ ha-card.detail-active .solar-svg,
         budgets) and forcing the compositor to re-sync them on every
         Lit re-render. Promote only when a mode actually toggles. */
     ha-card.lidar-view-active     .overlay-top-left, ha-card.lidar-view-active     .home-glow-svg,
-    ha-card.lidar-view-active     .home-hitbox,      ha-card.lidar-view-active     .home-silhouette-svg,
+    ha-card.lidar-view-active     .home-hitbox,      
     ha-card.lidar-view-active     .home-drop-leader-svg, ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active     .solar-pct-label,  ha-card.lidar-view-active     .cloud-pct-label,
-    ha-card.lidar-view-active     .pv-home-anchor-svg, ha-card.lidar-view-active   .pv-home-leader-svg,
+    ha-card.lidar-view-active     .solar-pct-label,  
+    ha-card.lidar-view-active   .pv-home-leader-svg,
     ha-card.lidar-view-active     .pv-pct-label,     ha-card.lidar-view-active     .battery-leader-svg,
     ha-card.lidar-view-active     .battery-pct-label,ha-card.lidar-view-active     .grid-leader-svg,
     ha-card.lidar-view-active     .grid-import-label,ha-card.lidar-view-active     .grid-export-label,
     ha-card.lidar-view-active     .home-pill,
     ha-card.shading-dome-active   .overlay-top-left, ha-card.shading-dome-active   .home-glow-svg,
-    ha-card.shading-dome-active   .home-hitbox,      ha-card.shading-dome-active   .home-silhouette-svg,
+    ha-card.shading-dome-active   .home-hitbox,      
     ha-card.shading-dome-active   .home-drop-leader-svg, ha-card.shading-dome-active .solar-svg,
-    ha-card.shading-dome-active   .solar-pct-label,  ha-card.shading-dome-active   .cloud-pct-label,
-    ha-card.shading-dome-active   .pv-home-anchor-svg, ha-card.shading-dome-active .pv-home-leader-svg,
+    ha-card.shading-dome-active   .solar-pct-label,  
+    ha-card.shading-dome-active .pv-home-leader-svg,
     ha-card.shading-dome-active   .pv-pct-label,     ha-card.shading-dome-active   .battery-leader-svg,
     ha-card.shading-dome-active   .battery-pct-label,ha-card.shading-dome-active   .grid-leader-svg,
     ha-card.shading-dome-active   .grid-import-label,ha-card.shading-dome-active   .grid-export-label,
     ha-card.shading-dome-active   .home-pill,
     ha-card.detail-active         .overlay-top-left, ha-card.detail-active         .home-glow-svg,
-    ha-card.detail-active         .home-hitbox,      ha-card.detail-active         .pv-home-anchor-svg,
+    ha-card.detail-active         .home-hitbox,      
     ha-card.detail-active         .pv-home-leader-svg, ha-card.detail-active       .pv-pct-label,
     ha-card.detail-active         .battery-leader-svg, ha-card.detail-active       .battery-pct-label,
     ha-card.detail-active         .solar-svg,        ha-card.detail-active         .solar-pct-label,
-    ha-card.detail-active         .cloud-pct-label
     {
         will-change: opacity;
     }
@@ -357,12 +320,12 @@ ha-card.detail-active .solar-svg,
     }
     ha-card.lidar-view-active .home-glow-svg,
     ha-card.lidar-view-active .home-hitbox,
-    ha-card.lidar-view-active .home-silhouette-svg,
+    
     ha-card.lidar-view-active .home-drop-leader-svg,
     ha-card.lidar-view-active .solar-svg,
     ha-card.lidar-view-active .solar-pct-label,
-    ha-card.lidar-view-active .cloud-pct-label,
-    ha-card.lidar-view-active .pv-home-anchor-svg,
+    
+    
     ha-card.lidar-view-active .pv-home-leader-svg,
     ha-card.lidar-view-active .pv-pct-label,
     ha-card.lidar-view-active .battery-leader-svg,
@@ -419,7 +382,7 @@ ha-card.detail-active .solar-svg,
         animation: detail-panel-fade-in 0.25s ease forwards;
         display: flex;
         flex-direction: column;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-family: var(--ha-font-family-body, 'Roboto', sans-serif);
     }
     @keyframes detail-panel-fade-in
     {
@@ -554,9 +517,9 @@ ha-card.detail-active .solar-svg,
         the dashboard reads as the same family as HA's Energy
         distribution card. Today / Tomorrow ride the solar amber,
         the Battery section uses the discharge teal.                 */
-    .dash-card.dash-today    .dash-card-icon { color: var(--energy-solar-color, var(--energy-solar-color, #ff9800));        background: rgba(255, 152, 0, 0.12);  }
+    .dash-card.dash-today    .dash-card-icon { color: var(--energy-solar-color, #ff9800);        background: rgba(255, 152, 0, 0.12);  }
     .dash-card.dash-tomorrow .dash-card-icon { color: var(--amber-color, var(--warning-color, #ffc107));                background: rgba(255, 193, 7, 0.12);  }
-    .dash-card.dash-battery  .dash-card-icon { color: var(--energy-battery-out-color, var(--energy-battery-out-color, #4db6ac)); background: rgba(77, 182, 172, 0.12); }
+    .dash-card.dash-battery  .dash-card-icon { color: var(--energy-battery-out-color, #4db6ac); background: rgba(77, 182, 172, 0.12); }
     .dash-card-label
     {
         font-size: 11px;
@@ -584,11 +547,6 @@ ha-card.detail-active .solar-svg,
         display: inline-flex;
         align-items: baseline;
         gap: 3px;
-    }
-    .dash-card-trailing-forecast
-    {
-        font-style: italic;
-        opacity: 0.85;
     }
     .dash-stat-value
     {
@@ -676,25 +634,6 @@ ha-card.detail-active .solar-svg,
     {
         display: inline-flex;
         align-items: baseline;
-        line-height: 1;
-    }
-    /*  Forecast headline mirrors the produced figure typographically
-        (same font sizes for value + unit) so the reader scans
-        "produced / forecast" as twin columns rather than the forecast
-        looking like an afterthought. Italic + reduced opacity remain
-        as the only typographic differentiators. Inline ha-icon next
-        to the value carries the cumulative-bell glyph HA uses for
-        the predicted curve. */
-    .dash-today-stat--forecast
-    {
-        gap: 6px;
-        opacity: 0.75;
-        font-style: italic;
-    }
-    .dash-today-stat--forecast ha-icon
-    {
-        --mdc-icon-size: 22px;
-        align-self: center;
         line-height: 1;
     }
     /*  When forecast calibration kicks in we stack the raw stat
@@ -1535,7 +1474,7 @@ ha-card.detail-active .solar-svg,
         border-radius: 4px;
         padding: 6px 8px;
         box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.16), 0 1px 4px 0 rgba(0, 0, 0, 0.06);
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
+        font-family: var(--ha-font-family-body, 'Roboto', sans-serif);
         font-size: 12px;
         line-height: 1.25;
         font-variant-numeric: tabular-nums;
@@ -1791,10 +1730,7 @@ ha-card.detail-active .solar-svg,
             stack down to this depth, the date (bold) and the
             forecast kWh (italic) ended up sitting on different
             baselines and the cell read as misaligned. */
-        font-family: var(--mdc-typography-body1-font-family,
-                         var(--ha-font-family,
-                             var(--paper-font-common-base_-_font-family,
-                                 Roboto, "Helvetica Neue", Arial, sans-serif)));
+        font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, Roboto, "Helvetica Neue", Arial, sans-serif));
         font-size: clamp(9px, 7cqw, 11px);
         line-height: 18px;
         letter-spacing: 0;
@@ -1924,11 +1860,9 @@ ha-card.detail-active .solar-svg,
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
-    .home-silhouette-svg,
     .home-drop-leader-svg,
     .solar-svg,
     .solar-pct-label,
-.pv-home-anchor-svg,
     .pv-home-leader-svg,
     .pv-pct-label,
     .battery-leader-svg,
@@ -1947,66 +1881,26 @@ ha-card.detail-active .solar-svg,
         budgets) and forcing the compositor to re-sync them on every
         Lit re-render. Promote only when a mode actually toggles. */
     ha-card.detail-active         .overlay-top-left, ha-card.detail-active         .home-glow-svg,
-    ha-card.detail-active         .home-hitbox,      ha-card.detail-active         .pv-home-anchor-svg,
-    ha-card.detail-active         .pv-home-leader-svg, ha-card.detail-active       .pv-pct-label,
-    ha-card.detail-active         .battery-leader-svg, ha-card.detail-active       .battery-pct-label,
-    ha-card.detail-active         .solar-svg,        ha-card.detail-active         .solar-pct-label,
+    ha-card.detail-active         .home-hitbox,
+    ha-card.detail-active         .pv-home-leader-svg,
+    ha-card.detail-active         .pv-pct-label,
+    ha-card.detail-active         .battery-leader-svg,
+    ha-card.detail-active         .battery-pct-label,
+    ha-card.detail-active         .solar-svg,
+    ha-card.detail-active         .solar-pct-label,
     ha-card.detail-active
-{
+    {
         will-change: opacity;
     }
 
-    /*  Timeline SLIDES out below the card / slides back in from the
-        bottom edge instead of fading. The X centring (translateX
-        -50%) is kept inside every keyframe so the bar never drifts
-        horizontally during the slide. */
+    /*  Timeline slides out below the card / slides back in from the bottom edge instead of fading. The X centring is
+        kept inside every keyframe so the bar never drifts horizontally during the slide. */
     .time-bar
     {
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
     }
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-    /*  Timeline slides out below the card edge. Pointer-events
-        disabled so the drifting element cannot intercept clicks
-        while off-screen. translateX kept so the bar stays centred. */
-    {
-        transform: translateX(-50%) translateY(140%);
-        pointer-events: none;
-    }
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-    {
-        opacity: 1;
-        pointer-events: auto;
-    }
 
-    /*  Shading-dome view: mirrors the LiDAR fade-out list so the
-        rest of the HUD steps aside when the dome takes over the
-        canvas, then the dome SVG itself overlays the map without
-        intercepting pointer events. Top-right chip cluster stays
-        live so the user can toggle the dome back off.            */
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-    /*  Same slide-out as LiDAR for the timeline. */
-    {
-        transform: translateX(-50%) translateY(140%);
-        pointer-events: none;
-    }
-    {
-        opacity: 1;
-        pointer-events: auto;
-    }
-
-    /*  Cloud-dome (per-layer reveal) is now a soft mode: the rest of
-        the HUD stays alive and the cloud chip itself remains visible
-        as the OFF switch. */
     /*  Cloud-cover toggle button. iOS-friendly 40 px touch target,
         icon-only with a title tooltip; the on state takes the brand
         primary plate so the user has one consistent
@@ -2290,42 +2184,6 @@ ha-card.detail-active .solar-svg,
         top: 56px;
     }
 
-
-    /*  "LiDAR shadow computing" indicator. Stripped to the spinning
-        sun glyph alone, no chip plate, no border, no shadow, matches
-        the clean spinner-sun aesthetic at the centre of the map: a
-        pure on-brand mark in the foreground that doesn't compete
-        with the chips and buttons around it. */
-    .shadow-busy-chip
-    {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  22px;
-        height: 22px;
-        background: transparent;
-        border: 0;
-        box-shadow: none;
-    }
-
-    /*  Rotating sun glyph used as the busy indicator. Themed through
-        the configured sun colour so themed installs stay on-brand,
-        with the brand orange as the fallback. */
-    .shadow-busy-sun
-    {
-        --mdc-icon-size: 18px;
-        color: var(--helios-sun-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        animation: helios-shadow-spin 1.4s linear infinite;
-    }
-
-    @keyframes helios-shadow-spin
-    {
-        from { transform: rotate(0deg); }
-        to   { transform: rotate(360deg); }
-    }
 
     /*  Per-altitude cloud cover discs. Three 40 px round chips drop
         in the overlay-top-right rail below the cloud-cover toggle.
@@ -2669,7 +2527,7 @@ ha-card.detail-active .solar-svg,
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
+        border:     2px solid var(--pv-leader-color, var(--energy-solar-color, #ff9800));
         border-radius: 999px;
         padding: 3px 10px;
         font-size:    12px;
@@ -2717,7 +2575,7 @@ ha-card.detail-active .solar-svg,
         box-sizing: border-box;
         background: var(--card-background-color, #ffffff);
         color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--battery-leader-color, var(--energy-battery-out-color, var(--energy-battery-out-color, #4db6ac)));
+        border:     2px solid var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
         border-radius: 999px;
         padding: 3px 10px;
         font-size:    12px;
@@ -2768,11 +2626,11 @@ ha-card.detail-active .solar-svg,
     }
     .grid-import-label
     {
-        border: 2px solid var(--energy-grid-consumption-color, var(--energy-grid-consumption-color, #488fc2));
+        border: 2px solid var(--energy-grid-consumption-color, #488fc2);
     }
     .grid-export-label
     {
-        border: 2px solid var(--energy-grid-return-color, var(--energy-grid-return-color, #8353d1));
+        border: 2px solid var(--energy-grid-return-color, #8353d1);
     }
     .grid-import-label ha-icon,
     .grid-export-label ha-icon
@@ -2794,20 +2652,20 @@ ha-card.detail-active .solar-svg,
     }
     .grid-import-leader-line
     {
-        stroke: var(--energy-grid-consumption-color, var(--energy-grid-consumption-color, #488fc2));
+        stroke: var(--energy-grid-consumption-color, #488fc2);
         stroke-width: 1;
         stroke-linecap: round;
         fill: none;
     }
     .grid-export-leader-line
     {
-        stroke: var(--energy-grid-return-color, var(--energy-grid-return-color, #8353d1));
+        stroke: var(--energy-grid-return-color, #8353d1);
         stroke-width: 1;
         stroke-linecap: round;
         fill: none;
     }
-    .grid-import-leader-bead { fill: var(--energy-grid-consumption-color, var(--energy-grid-consumption-color, #488fc2)); }
-    .grid-export-leader-bead { fill: var(--energy-grid-return-color, var(--energy-grid-return-color, #8353d1)); }
+    .grid-import-leader-bead { fill: var(--energy-grid-consumption-color, #488fc2); }
+    .grid-export-leader-bead { fill: var(--energy-grid-return-color, #8353d1); }
 
     /*  PV → home leader. Vertical dashed line from the PV chip's
         bottom edge down to the home marker, painted in the configured
@@ -2828,7 +2686,7 @@ ha-card.detail-active .solar-svg,
 
     .pv-home-leader-line
     {
-        stroke: var(--pv-leader-color, var(--energy-solar-color, var(--energy-solar-color, #ff9800)));
+        stroke: var(--pv-leader-color, var(--energy-solar-color, #ff9800));
         stroke-width: 1;
         stroke-opacity: 1;
         stroke-linecap: round;
@@ -2852,54 +2710,6 @@ ha-card.detail-active .solar-svg,
         stroke-opacity: 0.95;
     }
 
-    /*  PV home-anchor ring host SVG. Sits below every chip cluster
-        + leader line (z-index 1) but above the MapLibre canvas
-        (z-index 0), and below the home-glow silhouette (z-index 11)
-        so the projected building paints OVER the back half of the
-        ring. The eye reads the ring as a ground footprint the
-        building stands inside, which is what the perspective
-        projection promises geometrically.                           */
-    .pv-home-anchor-svg
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-        /*  Sits ABOVE the cloud-cover dome bands (z 3) so the green
-            HA-Energy home ring is always visible at the foot of the
-            house even when overcast. Stacks below the home-glow
-            silhouette (z 9) and the time bar (z 10) so it still
-            yields to the focal home + the timeline. */
-        z-index: 4;
-    }
-
-    /*  PV home-anchor ring, drawn as a stroked polygon projected
-        through the map's perspective so it sits flat on the ground
-        around the home (an ellipse aplated by the camera pitch +
-        rotated by the camera bearing). Stroked rather than filled
-        so the home silhouette stays visible inside the ring. The
-        translate-to-home transform lives on the wrapping <g>; the
-        polygon points themselves are coordinates relative to
-        (0, 0), which lets the pulse animation scale the polygon
-        around the home centre by simply scaling the group around
-        its local origin.                                            */
-    .pv-home-leader-anchor       { transform-origin: 0 0; }
-    .pv-home-leader-anchor-disc
-    {
-        transform-origin: 0 0;
-        vector-effect: non-scaling-stroke;
-    }
-    .pv-home-leader-anchor.is-pulsing .pv-home-leader-anchor-disc
-    {
-        animation: pv-home-anchor-pulse var(--pv-flow-duration, 2s) ease-in-out infinite;
-    }
-    @keyframes pv-home-anchor-pulse
-    {
-        0%, 80% { transform: scale(1); }
-        92%     { transform: scale(1.55); }
-        100%    { transform: scale(1); }
-    }
 
 
     /*  Battery leaders.
@@ -2924,7 +2734,7 @@ ha-card.detail-active .solar-svg,
 
     .battery-leader-line
     {
-        stroke: var(--battery-leader-color, var(--energy-battery-out-color, var(--energy-battery-out-color, #4db6ac)));
+        stroke: var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
         stroke-width: 1;
         stroke-opacity: 1;
         stroke-linecap: round;
@@ -3319,7 +3129,7 @@ ha-card.detail-active .solar-svg,
         flips on its own width, not on the viewport's. */
     @container helios-card (min-width: 900px)
     {
-.pv-pct-label,
+        .pv-pct-label,
         .battery-pct-label,
         .grid-import-label,
         .grid-export-label,
@@ -3328,7 +3138,6 @@ ha-card.detail-active .solar-svg,
             font-size: 14px;
             padding: 4px 12px;
         }
-ha-icon,
         .pv-pct-label ha-icon,
         .battery-pct-label ha-icon,
         .grid-import-label ha-icon,
