@@ -127,7 +127,10 @@ export function diveCamera(
     onComplete?:  () => void
 ): void
 {
-    if (!host.map) return;
+    if (!host.map)
+    {
+        return;
+    }
     if (host._detailDiveRaf !== undefined)
     {
         cancelAnimationFrame(host._detailDiveRaf);

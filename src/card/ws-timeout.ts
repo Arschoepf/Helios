@@ -68,7 +68,10 @@ function releaseFetchSlot(): void
 {
     _activeFetches = Math.max(0, _activeFetches - 1);
     const next = _fetchQueue.shift();
-    if (next) next();
+    if (next)
+    {
+        next();
+    }
 }
 
 
@@ -87,7 +90,10 @@ export function callWSWithTimeout<T = unknown>(
         let settled = false;
         const finish = (action: () => void) =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             settled = true;
             releaseFetchSlot();
             action();

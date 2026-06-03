@@ -96,7 +96,10 @@ void main() {
     //fade are still discarded so we don't waste blend bandwidth on
     //invisible fragments (and for lines this clips the segment past
     //the boundary cleanly).
-    if (v_alpha <= 0.0) discard;
+    if (v_alpha <= 0.0)
+    {
+        discard;
+    }
     float lit  = mix(u_exposureShadowFloor, u_exposureLitBoost, v_exposure);
     vec3  warm = mix(vec3(1.0), u_exposureWarmTint, v_exposure);
     vec3  col  = u_color.rgb * lit * warm;
@@ -227,7 +230,10 @@ export class LidarViewLayer implements CustomLayerInterface
         //wrong origin, invalidate the build memo so setData rebuilds.
         this._builtSignature = null;
         //Buffer encodes offsets from the previous home, refit it against the new origin so the cloud stays anchored.
-        if (this._raster) this.setData(this._raster);
+        if (this._raster)
+        {
+            this.setData(this._raster);
+        }
         this._map?.triggerRepaint();
     }
 
@@ -242,7 +248,10 @@ export class LidarViewLayer implements CustomLayerInterface
 
     public setPointSizePx(px: number): void
     {
-        if (px === this._pointSizePx) return;
+        if (px === this._pointSizePx)
+        {
+            return;
+        }
         this._pointSizePx = px;
         this._map?.triggerRepaint();
     }
@@ -253,7 +262,10 @@ export class LidarViewLayer implements CustomLayerInterface
     public setOpacity(opacity: number): void
     {
         const clamped = Math.max(0, Math.min(1, opacity));
-        if (clamped === this._opacity) return;
+        if (clamped === this._opacity)
+        {
+            return;
+        }
         this._opacity = clamped;
         this._map?.triggerRepaint();
     }
@@ -262,7 +274,10 @@ export class LidarViewLayer implements CustomLayerInterface
     public setAlphaFade(a: number): void
     {
         const clamped = Math.max(0, Math.min(1, a));
-        if (clamped === this._alphaFade) return;
+        if (clamped === this._alphaFade)
+        {
+            return;
+        }
         this._alphaFade = clamped;
         this._map?.triggerRepaint();
     }
@@ -366,7 +381,10 @@ export class LidarViewLayer implements CustomLayerInterface
             for (let i = 0; i < rasterSize; i++)
             {
                 const v = cellToVert[j * rasterSize + i];
-                if (v < 0) continue;
+                if (v < 0)
+                {
+                    continue;
+                }
                 if (i + 1 < rasterSize)
                 {
                     const vR = cellToVert[j * rasterSize + (i + 1)];
@@ -404,7 +422,10 @@ export class LidarViewLayer implements CustomLayerInterface
                 const v10 = cellToVert[j * rasterSize + i + 1];
                 const v01 = cellToVert[(j + 1) * rasterSize + i];
                 const v11 = cellToVert[(j + 1) * rasterSize + i + 1];
-                if (v00 < 0 || v10 < 0 || v01 < 0 || v11 < 0) continue;
+                if (v00 < 0 || v10 < 0 || v01 < 0 || v11 < 0)
+                {
+                    continue;
+                }
                 triIdx[ti++] = v00; triIdx[ti++] = v10; triIdx[ti++] = v11;
                 triIdx[ti++] = v00; triIdx[ti++] = v11; triIdx[ti++] = v01;
             }
@@ -490,7 +511,10 @@ export class LidarViewLayer implements CustomLayerInterface
         for (let i = 0; i < N; i++)
         {
             const v = c2v[i];
-            if (v >= 0) vertExposure[v] = perCellExposure[i] ?? 255;
+            if (v >= 0)
+            {
+                vertExposure[v] = perCellExposure[i] ?? 255;
+            }
         }
         if (this._gl && this._exposureBuffer)
         {
@@ -523,7 +547,10 @@ export class LidarViewLayer implements CustomLayerInterface
             vs = this._compileShader(gl, gl.VERTEX_SHADER,   VERT_SRC);
             fs = this._compileShader(gl, gl.FRAGMENT_SHADER, FRAG_SRC);
             program = gl.createProgram();
-            if (!program) throw new Error('LidarViewLayer: createProgram failed');
+            if (!program)
+            {
+                throw new Error('LidarViewLayer: createProgram failed');
+            }
             gl.attachShader(program, vs);
             gl.attachShader(program, fs);
             gl.linkProgram(program);
@@ -627,10 +654,19 @@ export class LidarViewLayer implements CustomLayerInterface
 
     public render(gl: WebGLRenderingContext | WebGL2RenderingContext, args: CustomRenderMethodInput): void
     {
-        if (!this._program || !this._buffer) return;
-        if (this._vertexCount === 0) return;
+        if (!this._program || !this._buffer)
+        {
+            return;
+        }
+        if (this._vertexCount === 0)
+        {
+            return;
+        }
         //Skip the draw when fully transparent. Saves a pipeline setup per frame while the user has the LiDAR View toggled off.
-        if (this._alphaFade <= 0) return;
+        if (this._alphaFade <= 0)
+        {
+            return;
+        }
 
         //MapLibre passes a projection matrix that maps Mercator [0..1]
         //world coords into clip space. The buffer stores home-relative
@@ -639,7 +675,10 @@ export class LidarViewLayer implements CustomLayerInterface
         //(JS Number) so the combined matrix carries the home shift
         //without losing precision on the way to the float32 uniform.
         const rawMatrix = args.defaultProjectionData?.mainMatrix as ArrayLike<number> | undefined;
-        if (!rawMatrix) return;
+        if (!rawMatrix)
+        {
+            return;
+        }
         this._buildShiftedMatrix(rawMatrix);
 
         gl.useProgram(this._program);
@@ -665,10 +704,22 @@ export class LidarViewLayer implements CustomLayerInterface
             }
         }
 
-        if (this._uMatrix)       gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
-        if (this._uMercPerMeter) gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
-        if (this._uFadeFull)     gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
-        if (this._uFadeOut)      gl.uniform1f(this._uFadeOut,  this._fadeOutMeters);
+        if (this._uMatrix)
+        {
+            gl.uniformMatrix4fv(this._uMatrix, false, this._shiftedMatrix);
+        }
+        if (this._uMercPerMeter)
+        {
+            gl.uniform1f(this._uMercPerMeter, this._mercPerMeter);
+        }
+        if (this._uFadeFull)
+        {
+            gl.uniform1f(this._uFadeFull, this._fadeFullMeters);
+        }
+        if (this._uFadeOut)
+        {
+            gl.uniform1f(this._uFadeOut,  this._fadeOutMeters);
+        }
         //Exposure tone controls.
         //  - Lit cells use a saturated amber (1.0 / 0.6 / 0.15)
         //    that stays readable on light dashboards.
@@ -695,12 +746,18 @@ export class LidarViewLayer implements CustomLayerInterface
         //the same CSS size across devices.
         const pixelRatio = this._map?.getPixelRatio?.()
                         ?? ((typeof window !== 'undefined' && window.devicePixelRatio) || 1);
-        if (this._uPointSize)    gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);
+        if (this._uPointSize)
+        {
+            gl.uniform1f(this._uPointSize, this._pointSizePx * pixelRatio);
+        }
         //Wireframe sits +0.15 above the slider opacity so the lines stay readable above the soft fill; clamped to 1 at the top so the user can
         //still push the slider all the way without overshooting.
         const fillA = this._opacity;
         const wireA = Math.min(1, this._opacity + 0.15);
-        if (this._uAlphaFade)    gl.uniform1f(this._uAlphaFade, this._alphaFade);
+        if (this._uAlphaFade)
+        {
+            gl.uniform1f(this._uAlphaFade, this._alphaFade);
+        }
 
         //Reset the GL state we depend on. MapLibre's other layers can
         //leave stencil + depth tests enabled and a non-default
@@ -724,9 +781,18 @@ export class LidarViewLayer implements CustomLayerInterface
          && this._triIdxCount > 0
          && this._uColor)
         {
-            if (this._uExposureLit)      gl.uniform1f(this._uExposureLit,    U_LIT_REAL);
-            if (this._uExposureShadow)   gl.uniform1f(this._uExposureShadow, U_SHADOW_REAL);
-            if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, U_WARM_R, U_WARM_G, U_WARM_B);
+            if (this._uExposureLit)
+            {
+                gl.uniform1f(this._uExposureLit,    U_LIT_REAL);
+            }
+            if (this._uExposureShadow)
+            {
+                gl.uniform1f(this._uExposureShadow, U_SHADOW_REAL);
+            }
+            if (this._uExposureWarmTint)
+            {
+                gl.uniform3f(this._uExposureWarmTint, U_WARM_R, U_WARM_G, U_WARM_B);
+            }
             gl.uniform4f(this._uColor, 1, 1, 1, fillA);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
             gl.drawElements(gl.TRIANGLES, this._triIdxCount, this._indexType, 0);
@@ -739,9 +805,18 @@ export class LidarViewLayer implements CustomLayerInterface
         //1, warm=white), which collapses col = u_color * 1 * 1 to a
         //flat white. This gives the user immediate visual feedback
         //("the cells are loading") before the irradiance fill arrives.
-        if (this._uExposureLit)      gl.uniform1f(this._uExposureLit, 1.0);
-        if (this._uExposureShadow)   gl.uniform1f(this._uExposureShadow, 1.0);
-        if (this._uExposureWarmTint) gl.uniform3f(this._uExposureWarmTint, 1.0, 1.0, 1.0);
+        if (this._uExposureLit)
+        {
+            gl.uniform1f(this._uExposureLit, 1.0);
+        }
+        if (this._uExposureShadow)
+        {
+            gl.uniform1f(this._uExposureShadow, 1.0);
+        }
+        if (this._uExposureWarmTint)
+        {
+            gl.uniform3f(this._uExposureWarmTint, 1.0, 1.0, 1.0);
+        }
 
         //Points pass. Skipped when the user dialed point size to 0
         //(typical wireframe-only setup).
@@ -791,11 +866,26 @@ export class LidarViewLayer implements CustomLayerInterface
 
     public onRemove(_map: MapLibreMap, gl: WebGLRenderingContext | WebGL2RenderingContext): void
     {
-        if (this._buffer)         gl.deleteBuffer(this._buffer);
-        if (this._indexBuffer)    gl.deleteBuffer(this._indexBuffer);
-        if (this._triIndexBuffer) gl.deleteBuffer(this._triIndexBuffer);
-        if (this._exposureBuffer) gl.deleteBuffer(this._exposureBuffer);
-        if (this._program)        gl.deleteProgram(this._program);
+        if (this._buffer)
+        {
+            gl.deleteBuffer(this._buffer);
+        }
+        if (this._indexBuffer)
+        {
+            gl.deleteBuffer(this._indexBuffer);
+        }
+        if (this._triIndexBuffer)
+        {
+            gl.deleteBuffer(this._triIndexBuffer);
+        }
+        if (this._exposureBuffer)
+        {
+            gl.deleteBuffer(this._exposureBuffer);
+        }
+        if (this._program)
+        {
+            gl.deleteProgram(this._program);
+        }
         this._buffer         = undefined;
         this._indexBuffer    = undefined;
         this._triIndexBuffer = undefined;
@@ -809,7 +899,10 @@ export class LidarViewLayer implements CustomLayerInterface
     private _compileShader(gl: WebGLRenderingContext | WebGL2RenderingContext, type: number, src: string): WebGLShader
     {
         const sh = gl.createShader(type);
-        if (!sh) throw new Error('LidarViewLayer: createShader failed');
+        if (!sh)
+        {
+            throw new Error('LidarViewLayer: createShader failed');
+        }
         gl.shaderSource(sh, src);
         gl.compileShader(sh);
         if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS))

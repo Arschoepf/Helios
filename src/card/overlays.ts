@@ -155,7 +155,10 @@ function pointArrayEq(
     }
     for (let i = 0; i < a.length; i++)
     {
-        if (!nearlyEq(a[i].x, b[i].x) || !nearlyEq(a[i].y, b[i].y)) return false;
+        if (!nearlyEq(a[i].x, b[i].x) || !nearlyEq(a[i].y, b[i].y))
+        {
+            return false;
+        }
     }
     return true;
 }
@@ -195,8 +198,14 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
     {
         return false;
     }
-    if (!nearlyEq(a.daylight, b.daylight)) return false;
-    if (!pointEq(a.home, b.home)) return false;
+    if (!nearlyEq(a.daylight, b.daylight))
+    {
+        return false;
+    }
+    if (!pointEq(a.home, b.home))
+    {
+        return false;
+    }
     if (!nearlyEq(a.sun.x, b.sun.x) || !nearlyEq(a.sun.y, b.sun.y)
         || !nearlyEq(a.sun.altitude, b.sun.altitude)) return false;
     if (a.arc.length !== b.arc.length)
@@ -210,13 +219,22 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
         {
             return false;
         }
-        if (!nearlyEq(sa.x, sb.x) || !nearlyEq(sa.y, sb.y)) return false;
+        if (!nearlyEq(sa.x, sb.x) || !nearlyEq(sa.y, sb.y))
+        {
+            return false;
+        }
     }
     //Sunrise / sunset markers must match presence and screen pos.
-    if ((a.sunrise === null) !== (b.sunrise === null)) return false;
+    if ((a.sunrise === null) !== (b.sunrise === null))
+    {
+        return false;
+    }
     if (a.sunrise && b.sunrise
         && (!nearlyEq(a.sunrise.x, b.sunrise.x) || !nearlyEq(a.sunrise.y, b.sunrise.y))) return false;
-    if ((a.sunset === null) !== (b.sunset === null)) return false;
+    if ((a.sunset === null) !== (b.sunset === null))
+    {
+        return false;
+    }
     if (a.sunset && b.sunset
         && (!nearlyEq(a.sunset.x, b.sunset.x) || !nearlyEq(a.sunset.y, b.sunset.y))) return false;
     return true;
@@ -263,8 +281,14 @@ function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
     }
     for (let i = 0; i < a.length; i++)
     {
-        if (!pointArrayEq(a[i].base, b[i].base)) return false;
-        if (!pointArrayEq(a[i].top,  b[i].top))  return false;
+        if (!pointArrayEq(a[i].base, b[i].base))
+        {
+            return false;
+        }
+        if (!pointArrayEq(a[i].top,  b[i].top))
+        {
+            return false;
+        }
     }
     return true;
 }
@@ -292,15 +316,27 @@ function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
 export function refreshOverlays(host: OverlaysHost): void
 {
     const nextLabel = host._engine?.projectHomeLabelLayout() ?? null;
-    if (!labelLayoutEq(host._labelLayout, nextLabel)) host._labelLayout = nextLabel;
+    if (!labelLayoutEq(host._labelLayout, nextLabel))
+    {
+        host._labelLayout = nextLabel;
+    }
 
     const t = host._selectedTime ?? host._now;
     const nextSun   = host._engine ? host._engine.projectSunScene(t)        : null;
     const nextCloud = host._engine ? host._engine.projectCloudScene()       : null;
     const nextHomes = host._engine ? host._engine.projectHomeFootprints()   : [];
-    if (!sunSceneEq       (host._sunScene,        nextSun))   host._sunScene        = nextSun;
-    if (!cloudSceneEq     (host._cloudScene,      nextCloud)) host._cloudScene      = nextCloud;
-    if (!homeSilhouettesEq(host._homeSilhouettes, nextHomes)) host._homeSilhouettes = nextHomes;
+    if (!sunSceneEq       (host._sunScene,        nextSun))
+    {
+        host._sunScene        = nextSun;
+    }
+    if (!cloudSceneEq     (host._cloudScene,      nextCloud))
+    {
+        host._cloudScene      = nextCloud;
+    }
+    if (!homeSilhouettesEq(host._homeSilhouettes, nextHomes))
+    {
+        host._homeSilhouettes = nextHomes;
+    }
 
     //custom layer now: no per-transform projection on the JS side,
     //no canvas redraw. The card just drives the fade-in/out alpha
@@ -344,7 +380,10 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
             {
                 s.pauseAnimations?.();
             }
-            else        s.unpauseAnimations?.();
+            else
+            {
+                s.unpauseAnimations?.();
+            }
         }
         catch (_) {}
     }

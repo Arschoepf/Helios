@@ -31,7 +31,10 @@ const _batteryHistoryCache: Map<string, BatteryHistoryCacheEntry> = new Map();
 function batteryHistoryCacheGet(key: string): BatteryHistoryCacheEntry | null
 {
     const e = _batteryHistoryCache.get(key);
-    if (!e) return null;
+    if (!e)
+    {
+        return null;
+    }
     if (Date.now() - e.ts > BATTERY_CACHE_TTL_MS)
     {
         _batteryHistoryCache.delete(key);
@@ -117,7 +120,10 @@ export interface BatteryHost
 //populated in fetchBatteryHistory after the WS response lands.
 export function refreshBattery(host: BatteryHost): void
 {
-    if (!host.hass) return;
+    if (!host.hass)
+    {
+        return;
+    }
 
     const { powerEntity, socEntity } = resolveBatteryEntities(host._energyDefaults);
 
@@ -125,11 +131,26 @@ export function refreshBattery(host: BatteryHost): void
     //the HA Energy dashboard.
     if (!powerEntity && !socEntity)
     {
-        if (host._batterySoc           !== null) host._batterySoc          = null;
-        if (host._batteryPower         !== null) host._batteryPower        = null;
-        if (host._batteryPowerUnit     !== '')   host._batteryPowerUnit    = '';
-        if (host._batterySocHistory    !== null) host._batterySocHistory   = null;
-        if (host._batteryPowerHistory  !== null) host._batteryPowerHistory = null;
+        if (host._batterySoc           !== null)
+        {
+            host._batterySoc          = null;
+        }
+        if (host._batteryPower         !== null)
+        {
+            host._batteryPower        = null;
+        }
+        if (host._batteryPowerUnit     !== '')
+        {
+            host._batteryPowerUnit    = '';
+        }
+        if (host._batterySocHistory    !== null)
+        {
+            host._batterySocHistory   = null;
+        }
+        if (host._batteryPowerHistory  !== null)
+        {
+            host._batteryPowerHistory = null;
+        }
         host._batteryFetchKey = '';
         return;
     }
@@ -160,14 +181,26 @@ export function refreshBattery(host: BatteryHost): void
             nextUnit  = 'W';
         }
     }
-    if (nextSoc   !== host._batterySoc)       host._batterySoc       = nextSoc;
-    if (nextPower !== host._batteryPower)     host._batteryPower     = nextPower;
-    if (nextUnit  !== host._batteryPowerUnit) host._batteryPowerUnit = nextUnit;
+    if (nextSoc   !== host._batterySoc)
+    {
+        host._batterySoc       = nextSoc;
+    }
+    if (nextPower !== host._batteryPower)
+    {
+        host._batteryPower     = nextPower;
+    }
+    if (nextUnit  !== host._batteryPowerUnit)
+    {
+        host._batteryPowerUnit = nextUnit;
+    }
 
     //History fetch, only when the (entities, range) tuple changed.
     //Without this guard we'd reissue the WS command on every Lit
     //cycle (e.g. every clock tick).
-    if (!host._timeRange || host._batteryFetching) return;
+    if (!host._timeRange || host._batteryFetching)
+    {
+        return;
+    }
     //Two-tier window:
     //  - LTS arm uses `visibleStart`, full visible timeline range,
     //    so the dashboard panel's today's charged / discharged kWh
@@ -186,7 +219,10 @@ export function refreshBattery(host: BatteryHost): void
     const rangeKey = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
     const sig      = `${socEntity ?? ''}|${powerEntity ?? ''}`;
     const fetchKey = `${sig}@${rangeKey}`;
-    if (fetchKey === host._batteryFetchKey) return;
+    if (fetchKey === host._batteryFetchKey)
+    {
+        return;
+    }
     host._batteryFetchKey = fetchKey;
 
     //Cache hit short-circuits the WS round-trip: the user navigates away from the Helios card and back, the module-level cache still has
@@ -222,7 +258,10 @@ function parseRawBatteryHistory(arr: any[]): BatteryHistory
             continue;
         }
         const v = parseFloat(stateStr);
-        if (!isFinite(v)) continue;
+        if (!isFinite(v))
+        {
+            continue;
+        }
         let ts: Date | null = null;
         if (typeof item?.lu === 'number')
         {
@@ -236,7 +275,10 @@ function parseRawBatteryHistory(arr: any[]): BatteryHistory
         {
             ts = new Date(item.last_changed);
         }
-        if (!ts || isNaN(ts.getTime())) continue;
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
         times.push(ts);
         values.push(v);
     }
@@ -257,7 +299,10 @@ function parseBatteryStats(arr: any[]): BatteryHistory
     {
         const startMs = parseStatBoundary(item?.start);
         const endMs   = parseStatBoundary(item?.end);
-        if (startMs === null) continue;
+        if (startMs === null)
+        {
+            continue;
+        }
         let valueRaw: unknown = item?.mean;
         let anchorAtEnd = false;
         if (valueRaw === null || valueRaw === undefined)
@@ -266,9 +311,15 @@ function parseBatteryStats(arr: any[]): BatteryHistory
             //Cumulative readings anchor at the bucket end so consecutive deltas attribute correctly to the bucket that produced them.
             anchorAtEnd = true;
         }
-        if (valueRaw === null || valueRaw === undefined) continue;
+        if (valueRaw === null || valueRaw === undefined)
+        {
+            continue;
+        }
         const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
-        if (!isFinite(v)) continue;
+        if (!isFinite(v))
+        {
+            continue;
+        }
         const anchorMs = anchorAtEnd
             ? (endMs ?? startMs)
             : (endMs !== null ? (startMs + endMs) / 2 : startMs);
@@ -283,12 +334,21 @@ function parseBatteryStats(arr: any[]): BatteryHistory
 //`battery.ts` stays import-light (a single circular guard through `pv.ts` would otherwise be needed).
 function parseStatBoundary(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
     if (typeof raw === 'string')
     {
         const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
         const d = new Date(raw);
         const t = d.getTime();
         return isFinite(t) ? t : null;
@@ -313,8 +373,14 @@ export async function fetchBatteryHistory(
     cacheKey:    string = '',
 ): Promise<void>
 {
-    if (!host.hass?.callWS) return;
-    if (!socEntity && !powerEntity) return;
+    if (!host.hass?.callWS)
+    {
+        return;
+    }
+    if (!socEntity && !powerEntity)
+    {
+        return;
+    }
     host._batteryFetching = true;
     try
     {
@@ -330,8 +396,14 @@ export async function fetchBatteryHistory(
         }
 
         const ids: string[] = [];
-        if (socEntity)   ids.push(socEntity);
-        if (powerEntity) ids.push(powerEntity);
+        if (socEntity)
+        {
+            ids.push(socEntity);
+        }
+        if (powerEntity)
+        {
+            ids.push(powerEntity);
+        }
 
         const perEntity: Record<string, BatteryHistory> = {};
 
@@ -527,14 +599,26 @@ export function computeBatteryToday(host: BatteryHost): BatteryToday
         for (let i = 1; i < hist.times.length; i++)
         {
             const tMs = hist.times[i].getTime();
-            if (tMs < startMs || tMs > endMs) continue;
+            if (tMs < startMs || tMs > endMs)
+            {
+                continue;
+            }
             const dtH = (tMs - hist.times[i - 1].getTime()) / 3_600_000;
-            if (dtH <= 0 || dtH > 6) continue;
+            if (dtH <= 0 || dtH > 6)
+            {
+                continue;
+            }
             const wAvg = (pvNormalizeToWatts(hist.values[i - 1], host._batteryPowerUnit)
                         + pvNormalizeToWatts(hist.values[i],     host._batteryPowerUnit)) / 2;
             const kwh = (wAvg * dtH) / 1000;
-            if (kwh > 0)      chargedKwh    += kwh;
-            else              dischargedKwh += -kwh;
+            if (kwh > 0)
+            {
+                chargedKwh    += kwh;
+            }
+            else
+            {
+                dischargedKwh += -kwh;
+            }
         }
     }
 

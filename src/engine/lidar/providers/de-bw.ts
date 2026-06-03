@@ -73,7 +73,10 @@ export const badenWurttembergLgl: LidarSource =
         }
 
         const epsg = getEpsg(25832);
-        if (!epsg) return emptyResult();
+        if (!epsg)
+        {
+            return emptyResult();
+        }
         const proj = projectBbox(bbox, epsg);
 
         //LGL BW's INSPIRE WCS advertises spatial axes "E N" (UTM
@@ -100,7 +103,10 @@ export const badenWurttembergLgl: LidarSource =
             fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DGM_URL), rasterSize, opts.signal)
         ]);
-        if (!dom || !dgm) return emptyResult();
+        if (!dom || !dgm)
+        {
+            return emptyResult();
+        }
 
         const heights = subtractRasters(dom, dgm);
 

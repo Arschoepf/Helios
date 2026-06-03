@@ -147,7 +147,10 @@ const _pvTrainerStatsCache:   Map<string, PvStatsCacheEntry>   = new Map();
 function pvHistoryCacheGet(key: string): PvHistoryCacheEntry | null
 {
     const e = _pvHistoryCache.get(key);
-    if (!e) return null;
+    if (!e)
+    {
+        return null;
+    }
     if (Date.now() - e.ts > PV_CACHE_TTL_MS)
     {
         _pvHistoryCache.delete(key);
@@ -159,7 +162,10 @@ function pvHistoryCacheGet(key: string): PvHistoryCacheEntry | null
 function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): PvStatsCacheEntry | null
 {
     const e = cache.get(key);
-    if (!e) return null;
+    if (!e)
+    {
+        return null;
+    }
     if (Date.now() - e.ts > PV_CACHE_TTL_MS)
     {
         cache.delete(key);
@@ -261,7 +267,10 @@ export function refreshPv(host: PvHost): void
                     {
                         const rangeStartMs = host._timeRange.start.getTime();
                         let drop = 0;
-                        while (drop < hist.times.length && hist.times[drop].getTime() < rangeStartMs) drop++;
+                        while (drop < hist.times.length && hist.times[drop].getTime() < rangeStartMs)
+                        {
+                            drop++;
+                        }
                         if (drop > 0)
                         {
                             hist.times.splice(0, drop);
@@ -294,7 +303,10 @@ export function refreshPv(host: PvHost): void
     //
     //All three exit cheaply on subsequent Lit cycles (clock ticks, hass updates) because the fetch key cache short-circuits
     //identical-range re-fetches, mirroring the existing behaviour.
-    if (!host._timeRange) return;
+    if (!host._timeRange)
+    {
+        return;
+    }
     const fetchEnd = host._timeRange.end;
     const HOUR_MS  = 3_600_000;
     const today0   = new Date();
@@ -406,7 +418,10 @@ export function refreshPv(host: PvHost): void
 //Energy defaults), null otherwise. Centralises the gate so both the trainer and the fetch path agree on when the SoC history is needed.
 export function batterySocEntityForInhibit(cfg: HeliosConfig | undefined, defaults: EnergyDefaults): string | null
 {
-    if (inverterCutoffSocPct(cfg) === null) return null;
+    if (inverterCutoffSocPct(cfg) === null)
+    {
+        return null;
+    }
     return resolveBatteryEntities(defaults).socEntity;
 }
 
@@ -415,10 +430,16 @@ export function batterySocEntityForInhibit(cfg: HeliosConfig | undefined, defaul
 //read both values without re-validating the config tree twice.
 export function inverterCutoffSocPct(cfg: HeliosConfig | undefined): number | null
 {
-    if (!cfg) return null;
+    if (!cfg)
+    {
+        return null;
+    }
     const cutoff = cfg['inverter-cutoff-soc-pct'];
     const cutoffN = typeof cutoff === 'number' ? cutoff : typeof cutoff === 'string' ? parseFloat(cutoff) : NaN;
-    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
+    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100)
+    {
+        return null;
+    }
     return cutoffN;
 }
 
@@ -434,9 +455,15 @@ function parseHistoryEntries(arr: any[]): PvHistory
     for (const item of arr)
     {
         const sRaw = item?.s ?? item?.state;
-        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
+        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+        {
+            continue;
+        }
         const v = parseFloat(String(sRaw));
-        if (!isFinite(v)) continue;
+        if (!isFinite(v))
+        {
+            continue;
+        }
 
         let ts: Date | null = null;
         const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
@@ -460,7 +487,10 @@ function parseHistoryEntries(arr: any[]): PvHistory
         {
             ts = new Date(lastTsMs);
         }
-        if (!ts || isNaN(ts.getTime())) continue;
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
 
         lastTsMs = ts.getTime();
         times.push(ts);
@@ -475,21 +505,36 @@ function parseHistoryEntries(arr: any[]): PvHistory
 //at a bucket midpoint, but generic enough for any time-keyed series.
 export function valueAtMs(series: PvHistory | null, ms: number): number | null
 {
-    if (!series || series.times.length === 0) return null;
+    if (!series || series.times.length === 0)
+    {
+        return null;
+    }
     const t = series.times;
     const v = series.values;
-    if (ms < t[0].getTime() || ms > t[t.length - 1].getTime()) return null;
+    if (ms < t[0].getTime() || ms > t[t.length - 1].getTime())
+    {
+        return null;
+    }
     //Binary search for the right-hand bracket; samples are inserted in order so the search is sound.
     let lo = 0, hi = t.length - 1;
     while (lo < hi - 1)
     {
         const mid = (lo + hi) >> 1;
-        if (t[mid].getTime() <= ms) lo = mid;
-        else                        hi = mid;
+        if (t[mid].getTime() <= ms)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid;
+        }
     }
     const t0 = t[lo].getTime();
     const t1 = t[hi].getTime();
-    if (t1 === t0) return v[lo];
+    if (t1 === t0)
+    {
+        return v[lo];
+    }
     const f = (ms - t0) / (t1 - t0);
     return v[lo] + (v[hi] - v[lo]) * f;
 }
@@ -620,7 +665,10 @@ export async function fetchPvStatistics(
     cacheKey: string = '',
 ): Promise<void>
 {
-    if (!host.hass?.callWS) return;
+    if (!host.hass?.callWS)
+    {
+        return;
+    }
 
     const fetchingFlag    = role === 'calib' ? '_pvCalibStatsFetching'    : '_pvTrainerStatsFetching';
     const targetSlot      = role === 'calib' ? '_pvCalibStats'            : '_pvTrainerStats';
@@ -664,14 +712,26 @@ export async function fetchPvStatistics(
             const endRaw   = item?.end;
             const startMs  = parseStatBoundary(startRaw);
             const endMs    = parseStatBoundary(endRaw);
-            if (startMs === null) continue;
+            if (startMs === null)
+            {
+                continue;
+            }
             //Prefer `mean` (populated for power / measurement entities); fall back to `state` (populated for cumulative-energy
             //entities). Both buckets null is treated as a gap and skipped silently.
             let valueRaw: unknown = item?.mean;
-            if (valueRaw === null || valueRaw === undefined) valueRaw = item?.state;
-            if (valueRaw === null || valueRaw === undefined) continue;
+            if (valueRaw === null || valueRaw === undefined)
+            {
+                valueRaw = item?.state;
+            }
+            if (valueRaw === null || valueRaw === undefined)
+            {
+                continue;
+            }
             const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
-            if (!isFinite(v)) continue;
+            if (!isFinite(v))
+            {
+                continue;
+            }
             //Bucket midpoint anchor for both flavours. Aligns with the trapezoidal integration in `calibration.ts` and
             //`shadingTrainer.ts`. Mid-bucket attribution averages out across the day boundary for cumulative sensors when the
             //calibration's cross-day guard tolerates the trailing slice.
@@ -711,12 +771,21 @@ export async function fetchPvStatistics(
 //since HA's payload shape has changed between releases. Returns null on anything unparseable.
 function parseStatBoundary(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
     if (typeof raw === 'string')
     {
         const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
         const d = new Date(raw);
         const t = d.getTime();
         return isFinite(t) ? t : null;
@@ -740,11 +809,17 @@ function pickPvHistoryAt(host: PvHost, tMs: number): PvHistory | null
 {
     const bracketed = (h: PvHistory | null): PvHistory | null =>
     {
-        if (!h || h.times.length === 0) return null;
+        if (!h || h.times.length === 0)
+        {
+            return null;
+        }
         const firstMs = h.times[0].getTime();
         const lastMs  = h.times[h.times.length - 1].getTime();
         //Allow a 60 s grace at the tail so a "live" scrub to "now" still resolves on a series whose last sample is a few seconds old.
-        if (tMs < firstMs || tMs > lastMs + 60_000) return null;
+        if (tMs < firstMs || tMs > lastMs + 60_000)
+        {
+            return null;
+        }
         return h;
     };
     return bracketed(host._pvHistory)
@@ -770,7 +845,10 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
     //scrub older than that would return null without this fallback. `_pvTrainerStats` carries the same data at 5-min resolution over 30
     //days, which is enough for chip-level accuracy when the cursor lands past the raw window.
     const hist = pickPvHistoryAt(host, tMs);
-    if (!hist) return null;
+    if (!hist)
+    {
+        return null;
+    }
 
     //Classification, same logic as currentPvRate. Repeated inline so each helper is self-contained.
     const entity   = resolvePvLiveEntity(host._energyDefaults);
@@ -781,17 +859,41 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
     const lu       = u.toLowerCase();
 
     let isCumulative: boolean;
-    if (sc === 'total_increasing' || sc === 'total') isCumulative = true;
-    else if (sc === 'measurement') isCumulative = false;
-    else if (dc === 'energy') isCumulative = true;
-    else if (dc === 'power') isCumulative = false;
+    if (sc === 'total_increasing' || sc === 'total')
+    {
+        isCumulative = true;
+    }
+    else if (sc === 'measurement')
+    {
+        isCumulative = false;
+    }
+    else if (dc === 'energy')
+    {
+        isCumulative = true;
+    }
+    else if (dc === 'power')
+    {
+        isCumulative = false;
+    }
     else isCumulative = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
 
     let rateUnit: string;
-    if (lu === 'wh')       rateUnit = 'W';
-    else if (lu === 'kwh') rateUnit = 'kW';
-    else if (lu === 'mwh') rateUnit = 'MW';
-    else                   rateUnit = u ? `${u}/h` : '';
+    if (lu === 'wh')
+    {
+        rateUnit = 'W';
+    }
+    else if (lu === 'kwh')
+    {
+        rateUnit = 'kW';
+    }
+    else if (lu === 'mwh')
+    {
+        rateUnit = 'MW';
+    }
+    else
+    {
+        rateUnit = u ? `${u}/h` : '';
+    }
 
     //Locate the index of the sample at or before `time`, linear scan is fine for the ~96 samples a typical 4-day window carries.
     let idx = hist.times.length - 1;
@@ -912,10 +1014,22 @@ export function currentPvRate(host: PvHost): PvRate | null
     //is unknown, append "/h" so the user still sees a sensible
     //label (e.g. "12 units/h") instead of a bare number.
     let rateUnit: string;
-    if (lu === 'wh')       rateUnit = 'W';
-    else if (lu === 'kwh') rateUnit = 'kW';
-    else if (lu === 'mwh') rateUnit = 'MW';
-    else                   rateUnit = u ? `${u}/h` : '';
+    if (lu === 'wh')
+    {
+        rateUnit = 'W';
+    }
+    else if (lu === 'kwh')
+    {
+        rateUnit = 'kW';
+    }
+    else if (lu === 'mwh')
+    {
+        rateUnit = 'MW';
+    }
+    else
+    {
+        rateUnit = u ? `${u}/h` : '';
+    }
 
     //Cumulative path: from this point on we MUST return a rate
     //object, never null. Showing the raw cumulative state on
@@ -1023,9 +1137,18 @@ export function currentPvRate(host: PvHost): PvRate | null
 export function pvNormalizeToWatts(value: number, unit: string): number
 {
     const lu = (unit || '').toLowerCase();
-    if (lu === 'kw') return value * 1000;
-    if (lu === 'mw') return value * 1_000_000;
-    if (lu === 'w')  return value;
+    if (lu === 'kw')
+    {
+        return value * 1000;
+    }
+    if (lu === 'mw')
+    {
+        return value * 1_000_000;
+    }
+    if (lu === 'w')
+    {
+        return value;
+    }
     return 0;
 }
 
@@ -1041,7 +1164,10 @@ const _pvCalibKCache = new WeakMap<HeliosConfig, number | null>();
 
 export function pvCalibK(config: HeliosConfig | undefined): number | null
 {
-    if (!config) return null;
+    if (!config)
+    {
+        return null;
+    }
     if (_pvCalibKCache.has(config))
     {
         return _pvCalibKCache.get(config) ?? null;
@@ -1071,9 +1197,15 @@ const _pvInverterMaxWCache = new WeakMap<HeliosConfig, number>();
 
 export function pvInverterMaxW(config: HeliosConfig | undefined): number
 {
-    if (!config) return Infinity;
+    if (!config)
+    {
+        return Infinity;
+    }
     const cached = _pvInverterMaxWCache.get(config);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined)
+    {
+        return cached;
+    }
     const raw = config['pv-inverter-max-kw'];
     const kw  = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
     const result = (!isFinite(kw) || kw <= 0) ? Infinity : kw * 1000;
@@ -1115,7 +1247,10 @@ export function wipeLegacyPvCalibStorage(
                     stale.push(k);
                 }
             }
-            for (const k of stale) ls.removeItem(k);
+            for (const k of stale)
+            {
+                ls.removeItem(k);
+            }
             ls.setItem(PV_CALIB_WIPE_FLAG_KEY, '1');
         }
     }
@@ -1178,10 +1313,19 @@ export function pvArrays(
     //typo into the forecast model.
     const parseCoord = (v: unknown, max: number): number | null =>
     {
-        if (v === undefined || v === null || v === '') return null;
+        if (v === undefined || v === null || v === '')
+        {
+            return null;
+        }
         const n = typeof v === 'number' ? v : parseFloat(String(v));
-        if (!isFinite(n)) return null;
-        if (n < -max || n > max) return null;
+        if (!isFinite(n))
+        {
+            return null;
+        }
+        if (n < -max || n > max)
+        {
+            return null;
+        }
         return n;
     };
 
@@ -1190,7 +1334,10 @@ export function pvArrays(
     {
         for (const entry of rawList)
         {
-            if (!entry || typeof entry !== 'object') continue;
+            if (!entry || typeof entry !== 'object')
+            {
+                continue;
+            }
             const e = entry as Record<string, unknown>;
 
             //Missing / blank tilt is the editor's "flat install" state. Default to 0; computePvPower then takes the horizontal
@@ -1210,7 +1357,10 @@ export function pvArrays(
             if (rawPeakKwp !== undefined && rawPeakKwp !== null && rawPeakKwp !== '')
             {
                 const k = typeof rawPeakKwp === 'number' ? rawPeakKwp : parseFloat(String(rawPeakKwp));
-                if (isFinite(k) && k > 0) peakKwp = k;
+                if (isFinite(k) && k > 0)
+                {
+                    peakKwp = k;
+                }
             }
 
             const rawShare = e['share'];
@@ -1227,7 +1377,10 @@ export function pvArrays(
                 {
                     //A zero / negative share kills the entry only when no per-string peak-kwp is provided. Otherwise the peak-kwp carries the weight
                     //and the share is ignored, so we still want to keep the entry.
-                    if (!isFinite(peakKwp)) continue;
+                    if (!isFinite(peakKwp))
+                    {
+                        continue;
+                    }
                     share = NaN;
                 }
                 else
@@ -1296,7 +1449,10 @@ export function pvArrays(
                 : 1;
             for (let i = 0; i < sh.length; i++)
             {
-                if (!isFinite(sh[i])) sh[i] = fillVal;
+                if (!isFinite(sh[i]))
+                {
+                    sh[i] = fillVal;
+                }
             }
         }
     }
@@ -1332,7 +1488,10 @@ export function pvArrays(
     const total = sh.reduce((a, b) => a + b, 0);
     if (total > 0)
     {
-        for (let i = 0; i < sh.length; i++) sh[i] /= total;
+        for (let i = 0; i < sh.length; i++)
+        {
+            sh[i] /= total;
+        }
     }
 
     return { orientations: out, shares: sh, coords: co, heightsM: he, totalKwp };

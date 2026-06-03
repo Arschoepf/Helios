@@ -173,7 +173,10 @@ const _liveCards = new Set<HeliosCard>();
 //the listener per card.
 window.addEventListener('helios-data-cache-reset', () =>
 {
-    for (const card of _liveCards) card.resetDataCache();
+    for (const card of _liveCards)
+    {
+        card.resetDataCache();
+    }
 });
 
 //Public diagnostic command, exposed once on first bundle load. Returns
@@ -265,7 +268,10 @@ window.addEventListener('helios-data-cache-reset', () =>
             console.info(
                 `%c☀ HELIOS%c location override → ${lat.toFixed(5)}, ${lon.toFixed(5)} (refresh page to revert)`,
                 label, 'color:#6b7280;');
-            for (const card of _liveCards) card.invalidateLocation();
+            for (const card of _liveCards)
+            {
+                card.invalidateLocation();
+            }
         };
     }
 
@@ -282,7 +288,10 @@ window.addEventListener('helios-data-cache-reset', () =>
             console.info(
                 `%c☀ HELIOS%c location override cleared, reverting to hass.config`,
                 label, 'color:#6b7280;');
-            for (const card of _liveCards) card.invalidateLocation();
+            for (const card of _liveCards)
+            {
+                card.invalidateLocation();
+            }
         };
     }
 }
@@ -734,7 +743,10 @@ export class HeliosCard extends LitElement
             for (const [k, v] of Object.entries(this.config))
             {
                 //Skip user-supplied home coordinates so the snapshot stays PII-free, matching the engine-side stripping.
-                if (k === 'home-latitude' || k === 'home-longitude') continue;
+                if (k === 'home-latitude' || k === 'home-longitude')
+                {
+                    continue;
+                }
                 cfg[k] = v;
             }
         }
@@ -1003,7 +1015,10 @@ export class HeliosCard extends LitElement
         }
 
         const coords = getHomeCoords(this.config, this.hass);
-        if (!coords) return;
+        if (!coords)
+        {
+            return;
+        }
 
         const { lat, lon } = coords;
 
@@ -1028,7 +1043,10 @@ export class HeliosCard extends LitElement
             //would still spawn a fresh engine for a card the DOM
             //already discarded, and the cycle could repeat once HA
             //re-attaches.
-            if (!this.isConnected) return;
+            if (!this.isConnected)
+            {
+                return;
+            }
             if (this._initInflight)
             {
                 return;
@@ -1055,7 +1073,10 @@ export class HeliosCard extends LitElement
                 this._connectSettleTimer = window.setTimeout(() =>
                 {
                     this._connectSettleTimer = undefined;
-                    if (!this.isConnected) return;
+                    if (!this.isConnected)
+                    {
+                        return;
+                    }
                     this.requestUpdate();
                 }, CONNECT_SETTLE_MS - sinceConnect + 16);
                 return;
@@ -1192,7 +1213,10 @@ export class HeliosCard extends LitElement
         try
         {
             const bg = getComputedStyle(this).getPropertyValue('--primary-background-color').trim();
-            if (!bg) return false;
+            if (!bg)
+            {
+                return false;
+            }
             const hexMatch = bg.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
             let r = 0, g = 0, b = 0;
             if (hexMatch)
@@ -1245,7 +1269,10 @@ export class HeliosCard extends LitElement
     private _getSilhouettePoints(): Array<{ base: string; top: string; walls: string[] } | null>
     {
         const sils = this._homeSilhouettes;
-        if (this._silhouetteCacheKey === sils) return this._silhouettePtsCache;
+        if (this._silhouetteCacheKey === sils)
+        {
+            return this._silhouettePtsCache;
+        }
 
         const out: Array<{ base: string; top: string; walls: string[] } | null> = [];
         for (const sil of sils)
@@ -1591,7 +1618,10 @@ export class HeliosCard extends LitElement
         //pill border.
         const buildLPathToHome = (chipX: number, chipY: number, chipNudgePx: number): string =>
         {
-            if (!layout) return '';
+            if (!layout)
+            {
+                return '';
+            }
             const homeX = layout.home.x;
             const homeY = layout.home.y;
             //Chip-side start: nudge horizontally toward home.
@@ -1702,9 +1732,18 @@ export class HeliosCard extends LitElement
         for (let i = 0; i < arcSegments.length; i++)
         {
             const s = arcSegments[i];
-            if (s.belowHorizon)            arcSegmentsBack.push(s);
-            else if (s.nearness >= 0.50)   arcSegmentsFrontNear.push(s);
-            else                           arcSegmentsFrontFar.push(s);
+            if (s.belowHorizon)
+            {
+                arcSegmentsBack.push(s);
+            }
+            else if (s.nearness >= 0.50)
+            {
+                arcSegmentsFrontNear.push(s);
+            }
+            else
+            {
+                arcSegmentsFrontFar.push(s);
+            }
         }
 
         //The incidence ray only renders when the sun is actually above the horizon, drawing a ray from below the ground towards the home would be
@@ -2642,12 +2681,18 @@ export class HeliosCard extends LitElement
     private _onLidarOpacityChange = (opacity: number): void =>
     {
         this._pendingLidarOpacity = opacity;
-        if (this._lidarOpacityRaf) return;
+        if (this._lidarOpacityRaf)
+        {
+            return;
+        }
         this._lidarOpacityRaf = requestAnimationFrame(() =>
         {
             this._lidarOpacityRaf = 0;
             const v = this._pendingLidarOpacity;
-            if (v === null) return;
+            if (v === null)
+            {
+                return;
+            }
             this._lidarViewOpacity = v;
             this._engine?.setLidarViewOpacity(v);
         });
@@ -2669,8 +2714,14 @@ export class HeliosCard extends LitElement
     private _onModeLayer = (): void =>
     {
         this._exitScrubMode();
-        if (this._lidarViewMode)   toggleLidarView(this);
-        if (this._shadingDomeMode) toggleShadingDome(this);
+        if (this._lidarViewMode)
+        {
+            toggleLidarView(this);
+        }
+        if (this._shadingDomeMode)
+        {
+            toggleShadingDome(this);
+        }
         //Cloud detail toggle is a simple ON/OFF, not a full-screen
         //mode: leaving it on while the user switches back to the
         //default layer keeps the 3 layer chips visible.
@@ -2711,19 +2762,31 @@ export class HeliosCard extends LitElement
     private _onModeLidar = (): void =>
     {
         this._exitScrubMode();
-        if (this._shadingDomeMode) toggleShadingDome(this);
+        if (this._shadingDomeMode)
+        {
+            toggleShadingDome(this);
+        }
         //LiDAR and Shading replace the whole HUD; force the cloud mode
         //OFF so the per-layer chips don't leak through. The aggregate
         //cloud chip itself is hidden via .cloud-mode-active CSS.
         this._cloudMode = false;
-        if (!this._lidarViewMode)  toggleLidarView(this);
+        if (!this._lidarViewMode)
+        {
+            toggleLidarView(this);
+        }
     };
     private _onModeShadingDome = (): void =>
     {
         this._exitScrubMode();
-        if (this._lidarViewMode)   toggleLidarView(this);
+        if (this._lidarViewMode)
+        {
+            toggleLidarView(this);
+        }
         this._cloudMode = false;
-        if (!this._shadingDomeMode) toggleShadingDome(this);
+        if (!this._shadingDomeMode)
+        {
+            toggleShadingDome(this);
+        }
     };
     //Reset the timeline scrub state so the absolutely-positioned
     //scrub tooltip element disappears in the next render. Called
@@ -2732,8 +2795,14 @@ export class HeliosCard extends LitElement
     //pinned to the previous on-screen position.
     private _exitScrubMode = (): void =>
     {
-        if (this._selectedTime !== null) this._selectedTime = null;
-        if (!this._isLiveMode) this._isLiveMode = true;
+        if (this._selectedTime !== null)
+        {
+            this._selectedTime = null;
+        }
+        if (!this._isLiveMode)
+        {
+            this._isLiveMode = true;
+        }
     };
     //Camera lock state used by the top-left lock button. Delegates
     //to the engine, which itself prefers localStorage over the legacy
@@ -2741,7 +2810,10 @@ export class HeliosCard extends LitElement
     //actually doing.
     private _isCameraLocked(): boolean
     {
-        if (this._engine) return this._engine.isCameraLocked();
+        if (this._engine)
+        {
+            return this._engine.isCameraLocked();
+        }
         return false;
     }
     //Lock-button click handler. Asks the engine to flip its lock
@@ -2752,7 +2824,10 @@ export class HeliosCard extends LitElement
     //same localStorage entry and restores the pose.
     private _onCameraLockToggle = (): void =>
     {
-        if (!this._engine) return;
+        if (!this._engine)
+        {
+            return;
+        }
         this._engine.setCameraLocked(!this._engine.isCameraLocked());
         this.requestUpdate();
     };

@@ -65,10 +65,16 @@ export function medianOfNumbers(values: ReadonlyArray<number | null | undefined>
     const clean: number[] = [];
     for (const v of values)
     {
-        if (v == null || Number.isNaN(v)) continue;
+        if (v == null || Number.isNaN(v))
+        {
+            continue;
+        }
         clean.push(v);
     }
-    if (clean.length === 0) return null;
+    if (clean.length === 0)
+    {
+        return null;
+    }
     clean.sort((a, b) => a - b);
     const mid = clean.length >> 1;
     return clean.length % 2 === 0
@@ -186,12 +192,18 @@ export function clearWeatherCache(): number
     try
     {
         const ls = window.localStorage;
-        if (!ls) return 0;
+        if (!ls)
+        {
+            return 0;
+        }
         const stale: string[] = [];
         for (let i = 0; i < ls.length; i++)
         {
             const k = ls.key(i);
-            if (k && k.startsWith(CACHE_KEY_PREFIX)) stale.push(k);
+            if (k && k.startsWith(CACHE_KEY_PREFIX))
+            {
+                stale.push(k);
+            }
         }
         for (const k of stale) { ls.removeItem(k); cleared++; }
     }
@@ -204,9 +216,15 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
     try
     {
         const raw = window.localStorage?.getItem(cacheKey(lat, lon, precision));
-        if (!raw) return null;
+        if (!raw)
+        {
+            return null;
+        }
         const obj = JSON.parse(raw);
-        if (Date.now() - obj.storedAt > CACHE_TTL_MS) return null;
+        if (Date.now() - obj.storedAt > CACHE_TTL_MS)
+        {
+            return null;
+        }
         //Even within the TTL, reject the cache if we crossed a local midnight since it was written. Open-Meteo anchors past_days / forecast_days to
         //"today" in the location's timezone, so the forecast window slides at midnight and stale cache from yesterday would otherwise pin the
         //timeline to the old day.
@@ -215,7 +233,10 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             return null;
         }
         const p = obj.payload;
-        if (!p || Array.isArray(p) || !Array.isArray(p.times)) return null;
+        if (!p || Array.isArray(p) || !Array.isArray(p.times))
+        {
+            return null;
+        }
         return {
             lat:         p.lat,
             lon:         p.lon,
@@ -306,10 +327,16 @@ function readSeries(row: any, varName: string, models: string[]): Array<number |
     for (const m of models)
     {
         const arr = row?.hourly?.[`${varName}_${m}`];
-        if (!Array.isArray(arr)) continue;
+        if (!Array.isArray(arr))
+        {
+            continue;
+        }
         series.push(arr.map((v: any) => (v == null || Number.isNaN(v)) ? null : Number(v)));
     }
-    if (series.length === 0) return [];
+    if (series.length === 0)
+    {
+        return [];
+    }
     const len = Math.max(...series.map(s => s.length));
     const out: Array<number | null> = new Array(len);
     for (let i = 0; i < len; i++)
@@ -371,7 +398,10 @@ export async function fetchHomePointData(
 ): Promise<SampleHourly | null>
 {
     const cached = readCache(lat, lon, precision);
-    if (cached) return cached;
+    if (cached)
+    {
+        return cached;
+    }
 
     const models = pickModelsForLocation(lat, lon, precision);
 
@@ -445,7 +475,10 @@ export async function fetchHomePointData(
         //AbortError on cancellation, network errors, JSON parse errors, all swallowed silently. The caller treats null as "no data
         //available" and renders the timeline ramps as empty. Rate-limit errors (HTTP 429) are NOT swallowed: they propagate to the
         //engine so the back-off table arms.
-        if (e && typeof e === 'object' && (e as { status?: number }).status === 429) throw e;
+        if (e && typeof e === 'object' && (e as { status?: number }).status === 429)
+        {
+            throw e;
+        }
         return null;
     }
 }

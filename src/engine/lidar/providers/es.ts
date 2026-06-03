@@ -88,7 +88,10 @@ export const spainPnoaLidar: LidarSource =
             fetchFloat32GeoTiff(buildUrl(COVERAGE_VEG), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(COVERAGE_BLD), rasterSize, opts.signal)
         ]);
-        if (!veg && !bld) return emptyResult();
+        if (!veg && !bld)
+        {
+            return emptyResult();
+        }
 
         //Defensive: if one coverage is missing (transient WCS hiccup)
         //we still consume the other rather than dropping the whole

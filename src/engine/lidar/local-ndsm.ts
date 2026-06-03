@@ -143,7 +143,10 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
             {
                 return emptyResult();
             }
-            if (!band || band.length < rasterSize * rasterSize) return emptyResult();
+            if (!band || band.length < rasterSize * rasterSize)
+            {
+                return emptyResult();
+            }
 
             normaliseLocalNdsmRaster(band, noData);
             //Same nodata sentinel for both bands; the single noData

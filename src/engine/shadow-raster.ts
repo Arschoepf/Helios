@@ -92,13 +92,19 @@ export function paintShadowRaster(
 {
     const src = map.getSource('helios-building-shadows-src') as
                 maplibregl.ImageSource | undefined;
-    if (!src) return;
+    if (!src)
+    {
+        return;
+    }
 
     const minLon = corners[0][0], maxLat = corners[0][1];
     const maxLon = corners[1][0], minLat = corners[2][1];
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx)
+    {
+        return;
+    }
 
     const size = canvas.width;
     ctx.clearRect(0, 0, size, size);
@@ -116,17 +122,35 @@ export function paintShadowRaster(
     for (const feat of features.features)
     {
         const geom = feat.geometry;
-        if (!geom) continue;
+        if (!geom)
+        {
+            continue;
+        }
         let polygons: number[][][][] | null = null;
-        if      (geom.type === 'Polygon')      polygons = [geom.coordinates as number[][][]];
-        else if (geom.type === 'MultiPolygon') polygons = geom.coordinates as number[][][][];
-        if (!polygons) continue;
+        if (geom.type === 'Polygon')
+        {
+            polygons = [geom.coordinates as number[][][]];
+        }
+        else if (geom.type === 'MultiPolygon')
+        {
+            polygons = geom.coordinates as number[][][][];
+        }
+        if (!polygons)
+        {
+            continue;
+        }
 
         for (const poly of polygons)
         {
-            if (!poly.length) continue;
+            if (!poly.length)
+            {
+                continue;
+            }
             const outer = poly[0] as number[][];
-            if (outer.length < 3) continue;
+            if (outer.length < 3)
+            {
+                continue;
+            }
 
             ctx.beginPath();
             ctx.moveTo(lonToPx(outer[0][0]), latToPx(outer[0][1]));

@@ -221,7 +221,6 @@ export const heliosCardStyles = css`
     {
         transition: opacity 0.35s ease;
     }
-    ha-card.detail-active,
     ha-card.detail-active .solar-svg,
     ha-card.detail-active .solar-pct-label,
     ha-card.detail-active .pv-home-leader-svg,
@@ -304,7 +303,7 @@ export const heliosCardStyles = css`
     ha-card.detail-active         .home-hitbox,      
     ha-card.detail-active         .pv-home-leader-svg, ha-card.detail-active       .pv-pct-label,
     ha-card.detail-active         .battery-leader-svg, ha-card.detail-active       .battery-pct-label,
-    ha-card.detail-active         .solar-svg,        ha-card.detail-active         .solar-pct-label,
+    ha-card.detail-active         .solar-svg,        ha-card.detail-active         .solar-pct-label
     {
         will-change: opacity;
     }
@@ -318,22 +317,32 @@ export const heliosCardStyles = css`
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
     }
-    ha-card.lidar-view-active .home-glow-svg,
-    ha-card.lidar-view-active .home-hitbox,
-    
-    ha-card.lidar-view-active .home-drop-leader-svg,
-    ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active .solar-pct-label,
-    
-    
-    ha-card.lidar-view-active .pv-home-leader-svg,
-    ha-card.lidar-view-active .pv-pct-label,
-    ha-card.lidar-view-active .battery-leader-svg,
-    ha-card.lidar-view-active .battery-pct-label,
-    ha-card.lidar-view-active .grid-leader-svg,
-    ha-card.lidar-view-active .grid-import-label,
-    ha-card.lidar-view-active .grid-export-label,
-    ha-card.lidar-view-active .home-pill
+    ha-card.lidar-view-active   .home-glow-svg,
+    ha-card.lidar-view-active   .home-hitbox,
+    ha-card.lidar-view-active   .home-drop-leader-svg,
+    ha-card.lidar-view-active   .solar-svg,
+    ha-card.lidar-view-active   .solar-pct-label,
+    ha-card.lidar-view-active   .pv-home-leader-svg,
+    ha-card.lidar-view-active   .pv-pct-label,
+    ha-card.lidar-view-active   .battery-leader-svg,
+    ha-card.lidar-view-active   .battery-pct-label,
+    ha-card.lidar-view-active   .grid-leader-svg,
+    ha-card.lidar-view-active   .grid-import-label,
+    ha-card.lidar-view-active   .grid-export-label,
+    ha-card.lidar-view-active   .home-pill,
+    ha-card.shading-dome-active .home-glow-svg,
+    ha-card.shading-dome-active .home-hitbox,
+    ha-card.shading-dome-active .home-drop-leader-svg,
+    ha-card.shading-dome-active .solar-svg,
+    ha-card.shading-dome-active .solar-pct-label,
+    ha-card.shading-dome-active .pv-home-leader-svg,
+    ha-card.shading-dome-active .pv-pct-label,
+    ha-card.shading-dome-active .battery-leader-svg,
+    ha-card.shading-dome-active .battery-pct-label,
+    ha-card.shading-dome-active .grid-leader-svg,
+    ha-card.shading-dome-active .grid-import-label,
+    ha-card.shading-dome-active .grid-export-label,
+    ha-card.shading-dome-active .home-pill
     {
         opacity: 0;
         pointer-events: none;

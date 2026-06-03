@@ -50,8 +50,14 @@ export interface LidarViewHost extends OverlaysHost
 //worth the visual flourish.
 export function toggleLidarView(host: LidarViewHost): void
 {
-    if (!host._engine) return;
-    if (!host._lidarViewMode && host._engine.getActiveLidarSourceId() === null) return;
+    if (!host._engine)
+    {
+        return;
+    }
+    if (!host._lidarViewMode && host._engine.getActiveLidarSourceId() === null)
+    {
+        return;
+    }
 
     if (!host._lidarViewMode)
     {
@@ -84,7 +90,10 @@ export function toggleLidarView(host: LidarViewHost): void
 //regular viewing.
 export function startLidarFadeLoop(host: LidarViewHost): void
 {
-    if (host._lidarFadeRaf !== undefined) return;
+    if (host._lidarFadeRaf !== undefined)
+    {
+        return;
+    }
     const tick = (): void =>
     {
         const now = performance.now();
@@ -178,7 +187,10 @@ export function renderLidarViewOpacityPicker(
                        //tick, see the field comment in helios-card.ts), so a Lit pass would never re-paint the value span on
                        //its own. Mirror what the input.value already reflects natively.
                        const span = input.parentElement?.querySelector('.lidar-view-opacity-value') as HTMLElement | null;
-                       if (span) span.textContent = `${Math.round(v)}%`;
+                       if (span)
+                       {
+                           span.textContent = `${Math.round(v)}%`;
+                       }
                    }}" />
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
             <span class="lidar-view-opacity-value">${pct}%</span>

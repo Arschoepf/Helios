@@ -48,7 +48,10 @@ export function effectiveForecastRatio(
 ): number
 {
     const sun = getSunPosition(time, lat, lon);
-    if (!sun || sun.altitude <= 0) return calR;
+    if (!sun || sun.altitude <= 0)
+    {
+        return calR;
+    }
     return blendedRatio(lookupRatio(map, sun.azimuth, sun.altitude, cloud, nowMs), calR);
 }
 
@@ -94,7 +97,10 @@ function findSunCrossing(
         }
         prevAlt = alt;
     }
-    if (!found) return null;
+    if (!found)
+    {
+        return null;
+    }
     for (let i = 0; i < 12; i++)
     {
         const mid = (bracketLo + bracketHi) / 2;
@@ -124,13 +130,22 @@ function findSunCrossing(
 function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPct: number }>
 {
     const range = host._timeRange;
-    if (!range) return [];
+    if (!range)
+    {
+        return [];
+    }
     const coords = getHomeCoords(host.config, host.hass);
-    if (!coords) return [];
+    if (!coords)
+    {
+        return [];
+    }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
     const rangeMs = endMs - startMs;
-    if (rangeMs <= 0) return [];
+    if (rangeMs <= 0)
+    {
+        return [];
+    }
 
     type Crossing = { ms: number; kind: 'sunrise' | 'sunset' };
     const crossings: Crossing[] = [];
@@ -145,8 +160,14 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
         const dayEnd   = dayStart + 24 * 60 * 60 * 1000;
         const rise = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'rising');
         const setT = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'setting');
-        if (rise) crossings.push({ ms: rise.getTime(), kind: 'sunrise' });
-        if (setT) crossings.push({ ms: setT.getTime(), kind: 'sunset' });
+        if (rise)
+        {
+            crossings.push({ ms: rise.getTime(), kind: 'sunrise' });
+        }
+        if (setT)
+        {
+            crossings.push({ ms: setT.getTime(), kind: 'sunset' });
+        }
         cursor.setDate(cursor.getDate() + 1);
     }
     crossings.sort((a, b) => a.ms - b.ms);
@@ -211,7 +232,10 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
 export function renderTimelineNightZones(host: ChartHost): TemplateResult
 {
     const intervals = computeNightIntervals(host);
-    if (intervals.length === 0) return html``;
+    if (intervals.length === 0)
+    {
+        return html``;
+    }
     return html`
         ${intervals.map(iv => html`
             <div
@@ -235,13 +259,22 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult
 export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 {
     const range = host._timeRange;
-    if (!range) return html``;
+    if (!range)
+    {
+        return html``;
+    }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
     const rangeMs = endMs - startMs;
-    if (rangeMs <= 0) return html``;
+    if (rangeMs <= 0)
+    {
+        return html``;
+    }
     const nowMs = Date.now();
-    if (nowMs <= startMs || nowMs >= endMs) return html``;
+    if (nowMs <= startMs || nowMs >= endMs)
+    {
+        return html``;
+    }
     const nowPct = (nowMs - startMs) / rangeMs * 100;
     return html`
         <div
@@ -264,7 +297,10 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit: string; isPredicted: boolean }
 {
     const luRaw = (host._pvUnit || '').trim();
-    if (!luRaw) return { value: NaN, unit: '', isPredicted: false };
+    if (!luRaw)
+    {
+        return { value: NaN, unit: '', isPredicted: false };
+    }
     const lu             = luRaw.toLowerCase();
     const isCumulative   = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
     const displayUnit    = isCumulative
@@ -318,13 +354,25 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
             for (let i = 1; i < hist.times.length; i++)
             {
                 const t1 = hist.times[i].getTime();
-                if (targetMs > t1) continue;
+                if (targetMs > t1)
+                {
+                    continue;
+                }
                 const t0 = hist.times[i - 1].getTime();
-                if (targetMs < t0) break;
+                if (targetMs < t0)
+                {
+                    break;
+                }
                 const dtH = (t1 - t0) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) break;
+                if (dtH <= 0 || dtH > 6)
+                {
+                    break;
+                }
                 const dv = hist.values[i] - hist.values[i - 1];
-                if (!isFinite(dv) || dv < 0) break;
+                if (!isFinite(dv) || dv < 0)
+                {
+                    break;
+                }
                 return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
             }
         }
@@ -370,9 +418,15 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
         for (let i = 1; i < series.times.length; i++)
         {
             const t1 = series.times[i].getTime();
-            if (targetMs > t1) continue;
+            if (targetMs > t1)
+            {
+                continue;
+            }
             const t0 = series.times[i - 1].getTime();
-            if (targetMs < t0) break;
+            if (targetMs < t0)
+            {
+                break;
+            }
             const cloud0 = series.cloud[i - 1] ?? 0;
             const cloud1 = series.cloud[i] ?? 0;
             const eff0   = effectiveForecastRatio(shading, series.times[i - 1], coords.lat, coords.lon, cloud0, calR, nowMs);
@@ -388,7 +442,10 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                 raster,
             }) * k * eff1);
             const dt = t1 - t0;
-            if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
+            if (dt <= 0)
+            {
+                return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
+            }
             const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
             return { value: Math.max(0, w) * nativeFromW, unit: displayUnit, isPredicted: true };
         }
@@ -627,7 +684,10 @@ export interface ChartHost
 function interpAt(times: Date[], values: number[], targetMs: number): number
 {
     const n = Math.min(times.length, values.length);
-    if (n === 0) return NaN;
+    if (n === 0)
+    {
+        return NaN;
+    }
     if (targetMs <= times[0].getTime())
     {
         return isFinite(values[0]) ? values[0] : NaN;
@@ -640,13 +700,22 @@ function interpAt(times: Date[], values: number[], targetMs: number): number
     for (let i = 1; i < n; i++)
     {
         const t1 = times[i].getTime();
-        if (targetMs > t1) continue;
+        if (targetMs > t1)
+        {
+            continue;
+        }
         const t0 = times[i - 1].getTime();
         const v0 = values[i - 1];
         const v1 = values[i];
-        if (!isFinite(v0) || !isFinite(v1)) return NaN;
+        if (!isFinite(v0) || !isFinite(v1))
+        {
+            return NaN;
+        }
         const dt = t1 - t0;
-        if (dt <= 0) return v1;
+        if (dt <= 0)
+        {
+            return v1;
+        }
         return v0 + (v1 - v0) * (targetMs - t0) / dt;
     }
     return NaN;
@@ -667,9 +736,15 @@ export function handleChartHoverMove(host: ChartHost, e: PointerEvent): void
         return;
     }
     const card = e.currentTarget as HTMLElement | null;
-    if (!card) return;
+    if (!card)
+    {
+        return;
+    }
     const rect = card.getBoundingClientRect();
-    if (rect.width <= 0) return;
+    if (rect.width <= 0)
+    {
+        return;
+    }
     const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     host._chartHoverPct = frac * 100;
 }
@@ -761,8 +836,14 @@ export function renderChart(host: ChartHost): TemplateResult
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
         const irrV    = interpAt(series.times, series.irradiance, hoverMs);
         const cldV    = interpAt(series.times, series.cloud,      hoverMs);
-        if (isFinite(irrV)) hoverYIrr = yIrr(irrV);
-        if (isFinite(cldV)) hoverYCld = yCloud(cldV);
+        if (isFinite(irrV))
+        {
+            hoverYIrr = yIrr(irrV);
+        }
+        if (isFinite(cldV))
+        {
+            hoverYCld = yCloud(cldV);
+        }
         showHover = isFinite(hoverYIrr) || isFinite(hoverYCld);
     }
 
@@ -1016,15 +1097,27 @@ export function renderPvChart(host: ChartHost): TemplateResult
         {
             const t  = calib.times[i];
             const tMs = t.getTime();
-            if (tMs < startMs)    continue;
-            if (tMs > endMsAbs)   continue;
+            if (tMs < startMs)
+            {
+                continue;
+            }
+            if (tMs > endMsAbs)
+            {
+                continue;
+            }
             //The raw fetch already carries the live tail at full
             //resolution; the LTS row would just double up the
             //paint underneath. Drop LTS rows once we cross into
             //the raw window.
-            if (tMs >= rawFirstMs) continue;
+            if (tMs >= rawFirstMs)
+            {
+                continue;
+            }
             const v = calib.values[i];
-            if (!isFinite(v))     continue;
+            if (!isFinite(v))
+            {
+                continue;
+            }
             samples.push({ t, v });
         }
     }
@@ -1032,8 +1125,14 @@ export function renderPvChart(host: ChartHost): TemplateResult
     {
         const t = rawTimes[i];
         const v = rawValues[i];
-        if (t.getTime() < startMs || t.getTime() > endMsAbs) continue;
-        if (!isFinite(v))                                     continue;
+        if (t.getTime() < startMs || t.getTime() > endMsAbs)
+        {
+            continue;
+        }
+        if (!isFinite(v))
+        {
+            continue;
+        }
         samples.push({ t, v });
     }
     //Sort by time so the painted line and area trace monotonically
@@ -1066,7 +1165,10 @@ export function renderPvChart(host: ChartHost): TemplateResult
                 if (bMinT.getTime() <= bMaxT.getTime())
                 {
                     slim.push({ t: bMinT, v: bMinV });
-                    if (bMinT.getTime() !== bMaxT.getTime()) slim.push({ t: bMaxT, v: bMaxV });
+                    if (bMinT.getTime() !== bMaxT.getTime())
+                    {
+                        slim.push({ t: bMaxT, v: bMaxV });
+                    }
                 }
                 else
                 {
@@ -1109,8 +1211,14 @@ export function renderPvChart(host: ChartHost): TemplateResult
         const native = isCumulativeEnergy
             ? (lu === 'kwh' ? 'kw' : lu === 'mwh' ? 'mw' : lu === 'wh' ? 'w' : '')
             : lu;
-        if (native === 'kw') return 1 / 1000;
-        if (native === 'mw') return 1 / 1_000_000;
+        if (native === 'kw')
+        {
+            return 1 / 1000;
+        }
+        if (native === 'mw')
+        {
+            return 1 / 1_000_000;
+        }
         return 1;
     })();
 
@@ -1144,15 +1252,24 @@ export function renderPvChart(host: ChartHost): TemplateResult
         {
             const tMs = series.times[i].getTime();
             if (tMs <  nowMs)   continue;             //future only
-            if (tMs <  startMs) continue;
-            if (tMs >  endMsAbs) continue;
+            if (tMs <  startMs)
+            {
+                continue;
+            }
+            if (tMs >  endMsAbs)
+            {
+                continue;
+            }
             const cloud = series.cloud[i] ?? 0;
             const pct = computePvPowerWeighted(host.config, series.times[i], lat, lon, cloud, {
                 airTempC: series.temperature[i],
                 windMs:   series.windSpeed[i],
                 raster,
             });
-            if (pct <= 0) continue;
+            if (pct <= 0)
+            {
+                continue;
+            }
             const eff = effectiveForecastRatio(shading, series.times[i], lat, lon, cloud, calR, nowMs);
             const wattsClipped = Math.min(capW, pct * k * eff);
             predictedSamples.push({ t: series.times[i], v: wattsClipped * nativeFromW });
@@ -1403,7 +1520,10 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     }
     //The final entry is the right edge of the strip (not a
     //between-day boundary), drop it.
-    if (sepPcts.length > 0) sepPcts.pop();
+    if (sepPcts.length > 0)
+    {
+        sepPcts.pop();
+    }
 
     return html`
         <div class="tb-day-strip">
@@ -1439,7 +1559,10 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 {
     const out = new Map<number, number>();
-    if (!host._timeRange) return out;
+    if (!host._timeRange)
+    {
+        return out;
+    }
     const { start, end } = host._timeRange;
     const startMs  = start.getTime();
     const endMsAbs = end.getTime();
@@ -1477,10 +1600,19 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             for (let i = 1; i < h.times.length; i++)
             {
                 const tMs = h.times[i].getTime();
-                if (tMs < startMs || tMs > endMsAbs) continue;
-                if (!bucketGuard(tMs)) continue;
+                if (tMs < startMs || tMs > endMsAbs)
+                {
+                    continue;
+                }
+                if (!bucketGuard(tMs))
+                {
+                    continue;
+                }
                 const dv = h.values[i] - h.values[i - 1];
-                if (!isFinite(dv) || dv < 0) continue;
+                if (!isFinite(dv) || dv < 0)
+                {
+                    continue;
+                }
                 const kwh = unit === 'mwh' ? dv * 1000
                           : unit === 'wh'  ? dv / 1000
                           : dv;
@@ -1497,14 +1629,26 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             for (let i = 1; i < h.times.length; i++)
             {
                 const tCurrMs = h.times[i].getTime();
-                if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
-                if (!bucketGuard(tCurrMs)) continue;
+                if (tCurrMs < startMs || tCurrMs > endMsAbs)
+                {
+                    continue;
+                }
+                if (!bucketGuard(tCurrMs))
+                {
+                    continue;
+                }
                 const tPrevMs = h.times[i - 1].getTime();
                 const dtH = (tCurrMs - tPrevMs) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) continue;
+                if (dtH <= 0 || dtH > 6)
+                {
+                    continue;
+                }
                 const wPrev = pvNormalizeToWatts(h.values[i - 1], host._pvUnit);
                 const wCurr = pvNormalizeToWatts(h.values[i],     host._pvUnit);
-                if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+                if (!isFinite(wPrev) || !isFinite(wCurr))
+                {
+                    continue;
+                }
                 const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
                 const k = dayKey(tCurrMs);
                 out.set(k, (out.get(k) ?? 0) + kwh);
@@ -1523,7 +1667,10 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         //Stats slot fills the wider days only. A sample whose timestamp falls within the raw window is already counted; skip it.
         integrate(calib, (tMs) =>
         {
-            if (rawFirstMs === null || rawLastMs === null) return true;
+            if (rawFirstMs === null || rawLastMs === null)
+            {
+                return true;
+            }
             return tMs < rawFirstMs || tMs > rawLastMs;
         });
     }
@@ -1553,7 +1700,10 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs   = series.times[i].getTime();
-            if (tMs < startMs || tMs > endMsAbs) continue;
+            if (tMs < startMs || tMs > endMsAbs)
+            {
+                continue;
+            }
             if (tMs < nowMs) continue;   //past covered by Pass 1
             const cloud = series.cloud[i] ?? 0;
             const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
@@ -1561,7 +1711,10 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
                 windMs:   series.windSpeed[i],
                 raster,
             });
-            if (pct <= 0) continue;
+            if (pct <= 0)
+            {
+                continue;
+            }
             //pct × k = watts at this hour midpoint × 1h = Wh.
             //Divide by 1000 to land in kWh; clip first so the
             //daily total honours the inverter cap.

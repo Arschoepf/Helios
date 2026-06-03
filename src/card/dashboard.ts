@@ -70,7 +70,10 @@ export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, 
     const k      = pvCalibK(host.config);
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
-    if (k === null || k <= 0 || !series || !coords) return null;
+    if (k === null || k <= 0 || !series || !coords)
+    {
+        return null;
+    }
     const raster = host._engine?.getLidarRaster() ?? null;
     const shMap  = currentShadingMap();
     const cal    = computeForecastCalibration(host);
@@ -82,14 +85,20 @@ export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, 
     for (let i = 0; i < series.times.length; i++)
     {
         const tMs = series.times[i].getTime();
-        if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+        if (tMs < dayStartMs || tMs >= dayEndMs)
+        {
+            continue;
+        }
         const cloud = series.cloud[i] ?? 0;
         const pct = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
             airTempC: series.temperature[i],
             windMs:   series.windSpeed[i],
             raster,
         });
-        if (pct < 0) continue;
+        if (pct < 0)
+        {
+            continue;
+        }
         const ratio = effectiveForecastRatio(shMap, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
         kwh += Math.min(capW, pct * k * ratio) / 1000;
         any = true;
@@ -104,7 +113,10 @@ const COUNT_UP_MS = 700;
 export function dashCountUpPhase(host: DashboardHost): number
 {
     const start = host._dashOpenedAtMs;
-    if (start === null) return 1;
+    if (start === null)
+    {
+        return 1;
+    }
     const t = Math.max(0, Math.min(1, (performance.now() - start) / COUNT_UP_MS));
     const inv = 1 - t;
     return 1 - inv * inv * inv;
@@ -220,11 +232,17 @@ export function computeTodayHourly(host: DashboardHost): {
             for (let i = 1; i < times.length; i++)
             {
                 const dtH = (times[i].getTime() - times[prevIdx].getTime()) / 3_600_000;
-                if (dtH <= 0) continue;
+                if (dtH <= 0)
+                {
+                    continue;
+                }
                 if (dtH > 6)  { prevIdx = i; continue; }
                 const dv = values[i] - values[prevIdx];
                 if (dv < 0)   { prevIdx = i; continue; }
-                if (dtH < MIN_DTH) continue;
+                if (dtH < MIN_DTH)
+                {
+                    continue;
+                }
                 dT.push(times[i]);
                 dV.push(dv / dtH);
                 prevIdx = i;
@@ -237,7 +255,10 @@ export function computeTodayHourly(host: DashboardHost): {
         for (let i = 0; i < times.length; i++)
         {
             const tMs = times[i].getTime();
-            if (tMs < startMs || tMs >= endMs) continue;
+            if (tMs < startMs || tMs >= endMs)
+            {
+                continue;
+            }
             //After differentiation the values are average power in
             //kW (kWh/hour), so go straight to watts. The original
             //unit ('kWh' / 'MWh' / 'Wh') isn't handled by
@@ -247,7 +268,10 @@ export function computeTodayHourly(host: DashboardHost): {
             const w = isCumulativeEnergy
                 ? values[i] * 1000
                 : pvNormalizeToWatts(values[i], host._pvUnit);
-            if (!isFinite(w)) continue;
+            if (!isFinite(w))
+            {
+                continue;
+            }
             const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
             sums  .set(hourTs, (sums  .get(hourTs) ?? 0) + w);
             counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
@@ -280,14 +304,20 @@ export function computeTodayHourly(host: DashboardHost): {
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
-            if (tMs < startMs || tMs >= endMs) continue;
+            if (tMs < startMs || tMs >= endMs)
+            {
+                continue;
+            }
             const cloud = series.cloud[i] ?? 0;
             const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
                 airTempC: series.temperature[i],
                 windMs:   series.windSpeed[i],
                 raster,
             });
-            if (pct < 0) continue;
+            if (pct < 0)
+            {
+                continue;
+            }
             const watts = Math.min(capW, pct * k);
             const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
             const idx = (hourTs - startMs) / HOUR_MS;
@@ -330,18 +360,27 @@ export function computeTodayHourly(host: DashboardHost): {
             peakPredictedHourTs = b.hourTs;
         }
 
-        if (b.observedW !== null) producedKwh += b.observedW / 1000;
+        if (b.observedW !== null)
+        {
+            producedKwh += b.observedW / 1000;
+        }
 
         if (b.hourTs + HOUR_MS <= nowMs)
         {
             //Past hour: count observed if available, else nothing
             //(no forecast for the past).
-            if (b.observedW !== null) forecastKwh += b.observedW / 1000;
+            if (b.observedW !== null)
+            {
+                forecastKwh += b.observedW / 1000;
+            }
         }
         else if (b.hourTs > nowMs)
         {
             //Future hour: count forecast if available.
-            if (b.forecastW !== null) forecastKwh += b.forecastW / 1000;
+            if (b.forecastW !== null)
+            {
+                forecastKwh += b.forecastW / 1000;
+            }
         }
         else
         {
@@ -372,17 +411,36 @@ function interpolateKwhAt(
     t:   number
 ): number | null
 {
-    if (pts.length === 0)              return null;
-    if (t < pts[0].tMs)                return null;
-    if (t > pts[pts.length - 1].tMs)   return null;
+    if (pts.length === 0)
+    {
+        return null;
+    }
+    if (t < pts[0].tMs)
+    {
+        return null;
+    }
+    if (t > pts[pts.length - 1].tMs)
+    {
+        return null;
+    }
     let lo = 0, hi = pts.length - 1;
     while (lo < hi - 1)
     {
         const mid = (lo + hi) >> 1;
-        if (pts[mid].tMs <= t) lo = mid; else hi = mid;
+        if (pts[mid].tMs <= t)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid;
+        }
     }
     const a = pts[lo], b = pts[hi];
-    if (b.tMs === a.tMs) return a.kwh;
+    if (b.tMs === a.tMs)
+    {
+        return a.kwh;
+    }
     return a.kwh + ((t - a.tMs) / (b.tMs - a.tMs)) * (b.kwh - a.kwh);
 }
 
@@ -433,12 +491,18 @@ export function computeTodayCumulative(host: DashboardHost): {
         for (let i = 0; i < hist.times.length; i++)
         {
             const tMs = hist.times[i].getTime();
-            if (tMs < startMs || tMs >= endMs) continue;
+            if (tMs < startMs || tMs >= endMs)
+            {
+                continue;
+            }
 
             if (isCumulativeEnergy)
             {
                 const v = hist.values[i] * energyFactor;
-                if (baseline === null) baseline = v;
+                if (baseline === null)
+                {
+                    baseline = v;
+                }
                 const kwh = Math.max(0, v - baseline);
                 actualSamples.push({ tMs, kwh });
                 actualKwh = kwh;
@@ -446,7 +510,10 @@ export function computeTodayCumulative(host: DashboardHost): {
             else
             {
                 const w = pvNormalizeToWatts(hist.values[i], host._pvUnit);
-                if (!isFinite(w)) continue;
+                if (!isFinite(w))
+                {
+                    continue;
+                }
                 if (prevT !== null && prevW !== null)
                 {
                     const dh = (tMs - prevT) / HOUR_MS;
@@ -489,7 +556,10 @@ export function computeTodayCumulative(host: DashboardHost): {
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
-            if (tMs < startMs || tMs >= endMs) continue;
+            if (tMs < startMs || tMs >= endMs)
+            {
+                continue;
+            }
             const binEnd = Math.floor(tMs / HOUR_MS) * HOUR_MS + HOUR_MS;
             const cloud  = series.cloud[i] ?? 0;
             const pct    = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
@@ -497,15 +567,24 @@ export function computeTodayCumulative(host: DashboardHost): {
                 windMs:   series.windSpeed[i],
                 raster,
             });
-            if (pct < 0) continue;
+            if (pct < 0)
+            {
+                continue;
+            }
             predictedKwh += Math.min(capW, pct * k) / 1000;
             predictedSamples.push({ tMs: binEnd, kwh: predictedKwh });
         }
     }
 
     let maxKwh = 0;
-    for (const s of actualSamples)    if (s.kwh > maxKwh) maxKwh = s.kwh;
-    for (const s of predictedSamples) if (s.kwh > maxKwh) maxKwh = s.kwh;
+    for (const s of actualSamples)    if (s.kwh > maxKwh)
+    {
+        maxKwh = s.kwh;
+    }
+    for (const s of predictedSamples) if (s.kwh > maxKwh)
+    {
+        maxKwh = s.kwh;
+    }
 
     return { actualSamples, predictedSamples, pastEndMs, maxKwh };
 }
@@ -736,7 +815,10 @@ export function renderDashTodayChart(
     cum:      ReturnType<typeof computeTodayCumulative>
 ): TemplateResult | typeof nothing
 {
-    if (cum.maxKwh < 0.05) return nothing;
+    if (cum.maxKwh < 0.05)
+    {
+        return nothing;
+    }
 
     const t = pickTranslations(host.hass?.language);
 
@@ -763,7 +845,10 @@ export function renderDashTodayChart(
 
     const buildPath = (pts: Array<{ tMs: number; kwh: number }>): string =>
     {
-        if (pts.length < 2) return '';
+        if (pts.length < 2)
+        {
+            return '';
+        }
         return 'M ' + pts.map(p =>
             `${xFor(p.tMs).toFixed(2)} ${yFor(p.kwh).toFixed(2)}`
         ).join(' L ');
@@ -793,7 +878,10 @@ export function renderDashTodayChart(
     //ticks on a tall chart.
     const niceStep = (range: number): number =>
     {
-        if (range <= 0) return 1;
+        if (range <= 0)
+        {
+            return 1;
+        }
         const target = range / 4;
         const pow    = Math.pow(10, Math.floor(Math.log10(target)));
         const ratio  = target / pow;
@@ -802,7 +890,10 @@ export function renderDashTodayChart(
     };
     const yStep   = niceStep(yMax);
     const kwhTicks: number[] = [];
-    for (let v = 0; v <= yMax + 1e-9; v += yStep) kwhTicks.push(v);
+    for (let v = 0; v <= yMax + 1e-9; v += yStep)
+    {
+        kwhTicks.push(v);
+    }
 
     //Sunrise / sunset markers from the engine's projected sun scene. Only render the ones that fall inside today's window, the projection may carry
     //"yesterday's sunset" or "tomorrow's sunrise" when the scrub time is near a midnight boundary.
@@ -1037,8 +1128,14 @@ export function renderDashTodayChart(
 //Helper: format a wattage value as a short label (W or kW).
 export function formatPvWatts(hass: any, w: number): string
 {
-    if (!isFinite(w) || w < 0) return '0 W';
-    if (w >= 1000) return formatLocalisedNumber(hass, w / 1000, 2) + ' kW';
+    if (!isFinite(w) || w < 0)
+    {
+        return '0 W';
+    }
+    if (w >= 1000) return formatLocalisedNumber(hass, w / 1000, 2)
+    {
+        + ' kW';
+    }
     return Math.round(w) + ' W';
 }
 
@@ -1077,7 +1174,10 @@ export function computeTomorrow(host: DashboardHost): {
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
-            if (tMs < tomorrowMs || tMs >= endMs) continue;
+            if (tMs < tomorrowMs || tMs >= endMs)
+            {
+                continue;
+            }
             const cloud = series.cloud[i] ?? 0;
             const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
                 airTempC: series.temperature[i],
@@ -1332,7 +1432,10 @@ export function handleExitDetail(host: DashboardHost, e: Event): void
 //the rAF token guard short-circuits.
 function startDashCountUpLoop(host: DashboardHost): void
 {
-    if (host._dashCountUpRaf !== undefined) return;
+    if (host._dashCountUpRaf !== undefined)
+    {
+        return;
+    }
     const tick = (): void =>
     {
         if (!host._detailMode || host._dashOpenedAtMs === null)
@@ -1365,9 +1468,15 @@ function startDashCountUpLoop(host: DashboardHost): void
 export function handleDashChartPointerMove(host: DashboardHost, e: PointerEvent): void
 {
     const svgEl = e.currentTarget as SVGSVGElement | null;
-    if (!svgEl) return;
+    if (!svgEl)
+    {
+        return;
+    }
     const rect = svgEl.getBoundingClientRect();
-    if (rect.width <= 0) return;
+    if (rect.width <= 0)
+    {
+        return;
+    }
     const W = 240, PAD_L = 22, PAD_R = 4;
     const fracPx = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     const xLogical = fracPx * W;

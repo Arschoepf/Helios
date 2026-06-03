@@ -81,7 +81,10 @@ export const netherlandsAhn4: LidarSource =
             fetchFloat32GeoTiff(buildUrl(COVERAGE_DSM), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(COVERAGE_DTM), rasterSize, opts.signal)
         ]);
-        if (!dsm || !dtm) return emptyResult();
+        if (!dsm || !dtm)
+        {
+            return emptyResult();
+        }
 
         const heights = subtractRasters(dsm, dtm);
 

@@ -151,15 +151,27 @@ export interface GridHost
 
 function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string, Sample[]>): void
 {
-    if (!host.hass?.callWS) return;
-    if (_historyInflight.has(entity)) return;
+    if (!host.hass?.callWS)
+    {
+        return;
+    }
+    if (_historyInflight.has(entity))
+    {
+        return;
+    }
     const now = Date.now();
     //Cooldown after a previous timeout: do not retry yet.
     const failedUntil = _historyFailedUntil.get(entity);
-    if (failedUntil !== undefined && now < failedUntil) return;
+    if (failedUntil !== undefined && now < failedUntil)
+    {
+        return;
+    }
     //Fresh enough: a previous backfill already landed within the refresh window.
     const lastFetched = _historyFetched.get(entity);
-    if (lastFetched !== undefined && now - lastFetched < GRID_FETCH_REFRESH_MS) return;
+    if (lastFetched !== undefined && now - lastFetched < GRID_FETCH_REFRESH_MS)
+    {
+        return;
+    }
     _historyInflight.add(entity);
     const end      = new Date();
     const rawStart = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
@@ -224,7 +236,10 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
             {
                 const startMs = parseStatBoundary(item?.start);
                 const endMs   = parseStatBoundary(item?.end);
-                if (startMs === null) continue;
+                if (startMs === null)
+                {
+                    continue;
+                }
                 let valueRaw: unknown = item?.mean;
                 let anchorAtEnd = false;
                 if (valueRaw === null || valueRaw === undefined)
@@ -232,14 +247,23 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     valueRaw = item?.state;
                     anchorAtEnd = true;
                 }
-                if (valueRaw === null || valueRaw === undefined) continue;
+                if (valueRaw === null || valueRaw === undefined)
+                {
+                    continue;
+                }
                 const v = parseNumericState(valueRaw);
-                if (v === null) continue;
+                if (v === null)
+                {
+                    continue;
+                }
                 const t = anchorAtEnd
                     ? (endMs ?? startMs)
                     : (endMs !== null ? (startMs + endMs) / 2 : startMs);
                 const realTransition = lastV !== null && lastV !== v;
-                if (realTransition || lastChangeT === null) lastChangeT = t;
+                if (realTransition || lastChangeT === null)
+                {
+                    lastChangeT = t;
+                }
                 merged.push({ t, v, lastChangeT });
                 lastV = v;
             }
@@ -248,27 +272,45 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
             for (const item of rawArr)
             {
                 const sRaw = item?.s ?? item?.state;
-                if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
+                if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+                {
+                    continue;
+                }
                 const v = parseNumericState(sRaw);
-                if (v === null) continue;
+                if (v === null)
+                {
+                    continue;
+                }
                 const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
                 const t = parseTimestamp(tsRaw);
-                if (t === null) continue;
+                if (t === null)
+                {
+                    continue;
+                }
                 const realTransition = lastV !== null && lastV !== v;
-                if (realTransition || lastChangeT === null) lastChangeT = t;
+                if (realTransition || lastChangeT === null)
+                {
+                    lastChangeT = t;
+                }
                 merged.push({ t, v, lastChangeT });
                 lastV = v;
             }
             //Merge with any live samples that may have already landed
             //while the WS call was in flight, dedupe by timestamp.
             const live = bufMap.get(entity) ?? [];
-            for (const s of live) merged.push(s);
+            for (const s of live)
+            {
+                merged.push(s);
+            }
             merged.sort((a, b) => a.t - b.t);
             const deduped: Sample[] = [];
             for (const s of merged)
             {
                 const last = deduped[deduped.length - 1];
-                if (last && last.t === s.t) continue;
+                if (last && last.t === s.t)
+                {
+                    continue;
+                }
                 deduped.push(s);
             }
             if (deduped.length > 0)
@@ -302,12 +344,21 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
 //copied here so grid.ts stays import-light.
 function parseStatBoundary(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
     if (typeof raw === 'string')
     {
         const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
         const d = new Date(raw);
         const t = d.getTime();
         return isFinite(t) ? t : null;
@@ -320,10 +371,22 @@ export function refreshGrid(host: GridHost): void
 {
     if (!host.hass)
     {
-        if (host._gridImportValue !== null) host._gridImportValue = null;
-        if (host._gridImportUnit  !== '')   host._gridImportUnit  = '';
-        if (host._gridExportValue !== null) host._gridExportValue = null;
-        if (host._gridExportUnit  !== '')   host._gridExportUnit  = '';
+        if (host._gridImportValue !== null)
+        {
+            host._gridImportValue = null;
+        }
+        if (host._gridImportUnit  !== '')
+        {
+            host._gridImportUnit  = '';
+        }
+        if (host._gridExportValue !== null)
+        {
+            host._gridExportValue = null;
+        }
+        if (host._gridExportUnit  !== '')
+        {
+            host._gridExportUnit  = '';
+        }
         return;
     }
 
@@ -382,17 +445,32 @@ function readStatRates(host: GridHost, rates: string[]): void
     for (const entity of rates)
     {
         const stateObj = host.hass.states?.[entity];
-        if (!stateObj) continue;
+        if (!stateObj)
+        {
+            continue;
+        }
         const raw = stateObj.state;
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable')
+        {
+            continue;
+        }
         const num = parseNumericState(raw);
-        if (num === null) continue;
+        if (num === null)
+        {
+            continue;
+        }
         const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
         signedWatts += pvNormalizeToWatts(num, unit);
         sawAny = true;
     }
-    if (!sawAny) return;
-    if (gridPowerInvert(host.config)) signedWatts = -signedWatts;
+    if (!sawAny)
+    {
+        return;
+    }
+    if (gridPowerInvert(host.config))
+    {
+        signedWatts = -signedWatts;
+    }
     applyCombinedSplit(host, signedWatts);
 }
 
@@ -400,8 +478,14 @@ function readStatRates(host: GridHost, rates: string[]): void
 //Config key backing each slot.
 function slotKey(slot: 'import' | 'export' | 'combined'): string
 {
-    if (slot === 'import') return 'grid-import-entity';
-    if (slot === 'export') return 'grid-export-entity';
+    if (slot === 'import')
+    {
+        return 'grid-import-entity';
+    }
+    if (slot === 'export')
+    {
+        return 'grid-export-entity';
+    }
     return 'grid-power-entity';
 }
 
@@ -420,7 +504,10 @@ function resolveEntities(host: GridHost, slot: 'import' | 'export' | 'combined')
             .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
             .map(s => s.trim());
     }
-    if (typeof raw === 'string' && raw.trim() !== '') return [raw.trim()];
+    if (typeof raw === 'string' && raw.trim() !== '')
+    {
+        return [raw.trim()];
+    }
     return [];
 }
 
@@ -438,8 +525,14 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
 
     //Drop buffers + last-derived records for entities that have been
     //removed from the config (user trimmed the array in the editor).
-    for (const key of Array.from(bufMap.keys()))     if (!entities.includes(key)) bufMap.delete(key);
-    for (const key of Array.from(derivedMap.keys())) if (!entities.includes(key)) derivedMap.delete(key);
+    for (const key of Array.from(bufMap.keys()))     if (!entities.includes(key))
+    {
+        bufMap.delete(key);
+    }
+    for (const key of Array.from(derivedMap.keys())) if (!entities.includes(key))
+    {
+        derivedMap.delete(key);
+    }
 
     let unitForOutput = '';
     let sawAny        = false;
@@ -455,12 +548,21 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
         ensureHistoryFetched(host, entity, bufMap);
 
         const stateObj = host.hass.states?.[entity];
-        if (!stateObj) continue;
+        if (!stateObj)
+        {
+            continue;
+        }
         const raw  = stateObj.state;
         const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable')
+        {
+            continue;
+        }
         const num = parseNumericState(raw);
-        if (num === null) continue;
+        if (num === null)
+        {
+            continue;
+        }
         unitForOutput = unitForOutput || unit;
         sawAny = true;
 
@@ -575,8 +677,14 @@ function readCombined(host: GridHost): void
     const unitsMap = host._gridCombinedUnits;
 
     //Drop buffers / units for entities removed from the config.
-    for (const key of Array.from(bufMap.keys()))   if (!entities.includes(key)) bufMap.delete(key);
-    for (const key of Array.from(unitsMap.keys())) if (!entities.includes(key)) unitsMap.delete(key);
+    for (const key of Array.from(bufMap.keys()))   if (!entities.includes(key))
+    {
+        bufMap.delete(key);
+    }
+    for (const key of Array.from(unitsMap.keys())) if (!entities.includes(key))
+    {
+        unitsMap.delete(key);
+    }
 
     let signedWatts = 0;
     let sawAny      = false;
@@ -590,12 +698,21 @@ function readCombined(host: GridHost): void
         ensureHistoryFetched(host, entity, bufMap);
 
         const stateObj = host.hass.states?.[entity];
-        if (!stateObj) continue;
+        if (!stateObj)
+        {
+            continue;
+        }
         const raw  = stateObj.state;
         const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable')
+        {
+            continue;
+        }
         const num = parseNumericState(raw);
-        if (num === null) continue;
+        if (num === null)
+        {
+            continue;
+        }
 
         const u = unit.toLowerCase();
         unitsMap.set(entity, u);
@@ -640,7 +757,10 @@ function readCombined(host: GridHost): void
         return;
     }
 
-    if (gridPowerInvert(host.config)) signedWatts = -signedWatts;
+    if (gridPowerInvert(host.config))
+    {
+        signedWatts = -signedWatts;
+    }
     applyCombinedSplit(host, signedWatts);
 }
 
@@ -677,10 +797,19 @@ function unitIsEnergy(unit: string): boolean
 //for anything that isn't a finite number.
 function parseNumericState(raw: unknown): number | null
 {
-    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
-    if (typeof raw !== 'string') return null;
+    if (typeof raw === 'number')
+    {
+        return Number.isFinite(raw) ? raw : null;
+    }
+    if (typeof raw !== 'string')
+    {
+        return null;
+    }
     const trimmed = raw.trim();
-    if (trimmed === '') return null;
+    if (trimmed === '')
+    {
+        return null;
+    }
     //Locale-tolerant: replace a single comma with a dot when the
     //string has no dot already. Avoids breaking thousand-separated
     //inputs like "12,345.6" which would otherwise parse as 12.
@@ -692,15 +821,27 @@ function parseNumericState(raw: unknown): number | null
 
 function parseTimestamp(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
     if (typeof raw === 'number')
     {
-        if (!Number.isFinite(raw)) return null;
+        if (!Number.isFinite(raw))
+        {
+            return null;
+        }
         return raw > 1e12 ? raw : raw * 1000;
     }
-    if (typeof raw !== 'string') return null;
+    if (typeof raw !== 'string')
+    {
+        return null;
+    }
     const trimmed = raw.trim();
-    if (trimmed === '') return null;
+    if (trimmed === '')
+    {
+        return null;
+    }
     const asNum = Number(trimmed);
     if (Number.isFinite(asNum) && asNum > 1e9)
     {
@@ -743,8 +884,14 @@ function recordCumulativeSample(
     //window, measured against the current wall clock (so stale buffers
     //prune themselves out of memory even if no new sample lands for
     //a while).
-    while (buf.length > GRID_SAMPLE_MAX) buf.shift();
-    while (buf.length > 1 && nowMs - buf[0].t > GRID_SAMPLE_WINDOW_MS) buf.shift();
+    while (buf.length > GRID_SAMPLE_MAX)
+    {
+        buf.shift();
+    }
+    while (buf.length > 1 && nowMs - buf[0].t > GRID_SAMPLE_WINDOW_MS)
+    {
+        buf.shift();
+    }
 }
 
 
@@ -767,14 +914,23 @@ function pickBracket(
     maxLookbackMs: number | null
 ): { oldest: Sample; newest: Sample } | null
 {
-    if (buf.length < 2) return null;
+    if (buf.length < 2)
+    {
+        return null;
+    }
     //beforeIdx = index of the latest sample with t <= targetMs.
     //afterIdx  = index of the earliest sample with t > targetMs.
     let beforeIdx = -1;
     for (let i = 0; i < buf.length; i++)
     {
-        if (buf[i].t <= targetMs) beforeIdx = i;
-        else break;
+        if (buf[i].t <= targetMs)
+        {
+            beforeIdx = i;
+        }
+        else
+        {
+            break;
+        }
     }
     let afterIdx = beforeIdx + 1;
 
@@ -791,7 +947,10 @@ function pickBracket(
             //Within the edge tolerance the first bracket is still
             //used so a small gap between buffer start and the user's
             //scrub instant doesn't hide the chip needlessly.
-            if (buf[0].t - targetMs > SCRUB_EDGE_TOLERANCE_MS) return null;
+            if (buf[0].t - targetMs > SCRUB_EDGE_TOLERANCE_MS)
+            {
+                return null;
+            }
         }
         beforeIdx = 0;
         afterIdx  = 1;
@@ -813,7 +972,10 @@ function pickBracket(
     {
         const canShrinkOlder  = beforeIdx > 0;
         const canExtendNewer  = afterIdx < buf.length - 1;
-        if (!canShrinkOlder && !canExtendNewer) break;
+        if (!canShrinkOlder && !canExtendNewer)
+        {
+            break;
+        }
         if (!canShrinkOlder)
         {
             afterIdx++;
@@ -847,7 +1009,10 @@ function pickBracket(
     {
         return null;
     }
-    if (newest.t === oldest.t) return null;
+    if (newest.t === oldest.t)
+    {
+        return null;
+    }
     return { oldest, newest };
 }
 
@@ -855,10 +1020,19 @@ function pickBracket(
 function slopeWatts(oldest: Sample, newest: Sample, u: string): number | null
 {
     const dt = (newest.t - oldest.t) / 1000;
-    if (dt <= 0) return null;
+    if (dt <= 0)
+    {
+        return null;
+    }
     let dE_wh = newest.v - oldest.v;
-    if (u === 'kwh') dE_wh *= 1000;
-    else if (u === 'mwh') dE_wh *= 1_000_000;
+    if (u === 'kwh')
+    {
+        dE_wh *= 1000;
+    }
+    else if (u === 'mwh')
+    {
+        dE_wh *= 1_000_000;
+    }
     //Power = energy / time. dE_wh is in Wh, dt is in seconds; the
     //3600 factor turns Wh per second into watts.
     return dE_wh * 3600 / dt;
@@ -875,11 +1049,20 @@ function bracketedSlopeWatts(
     maxLookbackMs: number | null
 ): { watts: number; changedAt: number } | null
 {
-    if (!buf) return null;
+    if (!buf)
+    {
+        return null;
+    }
     const bracket = pickBracket(buf, targetMs, maxLookbackMs);
-    if (!bracket) return null;
+    if (!bracket)
+    {
+        return null;
+    }
     const w = slopeWatts(bracket.oldest, bracket.newest, u);
-    if (w === null) return null;
+    if (w === null)
+    {
+        return null;
+    }
     //changedAt = the timestamp of the latest REAL value transition
     //seen in this entity's buffer, not the last poll. The multi-
     //tariff picker ranks by "moved most recently", and HA pushes
@@ -911,7 +1094,10 @@ export function gridWattsAtTime(
     let anyHit: boolean = false;
     for (const [entity, buf] of samples)
     {
-        if (buf.length < 2) continue;
+        if (buf.length < 2)
+        {
+            continue;
+        }
         const u = (units.get(entity) ?? 'kwh').toLowerCase();
         if (u !== 'wh' && u !== 'kwh' && u !== 'mwh')
         {
@@ -934,9 +1120,15 @@ export function gridWattsAtTime(
         }
         //Cumulative-energy sensor.
         const bracket = pickBracket(buf, targetMs, null);
-        if (!bracket) continue;
+        if (!bracket)
+        {
+            continue;
+        }
         const w = slopeWatts(bracket.oldest, bracket.newest, u);
-        if (w === null) continue;
+        if (w === null)
+        {
+            continue;
+        }
         total += w;
         anyHit = true;
     }
@@ -975,7 +1167,10 @@ export function gridPowerInvert(config: HeliosConfig | undefined): boolean
 export function gridCombinedWattsAtTime(host: GridHost, targetMs: number): number | null
 {
     const signed = gridWattsAtTime(host._gridCombinedSamples, host._gridCombinedUnits, targetMs);
-    if (signed === null) return null;
+    if (signed === null)
+    {
+        return null;
+    }
     return gridPowerInvert(host.config) ? -signed : signed;
 }
 
@@ -991,13 +1186,25 @@ function applyValue(host: GridHost, slot: 'import' | 'export', value: number | n
     const clamped = (value === null) ? null : Math.max(0, value);
     if (slot === 'import')
     {
-        if (host._gridImportValue !== clamped) host._gridImportValue = clamped;
-        if (host._gridImportUnit  !== unit)    host._gridImportUnit  = unit;
+        if (host._gridImportValue !== clamped)
+        {
+            host._gridImportValue = clamped;
+        }
+        if (host._gridImportUnit  !== unit)
+        {
+            host._gridImportUnit  = unit;
+        }
     }
     else
     {
-        if (host._gridExportValue !== clamped) host._gridExportValue = clamped;
-        if (host._gridExportUnit  !== unit)    host._gridExportUnit  = unit;
+        if (host._gridExportValue !== clamped)
+        {
+            host._gridExportValue = clamped;
+        }
+        if (host._gridExportUnit  !== unit)
+        {
+            host._gridExportUnit  = unit;
+        }
     }
 }
 
@@ -1009,13 +1216,22 @@ function applyValue(host: GridHost, slot: 'import' | 'export', value: number | n
 //chip without an explicit conditional.
 export function formatGridValue(value: number | null, unit: string): string
 {
-    if (value === null) return '';
+    if (value === null)
+    {
+        return '';
+    }
     const u = unit.toLowerCase();
     if (u === 'w' || u === 'kw' || u === 'mw')
     {
         const w = pvNormalizeToWatts(value, unit);
-        if (Math.abs(w) >= 1000) return `${(w / 1000).toFixed(1)} kW`;
-        if (Math.abs(w) >= 100)  return `${Math.round(w)} W`;
+        if (Math.abs(w) >= 1000)
+        {
+            return `${(w / 1000).toFixed(1)} kW`;
+        }
+        if (Math.abs(w) >= 100)
+        {
+            return `${Math.round(w)} W`;
+        }
         return `${w.toFixed(1)} W`;
     }
     if (u === 'wh' || u === 'kwh' || u === 'mwh')

@@ -86,7 +86,10 @@ export interface BinCoord { az: number; alt: number; cloud: number; }
 
 export function binFor(azimuthDeg: number, altitudeDeg: number, cloudPct: number): BinCoord | null
 {
-    if (!isFinite(azimuthDeg) || !isFinite(altitudeDeg) || !isFinite(cloudPct)) return null;
+    if (!isFinite(azimuthDeg) || !isFinite(altitudeDeg) || !isFinite(cloudPct))
+    {
+        return null;
+    }
     if (altitudeDeg <= 0) return null;   //Below horizon, no PV, no signal.
     const az  = ((Math.floor(((azimuthDeg % 360) + 360) % 360 / AZIMUTH_BIN_DEG)) | 0);
     const alt = Math.max(0, Math.min(ALTITUDE_BIN_COUNT - 1, Math.floor(altitudeDeg / ALTITUDE_BIN_DEG)));
@@ -130,16 +133,28 @@ export function applyObservation(
     timestampMs:   number,
 ): boolean
 {
-    if (!isFinite(actualW) || !isFinite(predictedW) || !isFinite(timestampMs)) return false;
+    if (!isFinite(actualW) || !isFinite(predictedW) || !isFinite(timestampMs))
+    {
+        return false;
+    }
     //Predicted floor: a 20 W reading driven by a 5 W prediction is a 4x ratio that says nothing about systematic shading. Cut off at 80 W so we only
     //feed cells that the model is confidently predicting non-trivial production for. Same idea as MIN_DAY_PREDICTED_KWH in the scalar calibration.
-    if (predictedW < 80 || actualW < 0) return false;
+    if (predictedW < 80 || actualW < 0)
+    {
+        return false;
+    }
     const ratio = actualW / predictedW;
-    if (!isFinite(ratio) || ratio <= 0) return false;
+    if (!isFinite(ratio) || ratio <= 0)
+    {
+        return false;
+    }
     const clamped = Math.max(RATIO_MIN, Math.min(RATIO_MAX, ratio));
 
     const bin = binFor(sunAzimuthDeg, sunAltitudeDeg, cloudPct);
-    if (!bin) return false;
+    if (!bin)
+    {
+        return false;
+    }
 
     const key  = cellKey(bin);
     const cell = map.cells[key];
@@ -182,7 +197,10 @@ export function lookupRatio(
 ): LookupResult | null
 {
     const target = binFor(sunAzimuthDeg, sunAltitudeDeg, cloudPct);
-    if (!target) return null;
+    if (!target)
+    {
+        return null;
+    }
 
     //Kernel sigma = 1 cell in each dimension. Within-cell weight
     //is 1, immediate neighbour 0.61, diagonal 0.37, far corner
@@ -201,16 +219,28 @@ export function lookupRatio(
             {
                 const az    = ((target.az + dAz) % AZIMUTH_BIN_COUNT + AZIMUTH_BIN_COUNT) % AZIMUTH_BIN_COUNT;
                 const alt   = target.alt + dAlt;
-                if (alt < 0 || alt >= ALTITUDE_BIN_COUNT) continue;
+                if (alt < 0 || alt >= ALTITUDE_BIN_COUNT)
+                {
+                    continue;
+                }
                 const cloud = target.cloud + dC;
-                if (cloud < 0 || cloud >= CLOUD_BIN_COUNT) continue;
+                if (cloud < 0 || cloud >= CLOUD_BIN_COUNT)
+                {
+                    continue;
+                }
                 const cell = map.cells[cellKey({ az, alt, cloud })];
-                if (!cell) continue;
+                if (!cell)
+                {
+                    continue;
+                }
 
                 //Age-decay the cell's effective weight on read so a stale six-month-old cell can't pose as fresh data.
                 const dDays = Math.max(0, (nowMs - cell.t) / DAY_MS);
                 const aged  = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
-                if (aged <= 0) continue;
+                if (aged <= 0)
+                {
+                    continue;
+                }
 
                 const dist2 = dAz * dAz + dAlt * dAlt + dC * dC;
                 const kernel = Math.exp(-dist2 / SIGMA2);
@@ -221,7 +251,10 @@ export function lookupRatio(
         }
     }
 
-    if (den <= 0) return null;
+    if (den <= 0)
+    {
+        return null;
+    }
     const ratio = num / den;
     const confidence = Math.min(1, den / MIN_EFFECTIVE_SAMPLES);
     if (confidence < 0.33) return null;   //den below a third of MIN_EFFECTIVE_SAMPLES, not enough kernel weight yet
@@ -233,7 +266,10 @@ export function lookupRatio(
 //jumping abruptly once it crosses the confidence threshold.
 export function blendedRatio(lookup: LookupResult | null, fallback: number): number
 {
-    if (!lookup) return fallback;
+    if (!lookup)
+    {
+        return fallback;
+    }
     return lookup.ratio * lookup.confidence + fallback * (1 - lookup.confidence);
 }
 
@@ -253,9 +289,15 @@ function safeStorage(): MapStorage | null
 {
     try
     {
-        if (typeof window === 'undefined') return null;
+        if (typeof window === 'undefined')
+        {
+            return null;
+        }
         const ls = (window as { localStorage?: MapStorage }).localStorage;
-        if (!ls) return null;
+        if (!ls)
+        {
+            return null;
+        }
         return ls;
     }
     catch (_) { return null; }
@@ -279,7 +321,10 @@ function _invalidateLoadMapCache(): void
 
 export function loadMap(storage: MapStorage | null = safeStorage()): ShadingMap
 {
-    if (_cachedMap) return _cachedMap;
+    if (_cachedMap)
+    {
+        return _cachedMap;
+    }
     if (!storage)
     {
         _cachedMap = emptyMap();
@@ -321,7 +366,10 @@ export function saveMap(map: ShadingMap, storage: MapStorage | null = safeStorag
     //so the next loadMap() call hits the cache instead of round-
     //tripping through JSON.parse.
     _cachedMap = map;
-    if (!storage) return;
+    if (!storage)
+    {
+        return;
+    }
     try { storage.setItem(STORAGE_KEY, JSON.stringify(map)); }
     catch (_) { /* quota or disabled, give up silently */ }
 }
@@ -350,8 +398,14 @@ export function mergeMaps(a: ShadingMap, b: ShadingMap, nowMs: number = Date.now
         cells: {},
     };
     const keys = new Set<string>();
-    for (const k of Object.keys(a.cells)) keys.add(k);
-    for (const k of Object.keys(b.cells)) keys.add(k);
+    for (const k of Object.keys(a.cells))
+    {
+        keys.add(k);
+    }
+    for (const k of Object.keys(b.cells))
+    {
+        keys.add(k);
+    }
     for (const k of keys)
     {
         const ca = a.cells[k];
@@ -391,15 +445,30 @@ export function importMapJson(raw: string): ShadingMap | null
     try
     {
         const parsed = JSON.parse(raw);
-        if (!parsed || typeof parsed !== 'object') return null;
-        if (parsed.version !== 2) return null;
-        if (!parsed.cells || typeof parsed.cells !== 'object') return null;
+        if (!parsed || typeof parsed !== 'object')
+        {
+            return null;
+        }
+        if (parsed.version !== 2)
+        {
+            return null;
+        }
+        if (!parsed.cells || typeof parsed.cells !== 'object')
+        {
+            return null;
+        }
         const cells: Record<string, ShadingCell> = {};
         for (const key of Object.keys(parsed.cells))
         {
             const c = parsed.cells[key];
-            if (!c || typeof c.ema !== 'number' || typeof c.w !== 'number' || typeof c.t !== 'number') continue;
-            if (!isFinite(c.ema) || !isFinite(c.w) || !isFinite(c.t)) continue;
+            if (!c || typeof c.ema !== 'number' || typeof c.w !== 'number' || typeof c.t !== 'number')
+            {
+                continue;
+            }
+            if (!isFinite(c.ema) || !isFinite(c.w) || !isFinite(c.t))
+            {
+                continue;
+            }
             cells[key] = { ema: c.ema, w: c.w, t: c.t };
         }
         return {
@@ -427,11 +496,17 @@ export interface DecodedCell
 export function decodeCellKey(key: string, cell: ShadingCell): DecodedCell | null
 {
     const parts = key.split('|');
-    if (parts.length !== 3) return null;
+    if (parts.length !== 3)
+    {
+        return null;
+    }
     const az    = parseInt(parts[0], 10);
     const alt   = parseInt(parts[1], 10);
     const cloud = parseInt(parts[2], 10);
-    if (!isFinite(az) || !isFinite(alt) || !isFinite(cloud)) return null;
+    if (!isFinite(az) || !isFinite(alt) || !isFinite(cloud))
+    {
+        return null;
+    }
     return {
         azimuthDeg:  az * AZIMUTH_BIN_DEG  + AZIMUTH_BIN_DEG  / 2,
         altitudeDeg: alt * ALTITUDE_BIN_DEG + ALTITUDE_BIN_DEG / 2,
@@ -474,8 +549,14 @@ export function describeMap(map: ShadingMap, nowMs: number): MapStats
         const cell = map.cells[key];
         const dDays = Math.max(0, (nowMs - cell.t) / DAY_MS);
         const aged  = cell.w * Math.pow(0.5, dDays / HALFLIFE_DAYS);
-        if (aged >= MIN_EFFECTIVE_SAMPLES) confidentCells++;
-        if (aged < 1) continue;
+        if (aged >= MIN_EFFECTIVE_SAMPLES)
+        {
+            confidentCells++;
+        }
+        if (aged < 1)
+        {
+            continue;
+        }
         if (cell.ema < 0.9 && (!strongestUnder || cell.ema < strongestUnder.ratio))
         {
             strongestUnder = { key, ratio: cell.ema, w: aged };

@@ -76,7 +76,10 @@ function parseConfigCoord(raw: unknown): number | null
     if (typeof raw === 'string')
     {
         const trimmed = raw.trim();
-        if (trimmed === '') return null;
+        if (trimmed === '')
+        {
+            return null;
+        }
         const n = Number(trimmed);
         return isFinite(n) ? n : null;
     }
@@ -140,8 +143,14 @@ export function getHomeCoords(
 
     const result = _resolveHomeCoords(config, hassCfg, overrideId);
     const entry: HomeCoordsCacheEntry = { hassCfg, overrideId, result };
-    if (config) _homeCoordsCache.set(config, entry);
-    else        _homeCoordsNoConfigCache = entry;
+    if (config)
+    {
+        _homeCoordsCache.set(config, entry);
+    }
+    else
+    {
+        _homeCoordsNoConfigCache = entry;
+    }
     return result;
 }
 
@@ -169,7 +178,10 @@ function _resolveHomeCoords(
 
     const lat = hassCfg?.latitude;
     const lon = hassCfg?.longitude;
-    if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+    if (typeof lat !== 'number' || typeof lon !== 'number')
+    {
+        return null;
+    }
     return { lat, lon };
 }
 
@@ -191,7 +203,10 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
         return '';
     }
     const cached = _configSigCache.get(config);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined)
+    {
+        return cached;
+    }
     const sig = VISUAL_CONFIG_KEYS
         .map(k => `${k}=${config[k] ?? ''}`)
         .join('|');
@@ -344,7 +359,10 @@ export function initEngine(host: InitHost): void
         //is cleared so we never enqueue more than one wake-up; the
         //latest config wins.
         const prev = _pendingRespawnTimers.get(host);
-        if (prev !== undefined) window.clearTimeout(prev);
+        if (prev !== undefined)
+        {
+            window.clearTimeout(prev);
+        }
         host._initInflight = true;
         const perCardWait = lastAt > 0 ? ENGINE_SPAWN_COOLDOWN_MS - delta : 0;
         const globalWait  = GLOBAL_SPAWN_COOLDOWN_MS - sinceGlobalSpawn;
@@ -469,7 +487,10 @@ export function initEngineNow(host: InitHost): void
 //just been assigned and is non-null.
 function wireEngineCallbacks(host: InitHost): void
 {
-    if (!host._engine) return;
+    if (!host._engine)
+    {
+        return;
+    }
 
     //Ping Lit so the chrome that depends on engine readiness
     //(today: the LiDAR View button, which gates on the provider
@@ -534,8 +555,14 @@ function wireEngineCallbacks(host: InitHost): void
         //but the user can't see anything, so skip the per-frame
         //work entirely. Comes back on the next render once the
         //IntersectionObserver re-enables the engine.
-        if (host._engine?.isPaused()) return;
-        if (overlayRaf !== null) return;
+        if (host._engine?.isPaused())
+        {
+            return;
+        }
+        if (overlayRaf !== null)
+        {
+            return;
+        }
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;

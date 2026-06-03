@@ -142,7 +142,10 @@ export function findLidarSource(lat: number, lon: number): LidarSource | null
 {
     for (const src of LIDAR_SOURCES)
     {
-        if (src.covers(lat, lon)) return src;
+        if (src.covers(lat, lon))
+        {
+            return src;
+        }
     }
     return null;
 }
@@ -155,35 +158,68 @@ export function findLidarSource(lat: number, lon: number): LidarSource | null
 //invalidates the rest of the card config.
 export function validateLocalNdsmConfig(cfg: HeliosConfig | undefined | null): LocalNdsmConfig | null
 {
-    if (!cfg) return null;
-    if (cfg['lidar-local-ndsm-enabled'] !== true) return null;
+    if (!cfg)
+    {
+        return null;
+    }
+    if (cfg['lidar-local-ndsm-enabled'] !== true)
+    {
+        return null;
+    }
 
     const rawUrl = cfg['lidar-local-ndsm-url'];
-    if (typeof rawUrl !== 'string') return null;
+    if (typeof rawUrl !== 'string')
+    {
+        return null;
+    }
     const url = rawUrl.trim();
-    if (url.length === 0) return null;
+    if (url.length === 0)
+    {
+        return null;
+    }
 
     const minLat = numFromCfg(cfg['lidar-local-ndsm-min-lat']);
     const maxLat = numFromCfg(cfg['lidar-local-ndsm-max-lat']);
     const minLon = numFromCfg(cfg['lidar-local-ndsm-min-lon']);
     const maxLon = numFromCfg(cfg['lidar-local-ndsm-max-lon']);
-    if (minLat === null || maxLat === null || minLon === null || maxLon === null) return null;
+    if (minLat === null || maxLat === null || minLon === null || maxLon === null)
+    {
+        return null;
+    }
 
-    if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) return null;
-    if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180) return null;
-    if (!(minLat < maxLat)) return null;
-    if (!(minLon < maxLon)) return null;
+    if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90)
+    {
+        return null;
+    }
+    if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180)
+    {
+        return null;
+    }
+    if (!(minLat < maxLat))
+    {
+        return null;
+    }
+    if (!(minLon < maxLon))
+    {
+        return null;
+    }
 
     return { url, minLat, maxLat, minLon, maxLon };
 }
 
 function numFromCfg(v: unknown): number | null
 {
-    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'number' && Number.isFinite(v))
+    {
+        return v;
+    }
     if (typeof v === 'string')
     {
         const s = v.trim();
-        if (s.length === 0) return null;
+        if (s.length === 0)
+        {
+            return null;
+        }
         const n = Number(s);
         return Number.isFinite(n) ? n : null;
     }
@@ -233,7 +269,10 @@ export function resolveLidarSource(
     if (localCfg)
     {
         const local = createLocalNdsmSource(localCfg);
-        if (local.covers(lat, lon)) return local;
+        if (local.covers(lat, lon))
+        {
+            return local;
+        }
     }
 
     return findLidarSource(lat, lon);

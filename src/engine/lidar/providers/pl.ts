@@ -84,7 +84,10 @@ export const polandGugikNmpt: LidarSource =
             rasterSize,
             opts.signal
         );
-        if (!heights) return emptyResult();
+        if (!heights)
+        {
+            return emptyResult();
+        }
 
         //GUGiK NMPT ships absolute heights above sea level (118-145 m
         //around Wrocław), the shared pipeline thresholds against the
@@ -102,16 +105,28 @@ export const polandGugikNmpt: LidarSource =
         for (let dy = -NEIGH; dy <= NEIGH; dy++)
         {
             const ny = hy + dy;
-            if (ny < 0 || ny >= rasterSize) continue;
+            if (ny < 0 || ny >= rasterSize)
+            {
+                continue;
+            }
             for (let dx = -NEIGH; dx <= NEIGH; dx++)
             {
                 const nx = hx + dx;
-                if (nx < 0 || nx >= rasterSize) continue;
+                if (nx < 0 || nx >= rasterSize)
+                {
+                    continue;
+                }
                 const v = heights[ny * rasterSize + nx];
-                if (isFinite(v) && v < homeGround) homeGround = v;
+                if (isFinite(v) && v < homeGround)
+                {
+                    homeGround = v;
+                }
             }
         }
-        if (!isFinite(homeGround)) return emptyResult();
+        if (!isFinite(homeGround))
+        {
+            return emptyResult();
+        }
 
         const normalised = new Float32Array(heights.length);
         for (let i = 0; i < heights.length; i++)

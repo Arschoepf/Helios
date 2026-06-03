@@ -82,7 +82,10 @@ export interface ShadingDomeScene
 //LiDAR-view first if needed.
 export function toggleShadingDome(host: ShadingDomeHost): void
 {
-    if (!host._engine) return;
+    if (!host._engine)
+    {
+        return;
+    }
     if (!host._shadingDomeMode)
     {
         host._shadingDomeFadeOutStartMs = null;
@@ -126,7 +129,10 @@ export function toggleShadingDome(host: ShadingDomeHost): void
 //wrapper, this loop only handles the discrete state flip + scheduling the per-frame requestUpdate so Lit re-renders during the transition.
 export function startShadingDomeFadeLoop(host: ShadingDomeHost): void
 {
-    if (host._shadingDomeFadeRaf !== undefined) return;
+    if (host._shadingDomeFadeRaf !== undefined)
+    {
+        return;
+    }
     const tick = (): void =>
     {
         const now = performance.now();
@@ -210,10 +216,16 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
         {
             const cell = map.cells[key];
             const d = decodeCellKey(key, cell);
-            if (!d) continue;
+            if (!d)
+            {
+                continue;
+            }
             const dDays = Math.max(0, (nowMs - cell.t) / 86_400_000);
             const aged  = cell.w * Math.pow(0.5, dDays / 60);
-            if (aged <= 0.05) continue;
+            if (aged <= 0.05)
+            {
+                continue;
+            }
             decodedCells.push({
                 azimuthDeg:  d.azimuthDeg,
                 altitudeDeg: d.altitudeDeg,
@@ -244,10 +256,16 @@ export function refreshShadingDomeScene(host: ShadingDomeHost): void
     const cellLookup = (az: number, alt: number, cloud: number) =>
     {
         const bin = binFor(az, alt, cloud);
-        if (!bin) return null;
+        if (!bin)
+        {
+            return null;
+        }
         const key = cellKey(bin);
         const cached = lookupCache.get(key);
-        if (cached !== undefined) return cached;
+        if (cached !== undefined)
+        {
+            return cached;
+        }
         const result = lookupRatio(map, az, alt, cloud, nowMs);
         lookupCache.set(key, result);
         return result;
@@ -325,8 +343,14 @@ export function shadingDomeWipeThreshold(host: ShadingDomeHost): number
 function wipeAlphaForAltitude(cellAltitudeDeg: number, threshold: number): number
 {
     const delta = threshold - cellAltitudeDeg;
-    if (delta <= 0) return 0;
-    if (delta >= DOME_WIPE_SOFT_DEG) return 1;
+    if (delta <= 0)
+    {
+        return 0;
+    }
+    if (delta >= DOME_WIPE_SOFT_DEG)
+    {
+        return 1;
+    }
     return delta / DOME_WIPE_SOFT_DEG;
 }
 
@@ -373,9 +397,15 @@ function ratioToFill(ratio: number): string
 //Returns nothing when the scene isn't ready, so the card template can drop the result directly into its render.
 export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult | typeof nothing
 {
-    if (!shouldRenderShadingDome(host)) return nothing;
+    if (!shouldRenderShadingDome(host))
+    {
+        return nothing;
+    }
     const scene = host._shadingDomeScene;
-    if (!scene) return nothing;
+    if (!scene)
+    {
+        return nothing;
+    }
     //Altitude-driven wipe threshold: each cell, ribbon segment and the sun marker get multiplied by an alpha derived from the cell's own altitude
     //vs this threshold. While the threshold is high (steady-state mode-on), every alpha resolves to 1 and the render is identical to the pre-wipe
     //version. While the threshold travels through the altitude range, the low-altitude cells light up first and the zenith last.
@@ -395,7 +425,10 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     for (const c of scene.cellPolys)
     {
         const wipeAlpha = wipeAlphaForAltitude(c.altitudeDeg, wipe);
-        if (wipeAlpha <= 0) continue;
+        if (wipeAlpha <= 0)
+        {
+            continue;
+        }
         //Wireframe + outlines use currentColor so the theme override
         //below can swap white -> black via .shading-dome-cells-* in
         //light mode without touching the per-cell opacity envelope.
@@ -428,7 +461,10 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
     {
         const a = arc[i - 1];
         const b = arc[i];
-        if (a.belowHorizon || b.belowHorizon) continue;
+        if (a.belowHorizon || b.belowHorizon)
+        {
+            continue;
+        }
         //Use the destination sample's lookup as the segment colour;
         //transitions look natural with that convention.
         const colour = b.confidence > 0 ? ratioToFill(b.ratio) : '#f8e89c';
@@ -436,7 +472,10 @@ export function renderShadingDomeOverlay(host: ShadingDomeHost): TemplateResult 
         //threshold. Keeps the ribbon following the same horizon-up reveal as the cells underneath instead of leaking ahead of them at the peak.
         const segAlt    = Math.max(a.altitudeDeg, b.altitudeDeg);
         const wipeAlpha = wipeAlphaForAltitude(segAlt, wipe);
-        if (wipeAlpha <= 0) continue;
+        if (wipeAlpha <= 0)
+        {
+            continue;
+        }
         const opacity = (0.55 + 0.4 * Math.max(0, Math.min(1, b.confidence))) * wipeAlpha;
         ribbonNodes.push(svg`
             <line x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}"

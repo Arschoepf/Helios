@@ -172,18 +172,30 @@ let _ofmTileTemplateInflight: Promise<string | null> | null = null;
 
 async function getOpenFreeMapTileTemplate(signal?: AbortSignal): Promise<string | null>
 {
-    if (_ofmTileTemplate) return _ofmTileTemplate;
-    if (_ofmTileTemplateInflight) return _ofmTileTemplateInflight;
+    if (_ofmTileTemplate)
+    {
+        return _ofmTileTemplate;
+    }
+    if (_ofmTileTemplateInflight)
+    {
+        return _ofmTileTemplateInflight;
+    }
 
     _ofmTileTemplateInflight = (async (): Promise<string | null> =>
     {
         try
         {
             const resp = await fetch(OFM_TILEJSON_URL, { signal });
-            if (!resp.ok) return null;
+            if (!resp.ok)
+            {
+                return null;
+            }
             const tj   = await resp.json() as { tiles?: string[] };
             const url  = Array.isArray(tj.tiles) && tj.tiles.length > 0 ? tj.tiles[0] : null;
-            if (!url) return null;
+            if (!url)
+            {
+                return null;
+            }
             _ofmTileTemplate = url;
             return url;
         }
@@ -319,7 +331,10 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
             {
                 continue;
             }
-            if (!geojson.geometry) continue;
+            if (!geojson.geometry)
+            {
+                continue;
+            }
 
             //Split MultiPolygons into independent Polygon features.
             //OpenMapTiles' vector-tile encoder groups multiple
@@ -392,7 +407,10 @@ export async function fetchBuildingsAroundHome(opts: FetchBuildingsOptions): Pro
     {
         homeCluster.push(homeFallback.feature);
         const idx = surroundings.indexOf(homeFallback.feature);
-        if (idx >= 0) surroundings.splice(idx, 1);
+        if (idx >= 0)
+        {
+            surroundings.splice(idx, 1);
+        }
     }
 
     return {

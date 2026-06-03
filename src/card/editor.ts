@@ -106,7 +106,10 @@ export class HeliosCardEditor extends LitElement
     public disconnectedCallback(): void
     {
         super.disconnectedCallback();
-        for (const t of this._sliderDebounce.values()) window.clearTimeout(t);
+        for (const t of this._sliderDebounce.values())
+        {
+            window.clearTimeout(t);
+        }
         this._sliderDebounce.clear();
         //"Cache vidé" confirmation timer survives a fast unmount if not cleared, fires on a dead element and triggers a Lit warning
         //about touching @state after disconnect. Clear it here so the editor unmounts cleanly mid-feedback.
@@ -170,7 +173,10 @@ export class HeliosCardEditor extends LitElement
         const out = { ...config } as Record<string, unknown>;
         for (const k of HeliosCardEditor._RETIRED_KEYS)
         {
-            if (k in out) delete out[k];
+            if (k in out)
+            {
+                delete out[k];
+            }
         }
         return out as HeliosConfig;
     }
@@ -178,8 +184,14 @@ export class HeliosCardEditor extends LitElement
     {
         const aKeys = Object.keys(a).sort();
         const bKeys = Object.keys(b).sort();
-        if (aKeys.length !== bKeys.length) return false;
-        for (let i = 0; i < aKeys.length; i++) if (aKeys[i] !== bKeys[i]) return false;
+        if (aKeys.length !== bKeys.length)
+        {
+            return false;
+        }
+        for (let i = 0; i < aKeys.length; i++) if (aKeys[i] !== bKeys[i])
+        {
+            return false;
+        }
         return true;
     }
 
@@ -194,7 +206,10 @@ export class HeliosCardEditor extends LitElement
     //element, the side effect registers ha-entity-picker. While the load is pending we fall back to a plain text input so the field is never broken.
     private async _ensureEntityPicker(): Promise<void>
     {
-        if (this._pickerReady) return;
+        if (this._pickerReady)
+        {
+            return;
+        }
         if (typeof customElements !== 'undefined' && customElements.get('ha-entity-picker'))
         {
             this._pickerReady = true;
@@ -250,7 +265,10 @@ export class HeliosCardEditor extends LitElement
         //a one-shot migration. The runtime ignores them too, this just keeps the YAML tidy.
         for (const k of LIDAR_VIEW_LEGACY_KEYS)
         {
-            if (k in next) delete next[k];
+            if (k in next)
+            {
+                delete next[k];
+            }
         }
         this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: next as HeliosConfig } }));
         this._cfg = next as HeliosConfig;
@@ -274,7 +292,10 @@ export class HeliosCardEditor extends LitElement
             return;
         }
         const v = parseFloat(raw);
-        if (!isFinite(v)) return;
+        if (!isFinite(v))
+        {
+            return;
+        }
         this._update(key, v);
     }
 
@@ -283,14 +304,20 @@ export class HeliosCardEditor extends LitElement
     private _numSlider(key: keyof HeliosConfig, e: Event): void
     {
         const v = parseFloat((e.target as HTMLInputElement).value);
-        if (!isFinite(v)) return;
+        if (!isFinite(v))
+        {
+            return;
+        }
 
         //Local update only, no event dispatch yet.
         this._cfg = { ...this._cfg, [key]: v };
 
         const k        = String(key);
         const existing = this._sliderDebounce.get(k);
-        if (existing !== undefined) window.clearTimeout(existing);
+        if (existing !== undefined)
+        {
+            window.clearTimeout(existing);
+        }
         const t = window.setTimeout(() =>
         {
             this._sliderDebounce.delete(k);
@@ -324,13 +351,19 @@ export class HeliosCardEditor extends LitElement
     {
         const toNum = (v: unknown): number | null =>
         {
-            if (v === undefined || v === null || v === '') return null;
+            if (v === undefined || v === null || v === '')
+            {
+                return null;
+            }
             const n = typeof v === 'number' ? v : parseFloat(String(v));
             return isFinite(n) ? n : null;
         };
         const toStr = (v: unknown): string | null =>
         {
-            if (v === undefined || v === null) return null;
+            if (v === undefined || v === null)
+            {
+                return null;
+            }
             const s = String(v).trim();
             return s === '' ? null : s;
         };
@@ -398,14 +431,38 @@ export class HeliosCardEditor extends LitElement
             next['pv-arrays'] = list.map(e =>
             {
                 const o: Record<string, number | string> = {};
-                if (e.name      !== null) o['name']      = e.name;
-                if (e.tilt      !== null) o['tilt']      = e.tilt;
-                if (e.azimuth   !== null) o['azimuth']   = e.azimuth;
-                if (e.share     !== null) o['share']     = e.share;
-                if (e.peakKwp   !== null) o['peak-kwp']  = e.peakKwp;
-                if (e.latitude  !== null) o['latitude']  = e.latitude;
-                if (e.longitude !== null) o['longitude'] = e.longitude;
-                if (e.height    !== null) o['height']    = e.height;
+                if (e.name      !== null)
+                {
+                    o['name']      = e.name;
+                }
+                if (e.tilt      !== null)
+                {
+                    o['tilt']      = e.tilt;
+                }
+                if (e.azimuth   !== null)
+                {
+                    o['azimuth']   = e.azimuth;
+                }
+                if (e.share     !== null)
+                {
+                    o['share']     = e.share;
+                }
+                if (e.peakKwp   !== null)
+                {
+                    o['peak-kwp']  = e.peakKwp;
+                }
+                if (e.latitude  !== null)
+                {
+                    o['latitude']  = e.latitude;
+                }
+                if (e.longitude !== null)
+                {
+                    o['longitude'] = e.longitude;
+                }
+                if (e.height    !== null)
+                {
+                    o['height']    = e.height;
+                }
                 return o;
             });
         }
@@ -419,7 +476,10 @@ export class HeliosCardEditor extends LitElement
     private _arrayField(i: number, key: 'tilt' | 'azimuth' | 'share' | 'peakKwp' | 'latitude' | 'longitude' | 'height', e: Event): void
     {
         const list = this._readPvArrays();
-        if (i < 0 || i >= list.length) return;
+        if (i < 0 || i >= list.length)
+        {
+            return;
+        }
         const raw = (e.target as HTMLInputElement).value.trim();
         if (raw === '')
         {
@@ -428,7 +488,10 @@ export class HeliosCardEditor extends LitElement
         else
         {
             const v = parseFloat(raw);
-            if (!isFinite(v)) return;
+            if (!isFinite(v))
+            {
+                return;
+            }
             list[i] = { ...list[i], [key]: v };
         }
         this._writePvArrays(list);
@@ -439,7 +502,10 @@ export class HeliosCardEditor extends LitElement
     private _arrayName(i: number, e: Event): void
     {
         const list = this._readPvArrays();
-        if (i < 0 || i >= list.length) return;
+        if (i < 0 || i >= list.length)
+        {
+            return;
+        }
         const raw = (e.target as HTMLInputElement).value.trim();
         list[i] = { ...list[i], name: raw === '' ? null : raw };
         this._writePvArrays(list);
@@ -459,7 +525,10 @@ export class HeliosCardEditor extends LitElement
     private _arrayAdd(): void
     {
         const list = this._readPvArrays();
-        if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX) return;
+        if (list.length >= HeliosCardEditor.PV_ARRAYS_MAX)
+        {
+            return;
+        }
         list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null });
         //Open the newly added pan in the editor by default: the user just clicked to add it, so its body should be visible without requiring a second
         //click on the chevron. Existing pans keep their current open/closed state untouched.
@@ -477,7 +546,10 @@ export class HeliosCardEditor extends LitElement
     private _arrayRemove(i: number): void
     {
         const list = this._readPvArrays();
-        if (i < 0 || i >= list.length) return;
+        if (i < 0 || i >= list.length)
+        {
+            return;
+        }
         //Removing the last array is allowed and clears the whole pv-arrays section (see _writePvArrays empty-list branch). Lets the
         //user wipe their orientation setup from the visual editor without dropping to YAML.
         list.splice(i, 1);
@@ -486,9 +558,18 @@ export class HeliosCardEditor extends LitElement
         const next = new Set<number>();
         for (const idx of this._openArrayIndices)
         {
-            if (idx === i)        continue;
-            if (idx > i)          next.add(idx - 1);
-            else                  next.add(idx);
+            if (idx === i)
+            {
+                continue;
+            }
+            if (idx > i)
+            {
+                next.add(idx - 1);
+            }
+            else
+            {
+                next.add(idx);
+            }
         }
         this._openArrayIndices = next;
         this._writePvArrays(list);
@@ -535,8 +616,14 @@ export class HeliosCardEditor extends LitElement
     {
         const el = e.currentTarget as HTMLDetailsElement;
         const next = new Set(this._openArrayIndices);
-        if (el.open) next.add(i);
-        else         next.delete(i);
+        if (el.open)
+        {
+            next.add(i);
+        }
+        else
+        {
+            next.delete(i);
+        }
         this._openArrayIndices = next;
     }
 
@@ -552,8 +639,14 @@ export class HeliosCardEditor extends LitElement
     //integrations like Ecowitt where the field is just a raw float.
     private _solarRadiationEntityFilter = (entity: any): boolean =>
     {
-        if (!entity || !entity.attributes) return false;
-        if (entity.attributes.device_class === 'irradiance') return true;
+        if (!entity || !entity.attributes)
+        {
+            return false;
+        }
+        if (entity.attributes.device_class === 'irradiance')
+        {
+            return true;
+        }
         const u = String(entity.attributes.unit_of_measurement ?? '').trim();
         return u === 'W/m²' || u === 'W/m2';
     };

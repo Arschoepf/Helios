@@ -33,7 +33,10 @@ const _radiationHistoryCache: Map<string, RadiationHistoryCacheEntry> = new Map(
 function radiationHistoryCacheGet(key: string): RadiationHistoryCacheEntry | null
 {
     const e = _radiationHistoryCache.get(key);
-    if (!e) return null;
+    if (!e)
+    {
+        return null;
+    }
     if (Date.now() - e.ts > RADIATION_CACHE_TTL_MS)
     {
         _radiationHistoryCache.delete(key);
@@ -54,12 +57,21 @@ export function clearRadiationModuleCaches(): void
 //module stays self-contained.
 function parseStatBoundary(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
     if (typeof raw === 'string')
     {
         const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
         const d = new Date(raw);
         const t = d.getTime();
         return isFinite(t) ? t : null;
@@ -85,11 +97,20 @@ function parseRadiationStats(arr: any[]): RadiationHistory
     {
         const startMs = parseStatBoundary(item?.start);
         const endMs   = parseStatBoundary(item?.end);
-        if (startMs === null) continue;
+        if (startMs === null)
+        {
+            continue;
+        }
         const valueRaw = item?.mean;
-        if (valueRaw === null || valueRaw === undefined) continue;
+        if (valueRaw === null || valueRaw === undefined)
+        {
+            continue;
+        }
         const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
-        if (!isFinite(v) || v < 0) continue;
+        if (!isFinite(v) || v < 0)
+        {
+            continue;
+        }
         const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
         times.push(new Date(anchorMs));
         values.push(v);
@@ -210,7 +231,10 @@ const _pushedRadiationKey = new WeakMap<RadiationHost, {
 
 export function pushSolarRadiationToEngine(host: RadiationHost): void
 {
-    if (!host._engine) return;
+    if (!host._engine)
+    {
+        return;
+    }
     const entity = String(host.config?.['solar-radiation-entity'] ?? '').trim();
     if (!entity || !host.hass)
     {

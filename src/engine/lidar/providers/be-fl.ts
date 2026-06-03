@@ -69,7 +69,10 @@ export const flandersDhmv2: LidarSource =
         }
 
         const epsg = getEpsg(31370);
-        if (!epsg) return emptyResult();
+        if (!epsg)
+        {
+            return emptyResult();
+        }
         const proj = projectBbox(bbox, epsg);
 
         //BE-Flandre's GeoServer WCS advertises spatial axes "X Y"
@@ -95,7 +98,10 @@ export const flandersDhmv2: LidarSource =
             fetchFloat32GeoTiff(buildUrl(DSM_COV), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DTM_COV), rasterSize, opts.signal)
         ]);
-        if (!dsm || !dtm) return emptyResult();
+        if (!dsm || !dtm)
+        {
+            return emptyResult();
+        }
 
         const heights = subtractRasters(dsm, dtm);
 

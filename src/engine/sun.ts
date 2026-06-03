@@ -134,7 +134,10 @@ export function computePvPower(
 {
     const sun = getSunPosition(date, lat, lon);
     const alt = sun.altitude;
-    if (alt <= 0) return 0;
+    if (alt <= 0)
+    {
+        return 0;
+    }
 
     const D    = Math.PI / 180;
     const cosZ = Math.sin(alt * D);
@@ -215,7 +218,10 @@ export function computeIrradianceWm2(date: Date, lat: number, lon: number, cloud
 {
     const sun = getSunPosition(date, lat, lon);
     const alt = sun.altitude;
-    if (alt <= 0) return 0;
+    if (alt <= 0)
+    {
+        return 0;
+    }
 
     const D    = Math.PI / 180;
     const cosZ = Math.sin(alt * D);

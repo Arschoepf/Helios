@@ -63,8 +63,14 @@ export function trainShadingMap(host: ChartHost): number
         ? host._pvTrainerStats
         : host._pvHistory;
     const coords = getHomeCoords(host.config, host.hass);
-    if (k === null || k <= 0 || !series || !hist || !coords) return 0;
-    if (hist.times.length < 2 || series.times.length < 2)    return 0;
+    if (k === null || k <= 0 || !series || !hist || !coords)
+    {
+        return 0;
+    }
+    if (hist.times.length < 2 || series.times.length < 2)
+    {
+        return 0;
+    }
     //Fire-and-forget pull from HA on the first call; the latch in
     //syncShadingMapFromHomeAssistant() guarantees one pull per
     //page load, and a merge always lands cleanly because we only
@@ -113,9 +119,18 @@ export function trainShadingMap(host: ChartHost): number
         {
             const bucketStartMs = t0Ms + b * BUCKET_MS;
             const bucketEndMs   = bucketStartMs + BUCKET_MS;
-            if (bucketEndMs <= watermark) continue;
-            if (bucketEndMs > now)        continue;
-            if (bucketStartMs < windowStart) continue;
+            if (bucketEndMs <= watermark)
+            {
+                continue;
+            }
+            if (bucketEndMs > now)
+            {
+                continue;
+            }
+            if (bucketStartMs < windowStart)
+            {
+                continue;
+            }
 
             //Linear interpolation across the parent hour. b=0
             //samples a quarter into the hour (centre of bucket 0),
@@ -132,13 +147,22 @@ export function trainShadingMap(host: ChartHost): number
                 raster,
             });
             const predictedW = pct * k;
-            if (!isFinite(predictedW) || predictedW <= 0) continue;
+            if (!isFinite(predictedW) || predictedW <= 0)
+            {
+                continue;
+            }
 
             const actualW = actualWattsForBucket(hist, pvUnit, sensorIsEnergy, bucketStartMs, bucketEndMs);
-            if (actualW === null) continue;
+            if (actualW === null)
+            {
+                continue;
+            }
 
             const sun = getSunPosition(tMid, coords.lat, coords.lon);
-            if (!sun || sun.altitude <= 0) continue;
+            if (!sun || sun.altitude <= 0)
+            {
+                continue;
+            }
 
             //Inverter-cutoff inhibit. If the user's hybrid setup is configured to clamp PV when the battery hits a certain SoC, the
             //bucket is tainted: actual production is artificially low even though the sun is shining, and feeding that to the
@@ -157,7 +181,10 @@ export function trainShadingMap(host: ChartHost): number
                 if (soc !== null && soc >= cutoffPct)
                 {
                     skippedInhibit++;
-                    if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+                    if (bucketEndMs > highestProcessedMs)
+                    {
+                        highestProcessedMs = bucketEndMs;
+                    }
                     continue;
                 }
                 if (soc === null)
@@ -166,7 +193,10 @@ export function trainShadingMap(host: ChartHost): number
                     //inverter was not clamping. Skip the bucket and advance the watermark so we revisit it once the SoC window
                     //expands.
                     skippedInhibit++;
-                    if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+                    if (bucketEndMs > highestProcessedMs)
+                    {
+                        highestProcessedMs = bucketEndMs;
+                    }
                     continue;
                 }
             }
@@ -175,7 +205,10 @@ export function trainShadingMap(host: ChartHost): number
             {
                 updated++;
             }
-            if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
+            if (bucketEndMs > highestProcessedMs)
+            {
+                highestProcessedMs = bucketEndMs;
+            }
         }
     }
 
@@ -202,7 +235,10 @@ const CACHE_TTL_MS = 5_000;
 export function currentShadingMap(): ShadingMap
 {
     const now = Date.now();
-    if (_cachedMap && (now - _cachedLoadedAt) < CACHE_TTL_MS) return _cachedMap;
+    if (_cachedMap && (now - _cachedLoadedAt) < CACHE_TTL_MS)
+    {
+        return _cachedMap;
+    }
     _cachedMap = loadMap();
     _cachedLoadedAt = now;
     return _cachedMap;
@@ -232,9 +268,18 @@ function isCumulativeEnergyUnit(unit: string): boolean
 //missing field at one of the hour boundaries).
 function lerpFinite(a: number, b: number, frac: number): number
 {
-    if (!isFinite(a) && !isFinite(b)) return NaN;
-    if (!isFinite(a)) return b;
-    if (!isFinite(b)) return a;
+    if (!isFinite(a) && !isFinite(b))
+    {
+        return NaN;
+    }
+    if (!isFinite(a))
+    {
+        return b;
+    }
+    if (!isFinite(b))
+    {
+        return a;
+    }
     return a + (b - a) * frac;
 }
 
@@ -246,8 +291,14 @@ function actualWattsForBucket(
     endMs:    number,
 ): number | null
 {
-    if (hist.times.length < 2) return null;
-    if (asEnergy) return actualWattsFromEnergyBucket(hist, pvUnit, startMs, endMs);
+    if (hist.times.length < 2)
+    {
+        return null;
+    }
+    if (asEnergy)
+    {
+        return actualWattsFromEnergyBucket(hist, pvUnit, startMs, endMs);
+    }
     return actualWattsFromPowerBucket(hist, pvUnit, startMs, endMs);
 }
 
@@ -265,16 +316,28 @@ function actualWattsFromEnergyBucket(
     for (let i = 1; i < hist.times.length; i++)
     {
         const tMs = hist.times[i].getTime();
-        if (tMs < startMs || tMs >= endMs) continue;
+        if (tMs < startMs || tMs >= endMs)
+        {
+            continue;
+        }
         const dv = hist.values[i] - hist.values[i - 1];
-        if (!isFinite(dv) || dv < 0) continue;
+        if (!isFinite(dv) || dv < 0)
+        {
+            continue;
+        }
         kwh += dv * energyFactor;
         saw = true;
     }
-    if (!saw) return null;
+    if (!saw)
+    {
+        return null;
+    }
     //Bucket-average watts = (kWh in window) / (window hours) * 1000.
     const windowHours = (endMs - startMs) / 3_600_000;
-    if (windowHours <= 0) return null;
+    if (windowHours <= 0)
+    {
+        return null;
+    }
     return (kwh / windowHours) * 1000;
 }
 
@@ -299,12 +362,21 @@ function actualWattsFromPowerBucket(
         //Clip segment to [startMs, endMs].
         const segStart = Math.max(tPrev, startMs);
         const segEnd   = Math.min(tCurr, endMs);
-        if (segEnd <= segStart) continue;
+        if (segEnd <= segStart)
+        {
+            continue;
+        }
         const dt = tCurr - tPrev;
-        if (dt <= 0 || dt > 30 * 60_000) continue;
+        if (dt <= 0 || dt > 30 * 60_000)
+        {
+            continue;
+        }
         const wPrev = pvNormalizeToWatts(hist.values[i - 1], pvUnit);
         const wCurr = pvNormalizeToWatts(hist.values[i],     pvUnit);
-        if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+        if (!isFinite(wPrev) || !isFinite(wCurr))
+        {
+            continue;
+        }
         //Linearly interpolate the segment endpoints to the bucket clip so partial overlaps are scaled correctly.
         const f0 = (segStart - tPrev) / dt;
         const f1 = (segEnd   - tPrev) / dt;
@@ -314,7 +386,10 @@ function actualWattsFromPowerBucket(
         span += (segEnd - segStart);
         saw = true;
     }
-    if (!saw || span <= 0) return null;
+    if (!saw || span <= 0)
+    {
+        return null;
+    }
     return area / span;
 }
 
@@ -337,9 +412,15 @@ let _pushTimer: ReturnType<typeof setTimeout> | null = null;
 
 export async function syncShadingMapFromHomeAssistant(hass: any): Promise<boolean>
 {
-    if (_pulledFromHomeAssistant) return false;
+    if (_pulledFromHomeAssistant)
+    {
+        return false;
+    }
     _pulledFromHomeAssistant = true;
-    if (!hass || typeof hass.callWS !== 'function') return false;
+    if (!hass || typeof hass.callWS !== 'function')
+    {
+        return false;
+    }
     let remoteRaw: string | null = null;
     try
     {
@@ -348,13 +429,25 @@ export async function syncShadingMapFromHomeAssistant(hass: any): Promise<boolea
             key:   HA_USER_DATA_KEY,
         });
         const value = reply && typeof reply === 'object' ? (reply as { value?: unknown }).value : null;
-        if (typeof value === 'string') remoteRaw = value;
-        else if (value && typeof value === 'object') remoteRaw = JSON.stringify(value);
+        if (typeof value === 'string')
+        {
+            remoteRaw = value;
+        }
+        else if (value && typeof value === 'object')
+        {
+            remoteRaw = JSON.stringify(value);
+        }
     }
     catch (_) { return false; }
-    if (!remoteRaw) return false;
+    if (!remoteRaw)
+    {
+        return false;
+    }
     const remote = importMapJson(remoteRaw);
-    if (!remote) return false;
+    if (!remote)
+    {
+        return false;
+    }
     const local  = loadMap();
     const merged = mergeMaps(local, remote);
     saveMap(merged);
@@ -364,8 +457,14 @@ export async function syncShadingMapFromHomeAssistant(hass: any): Promise<boolea
 
 function schedulePushToHomeAssistant(hass: any, _map: ShadingMap): void
 {
-    if (!hass || typeof hass.callWS !== 'function') return;
-    if (_pushTimer !== null) clearTimeout(_pushTimer);
+    if (!hass || typeof hass.callWS !== 'function')
+    {
+        return;
+    }
+    if (_pushTimer !== null)
+    {
+        clearTimeout(_pushTimer);
+    }
     _pushTimer = setTimeout(() =>
     {
         _pushTimer = null;
@@ -400,7 +499,10 @@ export function exportCurrentShadingMap(): string
 export function importShadingMapJson(raw: string): boolean
 {
     const parsed = importMapJson(raw);
-    if (!parsed) return false;
+    if (!parsed)
+    {
+        return false;
+    }
     saveMap(parsed);
     invalidateShadingMapCache();
     return true;

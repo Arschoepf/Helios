@@ -76,8 +76,14 @@ function renderCloudDisc(cloudBin: number, cells: ReturnType<typeof decodeCellKe
     const sectors: TemplateResult[] = [];
     for (const decoded of cells)
     {
-        if (!decoded) continue;
-        if (decoded.cloudBin !== cloudBin) continue;
+        if (!decoded)
+        {
+            continue;
+        }
+        if (decoded.cloudBin !== cloudBin)
+        {
+            continue;
+        }
         const azCentre   = decoded.azimuthDeg;
         const altCentre  = decoded.altitudeDeg;
         //Annular sector spans [az - 5, az + 5] x [alt - 2.5, alt + 2.5].
@@ -88,7 +94,10 @@ function renderCloudDisc(cloudBin: number, cells: ReturnType<typeof decodeCellKe
         //Radius: horizon at DISC_R, zenith at 0. Inverting altitude so the sun-path's longer low-altitude arcs are at the outside of the disc.
         const rOuter = DISC_R * (1 - altLow  / 90);
         const rInner = DISC_R * (1 - altHigh / 90);
-        if (rOuter <= 0 || rInner < 0 || rOuter <= rInner) continue;
+        if (rOuter <= 0 || rInner < 0 || rOuter <= rInner)
+        {
+            continue;
+        }
         const path = annularSectorPath(azStart, azEnd, rInner, rOuter);
         //Decay-adjusted weight drives opacity so a stale cell
         //fades. Same half-life formula as the engine lookup; we
@@ -218,7 +227,10 @@ export function renderShadingMapSection(opts: {
         input.addEventListener('change', () =>
         {
             const file = input.files && input.files[0];
-            if (!file) return;
+            if (!file)
+            {
+                return;
+            }
             const reader = new FileReader();
             reader.onload = () =>
             {
@@ -240,7 +252,10 @@ export function renderShadingMapSection(opts: {
     const handleReset = () =>
     {
         //eslint-disable-next-line no-alert
-        if (!window.confirm(t.editor.shadingResetConfirm)) return;
+        if (!window.confirm(t.editor.shadingResetConfirm))
+        {
+            return;
+        }
         resetShadingMap();
         opts.onAfterChange();
     };

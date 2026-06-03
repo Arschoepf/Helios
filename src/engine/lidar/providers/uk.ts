@@ -88,7 +88,10 @@ export const englandLidarComposite: LidarSource =
             fetchFloat32GeoTiff(buildUrl(DSM_URL, DSM_LAYER), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DTM_URL, DTM_LAYER), rasterSize, opts.signal)
         ]);
-        if (!dsm || !dtm) return emptyResult();
+        if (!dsm || !dtm)
+        {
+            return emptyResult();
+        }
 
         const heights = subtractRasters(dsm, dtm);
 

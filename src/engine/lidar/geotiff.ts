@@ -41,7 +41,10 @@ function extractMultipartTiff(buf: ArrayBuffer, contentType: string): ArrayBuffe
             break;
         }
     }
-    if (magic < 0) return null;
+    if (magic < 0)
+    {
+        return null;
+    }
 
     //Find the trailing boundary marker so we can drop the closing
     //preamble + footer. Fall back to end-of-buffer if no boundary
@@ -90,7 +93,10 @@ export async function fetchFloat32GeoTiff(
     {
         return null;
     }
-    if (!resp.ok) return null;
+    if (!resp.ok)
+    {
+        return null;
+    }
 
     let buf: ArrayBuffer;
     try { buf = await resp.arrayBuffer(); }
@@ -98,7 +104,10 @@ export async function fetchFloat32GeoTiff(
 
     //A short response is likely an XML error page (ServiceException),
     //not a binary GeoTIFF. Bail rather than feed garbage to the parser.
-    if (buf.byteLength < 200) return null;
+    if (buf.byteLength < 200)
+    {
+        return null;
+    }
 
     //WCS 2.0 servers (Austrian ALS, some ArcGIS WCSServer instances)
     //wrap the GeoTIFF in a multipart/related envelope alongside a GML
@@ -109,7 +118,10 @@ export async function fetchFloat32GeoTiff(
     if (contentType.includes('multipart/'))
     {
         const tiffSlice = extractMultipartTiff(buf, contentType);
-        if (!tiffSlice) return null;
+        if (!tiffSlice)
+        {
+            return null;
+        }
         buf = tiffSlice;
     }
 
@@ -156,7 +168,10 @@ export async function fetchFloat32GeoTiff(
     let band: ArrayLike<number>;
     if (Array.isArray(rasters))
     {
-        if (rasters.length === 0) return null;
+        if (rasters.length === 0)
+        {
+            return null;
+        }
         band = rasters[0] as ArrayLike<number>;
     }
     else
@@ -223,13 +238,19 @@ export async function fetchFloat32GeoTiffWithNoData(
     {
         return null;
     }
-    if (!resp.ok) return null;
+    if (!resp.ok)
+    {
+        return null;
+    }
 
     let buf: ArrayBuffer;
     try { buf = await resp.arrayBuffer(); }
     catch (_) { return null; }
 
-    if (buf.byteLength < 200) return null;
+    if (buf.byteLength < 200)
+    {
+        return null;
+    }
 
     let tiff;
     try { tiff = await fromArrayBuffer(buf); }
@@ -267,7 +288,10 @@ export async function fetchFloat32GeoTiffWithNoData(
         if (typeof anyImg.getSamplesPerPixel === 'function')
         {
             const n = anyImg.getSamplesPerPixel();
-            if (typeof n === 'number' && n >= 1) sampleCount = n;
+            if (typeof n === 'number' && n >= 1)
+            {
+                sampleCount = n;
+            }
         }
     }
     catch (_) { sampleCount = 1; }
@@ -287,13 +311,22 @@ export async function fetchFloat32GeoTiffWithNoData(
 
     //Always-an-array path (`interleave: false` returns one typed
     //array per requested sample). Normalise each band to Float32.
-    if (!Array.isArray(rasters) || rasters.length === 0) return null;
+    if (!Array.isArray(rasters) || rasters.length === 0)
+    {
+        return null;
+    }
 
     const toF32 = (b: ArrayLike<number>): Float32Array =>
     {
-        if (b instanceof Float32Array) return b;
+        if (b instanceof Float32Array)
+        {
+            return b;
+        }
         const out = new Float32Array(b.length);
-        for (let i = 0; i < b.length; i++) out[i] = b[i];
+        for (let i = 0; i < b.length; i++)
+        {
+            out[i] = b[i];
+        }
         return out;
     };
 
@@ -323,10 +356,22 @@ export function maxRasters(
         const bv = b[i];
         const aOk = isFinite(av);
         const bOk = isFinite(bv);
-        if      (aOk && bOk) out[i] = Math.max(av, bv);
-        else if (aOk)        out[i] = av;
-        else if (bOk)        out[i] = bv;
-        else                 out[i] = NaN;
+        if (aOk && bOk)
+        {
+            out[i] = Math.max(av, bv);
+        }
+        else if (aOk)
+        {
+            out[i] = av;
+        }
+        else if (bOk)
+        {
+            out[i] = bv;
+        }
+        else
+        {
+            out[i] = NaN;
+        }
     }
     return out;
 }
