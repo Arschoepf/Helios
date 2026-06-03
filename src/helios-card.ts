@@ -2725,9 +2725,11 @@ export class HeliosCard extends LitElement
         {
             toggleShadingDome(this);
         }
-        //Cloud detail toggle is a simple ON/OFF, not a full-screen
-        //mode: leaving it on while the user switches back to the
-        //default layer keeps the 3 layer chips visible.
+        //Restore the user's cloud-mode preference when returning to the Layer view. _onModeLidar and _onModeShadingDome
+        //force _cloudMode = false to keep the full-screen modes visually clean, but do NOT write to localStorage so the
+        //user's underlying preference survives. Re-read it here so the per-layer chips come back automatically when
+        //the user lands on Layer.
+        this._cloudMode = HeliosCard._readCloudModePref();
     };
     //Cloud cover detail toggle. ON reveals 3 chips (low / mid /
     //high) under the central cloud chip; OFF leaves only the

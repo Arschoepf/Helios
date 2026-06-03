@@ -574,17 +574,19 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             class="tb-hover-tooltip-wrapper"
             style="left:${pct.toFixed(2)}%; transform: translateX(-${pct.toFixed(2)}%)"
         >
-            <div
-                class="tb-hover-tooltip-magnet-tab ${inMagnetZone ? 'is-visible' : ''}"
-                title="${liveText}"
-                aria-label="${liveText}"
-                aria-hidden="${inMagnetZone ? 'false' : 'true'}"
-            >
-                <ha-icon class="tb-hover-tooltip-magnet-tab-dot" icon="mdi:circle-medium"></ha-icon>
-                <span class="tb-hover-tooltip-magnet-tab-label">${liveLabel}</span>
-            </div>
             <div class="tb-hover-tooltip">
-                <div class="tb-hover-tooltip-time">${timeLabel}</div>
+                <div class="tb-hover-tooltip-time-row">
+                    <span class="tb-hover-tooltip-time">${timeLabel}</span>
+                    <span
+                        class="tb-hover-tooltip-live-chip ${inMagnetZone ? 'is-visible' : ''}"
+                        title="${liveText}"
+                        aria-label="${liveText}"
+                        aria-hidden="${inMagnetZone ? 'false' : 'true'}"
+                    >
+                        <ha-icon class="tb-hover-tooltip-live-chip-dot" icon="mdi:circle-medium"></ha-icon>
+                        <span class="tb-hover-tooltip-live-chip-label">${liveLabel}</span>
+                    </span>
+                </div>
                 ${showProduction && dayKwhText ? html`
                     <div class="tb-hover-tooltip-row">
                         <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>

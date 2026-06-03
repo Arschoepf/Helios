@@ -1532,46 +1532,50 @@ export const heliosCardStyles = css`
         bottom border is dropped so the seam between the tab and the
         tooltip reads as one continuous frame. -1 px margin pulls the
         tab down onto the tooltip's top border, sharing the 1 px line. */
-    .tb-hover-tooltip-magnet-tab
+    /*  Time row inside the scrub tooltip. Time on the left, optional LIVE chip pinned top-right. Flex row keeps the chip
+        baseline-aligned with the timestamp at any zoom level. */
+    .tb-hover-tooltip-time-row
+    {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+    /*  Compact "LIVE" pill rendered to the right of the timestamp when the scrub pointer enters the magnet-snap zone.
+        Brand-blue plate, on-primary glyph + label, pulsing red-style dot. Same colour vocabulary as the magnet tab it
+        replaced, just shrunk + flat-cornered so it sits inside the tooltip without elbowing the time out of place. */
+    .tb-hover-tooltip-live-chip
     {
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 4px;
-        height: 18px;
-        padding: 0 8px 0 6px;
+        gap: 3px;
+        height: 14px;
+        padding: 0 6px 0 4px;
         background: var(--primary-color, #03a9f4);
         color: var(--text-on-primary-color, #ffffff);
-        border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
-        border-bottom: 0;
-        border-radius: 4px 4px 0 0;
-        margin-bottom: -1px;
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.3px;
+        border-radius: 7px;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
         text-transform: uppercase;
         line-height: 1;
-        /*  Fade in / out instead of pop in / out: render the tab in every tooltip pass and toggle visibility via
-            opacity + pointer-events so the entry / exit transition can play in both directions. translateY adds a
-            sub-pixel slide so the appearance reads as "slipping down from the tooltip" rather than a flat fade. */
+        /*  Fade in / out instead of pop in / out: render the chip in every tooltip pass and toggle visibility via
+            opacity + transform so the entry / exit transition can play in both directions. The small translateY makes
+            the appearance read as "settling into place" rather than a flat fade. */
         opacity: 0;
-        transform: translateY(-2px);
+        transform: translateY(-1px);
         pointer-events: none;
         transition: opacity 0.16s ease-out, transform 0.16s ease-out;
     }
-    .tb-hover-tooltip-magnet-tab.is-visible
+    .tb-hover-tooltip-live-chip.is-visible
     {
         opacity: 1;
         transform: translateY(0);
     }
-    /*  The "live" dot pulses to mirror the HA Energy dashboard's own live-data indicator vocabulary. White on the
-        brand-blue plate keeps the recipe consistent with the rest of the on-primary surfaces. The flex parent already
-        centres the icon vertically, but ha-icon ships with an internal mdc-icon line-box that sits 1 px below
-        baseline; the explicit line-height 0 flushes the box to the icon metric centre so the dot lines up with the
-        LIVE label cap-height. */
-    .tb-hover-tooltip-magnet-tab-dot
+    .tb-hover-tooltip-live-chip-dot
     {
-        --mdc-icon-size: 12px;
+        --mdc-icon-size: 10px;
         color: inherit;
         display: inline-flex;
         align-items: center;
@@ -1579,7 +1583,7 @@ export const heliosCardStyles = css`
         line-height: 0;
         animation: tb-hover-tooltip-live-pulse 1.4s ease-in-out infinite;
     }
-    .tb-hover-tooltip-magnet-tab-label
+    .tb-hover-tooltip-live-chip-label
     {
         line-height: 1;
         display: inline-flex;
