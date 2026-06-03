@@ -462,7 +462,7 @@ export const heliosCardStyles = css`
         position: relative;
         flex: 1;
         height: 100%;
-        max-height: 440px;
+        max-height: 600px;
         perspective: 1200px;
         /*  No transform-style: preserve-3d here on purpose: with the default flat value, the children get the
             perspective rendering from their parent but z-index still drives their stacking order, so the front
@@ -474,8 +474,8 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 50%;
         left: 50%;
-        width: min(320px, 72vw);
-        height: min(380px, 56vh);
+        width: min(440px, 72vw);
+        height: min(540px, 62vh);
         border-radius: 18px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));

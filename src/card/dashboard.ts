@@ -200,9 +200,9 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const absDelta = Math.abs(delta);
     const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
     //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the viewport. Tight spacing
-    //(60 % / 110 %) keeps the iTunes-CoverFlow feel where the back cards overlap the centre slightly; the
-    //rotateY tilt + the z-index stacking keep the centre card readable on top of the side overlap.
-    const txPct    = sign * (absDelta === 1 ? 60 : absDelta === 2 ? 110 : 0);
+    //(55 % / 90 %) keeps the iTunes-CoverFlow feel where each card overlaps its neighbour slightly; the ±2 sits
+    //35 % further out than ±1, close enough to read as part of the same stack instead of floating in space.
+    const txPct    = sign * (absDelta === 1 ? 55 : absDelta === 2 ? 90 : 0);
     const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.82 : 0.62;
     const rotY     = sign * (absDelta === 1 ? 35 : absDelta === 2 ? 50 : 0);
     const zIdx     = 10 - absDelta;
