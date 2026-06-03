@@ -58,7 +58,6 @@ export const en: Translations = {
         autoRotateOff:      'Off',
         uiSection:          'UI',
         pvSection:          'Solar production',
-        pvHint:             'Optional. When set, a chip appears near the home with the instant production (computed over the last minute) and a dedicated graph is added above the timeline. Accepts either a power sensor (W/kW) or a cumulative energy sensor (Wh/kWh).',
         pvPeakPower:        'Peak power (kWp)',
         pvPeakPowerHelp:    'Total installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader\'s flow saturation. Leave empty when you enter a per-string peak-kWp on each row below (the total is then the sum). Without either, no forecast is drawn; observed production and the daily peak still render.',
         pvInverterMaxKw:    'Inverter max output (kW)',

@@ -50,7 +50,6 @@ export const cs: Translations = {
         autoRotateOff:      'Vypnuto',
         uiSection:          'UI',
         pvSection:          'Solární produkce',
-        pvHint:             'Volitelné. Po nastavení se u domu objeví chip s okamžitou produkcí (vypočítanou za poslední minutu) a nad časovou osou se přidá dedikovaný graf. Přijímá buď senzor výkonu (W/kW) nebo kumulativní senzor energie (Wh/kWh).',
         pvPeakPower:        'Špičkový výkon (kWp)',
         pvPeakPowerHelp:    'Celkový instalovaný špičkový výkon vašeho pole v kilowatt-pícech. Pohání tečkovanou linku předpovědi v grafu FV a sytost toku vedoucího FV → dům. Ponechte prázdné, když zadáváte špičkový výkon na řádek níže (součet je pak celkem). Bez žádného z nich se předpověď nevykresluje; pozorovaná produkce a denní maximum se stále vykreslují.',
         pvInverterMaxKw:    'Max výstup invertoru (kW)',

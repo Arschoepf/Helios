@@ -57,7 +57,6 @@ export const no: Translations = {
         autoRotateOff:      'Av',
         uiSection:          'UI',
         pvSection:          'Solproduksjon',
-        pvHint:             'Valgfri. Når satt vises en chip nær huset med øyeblikkelig produksjon (beregnet over siste minutt), og en dedikert graf legges til over tidslinjen. Aksepterer enten en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).',
         pvPeakPower:        'Total toppeffekt (kWp)',
         pvPeakPowerHelp:    'Total installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen og strømningsmetningen for PV → hus-leaderen. La stå tom når du oppgir en toppeffekt per streng nedenfor (totalen er summen). Uten noen av delene tegnes ingen prognose; observert produksjon og dagens topp vises likevel.',
         pvInverterMaxKw:    'Maks vekselretter-effekt (kW)',

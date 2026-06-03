@@ -55,7 +55,6 @@ export const fr: Translations = {
         autoRotateOff:      'Désactivée',
         uiSection:          'UI',
         pvSection:          'Production photovoltaïque',
-        pvHint:             'Optionnel. Si renseigné, une pastille apparaît près de la maison avec la production instantanée (calculée sur la dernière minute) et un graphique dédié s\'ajoute au-dessus de la chronologie pour suivre la production. Capteur de puissance (W/kW) ou d\'énergie cumulée (Wh/kWh) acceptés indifféremment.',
         pvPeakPower:        'Puissance crête totale (kWp)',
         pvPeakPowerHelp:    'Puissance crête totale de ton installation, en kilowatts-crête. Sert à tracer la courbe de prévision et à caler la cadence du flux PV → maison. Laisse vide quand tu renseignes une puissance crête par string ci-dessous (le total est alors la somme). Sans l\'un ni l\'autre, la prévision n\'est pas affichée ; la production observée et le pic du jour restent visibles.',
         pvInverterMaxKw:    'Puissance max onduleur (kW)',

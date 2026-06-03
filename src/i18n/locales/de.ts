@@ -48,7 +48,6 @@ export const de: Translations = {
         autoRotateOff:      'Aus',
         uiSection:          'UI',
         pvSection:          'Solarproduktion',
-        pvHint:             'Optional. Wenn gesetzt, erscheint nahe dem Haus ein Chip mit der momentanen Produktion (über die letzte Minute berechnet) und über der Zeitachse wird ein dediziertes Diagramm eingeblendet. Akzeptiert sowohl Leistungssensoren (W/kW) als auch kumulative Energiesensoren (Wh/kWh).',
         pvPeakPower:        'Gesamt-Spitzenleistung (kWp)',
         pvPeakPowerHelp:    'Gesamte installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, wenn du unten pro String eine Spitzenleistung eingibst (Gesamt = Summe). Ohne beides wird keine Prognose angezeigt; gemessene Produktion und Tagesspitze bleiben sichtbar.',
         pvInverterMaxKw:    'Wechselrichter-Maximalleistung (kW)',

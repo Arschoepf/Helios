@@ -50,7 +50,6 @@ export const pl: Translations = {
         autoRotateOff:      'Wyłączona',
         uiSection:          'UI',
         pvSection:          'Produkcja słoneczna',
-        pvHint:             'Opcjonalne. Po ustawieniu, przy domu pojawia się chip z bieżącą produkcją (obliczaną w ciągu ostatniej minuty) oraz dedykowany wykres nad osią czasu. Akceptuje czujnik mocy (W/kW) lub czujnik energii skumulowanej (Wh/kWh).',
         pvPeakPower:        'Moc szczytowa (kWp)',
         pvPeakPowerHelp:    'Całkowita zainstalowana moc szczytowa Twojej instalacji w kilowatach-pikach. Steruje przerywaną linią prognozy na wykresie PV oraz nasyceniem przepływu lidera PV → dom. Pozostaw puste, gdy wpisujesz moc szczytową dla każdego stringu w wierszach poniżej (suma stanowi wtedy całość). Bez żadnego z nich prognoza nie jest rysowana; obserwowana produkcja i dzienny szczyt nadal się renderują.',
         pvInverterMaxKw:    'Maks. moc falownika (kW)',

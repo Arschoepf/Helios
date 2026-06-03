@@ -746,7 +746,6 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'pv'}" @toggle="${(e: Event) => this._onSectionToggle('pv', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.pvSection}</summary>
-                <div class="hint">${t.editor.pvHint}</div>
                 <label class="field">
                     <span class="label">${t.editor.pvPeakPower}</span>
                     <input

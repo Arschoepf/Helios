@@ -50,7 +50,6 @@ export const sv: Translations = {
         autoRotateOff:      'Av',
         uiSection:          'UI',
         pvSection:          'Solproduktion',
-        pvHint:             'Valfritt. När det är inställt visas ett chip nära hemmet med ögonblicklig produktion (beräknad över den senaste minuten) och ett dedikerat diagram läggs till ovanför tidslinjen. Accepterar antingen en effektsensor (W/kW) eller en kumulativ energisensor (Wh/kWh).',
         pvPeakPower:        'Topp-effekt (kWp)',
         pvPeakPowerHelp:    'Total installerad topp-effekt för din anläggning i kilowatt-peak. Driver den prickade prognoslinjen i PV-diagrammet och PV → hem-ledarens flödesmättnad. Lämna tomt när du anger en topp-kWp per sträng på varje rad nedan (totalen är då summan). Utan någondera ritas ingen prognos; observerad produktion och dagstoppen renderas fortfarande.',
         pvInverterMaxKw:    'Växelriktarens maxeffekt (kW)',

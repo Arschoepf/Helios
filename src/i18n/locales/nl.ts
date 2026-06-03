@@ -48,7 +48,6 @@ export const nl: Translations = {
         autoRotateOff:      'Uit',
         uiSection:          'UI',
         pvSection:          'Zonneproductie',
-        pvHint:             'Optioneel. Als ingesteld verschijnt bij het huis een chip met de momentane productie (berekend over de laatste minuut) en wordt boven de tijdlijn een toegewijde grafiek toegevoegd. Accepteert zowel een vermogenssensor (W/kW) als een cumulatieve energiesensor (Wh/kWh).',
         pvPeakPower:        'Totaal piekvermogen (kWp)',
         pvPeakPowerHelp:    'Geïnstalleerd totaal piekvermogen van je installatie in kilowattpiek. Stuurt de gestippelde voorspellingslijn en de stroomverzadiging van de PV → huis-leider. Laat leeg als je hieronder per string een piekvermogen invult (totaal = som). Zonder beide wordt geen voorspelling getekend; gemeten productie en de dagelijkse piek blijven zichtbaar.',
         pvInverterMaxKw:    'Max omvormervermogen (kW)',

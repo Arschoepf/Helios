@@ -115,7 +115,6 @@ export interface Translations
         uiSection:                string;
         //Optional photovoltaic production overlay.
         pvSection:                string;
-        pvHint:                   string;
         //Manual peak-power input (kWp). When set, drives the dotted
         //prediction line on the PV chart and the PV→home leader's
         //flow saturation. Optional; without it the card uses live

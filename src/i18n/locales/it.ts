@@ -48,7 +48,6 @@ export const it: Translations = {
         autoRotateOff:      'Disattiva',
         uiSection:          'UI',
         pvSection:          'Produzione solare',
-        pvHint:             'Opzionale. Se impostato, una pastiglia appare vicino alla casa con la produzione istantanea (calcolata sull\'ultimo minuto) e un grafico dedicato viene aggiunto sopra la cronologia. Accetta indifferentemente un sensore di potenza (W/kW) o di energia cumulativa (Wh/kWh).',
         pvPeakPower:        'Potenza di picco totale (kWp)',
         pvPeakPowerHelp:    'Potenza di picco installata totale del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata e la saturazione del flusso PV → casa. Lascia vuoto quando inserisci una potenza di picco per stringa qui sotto (il totale è la somma). Senza nessuna delle due, la previsione non viene tracciata; produzione osservata e picco del giorno restano visibili.',
         pvInverterMaxKw:    'Potenza max inverter (kW)',
