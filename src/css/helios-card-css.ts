@@ -643,7 +643,7 @@ export const heliosCardStyles = css`
         align-items: center;
         gap: 10px;
         padding: 10px 12px;
-        /*  Inherit the HA theme's card radius via `--ha-card-border-radius` (12 px default) so the inner tiles
+        /*  Inherit the HA theme's card radius via --ha-card-border-radius (12 px default) so the inner tiles
             share the same corner radius as the surrounding ha-card / bandeau. */
         border-radius: var(--ha-card-border-radius, 12px);
         background: var(--secondary-background-color, var(--ha-card-background, rgba(255, 255, 255, 0.04)));
