@@ -67,9 +67,7 @@ import
     tick,
     onTimelinePointerDown,
     onTimelinePointerMove,
-    onTimelinePointerUp,
-    timelineEnabled,
-    timelineWidthPct
+    onTimelinePointerUp
 } from './card/timeline';
 import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
 import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime, clearGridModuleCaches } from './card/grid';
@@ -1850,10 +1848,9 @@ export class HeliosCard extends LitElement
 
                 <div id="map-container"></div>
 
-                ${hasApiKey && this._timeRange && timelineEnabled(this.config) ? html`
+                ${hasApiKey && this._timeRange ? html`
                     <div
                         class="time-bar"
-                        style="--timeline-width-frac:${timelineWidthPct(this.config) / 100}"
                         @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
                     >
                         <!--  Optional PV production graph, only

@@ -8,9 +8,7 @@ import
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
-    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
-    DEFAULT_TIMELINE_ENABLED,
-    DEFAULT_TIMELINE_WIDTH_PCT
+    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 import { renderShadingMapSection } from './shadingMapView';
@@ -161,6 +159,8 @@ export class HeliosCardEditor extends LitElement
         'date-format',
         'time-format',
         'pixel-ratio',
+        'timeline-enabled',
+        'timeline-width-pct',
     ];
     private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
     {
@@ -666,37 +666,6 @@ export class HeliosCardEditor extends LitElement
                     </div>
                     <div class="hint">${t.editor.autoRotateHint}</div>
 
-                    <details class="advanced-section">
-                        <summary class="section-title section-title-collapse">${t.editor.timelineSection}</summary>
-                        <div class="field">
-                            <span class="label">${t.editor.timelineEnabled}</span>
-                            <div class="segmented-toggle">
-                                <button
-                                    type="button"
-                                    class="seg-option ${((c['timeline-enabled'] ?? DEFAULT_TIMELINE_ENABLED) === true) ? 'active' : ''}"
-                                    @click="${() => this._update('timeline-enabled', true)}"
-                                >${t.editor.timelineEnabledOn}</button>
-                                <button
-                                    type="button"
-                                    class="seg-option ${((c['timeline-enabled'] ?? DEFAULT_TIMELINE_ENABLED) !== true) ? 'active' : ''}"
-                                    @click="${() => this._update('timeline-enabled', false)}"
-                                >${t.editor.timelineEnabledOff}</button>
-                            </div>
-                        </div>
-                        <div class="hint">${t.editor.timelineEnabledHint}</div>
-                        <label class="field">
-                            <span class="label">${t.editor.timelineWidth}</span>
-                            <div class="slider-row">
-                                <input
-                                    type="range" min="50" max="100" step="5"
-                                    .value="${String(c['timeline-width-pct'] ?? DEFAULT_TIMELINE_WIDTH_PCT)}"
-                                    @input="${(e: Event) => this._numSlider('timeline-width-pct', e)}"
-                                />
-                                <span class="slider-value">${this._fmtNum(Number(c['timeline-width-pct'] ?? DEFAULT_TIMELINE_WIDTH_PCT), 1)} %</span>
-                            </div>
-                        </label>
-                        <div class="hint">${t.editor.timelineWidthHint}</div>
-                    </details>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'buildings'}" @toggle="${(e: Event) => this._onSectionToggle('buildings', e)}">

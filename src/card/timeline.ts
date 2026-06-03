@@ -1,15 +1,10 @@
-//Timeline subsystem: the periodic clock tick that advances the live cursor and re-projects the screen-space overlays, the pointer handlers that scrub
-//the timeline into the past, plus the two small config readers that drive the timeline's visibility and width.
+//Timeline subsystem: the periodic clock tick that advances the live cursor and re-projects the screen-space overlays, plus the pointer handlers that
+//scrub the timeline into the past.
 //
 //Same host-driven pattern as the data modules: the card owns the `@state` timeline fields, the functions here read / write them through a structural
 //TimelineHost interface and Lit's reactivity falls out naturally on every assignment.
 
 import type { HeliosConfig } from '../helios-config';
-import
-{
-    DEFAULT_TIMELINE_ENABLED,
-    DEFAULT_TIMELINE_WIDTH_PCT
-} from '../helios-config';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 import type { ChartSeries } from './charts';
@@ -231,35 +226,3 @@ export function resetToLive(host: TimelineHost): void
 }
 
 
-//Read the timeline visibility toggle. Default true so a fresh card config keeps showing the chart.
-export function timelineEnabled(config: HeliosConfig | undefined): boolean
-{
-    const raw = config?.['timeline-enabled'];
-    if (typeof raw === 'boolean')
-    {
-        return raw;
-    }
-    if (typeof raw === 'string')
-    {
-        const s = raw.trim().toLowerCase();
-        if (s === 'false' || s === '0' || s === 'off' || s === 'no')
-        {
-            return false;
-        }
-        if (s === 'true' || s === '1' || s === 'on' || s === 'yes')
-        {
-            return true;
-        }
-    }
-    return DEFAULT_TIMELINE_ENABLED;
-}
-
-
-//Read the timeline width as a percentage [50..100]. Clamped so a hand-edited YAML can't shrink the bar into uselessness or overflow the card edge.
-export function timelineWidthPct(config: HeliosConfig | undefined): number
-{
-    const raw = config?.['timeline-width-pct'];
-    const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-    if (!isFinite(n)) return DEFAULT_TIMELINE_WIDTH_PCT;
-    return Math.min(100, Math.max(50, n));
-}

@@ -226,12 +226,10 @@ export interface HeliosConfig
     //Timeline visibility toggle. Default: true. When false the whole
     //time-bar (chart card, day labels, scrub cursors) is hidden so
     //the card focuses on the live scene only.
-    'timeline-enabled'?:       unknown;
     //Timeline width as a percentage of the card width, 50..100.
     //Default: 100 (current behaviour, hugs the card edges at 8 px).
     //Below 100, the time-bar stays centred horizontally and the
     //chart cards shrink proportionally.
-    'timeline-width-pct'?:     unknown;
     //Radius (m) around the home within which surrounding buildings are
     //rendered. Buildings outside are not drawn at all. Default 100 m.
     'building-radius'?:        unknown;
@@ -450,5 +448,3 @@ export const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
 
 
 //Timeline defaults. Exposed so the editor placeholders + sliders land on the same values the runtime falls back to when the config key is absent.
-export const DEFAULT_TIMELINE_ENABLED              = true;
-export const DEFAULT_TIMELINE_WIDTH_PCT            = 100;

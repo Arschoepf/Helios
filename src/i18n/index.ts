@@ -201,13 +201,6 @@ export interface Translations
         solarRadiationEntity:     string;
         solarRadiationEntityHelp: string;
         //Timeline sub-section, nested inside the UI section. Hosts the visibility toggle, the width slider and the per-day consumption-chip toggle.
-        timelineSection:          string;
-        timelineEnabled:          string;
-        timelineEnabledOn:        string;
-        timelineEnabledOff:       string;
-        timelineEnabledHint:      string;
-        timelineWidth:            string;
-        timelineWidthHint:        string;
         //Surrounding buildings options. Cluster radius grows the home group to include attached outbuildings, opacity controls the transparency of
         //the neighbours and the colour is the base tint reused for every rendered building.
         buildingsSection:         string;
