@@ -329,69 +329,7 @@ export class HeliosCard extends LitElement
     //trace, it indicates where the sun goes without competing with the lit half.
     private static readonly NIGHT_STROKE_FACTOR = 0.5;
 
-    //Manual `hass` setter so we can skip `requestUpdate()` when the push only carries state changes for entities the
-    //card does not read. HA pushes a fresh `hass` object on every state_changed event on the bus (a smart thermostat,
-    //a phone battery, an MQTT light, anything); without this gate the card runs a full Lit render on every push, which
-    //on 1 Hz Victron / Shelly installs lit the chart-sample arrays + the SMIL animateMotion `path` strings up to
-    //~4 times per second for zero new data. Lit's default `@property` setter has no idea which entity ids matter to
-    //us, so we own the diff here. The backing field `_hass` is what the renderer reads via `get hass()`.
-    private _hass: any = undefined;
-    public get hass(): any
-    {
-        return this._hass;
-    }
-    public set hass(next: any)
-    {
-        const prev = this._hass;
-        this._hass = next;
-        if (!prev || !next)
-        {
-            this.requestUpdate();
-            return;
-        }
-        //Top-level fields that change rarely. Reference equality holds across consecutive pushes when none of
-        //connection / config / themes / language / user moved, so a single ref check skips the per-entity loop in
-        //the common steady-state case.
-        if (prev.config     !== next.config
-            || prev.themes  !== next.themes
-            || prev.language !== next.language
-            || prev.connection !== next.connection
-            || prev.user    !== next.user)
-        {
-            this.requestUpdate();
-            return;
-        }
-        //Watched entity ids. The HA Energy defaults snapshot is the single source of truth for everything the card
-        //reads on the live path. If the defaults snapshot itself hasn't landed yet we fall back to a full render so
-        //the boot-up populate isn't skipped.
-        const ed = this._energyDefaults;
-        if (!ed)
-        {
-            this.requestUpdate();
-            return;
-        }
-        const watched = [
-            ...ed.solarStatRates,         ...ed.solarStatEnergyFroms,
-            ...ed.gridStatRates,          ...ed.gridStatEnergyFroms,    ...ed.gridStatEnergyTos,
-            ...ed.batteryStatRates,       ...ed.batteryStatEnergyFroms, ...ed.batteryStatEnergyTos,
-            ...ed.batteryStatSocs,
-        ];
-        const prevStates = prev.states;
-        const nextStates = next.states;
-        if (prevStates !== nextStates)
-        {
-            for (const id of watched)
-            {
-                if (prevStates?.[id] !== nextStates?.[id])
-                {
-                    this.requestUpdate();
-                    return;
-                }
-            }
-        }
-        //Nothing the card reads changed; the new hass reference is stored for downstream consumers but no render
-        //is scheduled.
-    }
+    @property({ attribute: false }) public hass!: any;
     @property({ attribute: false }) config!: HeliosConfig;
 
     @state() _engine?:        HeliosEngine;

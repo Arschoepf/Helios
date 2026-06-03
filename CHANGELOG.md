@@ -33,6 +33,15 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Past scrub grid values restored after the hass setter throttle was rolled back
+
+The custom `hass` setter shipped in alpha.26 carried a stale-states corner case on installs where HA mutates
+`hass.states` in place instead of replacing the reference. The setter's `prevStates !== nextStates` short-circuit
+suppressed every render in that mode and `refreshGrid` stopped appending live samples to `_gridCombinedSamples`, so
+the import / export chips read blank during past-scrub once the existing buffer drifted past the cursor. The setter
+is rolled back; the four other PART 5 wins (auto-rotate suspend, binary search, daily totals singleton, sky timer
+clear on pause) stay in. A safer setter shape lands in a follow-up.
+
 ### Forecast accuracy + main-thread performance pass
 
 Forecast (PART 4 audit follow-ups):
