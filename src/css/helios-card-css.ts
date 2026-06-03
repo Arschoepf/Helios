@@ -1493,9 +1493,51 @@ export const heliosCardStyles = css`
         align-self: stretch;
     }
 
-    /*  Inner layout: time header in bold, a small gap, then one row
-        per data series. No banded backgrounds, no row separators,
-        the surrounding card frame is the only visible chrome. */
+    /*  Future-cursor variant: the whole tooltip dims so the user reads
+        the upcoming-time state at a glance and the past-vs-future
+        distinction does not rely on the forecast icons alone. The live
+        chip sits on the same opacity layer so the fade stays uniform. */
+    .tb-hover-tooltip.is-future-cursor
+    {
+        opacity: 0.78;
+    }
+
+    /*  Date heading at the top of the tooltip body, left-aligned with a
+        calendar glyph in front and a hairline separator under it so the
+        date / time pair reads as a heading block above the data rows.
+        Bold + tabular numerals match the time row. */
+    .tb-hover-tooltip-date
+    {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+        text-transform: capitalize;
+        padding-bottom: 4px;
+        margin-bottom: 4px;
+        border-bottom: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+    }
+    .tb-hover-tooltip-date-icon
+    {
+        --mdc-icon-size: 14px;
+        display: inline-flex;
+        align-items: center;
+        flex-shrink: 0;
+        line-height: 1;
+        color: var(--primary-text-color, #212121);
+        --mdc-icon-color: var(--primary-text-color, #212121);
+    }
+    .tb-hover-tooltip-date-label
+    {
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
+    }
+
+    /*  Inner layout: time row centered, a small gap, then one row per
+        data series. No banded backgrounds, no row separators, the
+        surrounding card frame is the only visible chrome. */
     .tb-hover-tooltip-time
     {
         font-weight: 700;
@@ -1558,17 +1600,15 @@ export const heliosCardStyles = css`
         text-transform: uppercase;
         line-height: 1.25;
         /*  Fade in / out instead of pop in / out: render the chip in every tooltip pass and toggle visibility via
-            opacity + transform so the entry / exit transition can play in both directions. The small translateY makes
-            the appearance read as "settling into place" rather than a flat fade. */
+            opacity. No transform on the chip itself: GPU compositing on a 1 px border + text would render at a
+            fractional layer offset and the chip read as blurry on high-DPI displays. */
         opacity: 0;
-        transform: translateY(-1px);
         pointer-events: none;
-        transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+        transition: opacity 0.16s ease-out;
     }
     .tb-hover-tooltip-live-chip.is-visible
     {
         opacity: 1;
-        transform: translateY(0);
     }
     .tb-hover-tooltip-live-chip-dot
     {

@@ -33,6 +33,14 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Scrub tooltip date heading + future-cursor dim + Live chip blur fix
+
+The scrub-timeline tooltip now opens with a date heading (`calendar` glyph + bold weekday / day / month, left-aligned)
+sitting above a hairline separator, so the user reads which day the cursor points at without having to count hours past
+midnight. When the cursor sits in the future, the whole tooltip body dims to ~78 % opacity so the past / future split is
+legible even before the forecast icons land. The Live chip dropped its `translateY` micro-animation, which was causing
+sub-pixel blur on high-DPI displays.
+
 ### Battery sign convention follows the HA Energy `stat_rate_inverted` slot (#185)
 
 Battery and grid live reads now respect the inverted slot that some installs use when the meter reports the opposite of
