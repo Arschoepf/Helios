@@ -2064,10 +2064,10 @@ export class HeliosCard extends LitElement
         //placeholder. The inner fill `rInner = r * sunFillRatio` is what the engine ties to live irradiance; we
         //tie it to boot progress instead so the disc literally fills as data lands. Halo radius + alpha scale with
         //the same ratio so the irradiation reads as growing with the disc.
-        const bootR        = 22;
+        const bootR        = 28;
         const bootRInner   = bootR * bootProgress;
         const bootHaloR    = bootR * (1.4 + 1.6 * bootProgress);
-        const bootHaloA    = bootProgress * 0.55;
+        const bootHaloA    = bootProgress * 0.30;
         const bootGradId   = `boot-sun-halo-${this._instanceId}`;
         const bootOverlay = this._bootPhase === 'loading'
             ? html`
