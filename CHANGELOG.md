@@ -33,6 +33,14 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Dashboard cumulative chart , per-source breakdown on hover
+
+The today-card cumulative kWh chart now lists every HA Energy solar source under the aggregate "actual" value in
+its hover tooltip on multi-source installs. Each per-source row carries the entity `friendly_name` from
+`hass.states`, the per-source cumulative kWh integrated up to the hover instant using the same baseline /
+counter-reset rules as the aggregate, and a colour pastille matching the per-source curve on the timeline above.
+Single-source installs see no change.
+
 ### Per-source PV curves + tooltip breakdown
 
 Multi-source HA Energy installs now render one PV curve per source on the timeline chart, drawn under the

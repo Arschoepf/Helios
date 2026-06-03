@@ -27,7 +27,7 @@ import
     resolvePvLiveEntity
 } from './pv';
 import { computeBatteryToday, resolveBatteryEntities, type BatteryHost } from './battery';
-import { effectiveForecastRatio, type ChartHost } from './charts';
+import { effectiveForecastRatio, pvSourceColor, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
@@ -926,6 +926,12 @@ export function renderDashTodayChart(
     let hoverX:           number = 0;
     let hoverFracX:       number = 0;
     let hoverTimeLabel:   string = '';
+    //Per-source breakdown rows shown under the aggregate "actual" row when the install has more than one HA Energy
+    //solar source. Each row carries the entity friendly_name, the per-source cumulative kWh integrated up to the
+    //hover instant using the same baseline / counter-reset rules as the aggregate, and the matching hue-rotated
+    //colour pastille so the eye links each row to its curve on the timeline above (and, eventually, on this
+    //dashboard chart itself if we decide to draw per-source mini-curves later).
+    const hoverPerSource: Array<{ id: string; label: string; kwh: number; color: string }> = [];
     if (hoverTs !== null && hoverTs >= startMs && hoverTs < endMs)
     {
         hoverActualKwh    = interpolateKwhAt(cum.actualSamples,    hoverTs);
@@ -935,6 +941,80 @@ export function renderDashTodayChart(
         hoverTimeLabel    = new Intl.DateTimeFormat((host.hass?.language as string | undefined) || undefined, {
             hour: '2-digit', minute: '2-digit',
         }).format(new Date(hoverTs));
+
+        if (host._pvHistoryPerEntity.size > 1)
+        {
+            const perSourceIds = Array.from(host._pvHistoryPerEntity.keys()).sort();
+            const unit         = (host._pvUnit || '').toLowerCase();
+            const isCumEnergy  = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+            const eFactor      = unit === 'wh' ? 1 / 1000
+                               : unit === 'mwh' ? 1000
+                               : 1;
+            for (let srcIdx = 0; srcIdx < perSourceIds.length; srcIdx++)
+            {
+                const id = perSourceIds[srcIdx];
+                const ph = host._pvHistoryPerEntity.get(id);
+                if (!ph)
+                {
+                    continue;
+                }
+                let baseline: number | null = null;
+                let kwh                     = 0;
+                let prevT: number | null    = null;
+                let prevW: number | null    = null;
+                for (let i = 0; i < ph.times.length; i++)
+                {
+                    const tMs = ph.times[i].getTime();
+                    if (tMs < startMs)
+                    {
+                        continue;
+                    }
+                    if (tMs > hoverTs)
+                    {
+                        break;
+                    }
+                    if (isCumEnergy)
+                    {
+                        const v = ph.values[i] * eFactor;
+                        if (baseline === null)
+                        {
+                            baseline = v;
+                        }
+                        if (v < baseline)
+                        {
+                            baseline = v - kwh;
+                        }
+                        kwh = Math.max(0, v - baseline);
+                    }
+                    else
+                    {
+                        const w = pvNormalizeToWatts(ph.values[i], host._pvUnit);
+                        if (!isFinite(w))
+                        {
+                            continue;
+                        }
+                        if (prevT !== null && prevW !== null)
+                        {
+                            const dh = (tMs - prevT) / HOUR_MS;
+                            if (dh > 0 && dh <= 6)
+                            {
+                                kwh += ((prevW + w) / 2) / 1000 * dh;
+                            }
+                        }
+                        prevT = tMs;
+                        prevW = w;
+                    }
+                }
+                const stateObj = host.hass?.states?.[id];
+                const friendly = String(stateObj?.attributes?.friendly_name ?? id);
+                hoverPerSource.push({
+                    id,
+                    label: friendly,
+                    kwh,
+                    color: pvSourceColor(srcIdx, perSourceIds.length),
+                });
+            }
+        }
     }
     const showHover = hoverActualKwh !== null || hoverPredictedKwh !== null;
 
@@ -1130,6 +1210,13 @@ export function renderDashTodayChart(
                             <span class="dash-today-chart-tooltip-value">${formatLocalisedNumber(host.hass, hoverActualKwh, 1)} kWh</span>
                         </span>
                     ` : nothing}
+                    ${hoverPerSource.map(row => html`
+                        <span class="dash-today-chart-tooltip-row dash-today-chart-tooltip-row-sub">
+                            <span class="dash-today-chart-tooltip-dot" style="background:${row.color}"></span>
+                            <span class="dash-today-chart-tooltip-sublabel">${row.label}</span>
+                            <span class="dash-today-chart-tooltip-value">${formatLocalisedNumber(host.hass, row.kwh, 1)} kWh</span>
+                        </span>
+                    `)}
                     ${hoverPredictedKwh !== null ? html`
                         <span class="dash-today-chart-tooltip-row">
                             <span class="dash-today-chart-tooltip-key" style="color:${predictedColor}">${t.detail.forecastShort}:</span>

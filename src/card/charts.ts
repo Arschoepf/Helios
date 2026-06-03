@@ -299,8 +299,9 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 //`360 / N` degrees so a 2-source split E / W lands on opposite hues, a 3-source install on 120 ° spacing, and so
 //on. The CSS HSL `from` syntax lets us derive the rotation in pure CSS so the actual colour follows the user's
 //live theme without us having to parse the resolved RGB. Falls back to a fixed orange on browsers that don't
-//support the relative-colour syntax.
-function pvSourceColor(index: number, total: number): string
+//support the relative-colour syntax. Exported so the dashboard chart tooltip can reuse the same per-source
+//colours next to the friendly-name rows.
+export function pvSourceColor(index: number, total: number): string
 {
     if (total <= 1)
     {

@@ -1119,6 +1119,31 @@ export const heliosCardStyles = css`
         opacity: 0.85;
         font-style: italic;
     }
+    /*  Per-source breakdown rows under the aggregate actual row. Smaller font + lower opacity so the eye reads
+        the headline aggregate first and the breakdown as supporting detail. Colour pastille comes from the
+        inline background style (hue-rotated derivative of the theme PV colour, matching the per-source curve on
+        the timeline). */
+    .dash-today-chart-tooltip-row-sub
+    {
+        font-size: 10px;
+        opacity: 0.82;
+        padding-left: 2px;
+    }
+    .dash-today-chart-tooltip-dot
+    {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: inline-block;
+    }
+    .dash-today-chart-tooltip-sublabel
+    {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 140px;
+    }
     .dash-today-chart-tooltip-icon
     {
         --mdc-icon-size: 12px;
