@@ -457,14 +457,23 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     //(future days). Past + today scrub shows the observed production
     //figure only, future scrub shows the forecast figure. No double
     //row even when both inputs are populated for today, the observed
-    //total is already authoritative for the day-so-far.
+    //total is already authoritative for the day-so-far. Today's bucket
+    //prefers the recorder-backed `_haSolarTodayKwh` so the tooltip
+    //matches the dashboard "produced today" chip to the watt-hour,
+    //falling back to the local trapezoidal integration when the HA
+    //Energy preference is not wired.
     const dayKey = new Date(atDate);
     dayKey.setHours(0, 0, 0, 0);
     const todayKey = new Date();
     todayKey.setHours(0, 0, 0, 0);
-    const dayTotals      = computeDailyKwhTotals(host);
-    const dayKwh         = dayTotals.get(dayKey.getTime());
-    const isFutureDay    = dayKey.getTime() > todayKey.getTime();
+    const isFutureDay = dayKey.getTime() > todayKey.getTime();
+    const isToday     = dayKey.getTime() === todayKey.getTime();
+    const dayTotals   = computeDailyKwhTotals(host);
+    let dayKwh: number | undefined = dayTotals.get(dayKey.getTime());
+    if (isToday && typeof host._haSolarTodayKwh === 'number' && isFinite(host._haSolarTodayKwh))
+    {
+        dayKwh = host._haSolarTodayKwh;
+    }
     const showProduction = !isFutureDay && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const showForecast   =  isFutureDay && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
@@ -590,6 +599,13 @@ export interface ChartHost
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
+    //HA Energy daily-total alignment: today's produced kWh as queried
+    //from the recorder `change` statistic on every `stat_energy_from`
+    //array, so the scrub tooltip lands on the same figure the dashboard
+    //chip shows. Null when not configured or before the first recorder
+    //call lands, in which case the tooltip falls back to the local
+    //trapezoidal integration over `_pvHistory`.
+    readonly _haSolarTodayKwh?: number | null;
     //Mutable hover-cursor position as a percent inside the visible
     //time range (0..100), null when no hover is active. Written by
     //the pointer handlers defined below.

@@ -44,15 +44,9 @@ export interface DashboardHost extends ChartHost, BatteryHost
     readonly _engine?:     HeliosEngine;
     readonly _instanceId:  string;
     readonly _sunScene?:   SunScene | null;
-    //HA Energy daily-total alignment: when the user has a solar
-    //source on the Energy dashboard, the card refresh loop queries
-    //the recorder for today's net change on every `stat_energy_from`
-    //and writes the sum here. `renderDashTodaySection` prefers this
-    //over the integral of the local `_pvHistory` for the headline
-    //"kWh produit aujourd'hui" so the value matches HA Energy to
-    //the watt-hour. Null when not configured or the recorder call
-    //has not landed (consumer falls back to the local integration).
-    _haSolarTodayKwh?: number | null;
+    //_haSolarTodayKwh lives on ChartHost (the scrub tooltip reads it
+    //for today's bucket). The same field powers the dashboard "kWh
+    //produit aujourd'hui" headline in renderDashTodaySection.
 
     _detailMode:           boolean;
     _homeHover:            boolean;
