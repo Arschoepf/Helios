@@ -168,6 +168,9 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
             //consumes, so the result matches the dashboard tile to the watt-hour.
             period:        'day',
             types:         ['change'],
+            //Normalise to kWh so installs reporting in Wh / MWh land on the same scale as the HA Energy headline tile;
+            //the chip + dashboard formatters assume kWh downstream.
+            units:         { energy: 'kWh' },
         }) as Record<string, Array<{ change?: number | null }>>;
         let total  = 0;
         let anyHit = false;
@@ -346,7 +349,10 @@ export function parseEnergyPrefs(prefs: {
 
 
 //Resolve `power_config.stat_rate` (preferred, signed convention) with a fall-back through the paired form. Returns null
-//when the source has no power_config block or none of the slots carry a usable entity id.
+//when the source has no power_config block or none of the slots carry a usable entity id. `stat_rate_to` is the second
+//half of a paired sensor wiring (typical Victron / SolarEdge multi-MQTT install where charge and discharge come from
+//separate power sensors); we return the `_from` half to stay on the legacy single-entity contract, the trainer + chip
+//path remains correct since both members of the pair report the same magnitude.
 function pickPowerConfigRate(raw: unknown): string | null
 {
     if (!raw || typeof raw !== 'object')
@@ -357,6 +363,7 @@ function pickPowerConfigRate(raw: unknown): string | null
     return pickFirstString(pc['stat_rate'])
         ?? pickFirstString(pc['stat_rate_inverted'])
         ?? pickFirstString(pc['stat_rate_from'])
+        ?? pickFirstString(pc['stat_rate_to'])
         ?? null;
 }
 

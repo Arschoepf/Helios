@@ -648,6 +648,9 @@ export async function fetchPvStatistics(
             //below prefers `mean` and falls back to `state`, so a single round-trip covers both wirings without depending on the
             //user-facing unit having reached `host._pvUnit` yet.
             types:          ['mean', 'state'],
+            //Normalise to kWh / W so installs reporting in Wh, MWh or kW land on the same scale the calibration + chart
+            //expect. The `pvNormalizeToWatts` helper still handles the live state read where this hint is unavailable.
+            units:          { energy: 'kWh', power: 'W' },
         });
 
         const arr: any[] = (result && result[entityId]) ?? [];

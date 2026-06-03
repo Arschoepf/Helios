@@ -200,6 +200,9 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     //at the bucket end so consecutive deltas attribute
                     //to the bucket that produced them.
                     types:         ['mean', 'state'],
+                    //Normalise to kWh / W so installs reporting in Wh, MWh or kW land on the same scale the chip + scrub
+                    //buffer assume downstream.
+                    units:         { energy: 'kWh', power: 'W' },
                 }).catch(armCooldownIfTimeout),
                 callWSWithTimeout<any>(host.hass, {
                     type:                     'history/history_during_period',

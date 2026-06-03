@@ -350,6 +350,9 @@ export async function fetchBatteryHistory(
             //Both fields, because a setup that wires a cumulative kWh meter as the battery power source has `mean: null` per bucket
             //(measurement assumption breaks). Asking for `state` too lets the parser cover both wirings in one round-trip.
             types:          ['mean', 'state'],
+            //Normalise: SoC stays %, power stays in W, cumulative energy stays in kWh, so the downstream parser does
+            //not have to handle Wh / MWh / mW scaling at sample time.
+            units:          { energy: 'kWh', power: 'W' },
         });
         const statsUsable = ids.some(id => Array.isArray(statsResult?.[id]) && statsResult[id].length > 0);
         if (statsUsable)
