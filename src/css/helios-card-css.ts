@@ -2036,6 +2036,7 @@ ha-card.detail-active .solar-svg,
         border-radius: 50%;
         overflow: hidden;
         cursor: pointer;
+        pointer-events: auto;
         position: relative;
         z-index: 50;
         opacity: 1;
