@@ -33,6 +33,12 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Scrub tooltip Live chip aligned with the time row
+
+The Live chip now lives as the last flex child of the time heading row, pushed to the right edge via
+`margin-left: auto`. Flexbox alignment vertically centres the chip on the clock glyph + the time label automatically,
+no more absolute positioning against the tooltip padding.
+
 ### Scrub tooltip time heading + Live chip blur + vertical centering
 
 The scrub-timeline tooltip now opens with a time heading (`clock` glyph + bold hour, left-aligned) sitting above a

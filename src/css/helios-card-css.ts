@@ -1560,9 +1560,10 @@ export const heliosCardStyles = css`
         with the tooltip background. The dot pulses to mirror the HA Energy dashboard's live-data vocabulary. */
     .tb-hover-tooltip-live-chip
     {
-        position: absolute;
-        top: 6px;
-        right: 8px;
+        /*  Lives as the last flex child of the time row, pushed to the right edge via margin-left: auto. align-items:
+            center on the parent vertically centres the chip with the clock glyph + the time label automatically, no
+            absolute positioning, no top/right calculation against the tooltip padding. */
+        margin-left: auto;
         display: inline-flex;
         align-items: center;
         justify-content: center;
