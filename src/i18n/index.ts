@@ -252,19 +252,88 @@ export interface Translations
     };
 }
 
-import { en } from './locales/en';
-import { fr } from './locales/fr';
+//Locale registry. Helios mirrors the 64 languages Home Assistant supports out of the box; pickTranslations walks the
+//hass.language tag through this map and falls back to English when no entry matches. Regional variants (en-GB, pt-BR,
+//es-419, sr-Latn, zh-Hans, zh-Hant) get their own entry so their dialect-specific phrasing wins over the language root.
+import { af } from './locales/af';
+import { ar } from './locales/ar';
+import { bg } from './locales/bg';
+import { bn } from './locales/bn';
+import { bs } from './locales/bs';
+import { ca } from './locales/ca';
+import { cs } from './locales/cs';
+import { cy } from './locales/cy';
+import { da } from './locales/da';
 import { de } from './locales/de';
+import { el } from './locales/el';
+import { en } from './locales/en';
+import { enGB } from './locales/en-GB';
+import { eo } from './locales/eo';
 import { es } from './locales/es';
+import { es419 } from './locales/es-419';
+import { et } from './locales/et';
+import { eu } from './locales/eu';
+import { fa } from './locales/fa';
+import { fi } from './locales/fi';
+import { fr } from './locales/fr';
+import { fy } from './locales/fy';
+import { gl } from './locales/gl';
+import { gsw } from './locales/gsw';
+import { he } from './locales/he';
+import { hi } from './locales/hi';
+import { hr } from './locales/hr';
+import { hu } from './locales/hu';
+import { hy } from './locales/hy';
+import { id } from './locales/id';
+//`is` is a TypeScript contextual keyword that confuses the parser at module scope; the locale file exports `is_`
+//(trailing underscore), the map below keys it as the natural `is` tag.
+import { is_ } from './locales/is';
 import { it } from './locales/it';
+import { ja } from './locales/ja';
+import { ka } from './locales/ka';
+import { ko } from './locales/ko';
+import { lb } from './locales/lb';
+import { lt } from './locales/lt';
+import { lv } from './locales/lv';
+import { ml } from './locales/ml';
+import { nb } from './locales/nb';
 import { nl } from './locales/nl';
-import { pt } from './locales/pt';
+import { nn } from './locales/nn';
 import { no } from './locales/no';
 import { pl } from './locales/pl';
-import { cs } from './locales/cs';
+import { pt } from './locales/pt';
+import { ptBR } from './locales/pt-BR';
+import { ro } from './locales/ro';
+import { ru } from './locales/ru';
+import { si } from './locales/si';
+import { sk } from './locales/sk';
+import { sl } from './locales/sl';
+import { sr } from './locales/sr';
+import { srLatn } from './locales/sr-Latn';
 import { sv } from './locales/sv';
+import { ta } from './locales/ta';
+import { te } from './locales/te';
+import { th } from './locales/th';
+import { tr } from './locales/tr';
+import { uk } from './locales/uk';
+import { ur } from './locales/ur';
+import { vi } from './locales/vi';
+import { zhHans } from './locales/zh-Hans';
+import { zhHant } from './locales/zh-Hant';
 
-const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt, no, pl, cs, sv };
+const LOCALES: Record<string, Translations> =
+{
+    af, ar, bg, bn, bs, ca, cs, cy, da, de, el, en, eo, es, et, eu, fa, fi, fr, fy, gl, gsw,
+    he, hi, hr, hu, hy, id, it, ja, ka, ko, lb, lt, lv, ml, nb, nl, nn, no, pl, pt, ro, ru, si,
+    sk, sl, sr, sv, ta, te, th, tr, uk, ur, vi,
+    'is':      is_,
+    'en-GB':   enGB,
+    'es-419':  es419,
+    'pt-BR':   ptBR,
+    'sr-Latn': srLatn,
+    'zh-Hans': zhHans,
+    'zh-Hant': zhHant,
+};
 
 const FALLBACK: Translations = en;
 
