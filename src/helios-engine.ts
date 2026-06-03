@@ -35,7 +35,6 @@ import
     DEFAULT_LIDAR_PRECISION,
     LIDAR_PRECISION_PITCH_MULT,
     DEFAULT_SHADOW_OPACITY,
-    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
     DEFAULT_LIDAR_VIEW_OPACITY,
     LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
     LIDAR_VIEW_DISPLAY_RADIUS_M
@@ -2339,10 +2338,7 @@ export class HeliosEngine
 
     private _lidarViewPointSizePx(): number
     {
-        const raw = this.cfg['lidar-view-point-size'];
-        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
-        return Math.min(6, n);
+        return 1.5;
     }
 
     //LiDAR View support, exposed to the card.

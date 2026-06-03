@@ -1027,29 +1027,13 @@ export function pvNormalizeToWatts(value: number, unit: string): number
 }
 
 
-//Manual PV peak power.
+//Total installed peak power for the forecast scaling, derived from the sum of per-string `pv-arrays[].peak-kwp` values.
+//We convert kWp to the calibration scalar k (W per percent of STC) by k = kWp * 1000 / 100 = kWp * 10, then multiply by
+//the clear-sky percentage to draw the dotted forecast line on the PV chart. Returns null when no array is configured or
+//every row is blank, callers then skip the prediction line and the peak-of-day highlights for future days.
 //
-//Total installed peak power for the forecast scaling. Two sources, in priority order:
-//
-//  1. Sum of per-string `pv-arrays[].peak-kwp` values. Preferred
-//     because each user enters the real nameplate for each string
-//     and the total is derived automatically. Drops the "60/40
-//     share with 5 kWp total" abstraction users found confusing.
-//  2. Top-level `pv-peak-kwp` legacy value. Kept for back-compat;
-//     existing configs work unchanged.
-//
-//We convert kWp to the calibration scalar k (W per percent of STC)
-//by k = kWp * 1000 / 100 = kWp * 10, then multiply by the clear-
-//sky percentage to draw the dotted forecast line on the PV chart.
-//
-//Returns null when neither source is set or both are invalid;
-//callers then skip the prediction line and the peak-of-day
-//highlights for future days.
-//WeakMap cache: pvCalibK is a pure function of the config object's
-//identity. It used to be called 5+ times per render (chip + chart +
-//dashboard + calibration), each call walking pvArrays(config) which
-//parses every array entry. WeakMap-by-config absorbs every repeat
-//call until setConfig hands a fresh config object.
+//WeakMap cache keyed on the config identity, the resolver runs on every chip / chart / dashboard / calibration render
+//cycle and the parsed pv-arrays walk is cheap but not free.
 const _pvCalibKCache = new WeakMap<HeliosConfig, number | null>();
 
 export function pvCalibK(config: HeliosConfig | undefined): number | null
@@ -1059,22 +1043,11 @@ export function pvCalibK(config: HeliosConfig | undefined): number | null
     {
         return _pvCalibKCache.get(config) ?? null;
     }
-    const arraysTotal = pvArrays(config).totalKwp;
-    let kwp: number;
-    if (arraysTotal > 0)
+    const kwp = pvArrays(config).totalKwp;
+    if (kwp <= 0)
     {
-        kwp = arraysTotal;
-    }
-    else
-    {
-        const raw = config['pv-peak-kwp'];
-        const v   = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(v) || v <= 0)
-        {
-            _pvCalibKCache.set(config, null);
-            return null;
-        }
-        kwp = v;
+        _pvCalibKCache.set(config, null);
+        return null;
     }
     const result = kwp * 10;
     _pvCalibKCache.set(config, result);
@@ -1184,10 +1157,8 @@ export function pvArrays(
     //Per-array height above ground in metres. Used by the LiDAR raycast shading check: a panel high on a south-facing roof clears a low garden fence
     //that a ground-mounted array of the same orientation would sit in the shadow of.
     heightsM:     number[];
-    //Total installed peak power of the configured arrays in kWp.
-    //Derived from per-string `peak-kwp` values when any are set;
-    //zero otherwise (legacy share-only configs leave the top-level
-    //`pv-peak-kwp` as the source of truth, see pvCalibK).
+    //Total installed peak power of the configured arrays in kWp. Sum of the per-string `peak-kwp` values; zero when no
+    //entry supplied a peak-kwp (no forecast then, the chip + chart still render off the live observation).
     totalKwp:     number;
 }
 {

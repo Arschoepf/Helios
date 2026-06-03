@@ -8,7 +8,6 @@ import
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
-    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 import { renderShadingMapSection } from './shadingMapView';
@@ -161,6 +160,10 @@ export class HeliosCardEditor extends LitElement
         'pixel-ratio',
         'timeline-enabled',
         'timeline-width-pct',
+        'pv-peak-kwp',
+        'lidar-view-point-size',
+        'lidar-view-radius',
+        'building-radius',
     ];
     private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
     {
@@ -583,7 +586,7 @@ export class HeliosCardEditor extends LitElement
             <div class="editor">
 
                 <details class="advanced-section" ?open="${this._openSection === 'location'}" @toggle="${(e: Event) => this._onSectionToggle('location', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.locationSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map-marker"></ha-icon>${t.editor.locationSection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.homeLatitude}</span>
                     <input
@@ -613,7 +616,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'map'}" @toggle="${(e: Event) => this._onSectionToggle('map', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.uiAndMapSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:map"></ha-icon>${t.editor.uiAndMapSection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.mapStyle}</span>
                     <select
@@ -662,7 +665,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'buildings'}" @toggle="${(e: Event) => this._onSectionToggle('buildings', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.buildingsSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:office-building-outline"></ha-icon>${t.editor.buildingsSection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.buildingClusterRadius}</span>
                     <div class="slider-row">
@@ -690,7 +693,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'shadows'}" @toggle="${(e: Event) => this._onSectionToggle('shadows', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.shadowsSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:weather-sunset-down"></ha-icon>${t.editor.shadowsSection}</summary>
                 <div class="field">
                     <span class="label">${t.editor.shadowsEnabled}</span>
                     <div class="segmented-toggle">
@@ -735,22 +738,16 @@ export class HeliosCardEditor extends LitElement
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
 
+                <details class="advanced-section" ?open="${this._openSection === 'shading'}" @toggle="${(e: Event) => this._onSectionToggle('shading', e)}">
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:radar"></ha-icon>${t.editor.shadingSection}</summary>
+                    ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
+                </details>
+
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'installation'}" @toggle="${(e: Event) => this._onSectionToggle('installation', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.installationSection}</summary>
-                <label class="field">
-                    <span class="label">${t.editor.pvPeakPower}</span>
-                    <input
-                        type="number"
-                        min="0"
-                        step="0.1"
-                        placeholder="6.5"
-                        .value="${c['pv-peak-kwp'] != null ? String(c['pv-peak-kwp']) : ''}"
-                        @change="${(e: Event) => this._numField('pv-peak-kwp', e)}"
-                    />
-                </label>
-                <div class="field-help">${t.editor.pvPeakPowerHelp}</div>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:solar-power-variant"></ha-icon>${t.editor.installationSection}</summary>
+                <div class="hint">${t.editor.installationHint}</div>
                 <label class="field">
                     <span class="label">${t.editor.pvInverterMaxKw}</span>
                     <input
@@ -800,17 +797,9 @@ export class HeliosCardEditor extends LitElement
                     //and for the "all blank" initial state.
                     const explicit = arrays.filter(a => a.share !== null).length;
                     const showNormHint = explicit >= 2 && Math.abs(sharesSum - 100) > 0.5;
-                    //Auto-open the multi-array section when the user
-                    //already has config there (either the new pv-arrays
-                    //shape or the legacy pv-tilt key). A fresh editor
-                    //starts collapsed to keep the simple-install case
-                    //visually quiet.
-                    const hasArrays = Array.isArray(c['pv-arrays']) && (c['pv-arrays'] as unknown[]).length > 0;
-                    const hasLegacy = c['pv-tilt'] != null && c['pv-tilt'] !== '';
-                    const sectionOpen = hasArrays || hasLegacy;
                     return html`
-                        <details class="advanced-section" ?open="${sectionOpen}">
-                            <summary class="section-title section-title-collapse">${t.editor.pvArraysSection}</summary>
+                        <details class="advanced-section" open>
+                            <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:angle-acute"></ha-icon>${t.editor.pvArraysSection}</summary>
                             <div class="hint">${t.editor.pvArraysHelp}</div>
                             ${arrays.map((arr, i) => {
                                 const fallback = t.editor.pvArrayTitle.replace('{n}', String(i + 1));
@@ -936,30 +925,9 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'shading'}" @toggle="${(e: Event) => this._onSectionToggle('shading', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.shadingSection}</summary>
-                    ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
-                </details>
-
-
-                <details class="advanced-section" ?open="${this._openSection === 'lidarView'}" @toggle="${(e: Event) => this._onSectionToggle('lidarView', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.lidarViewSection}</summary>
-                    <div class="hint">${t.editor.lidarViewHint}</div>
-                    <label class="field">
-                        <span class="label">${t.editor.lidarViewPointSize}</span>
-                        <div class="slider-row">
-                            <input
-                                type="range" min="1" max="6" step="0.5"
-                                .value="${String(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX)}"
-                                @input="${(e: Event) => this._numSlider('lidar-view-point-size', e)}"
-                            />
-                            <span class="slider-value">${this._fmtNum(Number(c['lidar-view-point-size'] ?? DEFAULT_LIDAR_VIEW_POINT_SIZE_PX), 0.5)}</span>
-                        </div>
-                    </label>
-                </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'lidar'}" @toggle="${(e: Event) => this._onSectionToggle('lidar', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.localLidarSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:cube-scan"></ha-icon>${t.editor.localLidarSection}</summary>
                     <div class="hint">${t.editor.localLidarHint}</div>
                     <div class="hint" style="margin-bottom: 14px;">${renderMarkdownLinks(t.editor.localLidarToolsHint)}</div>
                     <div class="field">
@@ -1037,7 +1005,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'reset'}" @toggle="${(e: Event) => this._onSectionToggle('reset', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.resetSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:refresh"></ha-icon>${t.editor.resetSection}</summary>
                     <div class="hint">${t.editor.resetSectionHint}</div>
                     <div class="hint reset-warning">${t.editor.resetCacheWarning}</div>
                     <button
@@ -1048,7 +1016,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section about-section" ?open="${this._openSection === 'about'}" @toggle="${(e: Event) => this._onSectionToggle('about', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.aboutSection}</summary>
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:information-outline"></ha-icon>${t.editor.aboutSection}</summary>
                     <div class="about-row">
                         <span class="about-label">${t.editor.aboutVersionLabel}</span>
                         <span class="about-value">${__HELIOS_VERSION__}</span>

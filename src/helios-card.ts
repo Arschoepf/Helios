@@ -126,16 +126,7 @@ if (!window.customCards.some(c => c.type === 'helios-card'))
         type:        'helios-card',
         name:        _bootI18n.cardName,
         description: _bootI18n.cardDescription,
-        //preview:false: tells HA NOT to mount a live helios-card
-        //instance in the "Add card" picker thumbnail. Each live
-        //preview was spawning a full MapLibre engine + WebGL context
-        //of its own; combined with HA's hui-card-edit-mode re-parent
-        //cycle, the picker was the entry-point for the infinite
-        //load/unload loop reported in the editor mode of the
-        //dashboard. Trading the thumbnail for a static name + icon
-        //(HA falls back to that automatically) stops the cascade
-        //at the source.
-        preview:     false
+        preview:     true
     });
 }
 
@@ -1321,9 +1312,9 @@ export class HeliosCard extends LitElement
         const layout         = this._labelLayout;
 
         //Photovoltaic production chip, pinned above the home, tinted in the configured production colour and tied to the home with an animated leader
-        //line whose dashes flow from the house up to the chip. Only renders when the user has set the optional `pv-power-entity` config and the live
-        //state read produced a finite numeric value.
-        const pvEntityId   = String(this.config?.['pv-power-entity'] ?? '').trim();
+        //line whose dashes flow from the house up to the chip. Only renders when the HA Energy dashboard exposes a solar source and the live state
+        //read produced a finite numeric value.
+        const pvEntityId   = resolvePvLiveEntity(this._energyDefaults);
         //Colour configs (pv-color / battery-color / sun-color / cloud-color / building-color) are no longer
         //consulted, the card inherits the active HA theme's Energy palette via CSS tokens. Defaults below
         //are the matching hex for any inline SVG attribute that still expects a string colour, the YAML

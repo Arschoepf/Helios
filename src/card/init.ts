@@ -33,7 +33,6 @@ export const VISUAL_CONFIG_KEYS = [
     'pv-arrays',
     'pv-tilt',
     'pv-azimuth',
-    'pv-peak-kwp',
     'pv-inverter-max-kw',
     //map-style triggers a MapLibre setStyle(), the engine reloads the cloud disc, buildings and labels on the resulting `style.load`.
     'map-style',
@@ -52,15 +51,8 @@ export const VISUAL_CONFIG_KEYS = [
     //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
     'solar-radiation-entity',
     //building-radius / cluster-radius invalidate cache and refetch; opacity is a cheap paint-property update.
-    'building-radius',
     'building-cluster-radius',
     'building-opacity',
-    //Render budget + LiDAR-View visuals. The slider that drives lidar-view-point-size lives on the LiDAR-View itself so the engine
-    //picks up the change immediately.
-    'shadows-enabled',
-    'shadow-opacity',
-    'lidar-precision',
-    'lidar-view-point-size',
     //Timeline visibility + chart UX preferences.
     'auto-rotate-enabled',
     //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must invalidate the engine sig so the shadow pipeline reruns against the

@@ -44,16 +44,6 @@ export interface HeliosConfig
     //                    stroke). Defaults to a vivid green chosen
     //                    to read cleanly on the white chart card.
     'pv-color'?:              unknown;
-    //Installed peak power of the PV array in kWp (kilowatt-peak).
-    //Optional; when set, it scales the predicted clear-sky percentage
-    //(0..100) into watts so the dotted forecast curve on the PV chart
-    //reflects the user's install. Without it, no prediction is drawn,
-    //but live observation, peak-of-day highlight and chart axes keep
-    //working off the actual PV entity.
-    //
-    //Superseded by per-string `pv-arrays[].peak-kwp`: when any array entry carries a `peak-kwp`, the total install power is the sum of those values
-    //and `pv-peak-kwp` is ignored. Existing configs that only set `pv-peak-kwp` keep working unchanged through the legacy share-based weighting.
-    'pv-peak-kwp'?:           unknown;
     //Inverter clipping cap in kW (kilowatts of AC). Optional; when
     //set, the forecast tops out at this value so an oversized DC
     //array hooked to a smaller inverter (e.g. 6.4 kWp panels behind a
@@ -328,9 +318,6 @@ export interface HeliosConfig
     //always on, colours are fixed (white) and the overall opacity is
     //controlled in-card via a bottom slider, not from config. Only
     //the point size remains configurable.
-    //  lidar-view-point-size: pixels (1..6). Square side length per
-    //                         point on the canvas. Default 1.
-    'lidar-view-point-size'?: unknown;
 }
 
 
@@ -432,7 +419,6 @@ export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 //inside the layer; overall opacity is runtime state driven by the
 //in-card bottom slider (DEFAULT_LIDAR_VIEW_OPACITY is the value the
 //slider lands on the first time the user opens the view).
-export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1;
 export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.25;
 //Distance from the home at which the LiDAR view is at full opacity.
 //Beyond this, alpha smoothstep-fades down to 0 at the display

@@ -98,15 +98,13 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
-        //Single section for the user's PV install. Bundles the manual peak power, the inverter cap, the inverter-cutoff SoC guard
-        //and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy dashboard equivalent.
+        //Single section for the user's PV install. Bundles the inverter cap, the per-row panel orientation, the inverter-cutoff
+        //SoC guard and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy
+        //dashboard equivalent.
         installationSection:      string;
-        //Manual peak-power input (kWp). When set, drives the dotted
-        //prediction line on the PV chart and the PV→home leader's
-        //flow saturation. Optional; without it the card uses live
-        //observation only.
-        pvPeakPower:              string;
-        pvPeakPowerHelp:          string;
+        //Hint rendered at the top of the section, telling the user every entity wiring (production, grid, battery) lives in
+        //the HA Energy dashboard now and this section only adds the install-level details that improve forecast accuracy.
+        installationHint:         string;
         //Inverter clipping cap, in kW of AC output. Optional. When set, the forecast tops out at this value so an over-sized DC array hooked to a
         //smaller inverter doesn't render a peak above what the hardware can actually deliver.
         pvInverterMaxKw:          string;
@@ -192,16 +190,7 @@ export interface Translations
         //Opacity of the cast ground shadows, 0..1 slider in the editor.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
-        //LiDAR View overlay (subsection inside Shading).
-        //Lets the user tune the LiDAR view overlay (wireframe + fill
-        //coloured by live solar exposure). Only the point size remains
-        //tunable from the editor; the overall opacity is exposed
-        //in-card via a bottom slider so the user can dial the layer
-        //in/out while looking at the result.
-        lidarViewSection:           string;
-        lidarViewHint:              string;
-        lidarViewPointSize:         string;
-        //Collapsible advanced section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
+        //Collapsible nested section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
         //<details>/<summary> toggle so the editor stays simple for the 99% of users who never need it.
         localLidarSection:        string;
         localLidarHint:           string;

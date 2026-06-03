@@ -1,15 +1,10 @@
 import type { Translations } from '../index';
 
-//Norsk Bokmål.
-//Translation notes:
-//  - "Cloud cover" → "Skydekke"
-//  - "Hillshade" → "Skyggelegging av terreng" (no longer used after the
-//    terrain layer was removed; placeholder strings retained should the
-//    feature return)
-//  - "Tap" → "Trykk" on touch contexts
-//  - LiDAR survey provider in Norway is Kartverket NHM
-//    (Nasjonal Høydemodell), referenced in the LiDAR precision hint.
-export const no: Translations = {
+// Norsk Bokmål (Norwegian Bokmål).
+// Adapted from the existing `no` locale; treated as the canonical Bokmål
+// variant. Terminology mirrors Kartverket's solar/PV usage; LiDAR-relevant
+// hint mentions the national NHM (Nasjonal Høydemodell) provider.
+export const nb: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid',
 
@@ -50,11 +45,11 @@ export const no: Translations = {
         labelsOn:           'Vist',
         labelsOff:          'Skjult',
         autoRotate:         'Automatisk kamerarotasjon',
-        autoRotateHint:     'Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). En enfingers-bevegelse pauser den umiddelbart, og den fortsetter så snart du slipper.',
+        autoRotateHint:     'Etter noen sekunders inaktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). Et fingertrykk pauser den umiddelbart, og den fortsetter så snart du slipper.',
         autoRotateOn:       'På',
         autoRotateOff:      'Av',
         installationSection: 'Solcelleanlegg',
-        installationHint:   'All entity wiring (production, grid, battery) now comes from the Home Assistant Energy dashboard. This section only adds the install-level details that improve the forecast accuracy: inverter cap, panel orientation, optional irradiance sensor.',
+        installationHint:   'All entitetskobling (produksjon, nett, batteri) kommer nå fra Home Assistants Energi-dashbord. Denne seksjonen legger bare til detaljene på anleggsnivå som forbedrer prognosens nøyaktighet: vekselretter-begrensning, panelorientering, valgfri innstrålingssensor.',
         pvInverterMaxKw:    'Maks vekselretter-effekt (kW)',
         pvInverterMaxKwHelp:'Valgfri begrensning på prognosen. Sett inn vekselretterens nominelle AC-effekt når panelene kan produsere mer enn vekselretteren kan levere (typisk europeisk kombinasjon: 6,4 kWp DC bak en 5 kW vekselretter). Påvirker ikke observasjon (vekselretteren begrenser allerede i maskinvare), men kapper prognosekurven, daglige kWh-summer og tooltip-verdier slik at avlesningen aldri overstiger maskinvarens virkelighet.',
         pvArraysSection:    'Panelorientering',
@@ -77,12 +72,12 @@ export const no: Translations = {
         pvArrayHeight:      'Panelhøyde (m)',
         pvArrayHeightHelp:  'Valgfritt, standard 5. Høyde for denne panelgruppen over bakken i meter; brukes av den LiDAR-bevisste PV-prognosen til å plassere ray-march-opphavet ved kontroll av skygge fra en nabo eller et tre. Øk for et tak i øverste etasje (8-10 m), reduser for en bakkemontering (0-1 m). Ingen effekt hvis ingen LiDAR-leverandør dekker hjemmet ditt.',
         pvArrayCoordsPlaceholder: 'valgfritt',
-        inverterCutoffSocPct:       'Vekselretter avbrudd SoC (%)',
+        inverterCutoffSocPct:       'Vekselretter-avbrudd SoC (%)',
         inverterCutoffSocPctHelp:   'Prosenten der din hybridvekselretter blokkerer PV-produksjonen når batteriet når sin innstilte grense. La være tom for å deaktivere. Når satt, hopper skyggekart-treneren over hvert observasjonsvindu der batteriets SoC nådde denne verdien, slik at den vekselretter-blokkerte produksjonen ikke forurenser skyggekartet med spøkelses-skygger på de tilsvarende solposisjonene.',
         solarRadiationEntity:     'Solinnstrålings-entitet',
         solarRadiationEntityHelp: 'Velg en sensor som rapporterer global kortbølget innstråling i W/m² (typisk en Ecowitt / Davis / personlig værstasjon). Når satt, erstatter dens nåværende tilstand og recorder-historikk Open-Meteo for live og tidligere innstrålingsverdier overalt der de vises (tall på solpastillen, Y-aksen i PV-grafen, fargen på solbuen). Prognose-timene bruker fortsatt Open-Meteo, en sensor kjenner bare nået.',
         buildingsSection:   'Bygning',
-        buildingsHint:      'For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataovergangene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.',
+        buildingsHint:      'For å holde kortet flytende i tette urbane områder rendres bare bygninger innenfor konfigurert radius rundt huset i 3D. Selve huset holdes alltid på full opasitet; nabobygninger rendres med konfigurert opasitet for å gi urban kontekst uten å konkurrere med dataoverleggene. Klyngeradiusen grupperer tilkoblede uthus (verandaer, garasjer, skur) i «hus»-settet.',
         buildingClusterRadius: 'Hus-klyngeradius',
         buildingOpacity:       'Opasitet for nabobygninger',
         mapStyleMinimal:       'Minimal',
@@ -98,8 +93,8 @@ export const no: Translations = {
         lidarPrecisionHint:    'Hvis huset ligger innenfor en LiDAR-leverandør integrert med Helios (Kartverket NHM for Norge), får du mer realistiske skygger (bygninger OG vegetasjon). Noe forskyvning kan oppstå mellom de viste bygningene og skyggene deres: LiDAR-undersøkelsen er fanget på en gitt dato og gjenspeiler kanskje ikke nåværende tilstand. Utenfor LiDAR-dekning faller skyggene tilbake til de flate OpenFreeMap-bygningsfotavtrykkene, og denne innstillingen har ingen effekt. Høyere presisjon henter flere celler fra kilden: LiDAR-visningen tegner flere punkter og er tyngre for GPU-en. Den faktiske tettheten avhenger av hva leverandøren publiserer for området ditt.',
         shadowOpacity:         'Skyggeopasitet',
         shadowOpacityHint:     'Opasitet for projiserte bakkeskygger.',
-        localLidarSection:     'Avansert, Lokal LiDAR (BYO)',
-        localLidarHint:        'Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (Digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.',
+        localLidarSection:     'Avansert, lokal LiDAR (BYO)',
+        localLidarHint:        'Valgfri. Pek Helios mot din egen nDSM-GeoTIFF (digital overflatemodell minus bakke, høyde over bakken i meter) hostet i Home Assistant. Gir skygger i regioner som ennå ikke dekkes av de offentlige LiDAR-leverandørene. Innenfor det definerte området erstatter denne kilden enhver nasjonal leverandør.',
         localLidarToolsHint:   'Trenger du å klargjøre en raster fra bunnen av? Slipp den rå LAZ / LAS-filen din eller et DSM + DTM-rasterpar inn på følgesiden [helios-lidar.org](https://helios-lidar.org), den returnerer 2-bånds COG-en Helios leser (bånd 1 = nDSM, bånd 2 = DTM) pluss den ferdige YAML-en for nøklene under. Gratis, ingen installasjon, ingen konto. Vil du heller kjøre alt lokalt? Hele Python-verktøykjeden bor i [Helios-Lidar-repoet](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Bruk lokale data',
         localLidarUrl:         'GeoTIFF-URL',
@@ -117,20 +112,20 @@ export const no: Translations = {
         aboutSiteTitle:        'Følgeside, helios-lidar.org',
         aboutSiteDescription:  'Gratis verktøy som gjør rå åpen LiDAR-data fra hvilket som helst land (LAZ / LAS eller DSM + DTM-par) om til nDSM GeoTIFF som Helios trenger, pluss YAML-snutten du limer inn i denne editoren. Ingen QGIS, ingen GDAL, ingen installasjon, ingen konto.',
         aboutCodeLabel:        'Kildekode',
-        aboutRepoCard:         'Helios',
-        aboutRepoLidar:        'Helios-Lidar',
+        aboutRepoCard:         'Helios (kortet)',
+        aboutRepoLidar:        'Helios-Lidar (følgesiden)',
         aboutCoffeeMessage:    'Helios bygges av én utvikler med mye energi og veldig lite søvn. Hvis det hjelper deg i hverdagen, holder en stjerne på GitHub eller en kaffe prosjektet i live.',
-        aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Adaptive shading map',
-        shadingHint:           'A learning layer on top of the 5-day calibration: each cell of the polar grid below holds the average actual/predicted ratio observed when the sun was at that position and the sky had that cloud cover. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR did not capture. Builds up from your own data over a few weeks; until then the scalar calibration carries the load.',
-        shadingStatsCells:     'cells with data',
-        shadingStatsConfident: 'cells trusted by the forecast',
-        shadingStatsUnder:     'strongest under-production:',
-        shadingStatsOver:      'strongest over-production:',
-        shadingExport:         'Export map',
-        shadingImport:         'Import map',
-        shadingImportError:    'That file is not a valid Helios shading map.',
-        shadingReset:          'Reset map',
-        shadingResetConfirm:   'Throw away every cell the shading map has learned? The forecast will fall back to the scalar calibration for a couple of weeks until the map re-fills.'
+        aboutCoffeeLink:       'Kjøp meg en kaffe',
+        shadingSection:        'Adaptivt skyggekart',
+        shadingHint:           'Et lærende lag oppå 5-dagers-kalibreringen: hver celle i det polare rutenettet under inneholder gjennomsnittsforholdet faktisk/forventet observert da solen sto i den posisjonen og himmelen hadde det skydekket. Lar prognosen bøye av til rett tid på dagen for treskygger, nabotak og andre hindringer LiDAR-en ikke fanget opp. Bygges opp av dine egne data over noen uker; inntil da bærer den skalære kalibreringen lasset.',
+        shadingStatsCells:     'celler med data',
+        shadingStatsConfident: 'celler prognosen stoler på',
+        shadingStatsUnder:     'sterkeste underproduksjon:',
+        shadingStatsOver:      'sterkeste overproduksjon:',
+        shadingExport:         'Eksporter kart',
+        shadingImport:         'Importer kart',
+        shadingImportError:    'Denne filen er ikke et gyldig Helios-skyggekart.',
+        shadingReset:          'Tilbakestill kart',
+        shadingResetConfirm:   'Vil du kaste alle celler skyggekartet har lært? Prognosen faller tilbake til den skalære kalibreringen i et par uker til kartet fylles på nytt.'
     }
 };

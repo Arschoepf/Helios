@@ -99,6 +99,17 @@ export const editorStyles = css`
     {
         transform: rotate(90deg);
     }
+    /*  Per-section icon, sits between the chevron and the label so each accordion row reads at a glance. Inherits the
+        section title's primary-colour tint and shrinks to match the title's vertical rhythm without overpowering it. */
+    .section-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+        margin-right: 2px;
+        flex-shrink: 0;
+    }
 
     /*  Vertical rhythm: a positive top margin pushes the help
         visibly away from its field above, and a generous bottom

@@ -1,16 +1,11 @@
 import type { Translations } from '../index';
 
 /*
- * English, reference locale.
- *
- * The Translations type (defined in ../index.ts) is derived from this
- * object's runtime shape. Because we annotate `en` with that very
- * type, it must contain all keys but is NOT typed as a literal, so
- * other locales can supply any string for each key. Adding a new key
- * here automatically widens Translations and triggers a TypeScript
- * error in every locale that hasn't been updated.
+ * British English, derived from en.ts.
+ * Adjusts spelling and a handful of word choices to UK conventions
+ * (colour, centre, behaviour, personalised, etc.).
  */
-export const en: Translations = {
+export const enGB: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home',
 
@@ -41,7 +36,7 @@ export const en: Translations = {
         locationSection:    'Location',
         homeLatitude:       'Home latitude',
         homeLongitude:      'Home longitude',
-        locationHint:       'Override the home address used as the card\'s center. Leave both fields empty to use Home Assistant\'s configured home. The override is only applied when BOTH fields are set to valid coordinates.',
+        locationHint:       'Override the home address used as the card\'s centre. Leave both fields empty to use Home Assistant\'s configured home. The override is only applied when BOTH fields are set to valid coordinates.',
         uiAndMapSection:    'UI & map',
         mapStyle:           'Map style',
         mapStyleHint:       'Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.',
@@ -66,7 +61,7 @@ export const en: Translations = {
         pvArrayTilt:        'Tilt (°)',
         pvArrayAzimuth:     'Azimuth (°)',
         pvArrayPeakKwp:     'Peak power (kWp)',
-        pvArrayPeakKwpHelp: 'Installed peak power of THIS row in kilowatt-peak. The total kWp of your install is the sum across rows; the per-row share is derived automatically from these values.',
+        pvArrayPeakKwpHelp: 'Installed peak power of THIS row in kilowatt-peak. Sum across rows = total kWp; replaces the legacy global "Peak power" field plus the per-row share. Leave blank to fall back to the share-based weighting.',
         pvArrayAdd:         '+ Add row',
         pvArrayRemove:      'Remove',
         pvArrayNormHint:    'Shares don\'t add up to 100%, the forecast normalises them automatically.',
@@ -81,17 +76,17 @@ export const en: Translations = {
         inverterCutoffSocPct:       'Inverter cutoff SoC (%)',
         inverterCutoffSocPctHelp:   'Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the shading-map trainer skips every observation bucket where the battery SoC reached this value so the inverter-blocked production does not pollute the shading map with phantom shadow at those sun positions.',
         solarRadiationEntity:     'Solar radiation entity',
-        solarRadiationEntityHelp: 'Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours stay on Open-Meteo since a sensor cannot carry future values.',
+        solarRadiationEntityHelp: 'Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours always use Open-Meteo since a sensor only knows the present.',
         buildingsSection:   'Building',
         buildingsHint:      'To keep the card smooth in dense urban areas, only buildings within the configured radius around the home are rendered in 3D. The home itself stays at full opacity; nearby buildings are rendered with the configured opacity so they provide urban context without competing with the data overlays. The cluster radius groups attached outbuildings (verandas, garages, sheds) into the "home" set.',
         buildingClusterRadius: 'Home cluster radius',
         buildingOpacity:       'Surrounding opacity',
         mapStyleMinimal:       'Minimal',
-        shadowsSection:        'LiDAR & shading',
+        shadowsSection:        'Shading',
         shadowsEnabled:        'Show shadows',
         shadowsEnabledOn:      'Shown',
         shadowsEnabledOff:     'Hidden',
-        shadowsEnabledHint:    'Toggles the cast ground shadows. When on, Helios picks the best available source automatically: a LiDAR provider when one covers your area (buildings + vegetation), OpenFreeMap building footprints otherwise (buildings only).',
+        shadowsEnabledHint:    'Master toggle for cast ground shadows. When hidden, no shadows are projected at all. When shown, the source picks itself: a LiDAR provider when one covers your location (buildings + vegetation), OpenFreeMap building footprints otherwise (buildings only).',
         lidarPrecision:        'LiDAR precision',
         lidarPrecisionLow:     'Low',
         lidarPrecisionMedium:  'Medium',
@@ -99,7 +94,7 @@ export const en: Translations = {
         lidarPrecisionHint:    'If your home sits inside a LiDAR provider integrated with Helios, you get more realistic shadows (buildings AND vegetation). Some offset may show up between the rendered buildings and their shadows: the LiDAR survey is captured at a given date and may not reflect the current state of the ground. Out of LiDAR coverage, shadows fall back to the flat OpenFreeMap building footprints and this setting has no effect. Higher precision pulls more cells from the source: the LiDAR view shows more points and weighs more on the GPU. The actual density depends on what the provider publishes for your area.',
         shadowOpacity:         'Shadow opacity',
         shadowOpacityHint:     'Opacity of the cast ground shadows.',
-        localLidarSection:     'Local LiDAR configuration',
+        localLidarSection:     'Advanced, Local LiDAR (BYO)',
         localLidarHint:        'Optional. Point Helios at your own nDSM GeoTIFF (Digital Surface Model minus ground, height-above-ground in metres) hosted on Home Assistant. Lets you light up shadows in any region not yet covered by the public LiDAR providers. Inside the defined area, this source replaces any national provider.',
         localLidarToolsHint:   'Need to prepare a raster from scratch? Drop your raw LAZ / LAS file or a DSM + DTM raster pair into the companion site [helios-lidar.org](https://helios-lidar.org), it returns the 2-band COG Helios reads (band 1 = nDSM, band 2 = DTM) plus the ready-to-paste YAML for the keys below. Free, no install, no account. Prefer to run everything locally? The full Python toolchain lives in the [Helios-Lidar repository](https://github.com/ReikanYsora/Helios-Lidar).',
         localLidarEnabled:     'Use local data',
@@ -118,8 +113,8 @@ export const en: Translations = {
         aboutSiteTitle:        'Companion site, helios-lidar.org',
         aboutSiteDescription:  'Free tool to turn raw open LiDAR data from any country (LAZ / LAS or DSM + DTM pairs) into the nDSM GeoTIFF Helios needs, plus the YAML snippet to paste into this editor. No QGIS, no GDAL, no install, no account.',
         aboutCodeLabel:        'Source code',
-        aboutRepoCard:         'Helios',
-        aboutRepoLidar:        'Helios-Lidar',
+        aboutRepoCard:         'Helios (the card)',
+        aboutRepoLidar:        'Helios-Lidar (the companion site)',
         aboutCoffeeMessage:    'Helios is built by one developer with a lot of energy and very little sleep. If it helps your daily routine, a star on GitHub or a coffee keeps the project alive.',
         aboutCoffeeLink:       'Buy me a coffee',
         shadingSection:        'Adaptive shading map',
