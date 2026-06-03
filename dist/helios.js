@@ -2305,87 +2305,6 @@ ha-card.detail-active .solar-svg,
         to   { transform: rotate(360deg); }
     }
 
-    /*  Cloud-cover percentage chip, pinned at the top centre of the
-        card. Same compact pill recipe as the PV / SoC / Grid In /
-        Grid Out chips, just with the configured cloud colour on the
-        2 px ring instead of the production / battery / grid hues.
-        Always sits above the arc + the solar ray so the toggle stays
-        reachable. */
-{
-        position: absolute;
-        top: 8px;
-        left: 50%;
-        transform: translateX(-50%);
-        pointer-events: none;
-        z-index: 50;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: 4px;
-        min-width: 56px;
-        box-sizing: border-box;
-        background: var(--card-background-color, #ffffff);
-        color:      var(--primary-text-color, #212121);
-        border:     2px solid var(--helios-cloud-color, var(--secondary-text-color, var(--secondary-text-color, #727272)));
-        border-radius: 999px;
-        padding: 3px 10px;
-        font-family: var(--primary-font-family, 'Roboto', sans-serif);
-        font-size:    12px;
-        font-weight:  600;
-        line-height:  1.2;
-        font-variant-numeric: tabular-nums;
-        box-shadow: 0 1px 3px var(--shadow-color);
-        white-space: nowrap;
-        text-rendering: geometricPrecision;
-        -webkit-font-smoothing: antialiased;
-    }
-ha-icon
-    {
-        --mdc-icon-size: 16px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-    /*  Cloud chip ON state (per-layer detail visible): brand-blue
-        plate signals the control is currently expanding the layers
-        below.                                                       */
-.is-on
-    {
-        background: var(--primary-color, #03a9f4);
-        color: var(--text-on-primary-color, #ffffff);
-        border-color: var(--darker-primary-color, #01579b);
-    }
-
-    /*  Cloud chip is now a button (the click toggles the per-layer
-        display below). Reset native button defaults so it visually
-        matches the canonical chip recipe and add a soft shadow on
-        hover so the affordance reads without a tooltip. The chip
-        does NOT lift on hover, the user asked for a flat feedback
-        so the chip stays anchored to its X-centred top spot. */
-    button
-{
-        font-family: inherit;
-        cursor: pointer;
-        pointer-events: auto;
-        transition: box-shadow 0.15s ease;
-    }
-    button
-:hover
-    {
-        box-shadow: 0 2px 8px var(--shadow-color);
-    }
-    button
-:active
-    {
-        box-shadow: 0 1px 2px var(--shadow-color);
-    }
-    button
-:focus-visible
-    {
-        outline: 2px solid var(--primary-color, #03a9f4);
-        outline-offset: 1px;
-    }
-
     /*  Per-altitude cloud cover discs. Three 40 px round chips drop
         in the overlay-top-right rail below the cloud-cover toggle.
         Always in the DOM whenever the cloud scene is available so
@@ -2452,6 +2371,7 @@ ha-icon
         margin-bottom: 2px;
     }
 
+    /*  Dome SVG: full-card overlay, sits below the click chrome so
         it never blocks pointer events. Fade alpha comes from inline
         style driven by the dome fade RAF.                          */
     .shading-dome-svg
