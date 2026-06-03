@@ -572,6 +572,12 @@ export const heliosCardStyles = css`
         --mdc-icon-size: 18px;
         color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
         flex-shrink: 0;
+        /*  Kill the ha-icon baseline so the glyph lands on the flex cross-axis centre rather than its
+            default text baseline (the date text sits centred, the icon was nudging up by ~2 px without these
+            three lines). */
+        display: inline-flex;
+        align-items: center;
+        line-height: 0;
     }
     .dash-cf-card-date
     {
@@ -619,7 +625,7 @@ export const heliosCardStyles = css`
         .dash-cf-card-date-long  { display: none;   }
         .dash-cf-card-date-short { display: inline; }
         .dash-cf-card-day-chip   { display: none;   }
-        .dash-cf-card-stats      { flex-direction: column; }
+        .dash-cf-card-stats      { grid-template-columns: 1fr; }
     }
 
     /*  First content block under the bandeau: Production on the left, Prévision on the right. Mushroom-card
@@ -628,10 +634,11 @@ export const heliosCardStyles = css`
         Uses HA theme tokens throughout so the colours follow the active frontend theme. */
     .dash-cf-card-stats
     {
-        display: flex;
-        /*  Gap + padding both bind to the same 8 px the bandeau uses for its outer margin so the JOUR strip,
-            the gap between PRODUCTION / PREVISION tiles and the gutters to the card edges all share the same
-            rhythm. */
+        /*  4 tiles in a 2x2 grid: Production / Prévision on the top row, Battery in / out on the bottom row.
+            Equal-fraction columns + rows so every tile takes a quarter of the block, regardless of label
+            length. Stacks to a single column on narrow containers via the @container rule above. */
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
         padding: 0 8px;
     }
@@ -649,7 +656,11 @@ export const heliosCardStyles = css`
         /*  Hard-coded 16 px, matches the bandeau radius. Same reasoning: some themes set
             --ha-card-border-radius low and the tiles read as near-square in those themes. */
         border-radius: 16px;
-        background: var(--secondary-background-color, var(--ha-card-background, rgba(255, 255, 255, 0.04)));
+        /*  Tile background = the ha-card background slightly darkened via color-mix with black, so the tile
+            reads as a recess inside the surrounding bandeau on both light and dark themes (light theme: white
+            card + 6 % black = very light grey; dark theme: dark card + 6 % black = slightly darker dark). No
+            HA theme variable does this exactly, color-mix lets us derive the shade from the live theme. */
+        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) 92%, #000 8%);
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
         min-width: 0;
@@ -658,10 +669,9 @@ export const heliosCardStyles = css`
     {
         width: 32px;
         height: 32px;
-        /*  HA frontend tile-card icon badges render as rounded SQUARES (~12 px radius for a 32 px badge), not
-            full circles. Reverted from 50 % to 12 px after a side-by-side comparison with the native HA tile
-            card the user shared. */
-        border-radius: 12px;
+        /*  Fully circular badge per the latest user feedback (the rounded-square shape read as too "card-y"
+            against the surrounding rounded-square tile body). */
+        border-radius: 50%;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -688,6 +698,18 @@ export const heliosCardStyles = css`
     {
         background: color-mix(in srgb, var(--info-color, #039be5) 18%, transparent);
         color: var(--info-color, #039be5);
+    }
+    /*  Battery in / out tinted with the HA Energy battery palette so the four tiles read as the same family
+        as the matching slots on the native HA Energy dashboard. */
+    .dash-cf-card-stat-icon-battery-in
+    {
+        background: color-mix(in srgb, var(--energy-battery-in-color, #4caf50) 18%, transparent);
+        color: var(--energy-battery-in-color, #4caf50);
+    }
+    .dash-cf-card-stat-icon-battery-out
+    {
+        background: color-mix(in srgb, var(--energy-battery-out-color, #1b6c75) 18%, transparent);
+        color: var(--energy-battery-out-color, #1b6c75);
     }
     .dash-cf-card-stat-body
     {
@@ -718,6 +740,20 @@ export const heliosCardStyles = css`
         font-weight: 500;
         opacity: 0.75;
         margin-left: 2px;
+    }
+
+    /*  Bottom block: chart placeholder that takes ALL remaining height in the card flex column. The body is
+        intentionally empty for now (chart implementation is the next iteration), the placeholder still
+        renders the framed area with the same tile recipe as the stat tiles so the empty card already reads
+        as "this is where the chart will go". */
+    .dash-cf-card-chart
+    {
+        flex: 1 1 auto;
+        min-height: 0;
+        margin: 8px;
+        border-radius: 16px;
+        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) 92%, #000 8%);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous

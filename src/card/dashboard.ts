@@ -402,6 +402,13 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const stats = computeDayStats(host, cardOffset);
     const weatherIcon = cloudCoverIcon(stats.avgCloud);
 
+    //Battery charged / discharged today, from computeBatteryToday for the live day. Past / future cards keep
+    //the tiles visible with 0 kWh values until we add an LTS path for historical battery flow, so the four
+    //tile slots are always present and the card layout stays constant across day offsets.
+    const battery = cardOffset === 0
+        ? computeBatteryToday(host as unknown as BatteryHost)
+        : { socNow: null, chargedKwh: 0, dischargedKwh: 0 };
+
     return html`
         <article
             class="dash-cf-card ${isFront ? 'dash-cf-card-front' : ''}"
@@ -466,7 +473,31 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
                         </span>
                     </span>
                 </div>
+                <div class="dash-cf-card-stat dash-cf-card-stat-battery-in">
+                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-in" aria-hidden="true">
+                        <ha-icon icon="mdi:battery-arrow-up"></ha-icon>
+                    </span>
+                    <span class="dash-cf-card-stat-body">
+                        <span class="dash-cf-card-stat-label">Charge</span>
+                        <span class="dash-cf-card-stat-value">
+                            ${formatLocalisedNumber(host.hass, battery.chargedKwh, 1)} kWh
+                        </span>
+                    </span>
+                </div>
+                <div class="dash-cf-card-stat dash-cf-card-stat-battery-out">
+                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-out" aria-hidden="true">
+                        <ha-icon icon="mdi:battery-arrow-down"></ha-icon>
+                    </span>
+                    <span class="dash-cf-card-stat-body">
+                        <span class="dash-cf-card-stat-label">Décharge</span>
+                        <span class="dash-cf-card-stat-value">
+                            ${formatLocalisedNumber(host.hass, battery.dischargedKwh, 1)} kWh
+                        </span>
+                    </span>
+                </div>
             </section>
+
+            <section class="dash-cf-card-chart" aria-hidden="true"></section>
         </article>
     `;
 }
