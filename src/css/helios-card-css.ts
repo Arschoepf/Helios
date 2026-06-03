@@ -3334,8 +3334,8 @@ export const heliosCardStyles = css`
         each progress increment glides in instead of snapping.                                                  */
     .boot-spinner-sun
     {
-        width: 144px;
-        height: 144px;
+        width: 120px;
+        height: 120px;
         color: var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
         overflow: visible;
     }

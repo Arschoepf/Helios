@@ -2067,7 +2067,7 @@ export class HeliosCard extends LitElement
         const bootR        = 28;
         const bootRInner   = bootR * bootProgress;
         const bootHaloR    = bootR * (1.4 + 1.6 * bootProgress);
-        const bootHaloA    = bootProgress * 0.30;
+        const bootHaloA    = bootProgress * 0.22;
         const bootGradId   = `boot-sun-halo-${this._instanceId}`;
         const bootOverlay = this._bootPhase === 'loading'
             ? html`
