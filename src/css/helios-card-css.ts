@@ -1351,7 +1351,7 @@ ha-card.detail-active .solar-svg,
             keeps the stroke visible without dominating the chart
             content underneath. */
         border: 2px solid rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.55);
-        border-radius: 12px;
+        border-radius: 8px;
         box-shadow: 0 1px 3px var(--shadow-color);
         /*  Height scales with the card's container width (cqw =
             container-query width). 36 px floor on a small grid tile,
