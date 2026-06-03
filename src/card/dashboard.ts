@@ -616,7 +616,7 @@ export function renderDashTodaySection(
 
     const todayDate = new Date();
     todayDate.setHours(0, 0, 0, 0);
-    const todayDateLabel = formatDate(todayDate, host.config?.['date-format']);
+    const todayDateLabel = formatDate(todayDate, host.hass);
 
     //Forecast calibration: surface the refined kWh as a SECOND
     //per-step integration that blends the per-(sun × cloud) shading-
@@ -1138,7 +1138,7 @@ export function renderDashTomorrowSection(
     const tomorrowDate = new Date();
     tomorrowDate.setHours(0, 0, 0, 0);
     tomorrowDate.setDate(tomorrowDate.getDate() + 1);
-    const tomorrowDateLabel = formatDate(tomorrowDate, host.config?.['date-format']);
+    const tomorrowDateLabel = formatDate(tomorrowDate, host.hass);
 
     //Same per-(sun × cloud) blended ratio we apply on the today
     //card, surfaced under the tomorrow stat too so the user sees a

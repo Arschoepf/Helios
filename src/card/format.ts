@@ -93,34 +93,11 @@ export function cfgHex(v: unknown, fallback: string): string
 }
 
 
-//Locale-independent date formatter. Tokens: yyyy, yy, mm, dd , anything else is preserved verbatim. Falls back to "mm-dd" when the format is empty,
-//undefined, or contains unsafe characters.
-const VALID_DATE_FORMAT_RE = /^[\-\/\. _:0-9A-Za-z]+$/;
-const DATE_TOKEN_RE        = /yyyy|yy|mm|dd/g;
-
-export function formatDate(d: Date, rawFormat: unknown): string
+//Short date formatter. Honours the user's HA language preference so a French dashboard reads "lun. 3 juin" while an English one reads "Mon, Jun 3".
+export function formatDate(d: Date, hass?: { language?: string }): string
 {
-    let fmt = typeof rawFormat === 'string' ? rawFormat.trim() : '';
-    if (!fmt || !VALID_DATE_FORMAT_RE.test(fmt) || !DATE_TOKEN_RE.test(fmt))
-    {
-        fmt = 'mm-dd';
-    }
-    DATE_TOKEN_RE.lastIndex = 0;
-
-    const yyyy = String(d.getFullYear());
-    const yy   = yyyy.slice(-2);
-    const mm   = String(d.getMonth() + 1).padStart(2, '0');
-    const dd   = String(d.getDate()).padStart(2, '0');
-
-    return fmt.replace(DATE_TOKEN_RE, tok =>
-    {
-        switch (tok)
-        {
-            case 'yyyy': return yyyy;
-            case 'yy':   return yy;
-            case 'mm':   return mm;
-            case 'dd':   return dd;
-        }
-        return tok;
-    });
+    const lang = (hass?.language as string | undefined) || undefined;
+    return new Intl.DateTimeFormat(lang, {
+        weekday: 'short', day: 'numeric', month: 'short',
+    }).format(d);
 }

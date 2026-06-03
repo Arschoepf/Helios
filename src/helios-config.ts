@@ -190,11 +190,6 @@ export interface HeliosConfig
     //and a negative reading as IMPORT. Use it when the meter reports
     //grid feed-in as positive. Default false. Ignored when
     //grid-power-entity is not set.
-    'date-format'?:           unknown;
-    //'12h' | '24h'. Default: '24h'. Picks between locale-
-    //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
-    //rendering of the date/time chip at the top-right of the card.
-    'time-format'?:           unknown;
     //Picks the OpenFreeMap base style. 'streets' (default) renders
     //the full-colour Liberty style with street / POI labels suited to
     //urban areas; 'minimal' renders the muted-grey Positron style for

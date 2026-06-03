@@ -65,9 +65,6 @@ export const VISUAL_CONFIG_KEYS = [
     //Timeline visibility + chart UX preferences.
     'timeline-enabled',
     'timeline-width-pct',
-    'timeline-consumption-enabled',
-    'date-format',
-    'time-format',
     'auto-rotate-enabled',
     //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must invalidate the engine sig so the shadow pipeline reruns against the
     //new provider config (toggle, URL or bbox).

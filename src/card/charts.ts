@@ -1385,7 +1385,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
             const isToday  = dayDelta === 0;
             const isActive = activeDayKey !== null && cursor.getTime() === activeDayKey;
 
-            const label    = formatDate(cursor, host.config?.['date-format']);
+            const label    = formatDate(cursor, host.hass);
 
             cells.push({
                 isToday,

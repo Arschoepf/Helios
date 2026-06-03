@@ -107,11 +107,6 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
-        dateFormat:               string;
-        dateFormatHelp:           string;
-        timeFormat:               string;
-        timeFormat12:             string;
-        timeFormat24:             string;
         //UI section, hosts the chrome-level customisation that
         //doesn't belong to a specific data overlay: sun + cloud
         //colours (the two phenomena that don't have their own

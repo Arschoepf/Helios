@@ -157,11 +157,9 @@ export class HeliosCardEditor extends LitElement
         'battery-power-entity',
         'battery-power-invert',
         'batteries',
-        //v1.8.3: the per-day kWh chip on the timeline date strip went
-        //away with the date strip redesign, so the toggle that gated
-        //it is silently stripped from saved YAML on the next editor
-        //open.
         'timeline-consumption-enabled',
+        'date-format',
+        'time-format',
     ];
     private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
     {
@@ -650,33 +648,6 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section" ?open="${this._openSection === 'ui'}" @toggle="${(e: Event) => this._onSectionToggle('ui', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.uiSection}</summary>
-                    <label class="field">
-                        <span class="label">${t.editor.dateFormat}</span>
-                        <input
-                            type="text"
-                            .value="${String(c['date-format'] ?? '')}"
-                            placeholder="mm-dd"
-                            @change="${(e: Event) => this._str('date-format', e)}"
-                        />
-                    </label>
-                    <div class="field-help">
-                        ${t.editor.dateFormatHelp} <code>mm-dd</code>, <code>dd/mm</code>, <code>yyyy-mm-dd</code>.
-                    </div>
-                    <div class="field">
-                        <span class="label">${t.editor.timeFormat}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '24h' ? 'active' : ''}"
-                                @click="${() => this._update('time-format', '24h')}"
-                            >${t.editor.timeFormat24}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${(String(c['time-format'] ?? '24h')) === '12h' ? 'active' : ''}"
-                                @click="${() => this._update('time-format', '12h')}"
-                            >${t.editor.timeFormat12}</button>
-                        </div>
-                    </div>
                     <div class="field">
                         <span class="label">${t.editor.autoRotate}</span>
                         <div class="segmented-toggle">
