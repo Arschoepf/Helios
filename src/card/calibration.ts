@@ -103,7 +103,6 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
 
     //Walk back day by day starting at yesterday. For each day, compute the model's "would-have-predicted" kWh from the hourly weather samples and the
     //user's actual produced kWh from the PV history. Keep going up to WINDOW_DAYS or until we run out of weather samples.
-    const HOUR_MS = 3_600_000;
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
 
@@ -115,8 +114,15 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
 
     for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++)
     {
-        const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
-        const dayEndMs   = dayStartMs + 24 * HOUR_MS;
+        //Walk back by calendar days, not by a fixed 24 h offset, so spring-forward (23 h) and fall-back (25 h) DST
+        //days line up on local midnight instead of landing at 01:00 or 23:00 of the prior day. The two `setDate`
+        //calls are evaluated on fresh Date instances so the loop state is not mutated across iterations.
+        const dayStart   = new Date(today0);
+        dayStart.setDate(dayStart.getDate() - dayOffset);
+        const dayEnd     = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+        const dayStartMs = dayStart.getTime();
+        const dayEndMs   = dayEnd.getTime();
 
         const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
         if (predictedKwh < MIN_DAY_PREDICTED_KWH)
@@ -135,7 +141,10 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
         {
             continue;
         }
-        ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r)));
+        //Push the raw daily ratio. The single clamp on the final mean below is enough; clamping per-day on the way in
+        //artificially drags the mean toward 1.0 on outlier days, so a string of true-2.0-ratio days reads as 1.5 (the
+        //per-day clamp) averaged with 1.0 baseline = 1.25 instead of the correct 1.5.
+        ratios.push(r);
     }
 
     let result: ForecastCalibration | null;

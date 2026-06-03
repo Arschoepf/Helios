@@ -33,6 +33,43 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Forecast accuracy + main-thread performance pass
+
+Forecast (PART 4 audit follow-ups):
+
+- Hemisphere-aware default azimuth, southern-hemisphere installs that leave the field blank now default to north
+  (`0`) instead of south (`180`), eliminating a systematic 10-30 % under-prediction for AUS / NZ / South-American
+  users.
+- DST-safe day iteration in the 5-day calibration loop and in the today / tomorrow dashboard windows. Spring-forward
+  (23 h) and fall-back (25 h) days now land on the correct local midnight instead of 01:00 / 23:00.
+- Calibration ratio is no longer clamped per-day before averaging, the single clamp on the final mean preserves the
+  full signal from outlier days (a real 2.0 day no longer gets dragged toward 1.0).
+- Cloud cover layers are clamped to [0, 100] individually before the weighted sum, so an upstream Open-Meteo quirk
+  on one layer cannot bleed an off-balance contribution into the final value.
+- Mid-day cumulative counter reset (sensor restart, integration nodered restart, daily reset on a utility-meter)
+  re-baselines so the today-kwh stays monotonic from the last known total, instead of jumping backward.
+- `computePvPowerWeighted` gains a defensive bounds check on the `pvArrays` output to keep a future drift in array
+  lengths from silently propagating NaN through the forecast.
+
+Performance (PART 5 audit follow-ups):
+
+- Auto-rotate rAF loop suspends itself when the editor toggle is OFF or the camera-locked switch is ON instead of
+  self-resubmitting at 60 Hz for the full life of the engine. The loop re-arms from `updateConfig` whenever the
+  user flips either flag back to the rotation-permitting state. The default install ships with auto-rotate OFF, so
+  this drops a continuous CPU sink that was burning ~4-6 % of one core for nothing.
+- Custom `hass` setter that diffs only the entity ids the card reads (PV / grid / battery slots resolved from the HA
+  Energy defaults) and skips `requestUpdate()` when none of the watched states moved. A 1 Hz Victron / Shelly install
+  with a busy state bus (a smart thermostat, a phone battery, MQTT lights) used to push a full Lit render on every
+  unrelated state change, now those pushes land silently and only the relevant watts ticks redraw.
+- Binary search over `_pvHistory.times` inside `pvRateAtTime` and `interpAt`. The scrub tooltip used to linear-scan
+  from index 0 on every Lit render; on 1 Hz sensors the history reaches ~21,600 entries over a 6 h window, so the
+  tooltip path is now O(log n) per call instead of O(n).
+- HA daily totals fetch is shared across cards on the same dashboard. A new module-level cache keyed by
+  `(local_date, sorted_statistic_ids)` with a 25 s TTL + in-flight Promise dedupe means an N-card dashboard hits the
+  recorder once per 30 s window instead of 5N times.
+- The 60 s sky / atmosphere refresh interval is cleared on `setPaused(true)` so a scrolled-away card no longer wakes
+  the page every minute just to early-return.
+
 ### Scrub tooltip Live chip aligned with the time row
 
 The Live chip now lives as the last flex child of the time heading row, pushed to the right edge via

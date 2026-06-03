@@ -193,8 +193,12 @@ export function computeTodayHourly(host: DashboardHost): {
     const HOUR_MS = 3_600_000;
     const today0  = new Date();
     today0.setHours(0, 0, 0, 0);
+    //DST-safe end-of-day: spring-forward (23 h) and fall-back (25 h) days resolve to the correct next local midnight
+    //instead of landing at 01:00 or 23:00.
+    const tomorrow0 = new Date(today0);
+    tomorrow0.setDate(tomorrow0.getDate() + 1);
     const startMs = today0.getTime();
-    const endMs   = startMs + 24 * HOUR_MS;
+    const endMs   = tomorrow0.getTime();
     const nowMs   = Date.now();
 
     const bins: Array<{
@@ -463,8 +467,10 @@ export function computeTodayCumulative(host: DashboardHost): {
     const HOUR_MS = 3_600_000;
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
+    const tomorrow0 = new Date(today0);
+    tomorrow0.setDate(tomorrow0.getDate() + 1);
     const startMs = today0.getTime();
-    const endMs   = startMs + 24 * HOUR_MS;
+    const endMs   = tomorrow0.getTime();
     const nowMs   = Date.now();
 
     const actualSamples: Array<{ tMs: number; kwh: number }> = [];
@@ -502,6 +508,14 @@ export function computeTodayCumulative(host: DashboardHost): {
                 if (baseline === null)
                 {
                     baseline = v;
+                }
+                //Mid-day counter reset (sensor restart, integration nodered restart, daily-reset utility-meter): the
+                //raw value drops below the baseline. Snap the baseline so the cumulative day-kwh stays monotonic from
+                //the last known total, otherwise every post-reset sample reads as a fresh baseline and the day total
+                //jumps backward by the full pre-reset production.
+                if (v < baseline)
+                {
+                    baseline = v - actualKwh;
                 }
                 const kwh = Math.max(0, v - baseline);
                 actualSamples.push({ tMs, kwh });
@@ -827,8 +841,10 @@ export function renderDashTodayChart(
     const HOUR_MS  = 3_600_000;
     const today0   = new Date();
     today0.setHours(0, 0, 0, 0);
+    const tomorrow0 = new Date(today0);
+    tomorrow0.setDate(tomorrow0.getDate() + 1);
     const startMs  = today0.getTime();
-    const endMs    = startMs + 24 * HOUR_MS;
+    const endMs    = tomorrow0.getTime();
     const nowMs    = Date.now();
 
     //SVG viewBox with preserveAspectRatio="none". Curves stretch
@@ -1156,8 +1172,12 @@ export function computeTomorrow(host: DashboardHost): {
     const HOUR_MS = 3_600_000;
     const today0  = new Date();
     today0.setHours(0, 0, 0, 0);
-    const tomorrowMs = today0.getTime() + 24 * HOUR_MS;
-    const endMs      = tomorrowMs + 24 * HOUR_MS;
+    const tomorrow0 = new Date(today0);
+    tomorrow0.setDate(tomorrow0.getDate() + 1);
+    const dayAfter0 = new Date(tomorrow0);
+    dayAfter0.setDate(dayAfter0.getDate() + 1);
+    const tomorrowMs = tomorrow0.getTime();
+    const endMs      = dayAfter0.getTime();
 
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);

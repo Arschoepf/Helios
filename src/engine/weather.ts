@@ -446,11 +446,15 @@ export async function fetchHomePointData(
         const midSeries  = fillCloud(readSeries(row, 'cloud_cover_mid',  models));
         const highSeries = fillCloud(readSeries(row, 'cloud_cover_high', models));
 
+        //Clamp each layer to [0, 100] before weighting so an upstream API quirk that returns > 100 on one layer does
+        //not bleed into the weighted sum with the wrong relative contribution (the final Math.min would catch the
+        //total but the layer mix would already be wrong).
         const cloudEffective = lowSeries.map((lo, i) =>
         {
-            const mi = midSeries[i]  ?? 0;
-            const hi = highSeries[i] ?? 0;
-            return Math.min(100, (lo ?? 0) + 0.6 * mi + 0.2 * hi);
+            const lc = Math.max(0, Math.min(100, lo ?? 0));
+            const mc = Math.max(0, Math.min(100, midSeries[i]  ?? 0));
+            const hc = Math.max(0, Math.min(100, highSeries[i] ?? 0));
+            return Math.min(100, lc + 0.6 * mc + 0.2 * hc);
         });
 
         const data: SampleHourly = {

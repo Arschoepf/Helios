@@ -3562,9 +3562,31 @@ export class HeliosEngine
             return;
         }
         this._paused = paused;
-        if (!paused)
+        if (paused)
+        {
+            //Drop the 60 s sky refresh interval entirely while paused. The interior of the callback already early-
+            //returns when `_paused` is true, but the timer itself still kept the page awake and showed up in profilers
+            //as a wakeup every minute for no work. Re-arm on un-pause below.
+            if (this._skyTimer !== undefined)
+            {
+                window.clearInterval(this._skyTimer);
+                this._skyTimer = undefined;
+            }
+        }
+        else
         {
             this._refreshShadowsAndAtmosphere();
+            if (this._skyTimer === undefined)
+            {
+                this._skyTimer = window.setInterval(() =>
+                {
+                    if (this._paused)
+                    {
+                        return;
+                    }
+                    this._refreshShadowsAndAtmosphere();
+                }, 60_000);
+            }
         }
     }
 
@@ -4878,7 +4900,21 @@ export class HeliosEngine
         const prevPrecision   = this._lidarPrecisionLevel();
         const prevShadowOpa   = this._shadowOpacity();
         const prevShadowsOn   = this._shadowsEnabled();
+        const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
+        const prevCameraLocked = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
         this.cfg = { ...cfg };
+
+        //Re-arm the auto-rotate rAF loop when either long-lived flag transitions back to a rotation-permitting
+        //state. The loop suspends itself when disabled to avoid burning 60 Hz of CPU on a no-op tick (see the early
+        //return inside tick() in src/engine/auto-rotate.ts).
+        const nextAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
+        const nextCameraLocked = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+        const nowPermitsRotation  = nextAutoRotateOn && !nextCameraLocked;
+        const prevPermitsRotation = prevAutoRotateOn && !prevCameraLocked;
+        if (nowPermitsRotation && !prevPermitsRotation && this.map)
+        {
+            startAutoRotateLoop(this);
+        }
 
         if (!this.map)
         {

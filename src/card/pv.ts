@@ -895,15 +895,37 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
         rateUnit = u ? `${u}/h` : '';
     }
 
-    //Locate the index of the sample at or before `time`, linear scan is fine for the ~96 samples a typical 4-day window carries.
-    let idx = hist.times.length - 1;
-    for (let i = 0; i < hist.times.length; i++)
+    //Locate the index of the sample at or before `time`. Binary search over the monotonically ascending `times`
+    //array, called from the scrub tooltip on every Lit render; on 1 Hz Victron / Shelly installs `_pvHistory` can
+    //carry ~21,600 entries over a 6 h raw window, where the previous linear scan was the dominant cost on the
+    //tooltip path.
+    const len = hist.times.length;
+    let idx: number;
+    if (len === 0 || tMs < hist.times[0].getTime())
     {
-        if (hist.times[i].getTime() > tMs)
+        idx = 0;
+    }
+    else if (tMs >= hist.times[len - 1].getTime())
+    {
+        idx = len - 1;
+    }
+    else
+    {
+        let lo = 0;
+        let hi = len - 1;
+        while (hi - lo > 1)
         {
-            idx = i - 1;
-            break;
+            const mid = (lo + hi) >> 1;
+            if (hist.times[mid].getTime() <= tMs)
+            {
+                lo = mid;
+            }
+            else
+            {
+                hi = mid;
+            }
         }
+        idx = lo;
     }
     if (idx < 0)
     {
@@ -1298,7 +1320,12 @@ export function wipeLegacyPvCalibStorage(
 //  3. Otherwise empty result, caller uses the horizontal-panel
 //     fast path inside computePvPower.
 export function pvArrays(
-    config: HeliosConfig | undefined
+    config: HeliosConfig | undefined,
+    //Home latitude in degrees, used only to pick the default azimuth when a row leaves it blank. A south-facing default
+    //(180) is right for the northern hemisphere where the sun crosses the southern sky; for the southern hemisphere we
+    //flip to north-facing (0) so an Aussie / NZ / South-American install that leaves the field empty doesn't get a
+    //systematically wrong forecast. `undefined` (no caller hint) preserves the historical 180 default.
+    homeLat?: number,
 ): {
     orientations: PanelOrientation[];
     shares:       number[];
@@ -1318,6 +1345,11 @@ export function pvArrays(
     const co:  ({ lat: number; lon: number } | null)[] = [];
     const he:  number[]           = [];
     const kw:  number[]           = [];
+
+    //Hemisphere-aware default azimuth for blank entries. Falls back to 180 (south) when the caller does not pass a
+    //home latitude, preserving the historical default for callers that only care about totalKwp (where azimuth is
+    //unused anyway).
+    const defaultAz = (typeof homeLat === 'number' && isFinite(homeLat) && homeLat < 0) ? 0 : 180;
 
     //Parse a single coord value (lat or lon) from the editor's
     //free-form input. Empty / non-numeric / out-of-range values
@@ -1361,7 +1393,7 @@ export function pvArrays(
 
             const rawAz = e['azimuth'];
             const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
-            const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : 180;
+            const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : defaultAz;
 
             //Per-string peak power in kWp (preferred path).
             //NaN when blank; the caller's pv-peak-kwp covers it.
@@ -1481,7 +1513,7 @@ export function pvArrays(
             const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
             out.push({
                 tiltDeg:    Math.max(0, Math.min(90, tilt)),
-                azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : 180
+                azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : defaultAz
             });
             sh.push(1);
             co.push(null);
@@ -1538,10 +1570,18 @@ export function computePvPowerWeighted(
     ctx?: PvWeightedContext,
 ): number
 {
-    const { orientations, shares, coords, heightsM } = pvArrays(config);
+    const { orientations, shares, coords, heightsM } = pvArrays(config, lat);
     const baseCtx = (ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN)))
         ? { airTempC: ctx.airTempC, windMs: ctx.windMs }
         : undefined;
+
+    //Defensive guard: pvArrays must keep its four output arrays in lockstep. If a future edit ever drifts that
+    //invariant we'd silently read past the share array's end, propagating NaN through the forecast. Fall back to the
+    //horizontal-panel path so the curve still renders.
+    if (orientations.length !== shares.length || orientations.length !== coords.length || orientations.length !== heightsM.length)
+    {
+        return computePvPower(t, lat, lon, cloudPct, undefined, baseCtx);
+    }
 
     if (orientations.length === 0)
     {

@@ -700,28 +700,38 @@ function interpAt(times: Date[], values: number[], targetMs: number): number
         const v = values[n - 1];
         return isFinite(v) ? v : NaN;
     }
-    for (let i = 1; i < n; i++)
+    //Binary search over the monotonically ascending `times` array. The early returns above already handled the
+    //out-of-range cases, so here we know times[0] < targetMs < times[n - 1] and we narrow lo/hi to the bracketing
+    //pair in O(log n). The previous linear scan walked from index 1 on every render, hot on 1 Hz sensors where
+    //`_pvHistory` reaches ~21,600 entries over a 6 h window and the tooltip re-runs interpAt twice per render.
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1)
     {
-        const t1 = times[i].getTime();
-        if (targetMs > t1)
+        const mid = (lo + hi) >> 1;
+        if (times[mid].getTime() <= targetMs)
         {
-            continue;
+            lo = mid;
         }
-        const t0 = times[i - 1].getTime();
-        const v0 = values[i - 1];
-        const v1 = values[i];
-        if (!isFinite(v0) || !isFinite(v1))
+        else
         {
-            return NaN;
+            hi = mid;
         }
-        const dt = t1 - t0;
-        if (dt <= 0)
-        {
-            return v1;
-        }
-        return v0 + (v1 - v0) * (targetMs - t0) / dt;
     }
-    return NaN;
+    const t0 = times[lo].getTime();
+    const t1 = times[hi].getTime();
+    const v0 = values[lo];
+    const v1 = values[hi];
+    if (!isFinite(v0) || !isFinite(v1))
+    {
+        return NaN;
+    }
+    const dt = t1 - t0;
+    if (dt <= 0)
+    {
+        return v1;
+    }
+    return v0 + (v1 - v0) * (targetMs - t0) / dt;
 }
 
 

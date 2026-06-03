@@ -147,9 +147,25 @@ export interface HaDailyTotalsHost
 }
 
 
+//Module-level cache for the recorder day-totals fetch. Keyed by `${localDateIso}|${sortedStatisticIds}` so two cards
+//on the same dashboard share a single WS round-trip per refresh window. The TTL undershoots the card's 30 s tick so
+//the cached value survives the entire interval between refreshes; inflight requests are deduped via the `inflight`
+//slot so concurrent cards never race two parallel calls. The cache is process-scoped (cleared on page reload), which
+//is the same lifetime as the hass.connection.
+type HaDailyTotalsCacheEntry =
+{
+    ts:        number;
+    result:    number | null;
+    inflight?: Promise<number | null>;
+};
+const HA_DAILY_TOTALS_TTL_MS = 25_000;
+const _haDailyTotalsCache = new Map<string, HaDailyTotalsCacheEntry>();
+
+
 //Recorder query helper. Sums the `change` field of `recorder/statistics_during_period` over today (local midnight to now)
 //across every statistic_id in the list. Returns null when the list is empty, when no `hass.callWS` is available, or when
-//the call rejects, so callers fall back cleanly.
+//the call rejects, so callers fall back cleanly. Shared across cards via `_haDailyTotalsCache` so an N-card dashboard
+//hits the recorder once instead of N times per refresh window.
 async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string[]): Promise<number | null>
 {
     if (statisticIds.length === 0)
@@ -163,50 +179,72 @@ async function fetchTodayKwhChange(host: HaDailyTotalsHost, statisticIds: string
     const midnight = new Date();
     midnight.setHours(0, 0, 0, 0);
     const now = new Date();
-    try
+    //Date stamp embedded in the key so the cached value doesn't outlive its window at midnight rollover.
+    const cacheKey = `${midnight.getFullYear()}-${midnight.getMonth()}-${midnight.getDate()}|${[...statisticIds].sort().join('|')}`;
+    const nowMs    = now.getTime();
+    const cached   = _haDailyTotalsCache.get(cacheKey);
+    if (cached)
     {
-        const result = await host.hass.callWS({
-            type:          'recorder/statistics_during_period',
-            start_time:    midnight.toISOString(),
-            end_time:      now.toISOString(),
-            statistic_ids: statisticIds,
-            //Day-period query returns at most one bucket per statistic covering today's window. `types: ['change']`
-            //returns the net delta the recorder computed across the bucket using the same Riemann sum HA Energy itself
-            //consumes, so the result matches the dashboard tile to the watt-hour.
-            period:        'day',
-            types:         ['change'],
-            //Normalise to kWh so installs reporting in Wh / MWh land on the same scale as the HA Energy headline tile;
-            //the chip + dashboard formatters assume kWh downstream.
-            units:         { energy: 'kWh' },
-        }) as Record<string, Array<{ change?: number | null }>>;
-        let total  = 0;
-        let anyHit = false;
-        for (const id of statisticIds)
+        if (cached.inflight)
         {
-            const buckets = result?.[id];
-            if (!Array.isArray(buckets))
+            return cached.inflight;
+        }
+        if (nowMs - cached.ts < HA_DAILY_TOTALS_TTL_MS)
+        {
+            return cached.result;
+        }
+    }
+    const inflight: Promise<number | null> = (async () =>
+    {
+        try
+        {
+            const result = await host.hass.callWS({
+                type:          'recorder/statistics_during_period',
+                start_time:    midnight.toISOString(),
+                end_time:      now.toISOString(),
+                statistic_ids: statisticIds,
+                //Day-period query returns at most one bucket per statistic covering today's window. `types: ['change']`
+                //returns the net delta the recorder computed across the bucket using the same Riemann sum HA Energy itself
+                //consumes, so the result matches the dashboard tile to the watt-hour.
+                period:        'day',
+                types:         ['change'],
+                //Normalise to kWh so installs reporting in Wh / MWh land on the same scale as the HA Energy headline tile;
+                //the chip + dashboard formatters assume kWh downstream.
+                units:         { energy: 'kWh' },
+            }) as Record<string, Array<{ change?: number | null }>>;
+            let total  = 0;
+            let anyHit = false;
+            for (const id of statisticIds)
             {
-                continue;
-            }
-            for (const bucket of buckets)
-            {
-                const v = typeof bucket?.change === 'number' ? bucket.change : null;
-                if (v === null)
+                const buckets = result?.[id];
+                if (!Array.isArray(buckets))
                 {
                     continue;
                 }
-                total += v;
-                anyHit = true;
+                for (const bucket of buckets)
+                {
+                    const v = typeof bucket?.change === 'number' ? bucket.change : null;
+                    if (v === null)
+                    {
+                        continue;
+                    }
+                    total += v;
+                    anyHit = true;
+                }
             }
+            return anyHit ? total : null;
         }
-        return anyHit ? total : null;
-    }
-    catch (_)
-    {
-        //Statistic missing, recorder under load or RBAC denied. The caller leaves the previous value untouched, the
-        //chip stays readable on the last good snapshot until the next refresh succeeds.
-        return null;
-    }
+        catch (_)
+        {
+            //Statistic missing, recorder under load or RBAC denied. The caller leaves the previous value untouched, the
+            //chip stays readable on the last good snapshot until the next refresh succeeds.
+            return null;
+        }
+    })();
+    _haDailyTotalsCache.set(cacheKey, { ts: nowMs, result: null, inflight });
+    const settled = await inflight;
+    _haDailyTotalsCache.set(cacheKey, { ts: Date.now(), result: settled });
+    return settled;
 }
 
 
