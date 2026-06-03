@@ -1933,6 +1933,89 @@ ha-card.detail-active .solar-svg,
     }
     .cloud-cover-toggle.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .cloud-cover-toggle.is-on:active { background: var(--darker-primary-color, #01579b); }
+
+    /*  Mode bar (Layer / LiDAR / Shading). Segmented pill of three
+        icon-only toggles glued together. Same visual recipe as the
+        cloud-cover toggle: HA-toolbar-style transparent buttons that
+        light up to the brand pastille when active. The pill itself
+        carries a soft tinted backdrop so the three segments read as
+        one control even when none of them are active. */
+    .mode-bar
+    {
+        display: inline-flex;
+        flex-direction: row;
+        align-items: center;
+        padding: 2px;
+        gap: 2px;
+        background-color: rgba(var(--rgb-card-background-color, 255, 255, 255), 0.85);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        border-radius: 24px;
+        box-shadow: var(--ha-card-box-shadow, 0 1px 2px rgba(0,0,0,0.08));
+        pointer-events: auto;
+    }
+    .mode-bar-seg
+    {
+        appearance: none;
+        -webkit-appearance: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width:  36px;
+        height: 36px;
+        box-sizing: border-box;
+        padding: 0;
+        background-color: transparent;
+        color: var(--primary-text-color, #212121);
+        border: 0;
+        outline: 0 !important;
+        border-radius: 50%;
+        cursor: pointer;
+        position: relative;
+        opacity: 1;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.15s, color 0.15s, opacity 0.15s;
+    }
+    .mode-bar-seg:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
+    .mode-bar-seg:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
+    .mode-bar-seg ha-icon
+    {
+        --mdc-icon-size: 20px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+        pointer-events: none;
+    }
+    /*  Active segment: brand-blue pastille behind the icon, white
+        glyph on top, same on-primary recipe as cloud-cover-toggle.is-on
+        so the two controls read as one family.                       */
+    .mode-bar-seg.is-on
+    {
+        background: var(--primary-color, #03a9f4);
+        color: var(--text-on-primary-color, #ffffff);
+    }
+    .mode-bar-seg.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
+    .mode-bar-seg.is-on:active { background: var(--darker-primary-color, #01579b); }
+    .mode-bar-seg.is-disabled,
+    .mode-bar-seg:disabled
+    {
+        opacity: 0.4;
+        cursor: not-allowed;
+        pointer-events: none;
+    }
+    /*  Spinning LiDAR icon while shadows are being computed. Same
+        rotation primitive used by the centre shadow-busy spinner so
+        the two surfaces breathe at the same rate. */
+    .mode-bar-seg .is-spinning
+    {
+        animation: helios-mode-spin 1s linear infinite;
+    }
+    @keyframes helios-mode-spin
+    {
+        from { transform: rotate(0deg); }
+        to   { transform: rotate(360deg); }
+    }
+
     /*  Top corner overlays. Camera-lock + scrub-return on the left,
         cloud-cover toggle on the right. Both rails are flex rows
         sitting 8 px from their card edge.                          */
@@ -1971,7 +2054,15 @@ ha-card.detail-active .solar-svg,
         display: flex;
         flex-direction: column;
         align-items: flex-end;
+        gap: 8px;
         pointer-events: none;
+    }
+    /*  Cloud rail sits BELOW the mode bar so the two top-right rails
+        do not stack on the same anchor. Offset = mode-bar height (40px)
+        plus the 8 px standard corner inset, leaving an 8 px gap. */
+    .overlay-top-right.overlay-top-right--cloud
+    {
+        top: 56px;
     }
 
     /*  Camera-lock toggle. Pinned top-left of the card, opens
@@ -4912,7 +5003,7 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
                 `:Dl}
 
                 ${ae&&this._cloudCover>=0?Cl`
-                    <div class="overlay-top-right">
+                    <div class="overlay-top-right overlay-top-right--cloud">
                         <button
                             type="button"
                             class="cloud-cover-toggle ${this._cloudMode?"is-on":""}"

@@ -2085,7 +2085,7 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 ${hasApiKey && this._cloudCover >= 0 ? html`
-                    <div class="overlay-top-right">
+                    <div class="overlay-top-right overlay-top-right--cloud">
                         <button
                             type="button"
                             class="cloud-cover-toggle ${this._cloudMode ? 'is-on' : ''}"
