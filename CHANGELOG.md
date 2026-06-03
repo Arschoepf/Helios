@@ -33,6 +33,24 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Dashboard chart morning gap , LTS calib blended into the cumulative + hourly aggregators
+
+The dashboard's today-card cumulative kWh chart and the hourly-bin aggregator that feeds the headline "X kWh
+produit" + "PIC RÉEL HH:MM" only walked `_pvHistory`, which is capped at the last 6 h of wall-clock time (HA
+recorder is single-threaded behind SQLite, multi-day raw scans on a 1 Hz Victron block every other card reading
+the same entity). Opening the card at, say, 22 h made the chart paint as "0 kWh until 16 h" because the morning
+production from 6 h to 16 h was not in the raw window, even though the timeline chart had no issue (the timeline
+already blended `_pvCalibStats` for its own past-portion painting).
+
+`computeTodayCumulative` and `computeTodayHourly` now blend `_pvCalibStats` (5-day hourly LTS already fetched
+for the calibration loop) into the integration alongside the raw samples. The raw window still owns the present
+tail at full resolution; LTS rows that cross into the raw window are dropped so the two sources never paint over
+the same hour. Cumulative entities get neighbour-pair differentiation on the LTS state, power entities get the
+hourly mean directly, same shapes used elsewhere in the codebase.
+
+Result: the dashboard chart covers the full local day from 00 h to "now" regardless of when the user opens the
+card, and the PIC RÉEL reading lands on the real peak even if the live raw window has slid past it.
+
 ### Boot loading hot-fix , daily-totals kickoff + 30 s timeout
 
 Reported by ReikanYsora: alpha.35 was reaching the 15 s timeout and surfacing the warning panel with

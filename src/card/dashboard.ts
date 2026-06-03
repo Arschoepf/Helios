@@ -215,14 +215,93 @@ export function computeTodayHourly(host: DashboardHost): {
         });
     }
 
-    //Pass 1: observed. Aggregate _pvHistory into hourly buckets.
-    //Same approach the chart uses (cumulative-energy sensors get
-    //differentiated, power sensors are averaged).
-    const hist = host._pvHistory;
+    //Pass 1: observed. Aggregate _pvHistory + _pvCalibStats into hourly buckets.
+    //
+    //The raw `_pvHistory` window is capped at the last 6 h of wall-clock time for HA recorder safety on
+    //high-frequency installs, so without the LTS blend the morning hours of a day-end card open would land empty
+    //and the dashboard would report "0 kWh until ~13 h" while the user produced from 6 h. `_pvCalibStats` carries
+    //the 5-day hourly LTS already fetched for the calibration loop, so the morning portion of today is already in
+    //memory; we feed it into the hour-bucket aggregator alongside the raw samples. The raw window still owns the
+    //present tail (it has full sample resolution) so we drop LTS rows once they cross into the raw window.
+    const hist  = host._pvHistory;
+    const calib = host._pvCalibStats;
+    const unit  = (host._pvUnit || '').toLowerCase();
+    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+
+    //Single helper that pushes power samples into the hourly bucket sums. Wraps the differentiation + unit
+    //normalisation logic that used to live inline so both the raw-history and LTS branches funnel through the
+    //same shape.
+    const sums   = new Map<number, number>();
+    const counts = new Map<number, number>();
+    const addPowerSample = (tMs: number, w: number): void =>
+    {
+        if (tMs < startMs || tMs >= endMs)
+        {
+            return;
+        }
+        if (!isFinite(w))
+        {
+            return;
+        }
+        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        sums  .set(hourTs, (sums  .get(hourTs) ?? 0) + w);
+        counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+    };
+
+    //LTS calib pass: hourly mean for power entities, neighbour-pair differentiation for cumulative entities. We
+    //skip any LTS row that lands inside the raw window because the raw fetch carries that portion at full
+    //resolution and would already feed the bucket via the loop below.
+    const rawFirstMs = hist && hist.times.length > 0 ? hist.times[0].getTime() : Infinity;
+    if (calib && calib.times.length > 0)
+    {
+        if (isCumulativeEnergy && calib.times.length >= 2)
+        {
+            let prevIdx = 0;
+            for (let i = 1; i < calib.times.length; i++)
+            {
+                const t1   = calib.times[i].getTime();
+                const t0   = calib.times[prevIdx].getTime();
+                const dtH  = (t1 - t0) / 3_600_000;
+                if (dtH <= 0)
+                {
+                    continue;
+                }
+                if (dtH > 6)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                const dv = calib.values[i] - calib.values[prevIdx];
+                if (dv < 0)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                prevIdx = i;
+                if (t1 >= rawFirstMs)
+                {
+                    continue;
+                }
+                addPowerSample(t1, (dv / dtH) * 1000);
+            }
+        }
+        else if (!isCumulativeEnergy)
+        {
+            for (let i = 0; i < calib.times.length; i++)
+            {
+                const tMs = calib.times[i].getTime();
+                if (tMs >= rawFirstMs)
+                {
+                    continue;
+                }
+                const w = pvNormalizeToWatts(calib.values[i], host._pvUnit);
+                addPowerSample(tMs, w);
+            }
+        }
+    }
+
     if (hist && hist.times.length > 0)
     {
-        const unit = (host._pvUnit || '').toLowerCase();
-        const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
         let times:  Date[]   = hist.times;
         let values: number[] = hist.values;
         if (isCumulativeEnergy && times.length >= 2)
@@ -254,15 +333,9 @@ export function computeTodayHourly(host: DashboardHost): {
             times = dT;
             values = dV;
         }
-        const sums   = new Map<number, number>();
-        const counts = new Map<number, number>();
         for (let i = 0; i < times.length; i++)
         {
             const tMs = times[i].getTime();
-            if (tMs < startMs || tMs >= endMs)
-            {
-                continue;
-            }
             //After differentiation the values are average power in
             //kW (kWh/hour), so go straight to watts. The original
             //unit ('kWh' / 'MWh' / 'Wh') isn't handled by
@@ -272,22 +345,17 @@ export function computeTodayHourly(host: DashboardHost): {
             const w = isCumulativeEnergy
                 ? values[i] * 1000
                 : pvNormalizeToWatts(values[i], host._pvUnit);
-            if (!isFinite(w))
-            {
-                continue;
-            }
-            const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
-            sums  .set(hourTs, (sums  .get(hourTs) ?? 0) + w);
-            counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+            addPowerSample(tMs, w);
         }
-        for (let h = 0; h < 24; h++)
+    }
+
+    for (let h = 0; h < 24; h++)
+    {
+        const sum = sums  .get(bins[h].hourTs);
+        const cnt = counts.get(bins[h].hourTs);
+        if (sum !== undefined && cnt && cnt > 0)
         {
-            const sum = sums  .get(bins[h].hourTs);
-            const cnt = counts.get(bins[h].hourTs);
-            if (sum !== undefined && cnt && cnt > 0)
-            {
-                bins[h].observedW = sum / cnt;
-            }
+            bins[h].observedW = sum / cnt;
         }
     }
 
@@ -483,17 +551,50 @@ export function computeTodayCumulative(host: DashboardHost): {
     //get a baseline-subtracted reading per sample; power sensors
     //get trapezoidal integration over consecutive pairs.
     const hist = host._pvHistory;
+    const calib = host._pvCalibStats;
+    const unit = (host._pvUnit || '').toLowerCase();
+    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+    const energyFactor = unit === 'wh' ? 1 / 1000
+                       : unit === 'mwh' ? 1000
+                       : 1;
+
+    //Merge LTS calib (hourly, covers 5 days) into the raw history's morning gap. The raw fetch is capped at the
+    //last 6 h of wall-clock time on purpose (HA recorder is single-threaded behind SQLite, multi-day raw scans on
+    //a 1 Hz Victron block every other card reading the same entity), so any production that happened before
+    //`now - 6 h` lives in `_pvCalibStats` (which already carries it via the 5-day LTS pass) and was previously
+    //invisible on the dashboard cumulative chart. The reported symptom was "0 kWh until ~13 h" while the user's
+    //real production started at 6 h. We pre-roll LTS samples into the integration so the morning portion of the
+    //chart matches what HA Energy itself shows. The raw window still owns the present tail (it has full sample
+    //resolution there) so LTS samples are dropped once they cross into the raw window's first timestamp.
+    const rawFirstMs = hist && hist.times.length > 0 ? hist.times[0].getTime() : Infinity;
+    const mergedTimes:  Date[]   = [];
+    const mergedValues: number[] = [];
+    if (calib && calib.times.length > 0)
+    {
+        for (let i = 0; i < calib.times.length; i++)
+        {
+            const tMs = calib.times[i].getTime();
+            if (tMs < startMs || tMs >= endMs)
+            {
+                continue;
+            }
+            //Drop LTS rows once they cross into the raw window, the raw fetch carries the live tail at full
+            //resolution and would paint over the coarse LTS samples anyway.
+            if (tMs >= rawFirstMs)
+            {
+                continue;
+            }
+            const v = calib.values[i];
+            if (!isFinite(v))
+            {
+                continue;
+            }
+            mergedTimes.push(calib.times[i]);
+            mergedValues.push(v);
+        }
+    }
     if (hist && hist.times.length > 0)
     {
-        const unit = (host._pvUnit || '').toLowerCase();
-        const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-        const energyFactor = unit === 'wh' ? 1 / 1000
-                           : unit === 'mwh' ? 1000
-                           : 1;
-        let baseline: number | null = null;
-        let prevT:    number | null = null;
-        let prevW:    number | null = null;
-
         for (let i = 0; i < hist.times.length; i++)
         {
             const tMs = hist.times[i].getTime();
@@ -501,10 +602,24 @@ export function computeTodayCumulative(host: DashboardHost): {
             {
                 continue;
             }
+            mergedTimes.push(hist.times[i]);
+            mergedValues.push(hist.values[i]);
+        }
+    }
+
+    if (mergedTimes.length > 0)
+    {
+        let baseline: number | null = null;
+        let prevT:    number | null = null;
+        let prevW:    number | null = null;
+
+        for (let i = 0; i < mergedTimes.length; i++)
+        {
+            const tMs = mergedTimes[i].getTime();
 
             if (isCumulativeEnergy)
             {
-                const v = hist.values[i] * energyFactor;
+                const v = mergedValues[i] * energyFactor;
                 if (baseline === null)
                 {
                     baseline = v;
@@ -523,7 +638,7 @@ export function computeTodayCumulative(host: DashboardHost): {
             }
             else
             {
-                const w = pvNormalizeToWatts(hist.values[i], host._pvUnit);
+                const w = pvNormalizeToWatts(mergedValues[i], host._pvUnit);
                 if (!isFinite(w))
                 {
                     continue;
