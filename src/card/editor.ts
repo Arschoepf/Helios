@@ -143,9 +143,9 @@ export class HeliosCardEditor extends LitElement
         'card-theme',
         'card-theme-light',
         'card-theme-dark',
-        //v1.8.3 entity refonte: every entity slot the HA Energy dashboard already declares is silently stripped on the
-        //next editor open, the card runtime resolves them from `energy/get_prefs` instead. See helios-card.ts setConfig
-        //for the user-facing migration notification.
+        //Entity slots the HA Energy dashboard already declares are silently stripped on the next editor open; the card
+        //runtime resolves them from `energy/get_prefs` instead. See helios-card.ts setConfig for the user-facing
+        //migration notification.
         'pv-power-entity',
         'grid-import-entity',
         'grid-export-entity',
@@ -537,8 +537,6 @@ export class HeliosCardEditor extends LitElement
         this._openArrayIndices = next;
     }
 
-    //Battery-bank editor state machinery. Mirrors the PV-arrays helpers above (read/write to the `batteries:` array with legacy flat-key
-    //fallback, per-field updaters, add/remove). Kept separate so a bank edit never touches a PV row by index collision.
     private _fmtNum(v: number, step: number): string
     {
         return step >= 1 ? String(Math.round(v)) : v.toFixed(2);

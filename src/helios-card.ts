@@ -343,8 +343,8 @@ export class HeliosCard extends LitElement
     //recomputed via engine.projectHomeLabelLayout() on every map
     //transform. null while the map is still loading.
     @state() _labelLayout: LabelLayout | null = null;
-    //Photovoltaic production state, populated when `pv-power-entity` is configured. Live value from hass.states + historical series from HA's history
-    //API for the dedicated chart.
+    //Photovoltaic production state, populated when the HA Energy dashboard exposes at least one solar source. Live value from hass.states +
+    //historical series from HA's history API for the dedicated chart.
     @state() _pvCurrent: number | null = null;
     @state() _pvUnit:    string        = '';
     @state() _pvHistory: {
@@ -367,10 +367,8 @@ export class HeliosCard extends LitElement
     @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
     _pvCalibStatsFetchKey  = '';
     _pvCalibStatsFetching  = false;
-    //5-minute long-term-statistics series feeding the 30-day
-    //shading-map trainer. Same contract as `_pvCalibStats`, just at
-    //a finer period and over a longer window. ~8.6k rows for 30
-    //days, vs the legacy raw 30-day path.
+    //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same contract as `_pvCalibStats`, just at a finer
+    //period and over a longer window. ~8.6k rows for 30 days.
     @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
     _pvTrainerStatsFetchKey  = '';
     _pvTrainerStatsFetching  = false;
@@ -386,18 +384,15 @@ export class HeliosCard extends LitElement
     //Rolling buffer of state samples. For cumulative-energy sensors this gives a "last minute" instantaneous rate, fresher than the historical fetch
     //which only refreshes per timeline range.
     _pvSampleBuffer: Array<{ t: number; v: number }> = [];
-    //Home-battery state, populated when at least one of
-    //`battery-soc-entity` / `battery-power-entity` is configured.
-    //Live readings; historical series lives in the *History fields
-    //below. Units are kept alongside the values so the chip can
-    //format kW vs W without re-reading the state.
+    //Home-battery state, populated when the HA Energy dashboard exposes at least one battery source (`stat_rate`,
+    //`stat_energy_from`, `stat_energy_to` or `stat_soc`). Live readings; historical series lives in the *History fields
+    //below. Units are kept alongside the values so the chip can format kW vs W without re-reading the state.
     @state() _batterySoc:        number | null = null;
     @state() _batteryPower:      number | null = null;
     @state() _batteryPowerUnit:  string        = '';
-    //Grid import / export live values, populated by refreshGrid()
-    //from the configured grid-import-entity / grid-export-entity.
-    //Unit is captured alongside the value so the chip formats the
-    //correct W / kWh / m³ suffix without re-reading hass.states.
+    //Grid import / export live values, populated by refreshGrid() from the HA Energy dashboard grid source's
+    //`stat_energy_from` (import) and `stat_energy_to` (export) slots. Unit is captured alongside the value so the chip
+    //formats the correct W / kWh / m³ suffix without re-reading hass.states.
     @state() _gridImportValue:   number | null = null;
     @state() _gridImportUnit:    string        = '';
     @state() _gridExportValue:   number | null = null;
@@ -422,10 +417,9 @@ export class HeliosCard extends LitElement
     //independently of the slot's overall normalised unit.
     _gridImportUnits: Map<string, string> = new Map();
     _gridExportUnits: Map<string, string> = new Map();
-    //Combined signed grid-power slot (grid-power-entity). When wired,
-    //refreshGrid derives the net signed watts from these buffers and
-    //routes the sign to the import / export chips; the directional
-    //slots above stay empty.
+    //Combined signed grid-power slot driven by the HA Energy grid source's `stat_rate`. When wired, refreshGrid derives
+    //the net signed watts from these buffers and routes the sign to the import / export chips; the directional slots
+    //above stay empty.
     _gridCombinedSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
     _gridCombinedUnits:   Map<string, string> = new Map();
     //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
@@ -657,10 +651,10 @@ export class HeliosCard extends LitElement
         this._warnIfLegacyEntityKeys(config);
     }
 
-    //Card YAML keys that the v1.8.3 entity refonte dropped from the editor. The card now reads these entirely from the
-    //HA Energy dashboard global settings; any value still set on the card config is silently ignored at runtime.
-    //Detected here only so the user gets a one-shot persistent notification telling them what was retired and where the
-    //replacement lives, instead of staring at a chip that no longer reacts to the entity they wired.
+    //Retired YAML entity keys. The card reads these entirely from the HA Energy dashboard global settings; any value
+    //still set on the card config is silently ignored at runtime. Detected here only so the user gets a one-shot
+    //persistent notification telling them what was retired and where the replacement lives, instead of staring at a chip
+    //that no longer reacts to the entity they wired.
     private static readonly _LEGACY_ENTITY_KEYS: ReadonlyArray<string> =
     [
         'pv-power-entity',
@@ -977,10 +971,10 @@ export class HeliosCard extends LitElement
             this._connectSettleTimer = undefined;
         }
         //Engine cleanup on disconnect. Home Assistant's editor preview pane destroys + re-creates the helios-card element on every
-        //`config-changed` commit (see `hui-card.ts:195`, the rebuild is hard-coded and no opt-out hook exists, confirmed by
-        //investigation in #162). We accept the cost of allocating a fresh MapLibre + WebGL context per commit, which is the same
-        //trade-off apexcharts-card, mini-graph-card and Mushroom make. The live dashboard tile is NOT recreated (`hui-card` takes
-        //the `_updateElement` branch when `preview === false`), so the user-facing surface stays smooth.
+        //`config-changed` commit (`hui-card.ts:195`, the rebuild is hard-coded and no opt-out hook exists). We accept the cost of
+        //allocating a fresh MapLibre + WebGL context per commit, which is the same trade-off apexcharts-card, mini-graph-card and
+        //Mushroom make. The live dashboard tile is NOT recreated (`hui-card` takes the `_updateElement` branch when
+        //`preview === false`), so the user-facing surface stays smooth.
         if (this._engine !== undefined)
         {
             this._engine.cleanup();

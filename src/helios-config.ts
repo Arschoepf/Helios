@@ -14,10 +14,10 @@
 //constants below provide the values used when a key is absent.
 export interface HeliosConfig
 {
-    //Index signature so consumers (and stale references to retired keys during the v1.8.3 entity refonte) can read
-    //arbitrary string keys off the config as `unknown` without TypeScript widening errors. The named keys below are the
-    //schema the editor + runtime know about; legacy YAML carrying retired keys is allowed through here and the migration
-    //path strips it on the next editor open.
+    //Index signature so consumers (and stale references to retired keys) can read arbitrary string keys off the config
+    //as `unknown` without TypeScript widening errors. The named keys below are the schema the editor + runtime know
+    //about; legacy YAML carrying retired keys is allowed through here and the migration path strips it on the next
+    //editor open.
     [key: string]: unknown;
     //When false, all of OpenFreeMap's label layers
     //(road names, building numbers, POI labels, place names) are

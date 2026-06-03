@@ -15,7 +15,7 @@ import type { EnergyDefaults } from './energy-prefs';
 //element unmount + remount (the user navigating away from the
 //Helios card and back) the same way the PV cache does in pv.ts.
 //15-minute TTL covers the most common nav-around-the-dashboard
-//pattern without serving stale data forever. See #159.
+//pattern without serving stale data forever.
 
 const BATTERY_CACHE_TTL_MS = 15 * 60_000;
 
@@ -190,7 +190,7 @@ export function refreshBattery(host: BatteryHost): void
     host._batteryFetchKey = fetchKey;
 
     //Cache hit short-circuits the WS round-trip: the user navigates away from the Helios card and back, the module-level cache still has
-    //the previous parsed series ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (entities / range) change. See #159.
+    //the previous parsed series ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (entities / range) change.
     const cached = batteryHistoryCacheGet(fetchKey);
     if (cached)
     {
@@ -248,7 +248,7 @@ function parseRawBatteryHistory(arr: any[]): BatteryHistory
 //`state_class: measurement` (Victron, Solis, Tesla, Pylontech, BYD, SonnenBatterie BMS) and the relevant column is `mean`. Some setups
 //wire a cumulative-energy kWh counter as the battery power source instead (`state_class: total_increasing`), in which case `mean` is
 //`null` and `state` carries the cumulative reading at the bucket end. We prefer `mean` when present and fall back to `state` so the
-//slot lands populated either way. See #161.
+//slot lands populated either way.
 function parseBatteryStats(arr: any[]): BatteryHistory
 {
     const times:  Date[]   = [];
@@ -348,7 +348,7 @@ export async function fetchBatteryHistory(
             statistic_ids:  ids,
             period:         '5minute',
             //Both fields, because a setup that wires a cumulative kWh meter as the battery power source has `mean: null` per bucket
-            //(measurement assumption breaks). Asking for `state` too lets the parser cover both wirings in one round-trip. See #161.
+            //(measurement assumption breaks). Asking for `state` too lets the parser cover both wirings in one round-trip.
             types:          ['mean', 'state'],
         });
         const statsUsable = ids.some(id => Array.isArray(statsResult?.[id]) && statsResult[id].length > 0);
@@ -395,7 +395,7 @@ export async function fetchBatteryHistory(
         host._batteryPowerHistory = powerSeries;
 
         //Persist the parsed series for the next mount. Cross-mount cache hits short-circuit the WS round-trip entirely on the
-        //navigation case that drives the user-visible "lag on each return" symptom from #155.
+        //navigation case that drives the user-visible "lag on each return" symptom.
         if (cacheKey)
         {
             _batteryHistoryCache.set(cacheKey, { soc: socSeries, power: powerSeries, ts: Date.now() });

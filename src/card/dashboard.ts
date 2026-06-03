@@ -556,7 +556,7 @@ export function renderDashTodaySection(
     //and assumes a bug). Flooring at zero matches the rest of the
     //PV readouts (live chip, tooltip) that already do this.
     //
-    //HA Energy alignment short-circuit (#180): when the user has
+    //HA Energy alignment short-circuit : when the user has
     //a solar source on the Energy dashboard, the card refresh tick
     //has populated `_haSolarTodayKwh` from
     //`recorder/statistics_during_period` (types: 'change') over the
@@ -1365,7 +1365,6 @@ function startDashCountUpLoop(host: DashboardHost): void
 //symmetric PAD_X here would offset the time mapping by ~18 px on
 //the left edge, the cursor would land in the middle of the
 //morning hours when the mouse is on midnight. Reported as bug
-//#20 by JJAsond.
 export function handleDashChartPointerMove(host: DashboardHost, e: PointerEvent): void
 {
     const svgEl = e.currentTarget as SVGSVGElement | null;

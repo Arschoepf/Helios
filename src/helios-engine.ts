@@ -109,7 +109,7 @@ const _liveEngines = new Set<HeliosEngine>();
 
 //-----------------------------------------------------------------
 //Shared fetch caches: HA's editor preview pane destroys and re-creates the helios-card element on every config-changed commit
-//(slider release, picker write, see #162 and `hui-card.ts:195`). The map's WebGL context is unavoidably re-allocated each time
+//(slider release, picker write and `hui-card.ts:195`). The map's WebGL context is unavoidably re-allocated each time
 //because the cycle is hard-coded in HA, but the expensive PARSED fetch payloads (buildings GeoJSON, LiDAR raster) do not need to
 //be re-downloaded and re-parsed. Stashing them at module scope lets the fresh engine pick them up synchronously and skip the
 //network round-trip entirely.
@@ -1305,7 +1305,7 @@ export class HeliosEngine
     //             variant for both above. Chosen over OFM's `dark`
     //             style which clamps the background to near-black
     //             (rgb(12,12,12)) and is too oppressive at the small
-    //             card viewport, Fiord's #45516E reads as "evening"
+    //             card viewport
     //             without losing the basemap content underneath.
     //
     //OFM has no separate light / dark pair per style; the dark style
@@ -3459,7 +3459,7 @@ export class HeliosEngine
         //All four constants are scaled by `_heliosScale()` so the
         //cluster spreads on a fullscreen / kiosk layout instead of
         //clumping at the centre of an otherwise empty canvas. See
-        //issue #33. At standard Lovelace grid sizes scale = 1.0,
+        // At standard Lovelace grid sizes scale = 1.0,
         //so the cluster geometry stays exactly as before.
         const scale = this._heliosScale();
         //Dedicated vertical-lift ramp, steeper than the horizontal
@@ -3659,7 +3659,7 @@ export class HeliosEngine
     //staying pinned to the tuned-for-grid pixel sizes. Below
     //FLOOR the scale is fixed at 1.0 (standard Lovelace grid
     //cell); above FLOOR it ramps linearly to MAX at TOP. See
-    //issue #33.
+    //
     private _heliosScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
@@ -4122,7 +4122,7 @@ export class HeliosEngine
         const a   = sun.altitude * D;
         const z   = sun.azimuth  * D;
 
-        //Scale the celestial radius on fullscreen / kiosk layouts so the arc reads from across the room instead of sitting at its grid-tuned size. See issue #33.
+        //Scale the celestial radius on fullscreen / kiosk layouts so the arc reads from across the room instead of sitting at its grid-tuned size. See
         const R = SUN_ARC_RADIUS_M * this._sunArcScale();
         const east  = R * Math.cos(a) * Math.sin(z);
         const north = R * Math.cos(a) * Math.cos(z);
@@ -4151,7 +4151,7 @@ export class HeliosEngine
         const D = Math.PI / 180;
         const a = altitudeDeg * D;
         const z = azimuthDeg  * D;
-        //Same scale as the sun arc so the shading-dome cells line up with the arc on fullscreen layouts. See issue #33.
+        //Same scale as the sun arc so the shading-dome cells line up with the arc on fullscreen layouts. See
         const R = SUN_ARC_RADIUS_M * this._sunArcScale();
         const east  = R * Math.cos(a) * Math.sin(z);
         const north = R * Math.cos(a) * Math.cos(z);

@@ -176,7 +176,7 @@ export function renderLidarViewOpacityPicker(
                        //Imperative DOM write for the % readout, the host's `_lidarViewOpacity` is intentionally NOT a `@state`
                        //(the slider fires ~50 input events / s and a state coupling would re-render the entire card on every
                        //tick, see the field comment in helios-card.ts), so a Lit pass would never re-paint the value span on
-                       //its own. Mirror what the input.value already reflects natively. See #153.
+                       //its own. Mirror what the input.value already reflects natively.
                        const span = input.parentElement?.querySelector('.lidar-view-opacity-value') as HTMLElement | null;
                        if (span) span.textContent = `${Math.round(v)}%`;
                    }}" />

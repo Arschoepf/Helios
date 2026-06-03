@@ -18,7 +18,7 @@ import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 //-----------------------------------------------------------------
 //Module-level cache for the solar-radiation history fetch.
 //Mirrors the PV and battery patterns so a navigation away and back
-//does not re-trigger the WS round-trip. See #159.
+//does not re-trigger the WS round-trip.
 
 const RADIATION_CACHE_TTL_MS = 15 * 60_000;
 
@@ -177,7 +177,7 @@ export function refreshSolarRadiation(host: RadiationHost): void
     host._solarRadiationFetchKey = fetchKey;
 
     //Cache hit short-circuits the WS round-trip on the navigation case. Cache invalidates on TTL (15 min) or on any (entity / range)
-    //change since that flips the fetch key. See #159.
+    //change since that flips the fetch key.
     const cached = radiationHistoryCacheGet(fetchKey);
     if (cached)
     {

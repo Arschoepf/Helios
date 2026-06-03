@@ -59,7 +59,7 @@ export const RATE_LIMIT_BACKOFF_MS = [
 //single robust value per timestep. Median over mean: individual
 //models occasionally emit gross outliers (typical: cloud_cover_low
 //pegged at 100 % from the Sundqvist parametrisation hitting an
-//underground pressure level, open-meteo issue #416).
+//underground pressure level).
 export function medianOfNumbers(values: ReadonlyArray<number | null | undefined>): number | null
 {
     const clean: number[] = [];
@@ -276,7 +276,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //variables let us:
 //  - keep the total `cloud_cover` for visual rendering
 //  - detect the well-known "fog spike" failure mode of low-layer
-//    parametrisations (open-meteo issue #416).
+//    parametrisations.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover',

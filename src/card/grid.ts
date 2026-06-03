@@ -208,7 +208,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     entity_ids:               [entity],
                     minimal_response:         true,
                     no_attributes:            true,
-                    //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters. See #157.
+                    //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters.
                     significant_changes_only: true,
                 }).catch(armCooldownIfTimeout),
             ]);

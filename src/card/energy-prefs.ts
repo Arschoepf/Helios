@@ -254,7 +254,7 @@ export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<voi
 //  - grid:    { type: 'grid', stat_energy_from, stat_energy_to?, stat_rate?, power_config? }
 //  - battery: { type: 'battery', stat_energy_from, stat_energy_to, stat_soc?, power_config? }
 //
-//`power_config.stat_rate` is the post-2026 grid + battery live-power slot (PR home-assistant/core#160432). The top-level
+//`power_config.stat_rate` is the post-2026 grid + battery live-power slot . The top-level
 //`stat_rate` on grid sources is the legacy slot still served by the official sankey card today; we read both so any
 //Energy dashboard config Helios encounters maps cleanly into our model.
 export function parseEnergyPrefs(prefs: {

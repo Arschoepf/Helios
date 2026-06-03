@@ -57,9 +57,8 @@ export function trainShadingMap(host: ChartHost): number
     const k      = pvCalibK(host.config);
     const series = host._chartSeries;
     //Prefer the 5-min long-term-statistics series (30 days, ~8.6k rows) when available; fall back to the raw `_pvHistory` window when the
-    //statistics are absent or empty. The trainer's 30-min buckets walk 6 consecutive 5-min stats rows where the legacy path used to walk
-    //potentially thousands of raw samples per bucket; on a non-LTS-tracked entity the fallback covers fewer past days but the trainer's
-    //watermark still advances safely.
+    //statistics are absent or empty. The trainer's 30-min buckets walk 6 consecutive 5-min stats rows; on a non-LTS-tracked entity the
+    //fallback covers fewer past days but the trainer's watermark still advances safely.
     const hist   = (host._pvTrainerStats && host._pvTrainerStats.times.length > 0)
         ? host._pvTrainerStats
         : host._pvHistory;

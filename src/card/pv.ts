@@ -85,14 +85,14 @@ export interface PvHost
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
     //Companion battery SoC history fetched alongside _pvHistory when a battery is wired AND `inverter-cutoff-soc-pct` is set. The
     //shading-map trainer scans it to detect inverter-cutoff buckets (battery full + production blocked) and skip them so the map
-    //doesn't accumulate phantom shadow at the matching sun bin. Null when the guard is off or no battery is configured; the trainer
-    //then falls back to the legacy "train every bucket" path.
+    //doesn't accumulate phantom shadow at the matching sun bin. Null when the guard is off or no battery is configured; the
+    //trainer then trains every bucket without the guard.
     _batteryHistory:        PvHistory | null;
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same parallel times[] / values[] shape as `_pvHistory`,
-    //but populated via `recorder/statistics_during_period` with `period: 'hour'` over the past 5 days. Power sensors land here as bucket
-    //means; cumulative-energy sensors land as the bucket-end `state` field. Carries roughly 120 rows where the legacy raw-history path
-    //would have carried ~430k on a 1 Hz Victron, an order-of-magnitude lighter recorder load. Null when statistics are unavailable
-    //(entity has no `state_class`, LTS disabled), the calibration then degrades to the narrower `_pvHistory` window.
+    //populated via `recorder/statistics_during_period` with `period: 'hour'` over the past 5 days. Power sensors land here as bucket
+    //means; cumulative-energy sensors land as the bucket-end `state` field. Carries roughly 120 rows, an order of magnitude lighter
+    //recorder load than the raw history path on a high-frequency BMS. Null when statistics are unavailable (entity has no
+    //`state_class`, LTS disabled), the calibration then degrades to the narrower `_pvHistory` window.
     _pvCalibStats:          PvHistory | null;
     _pvCalibStatsFetchKey:  string;
     _pvCalibStatsFetching:  boolean;
@@ -115,7 +115,7 @@ const PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
 //element unmount + remount (the user navigating away from the card
 //and back), which is the lifecycle event that the per-instance
 //`_pv*FetchKey` gate cannot catch. Without this, every navigation
-//restarted the heavy fetch from zero, see #155 / #158.
+//restarted the heavy fetch from zero
 //
 //Each entry carries the parsed series + the fetched-at timestamp.
 //TTL keeps stale data from drifting forever, the next refresh
@@ -286,11 +286,10 @@ export function refreshPv(host: PvHost): void
     }
 
     //Three-fetch staging, gated independently so each piece reissues only when its (entity, window) tuple changes:
-    //  1. Raw history bounded to the chart's visible past (~2 days). This is the only call that has historically saturated the recorder
-    //     on high-frequency installs (Victron Cerbo at >1 Hz returns millions of rows over a 30-day window, see #155). Keeping it
-    //     narrow is the structural fix.
-    //  2. Hourly long-term statistics over 5 days, feeding `calibration.ts`. ~120 rows per fetch, vs ~430k on the legacy raw path for a
-    //     1 Hz Victron, two orders of magnitude lighter on the recorder.
+    //  1. Raw history bounded to the chart's visible past (~2 days). High-frequency installs (Victron Cerbo at >1 Hz) would return
+    //     millions of rows over a wider window, so the narrow cap is the structural ceiling on recorder load.
+    //  2. Hourly long-term statistics over 5 days, feeding `calibration.ts`. ~120 rows per fetch, two orders of magnitude lighter
+    //     on the recorder than the equivalent raw path.
     //  3. 5-minute long-term statistics over 30 days, feeding `shadingTrainer.ts`. ~8.6k rows per fetch.
     //
     //All three exit cheaply on subsequent Lit cycles (clock ticks, hass updates) because the fetch key cache short-circuits
@@ -392,7 +391,7 @@ export function refreshPv(host: PvHost): void
             {
                 //Defer to browser idle time so the user-facing fetches (raw PV history + calib stats) land first and the chart paints
                 //quickly. The trainer feeds the shading-map heuristic which the engine can rebuild from any non-empty sample stream, so
-                //the trainer is effectively a background optimisation, not a blocker for the chip / chart render. See #160.
+                //the trainer is effectively a background optimisation, not a blocker for the chip / chart render.
                 scheduleIdle(() =>
                 {
                     fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
@@ -538,7 +537,7 @@ export async function fetchPvHistory(
             minimal_response:         true,
             no_attributes:            true,
             //Lets HA drop bucket-internal duplicates server-side. On a Victron MPPT at >1 Hz that trims roughly 30-70 % of the rows
-            //without affecting the calibration / chart since both consumers walk neighbour-pair deltas. See #157.
+            //without affecting the calibration / chart since both consumers walk neighbour-pair deltas.
             significant_changes_only: true,
         });
 
@@ -592,7 +591,7 @@ export async function fetchPvHistory(
 
 //Pull a long-term-statistics series from HA's `recorder/statistics_during_period` WebSocket command. Trades raw resolution for a two-orders-of-
 //magnitude reduction in payload size, which keeps the recorder responsive on installs whose PV entity reports several samples per second (Victron
-//Cerbo and friends, see #155).
+//Cerbo and friends).
 //
 //`role` selects the target slot: `'calib'` populates `host._pvCalibStats` for the 5-day forecast calibration, `'trainer'` populates
 //`host._pvTrainerStats` for the 30-day shading-map trainer. The two paths are independent so a slow trainer fetch does not delay the calibration
@@ -605,7 +604,7 @@ export async function fetchPvHistory(
 //`mean` only and a cumulative-energy entity would have returned all-null buckets, leaving the slot empty.
 //
 //Anchoring: cumulative samples (taken from `state`) anchor at the bucket midpoint to match the power-sensor convention. The slight
-//attribution drift across the day boundary is absorbed by `calibration.ts:actualKwhForDay`'s guard widening (see #155 follow-ups).
+//attribution drift across the day boundary is absorbed by `calibration.ts:actualKwhForDay`'s guard widening.
 //Power samples (taken from `mean`) anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` and
 //`shadingTrainer.ts` matches the existing semantics. Buckets with both `mean` AND `state` null are dropped silently.
 //
@@ -766,7 +765,7 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 
     //Pick the slot that brackets the scrub timestamp. The raw `_pvHistory` window is bounded to the chart's visible past (~2 days), so any
     //scrub older than that would return null without this fallback. `_pvTrainerStats` carries the same data at 5-min resolution over 30
-    //days, which is enough for chip-level accuracy when the cursor lands past the raw window. See #161.
+    //days, which is enough for chip-level accuracy when the cursor lands past the raw window.
     const hist = pickPvHistoryAt(host, tMs);
     if (!hist) return null;
 
@@ -1220,11 +1219,8 @@ export function pvArrays(
             if (!entry || typeof entry !== 'object') continue;
             const e = entry as Record<string, unknown>;
 
-            //Missing / blank tilt is the editor's "flat install" state,
-            //and matches the legacy `pv-tilt` default. Default to 0;
-            //computePvPower then takes the horizontal fast path for
-            //this entry, leaving every other entry's transposition
-            //intact.
+            //Missing / blank tilt is the editor's "flat install" state. Default to 0; computePvPower then takes the horizontal
+            //fast path for this entry, leaving every other entry's transposition intact.
             const rawTilt = e['tilt'];
             const tiltRaw = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
             const tilt    = isFinite(tiltRaw) ? tiltRaw : 0;
@@ -1385,11 +1381,8 @@ export interface PvWeightedContext
 }
 
 
-//Forecast PV percentage at a single sample, summed across every
-//configured array weighted by its share of the total kWp. Falls
-//through to the horizontal-panel fast path inside computePvPower
-//when no array is configured (returns the GHI-normalised value
-//the legacy code used to produce).
+//Forecast PV percentage at a single sample, summed across every configured array weighted by its share of the total kWp. Falls
+//through to the horizontal-panel fast path inside computePvPower when no array is configured (returns the GHI-normalised value).
 export function computePvPowerWeighted(
     config: HeliosConfig | undefined,
     t: Date,

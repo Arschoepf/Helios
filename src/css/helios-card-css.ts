@@ -1509,7 +1509,7 @@ ha-card.detail-active .solar-svg,
         surface, HA divider border, HA standard elevation shadow). */
     /*  Wrapper that hosts the magnet tab + tooltip body. Carries the
         horizontal positioning (left + translateX) so both children
-        slide together as one block when the scrub moves — the tab
+        slide together as one block when the scrub moves, the tab
         inherits the wrapper's transform via the DOM tree so there's
         no per-element lag. Bottom + margin lift the whole stack into
         the 10 px gap above the chart card. */
@@ -1542,7 +1542,7 @@ ha-card.detail-active .solar-svg,
     }
 
     /*  Inner layout: time header in bold, a small gap, then one row
-        per data series. No banded backgrounds, no row separators —
+        per data series. No banded backgrounds, no row separators,
         the surrounding card frame is the only visible chrome. */
     .tb-hover-tooltip-time
     {
@@ -2330,7 +2330,7 @@ ha-card.detail-active .solar-svg,
         the chips can fade between the on / off states. The cascade
         runs strict TOP DOWN on enter: high first (delay 0), mid
         after high finishes (~280 ms), low last (~560 ms); on exit
-        the same selectors apply BOTTOM UP — low fades first, then
+        the same selectors apply BOTTOM UP, low fades first, then
         mid, then high. Visuals mirror the toggle's idle look exactly,
         transparent plate, primary-text-color icon + label. */
     .cloud-layer-chip
