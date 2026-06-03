@@ -1567,9 +1567,10 @@ export const heliosCardStyles = css`
         align-items: center;
         justify-content: center;
         gap: 4px;
-        padding: 1px 6px 1px 4px;
+        padding: 0 6px 0 4px;
+        height: 18px;
         box-sizing: border-box;
-        background: transparent;
+        background: var(--card-background-color, #ffffff);
         color: var(--primary-color, #03a9f4);
         border: 1px solid var(--primary-color, #03a9f4);
         border-radius: 3px;
@@ -1577,10 +1578,14 @@ export const heliosCardStyles = css`
         font-weight: 700;
         letter-spacing: 0.4px;
         text-transform: uppercase;
-        line-height: 1.25;
+        line-height: 1;
+        /*  Force the chip onto its own GPU layer with a 3-axis translate, so it gets a pixel-snapped grid independent
+            of the wrapper's fractional translateX(-X%). Without this, the chip text + 1 px border antialias against a
+            sub-pixel offset inherited from the parent transform and read as blurry on high-DPI screens. */
+        transform: translateZ(0);
+        backface-visibility: hidden;
         /*  Fade in / out instead of pop in / out: render the chip in every tooltip pass and toggle visibility via
-            opacity. No transform on the chip itself: GPU compositing on a 1 px border + text would render at a
-            fractional layer offset and the chip read as blurry on high-DPI displays. */
+            opacity. */
         opacity: 0;
         pointer-events: none;
         transition: opacity 0.16s ease-out;

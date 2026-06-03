@@ -33,11 +33,13 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
-### Scrub tooltip time heading + Live chip blur fix
+### Scrub tooltip time heading + Live chip blur + vertical centering
 
 The scrub-timeline tooltip now opens with a time heading (`clock` glyph + bold hour, left-aligned) sitting above a
-hairline separator that matches the data-row alignment underneath. The Live chip dropped its `translateY`
-micro-animation, which was causing sub-pixel blur on high-DPI displays.
+hairline separator that matches the data-row alignment underneath. The Live chip got a proper pixel-snap layer
+(`translateZ(0)` + opaque card-background fill) so the 1 px primary-coloured border and the LIVE label render crisply
+on high-DPI displays, and its content sits on a fixed 18 px line-height with `line-height: 1` so the pulsing dot and
+the label are vertically centred inside the chip frame.
 
 ### Battery sign convention follows the HA Energy `stat_rate_inverted` slot (#185)
 
