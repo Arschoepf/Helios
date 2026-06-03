@@ -50,7 +50,8 @@ import
 import
 {
     renderDashboard,
-    handleHomeClick
+    handleHomeClick,
+    handleDashGlobalKey
 } from './card/dashboard';
 import
 {
@@ -889,11 +890,19 @@ export class HeliosCard extends LitElement
     //HA dashboard edit-mode wrapping cycle.
     private _connectSettleTimer: number | undefined;
 
+    //Bound document-level keydown reference so the listener can be added at connect time and removed at
+    //disconnect time without leaking a fresh closure on every mount.
+    private _onDashGlobalKey = (e: KeyboardEvent) => handleDashGlobalKey(this, e);
+
     public connectedCallback(): void
     {
         super.connectedCallback();
         _liveCards.add(this);
         this._connectedAt = performance.now();
+        if (typeof document !== 'undefined')
+        {
+            document.addEventListener('keydown', this._onDashGlobalKey);
+        }
         //Reset the daily-totals kickoff flag so a remount re-fires `refreshHaDailyTotals` the moment the HA Energy
         //defaults snapshot lands again. The early kickoff was the load-bearing piece of the previous boot overlay,
         //and it stays around as a perf win even after the overlay was removed.
@@ -945,6 +954,7 @@ export class HeliosCard extends LitElement
         if (typeof document !== 'undefined')
         {
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
+            document.removeEventListener('keydown', this._onDashGlobalKey);
         }
         unsubscribeEnergyPrefs(this);
         if (this._lidarFadeRaf !== undefined)

@@ -789,6 +789,29 @@ export function handleDashKey(host: DashboardHost, e: KeyboardEvent): void
         e.preventDefault();
         navigateDashDay(host, active + 1);
     }
+    else if (e.key === 'Escape')
+    {
+        e.preventDefault();
+        handleExitDetail(host, e);
+    }
+}
+
+
+//Global document-level keydown so ESC closes the dashboard regardless of which element currently has
+//focus. Bound in `connectedCallback` on the host card + unbound in `disconnectedCallback`. The handler
+//is a no-op when the dashboard is not open so the listener is cheap to keep around.
+export function handleDashGlobalKey(host: DashboardHost, e: KeyboardEvent): void
+{
+    if (e.key !== 'Escape')
+    {
+        return;
+    }
+    if (!host._detailMode)
+    {
+        return;
+    }
+    e.preventDefault();
+    handleExitDetail(host, e);
 }
 
 

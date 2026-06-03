@@ -227,14 +227,22 @@ export const heliosCardStyles = css`
     ha-card.detail-active .pv-pct-label,
     ha-card.detail-active .battery-leader-svg,
     ha-card.detail-active .battery-pct-label,
+    ha-card.detail-active .grid-leader-svg,
+    ha-card.detail-active .grid-import-label,
+    ha-card.detail-active .grid-export-label,
     ha-card.detail-active .home-hitbox,
     ha-card.detail-active .home-glow-svg,
     ha-card.detail-active .home-drop-leader-svg,
-    ha-card.detail-active .time-bar
+    ha-card.detail-active .home-pill,
+    ha-card.detail-active .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
     }
+    /*  Timeline slides DOWN out of the card instead of fading, matching the LiDAR View / Shading Dome exit
+        choreography the user already knows. The slide rule sits in the slide-out group further below; the
+        opacity rule for `.time-bar` was removed from this block so the two transforms (fade vs slide) do
+        not race during the dashboard open / close window. */
 
     /*  When LiDAR View is active, fade out every overlay layer so
         the dot cloud reads on its own against a quiet basemap. The
@@ -351,7 +359,8 @@ export const heliosCardStyles = css`
         disabled so the drifting element cannot intercept clicks while off-screen. translateX kept so the bar stays
         centred. */
     ha-card.lidar-view-active   .time-bar,
-    ha-card.shading-dome-active .time-bar
+    ha-card.shading-dome-active .time-bar,
+    ha-card.detail-active       .time-bar
     {
         transform: translateX(-50%) translateY(140%);
         pointer-events: none;
