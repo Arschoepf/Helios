@@ -33,6 +33,20 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Multi-source PV live aggregation (Phase 1 / 2)
+
+Installs with several solar sources declared in HA Energy (typically split E / W arrays each declared as its own
+solar source) were only ever showing the FIRST entity in the chip, the tooltip and the dashboard headline, because
+`resolvePvLiveEntity` collapsed the multi-source array down to `[0]`. `refreshPv` now sums the live state across
+every wired source: each entity is normalised to W via `pvNormalizeToWatts` and the total is stored as the
+canonical W value, so the chip + tooltip + dashboard reflect the real combined production. The rolling sample
+buffer + the live tail tracking follow the same path.
+
+History fetch + scrub-past + the chart curve itself stay single-entity for now (a follow-up reshapes
+`fetchPvHistory` + `_pvHistory` into an entity-summed series), so the chart's right edge does NOT extend past
+the last full history fetch in multi-source mode, keeping the historical tail (single entity) visually
+consistent with itself until Phase 2 lands.
+
 ### Grid import / export past-scrub chip values restored
 
 The entity refonte in #184 retired the card-level `grid-import-entity` / `grid-export-entity` YAML slots, but

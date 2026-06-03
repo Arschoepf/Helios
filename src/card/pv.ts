@@ -207,34 +207,88 @@ export function refreshPv(host: PvHost): void
         return;
     }
 
+    //Multi-source LIVE aggregation. A user with a split E/W install (or any other multi-string install with one
+    //solar source per string in HA Energy) sees the SUM of every wired stat_rate / stat_energy_from sensor on the
+    //chip, the tooltip, the dashboard headline, instead of just the first entry the previous resolver returned. The
+    //history fetch + scrub-past path stays single-entity for now (uses `entity` resolved above) until the recorder
+    //+ interpolation refactor that turns `_pvHistory` into a summed series lands.
+    const liveEntities = host._energyDefaults.solarStatRates.length > 0
+        ? host._energyDefaults.solarStatRates
+        : host._energyDefaults.solarStatEnergyFroms;
+    const isMultiEntity = liveEntities.length > 1;
+
     //Live state read, always cheap, runs on every Lit cycle.
     const stateObj = host.hass.states?.[entity];
     if (stateObj)
     {
-        const v = parseFloat(stateObj.state);
-        const next = isFinite(v) ? v : null;
-        if (next !== host._pvCurrent)
+        let nextValue:    number | null = null;
+        let nextUnit:     string        = '';
+        let liveTs:       number        = 0;
+        if (isMultiEntity)
         {
-            host._pvCurrent = next;
+            //Sum every configured live entity at its current state. Watts is the canonical unit because
+            //pvNormalizeToWatts collapses every per-source declared unit (W / kW / MW) into a single scale; the chip
+            //+ tooltip + dashboard already know how to format from W. Skip entries that fail to parse so a single
+            //unavailable sensor doesn't wipe out the aggregate.
+            let sumW       = 0;
+            let anyValid   = false;
+            for (const id of liveEntities)
+            {
+                const so = host.hass.states?.[id];
+                if (!so)
+                {
+                    continue;
+                }
+                const v = parseFloat(so.state);
+                if (!isFinite(v))
+                {
+                    continue;
+                }
+                const u = String(so.attributes?.unit_of_measurement ?? '');
+                sumW += pvNormalizeToWatts(v, u);
+                anyValid = true;
+                const ts = so.last_updated
+                    ? new Date(so.last_updated).getTime()
+                    : Date.now();
+                if (ts > liveTs)
+                {
+                    liveTs = ts;
+                }
+            }
+            if (anyValid)
+            {
+                nextValue = sumW;
+                nextUnit  = 'W';
+            }
         }
-        const unit = stateObj.attributes?.unit_of_measurement ?? '';
-        if (unit !== host._pvUnit)
+        else
         {
-            host._pvUnit = unit;
+            const v = parseFloat(stateObj.state);
+            nextValue = isFinite(v) ? v : null;
+            nextUnit  = stateObj.attributes?.unit_of_measurement ?? '';
+            liveTs    = stateObj.last_updated
+                ? new Date(stateObj.last_updated).getTime()
+                : Date.now();
+        }
+        if (nextValue !== host._pvCurrent)
+        {
+            host._pvCurrent = nextValue;
+        }
+        if (nextUnit !== host._pvUnit)
+        {
+            host._pvUnit = nextUnit;
         }
 
         //Append the freshly-read state to the rolling buffer if the entity timestamp moved forward since last cycle. We trim entries older than 5 min
         //so the buffer stays tiny even on entities that update many times per second.
-        if (next !== null)
+        if (nextValue !== null)
         {
-            const ts = stateObj.last_updated
-                ? new Date(stateObj.last_updated).getTime()
-                : Date.now();
+            const ts = liveTs || Date.now();
             const buf = host._pvSampleBuffer;
             const last = buf.length > 0 ? buf[buf.length - 1] : null;
             if (!last || ts > last.t)
             {
-                buf.push({ t: ts, v: next });
+                buf.push({ t: ts, v: nextValue });
                 const cutoff = Date.now() - 5 * 60 * 1000;
                 while (buf.length > 1 && buf[0].t < cutoff)
                 {
@@ -252,15 +306,19 @@ export function refreshPv(host: PvHost): void
             //and the arrays grew unbounded. Push mutates the existing arrays (Lit re-renders are driven by the live state
             //assignment above, not by `_pvHistory` identity), and we trim entries that drift before `_timeRange.start` so the
             //tail does not balloon past the visible window.
+            //
+            //Multi-source caveat: `_pvHistory` carries the primary entity's history until the recorder + interpolation
+            //refactor lands. Appending the multi-entity SUM here would create a visible jump where the historical
+            //single-entity tail meets the summed live tip, so we only extend the tail in single-entity mode.
             const hist = host._pvHistory;
-            if (hist)
+            if (hist && !isMultiEntity)
             {
                 const lastIdx = hist.times.length - 1;
                 const lastTs  = lastIdx >= 0 ? hist.times[lastIdx].getTime() : 0;
                 if (ts > lastTs)
                 {
                     hist.times.push(new Date(ts));
-                    hist.values.push(next);
+                    hist.values.push(nextValue);
                     //Drop the leading samples that have aged out of the chart's visible window. Guards the array against
                     //unbounded growth on long-uptime sessions where the fetch key stays stable for many hours.
                     if (host._timeRange)
