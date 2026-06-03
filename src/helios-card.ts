@@ -1977,7 +1977,10 @@ export class HeliosCard extends LitElement
                                        : lidarLoading ? 'LiDAR view, loading shadows...'
                                        : isLocal      ? 'LiDAR view, local nDSM'
                                                       : 'LiDAR view, online provider';
-                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode && !this._cloudMode;
+                    //Cloud mode is a soft per-layer reveal, not a mutually-exclusive view mode: it does NOT replace the
+                    //default Layer UI, the user can keep the layer on AND inspect the cloud breakdown. So the Layer
+                    //button stays lit while the cloud chips are revealed.
+                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode;
                     //Lock mode-switching while the exposure sweep is in
                     //flight: the user cannot exit / re-enter / swap
                     //modes until the LiDAR view has finished computing.

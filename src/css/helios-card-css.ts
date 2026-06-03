@@ -1537,7 +1537,7 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 3px;
+        gap: 4px;
         height: 18px;
         padding: 0 8px 0 6px;
         background: var(--primary-color, #03a9f4);
@@ -1550,18 +1550,40 @@ export const heliosCardStyles = css`
         font-weight: 600;
         letter-spacing: 0.3px;
         text-transform: uppercase;
+        line-height: 1;
+        /*  Fade in / out instead of pop in / out: render the tab in every tooltip pass and toggle visibility via
+            opacity + pointer-events so the entry / exit transition can play in both directions. translateY adds a
+            sub-pixel slide so the appearance reads as "slipping down from the tooltip" rather than a flat fade. */
+        opacity: 0;
+        transform: translateY(-2px);
+        pointer-events: none;
+        transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+    }
+    .tb-hover-tooltip-magnet-tab.is-visible
+    {
+        opacity: 1;
+        transform: translateY(0);
     }
     /*  The "live" dot pulses to mirror the HA Energy dashboard's own live-data indicator vocabulary. White on the
-        brand-blue plate keeps the recipe consistent with the rest of the on-primary surfaces. */
+        brand-blue plate keeps the recipe consistent with the rest of the on-primary surfaces. The flex parent already
+        centres the icon vertically, but ha-icon ships with an internal mdc-icon line-box that sits 1 px below
+        baseline; the explicit line-height 0 flushes the box to the icon metric centre so the dot lines up with the
+        LIVE label cap-height. */
     .tb-hover-tooltip-magnet-tab-dot
     {
         --mdc-icon-size: 12px;
         color: inherit;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
         animation: tb-hover-tooltip-live-pulse 1.4s ease-in-out infinite;
     }
     .tb-hover-tooltip-magnet-tab-label
     {
         line-height: 1;
+        display: inline-flex;
+        align-items: center;
     }
     @keyframes tb-hover-tooltip-live-pulse
     {

@@ -574,16 +574,15 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
             class="tb-hover-tooltip-wrapper"
             style="left:${pct.toFixed(2)}%; transform: translateX(-${pct.toFixed(2)}%)"
         >
-            ${inMagnetZone ? html`
-                <div
-                    class="tb-hover-tooltip-magnet-tab"
-                    title="${liveText}"
-                    aria-label="${liveText}"
-                >
-                    <ha-icon class="tb-hover-tooltip-magnet-tab-dot" icon="mdi:circle-medium"></ha-icon>
-                    <span class="tb-hover-tooltip-magnet-tab-label">${liveLabel}</span>
-                </div>
-            ` : nothing}
+            <div
+                class="tb-hover-tooltip-magnet-tab ${inMagnetZone ? 'is-visible' : ''}"
+                title="${liveText}"
+                aria-label="${liveText}"
+                aria-hidden="${inMagnetZone ? 'false' : 'true'}"
+            >
+                <ha-icon class="tb-hover-tooltip-magnet-tab-dot" icon="mdi:circle-medium"></ha-icon>
+                <span class="tb-hover-tooltip-magnet-tab-label">${liveLabel}</span>
+            </div>
             <div class="tb-hover-tooltip">
                 <div class="tb-hover-tooltip-time">${timeLabel}</div>
                 ${showProduction && dayKwhText ? html`
