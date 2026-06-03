@@ -121,8 +121,6 @@ export interface Translations
         //Optional photovoltaic production overlay.
         pvSection:                string;
         pvHint:                   string;
-        pvEntity:                 string;
-        pvEntityHelp:             string;
         //Manual peak-power input (kWp). When set, drives the dotted
         //prediction line on the PV chart and the PV→home leader's
         //flow saturation. Optional; without it the card uses live
@@ -175,31 +173,15 @@ export interface Translations
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
         batterySection:           string;
-        batteryHint:              string;
         //Multi-bank battery editor. The section renders one collapsible card per bank (same widget as pv-arrays) so a user with house +
         //garage banks (or a hybrid + standalone) gets a dedicated row each. The chip on the card stays single, aggregating the banks as
         //a capacity-weighted SoC + summed signed power. `batteryBankTitle` carries the auto-numbered fallback used when the user hasn't
         //typed a name; `{n}` is substituted with the 1-based row index.
-        batteryBankTitle:         string;
-        batteryBankAdd:           string;
-        batteryBankRemove:        string;
-        batteryBankName:          string;
-        batteryBankNameHelp:      string;
-        batteryCapacityKwh:       string;
-        batteryCapacityKwhHelp:   string;
-        batterySocEntity:         string;
-        batterySocEntityHelp:     string;
-        batteryPowerEntity:       string;
-        batteryPowerEntityHelp:   string;
         //Battery power sign-convention toggle. When the user's
         //entity reports charging as negative (some GivEnergy /
         //GivTCP setups), the inverted option flips the value once
         //at ingest so the rest of the card stays on the
         //"positive = charging" convention.
-        batteryPowerInvert:         string;
-        batteryPowerInvertStandard: string;
-        batteryPowerInvertInverted: string;
-        batteryPowerInvertHelp:     string;
         //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
         //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
         //train as phantom shadow. Leave the field empty to keep the legacy "train every bucket" behaviour.
@@ -209,24 +191,10 @@ export interface Translations
         //accept multiple entities; the chip displays whichever entity
         //last changed (typical for peak / off-peak indexes that never
         //increment at the same time).
-        gridSection:              string;
-        gridHint:                 string;
-        gridImportTitle:          string;
-        gridImportHint:           string;
-        gridExportTitle:          string;
-        gridExportHint:           string;
-        gridSourceAdd:            string;
-        gridSourceRemove:         string;
         //Combined signed grid-power entity: one sensor whose sign
         //routes to the import (>=0) or export (<0) chip, superseding
         //the two directional slots. The invert toggle flips the sign
         //convention for meters that report feed-in as positive.
-        gridCombinedTitle:        string;
-        gridCombinedHint:         string;
-        gridInvertLabel:          string;
-        gridInvertStandard:       string;
-        gridInvertInverted:       string;
-        gridInvertHelp:           string;
         //Weather section. Hosts the optional solar-radiation entity
         //override: when wired to a physical W/m² sensor at the home
         //(typical Ecowitt / Davis / personal weather station), the
