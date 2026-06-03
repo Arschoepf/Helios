@@ -844,15 +844,12 @@ export class HeliosCard extends LitElement
     }
 
     //Sizing for sections view (current). 1 row ≈ 56 px and 1 col ≈ 30 px
-    //(at section width 360 px). Default 9 columns x 11 rows ≈ 540 x 624 px.
-    //
-    //min_columns is kept at 6 (not 9) because Home Assistant will
-    //refuse to render the card with an "Invalid configuration"
-    //placeholder when the containing section happens to have fewer
-    //than min_columns slots available. 6 is the sweet spot: still a
-    //multiple of 3 (HA's recommended granularity), small enough to
-    //fit any section, large enough that the 11-day timeline labels
-    //stay readable when the user resizes down to that minimum.
+    //(at section width 360 px). Default 12 columns x 8 rows = the
+    //section editor's actual ceiling, and ALSO the minimum the card
+    //will accept now: the CoverFlow needs the full editor width to fan
+    //its five cards without overlap, and the bandeau + 2x2 stats grid
+    //+ chart placeholder need the full 8 rows of height to render
+    //readably. Resizing below that produced unreadable squished cards.
     public getGridOptions(): {
         rows:        number;
         columns:     number;
@@ -863,20 +860,11 @@ export class HeliosCard extends LitElement
     }
     {
         return {
-            //Default to the section editor's actual ceiling (12 cols
-            //wide, 8 rows tall) so the slot HA carves out matches
-            //what its layout UI lets the user resize to. Asking for
-            //11 rows by default (the old value) lands a slider handle
-            //past the editor's max-row limit, which reads as a buggy
-            //"the card wants more space than I can give it" mismatch.
-            //Min rows lowered to 4 so the card still fits inside a
-            //compact two-row "info strip" layout if a power user
-            //really wants that.
             rows:        8,
             columns:     12,
-            min_rows:    4,
+            min_rows:    8,
             max_rows:    24,
-            min_columns: 6,
+            min_columns: 12,
             max_columns: 12
         };
     }
