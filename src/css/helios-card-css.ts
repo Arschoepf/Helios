@@ -581,6 +581,12 @@ export const heliosCardStyles = css`
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    /*  Two formats rendered side by side: long is the default, short is hidden. The container query below
+        swaps them on narrow ha-card containers (section view, narrow dashboard) where the long format would
+        otherwise truncate. Both are localised via Intl.DateTimeFormat in the renderer so the abbreviation
+        respects the HA frontend's language. */
+    .dash-cf-card-date-short { display: none; }
+    .dash-cf-card-date-long  { display: inline; }
     .dash-cf-card-day-chip
     {
         background: color-mix(in srgb, var(--primary-color, #03a9f4) 18%, transparent);
@@ -602,6 +608,16 @@ export const heliosCardStyles = css`
         height: 30px;
     }
 
+    /*  Tight section view (helios-card container < 600 px): swap the long date for the short day + 3-letter
+        month format and drop the "Aujourd'hui / Hier / ..." chip so the bandeau still fits on one row without
+        truncation. */
+    @container helios-card (max-width: 600px)
+    {
+        .dash-cf-card-date-long  { display: none;   }
+        .dash-cf-card-date-short { display: inline; }
+        .dash-cf-card-day-chip   { display: none;   }
+    }
+
     /*  First content block under the bandeau: Production on the left, Prévision on the right. Mushroom-card
         styling so the block reads as a native HA section: padded gutters, soft secondary-background tile per
         stat, label uppercase + tracked, headline value big + bold, refined value below in a quieter shade.
@@ -609,8 +625,11 @@ export const heliosCardStyles = css`
     .dash-cf-card-stats
     {
         display: flex;
-        gap: 10px;
-        padding: 14px 14px 0 14px;
+        /*  Gap + padding both bind to the same 8 px the bandeau uses for its outer margin so the JOUR strip,
+            the gap between PRODUCTION / PREVISION tiles and the gutters to the card edges all share the same
+            rhythm. */
+        gap: 8px;
+        padding: 0 8px;
     }
     .dash-cf-card-stat
     {

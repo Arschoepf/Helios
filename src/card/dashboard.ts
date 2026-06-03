@@ -371,10 +371,17 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() + cardOffset);
     const haLanguage = (host.hass?.language as string | undefined) || undefined;
-    const dateLabel  = new Intl.DateTimeFormat(haLanguage, {
+    //Two formats so the bandeau can swap based on container width via @container query in CSS. Long format is
+    //the default; short (day + abbreviated month) kicks in on tight sections where the long string would
+    //overflow. Both are localised via Intl so the order + abbreviation follow the HA frontend's language.
+    const dateLabelLong  = new Intl.DateTimeFormat(haLanguage, {
         weekday: 'long',
         day:     'numeric',
         month:   'long',
+    }).format(d);
+    const dateLabelShort = new Intl.DateTimeFormat(haLanguage, {
+        day:   'numeric',
+        month: 'short',
     }).format(d);
 
     const friendlyLabel = cardOffset === -2 ? 'Avant-hier'
@@ -409,7 +416,8 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
                 </span>
                 <span class="dash-cf-card-bandeau-center">
                     <ha-icon class="dash-cf-card-cal-icon" icon="mdi:calendar"></ha-icon>
-                    <span class="dash-cf-card-date">${dateLabel}</span>
+                    <span class="dash-cf-card-date dash-cf-card-date-long">${dateLabelLong}</span>
+                    <span class="dash-cf-card-date dash-cf-card-date-short">${dateLabelShort}</span>
                     <span class="dash-cf-card-day-chip">${friendlyLabel}</span>
                 </span>
                 ${isFront ? html`
