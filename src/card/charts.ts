@@ -18,6 +18,7 @@ import
 {
     pvCalibK,
     pvInverterMaxW,
+    pvNormalizeToWatts,
     computePvPowerWeighted,
     type PvHistory
 } from './pv';
@@ -397,145 +398,159 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
 }
 
 
-//Hover tooltip chip, sits above the chart-card stack inside the
-//time-bar. Shows the hover timestamp + one colour-coded row per
-//series. Position clamps to [8 %, 92 %] so the chip never
-//overflows the timeline rails at the edges of the visible range.
-//The PV row is skipped silently when the entity isn't configured
-//(or no value is available at the cursor instant), so the chip
-//stays useful for forecast-only setups.
+//Hover tooltip block, sits above the chart-card stack inside the
+//time-bar. Shows the hover timestamp + one icon-coded row per
+//series, plus the day's kWh production (observed past + today
+//so-far) or forecast (future days) on a dedicated row. A small
+//magnet-snap tab appears above the tooltip the moment the scrub
+//pointer enters the narrow band around the live cursor, signalling
+//the imminent auto-snap back to live mode (see applyTimelinePointer
+//in timeline.ts for the actual snap logic). The PV row is skipped
+//silently when the entity isn't configured or no value is available
+//at the cursor instant, so the chip stays useful for forecast-only
+//setups.
 export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
-    if (!range || !series) return html``;
-
-    const startMs = range.start.getTime();
-    const rangeMs = range.end.getTime() - startMs;
-    if (rangeMs <= 0) return html``;
-
-    //Two-mode anchor. Hover pin (cursor inside the chart) takes
-    //precedence so the user always sees readings under their finger
-    //or mouse; otherwise the tooltip parks itself on the scrubbed
-    //instant so the moment the user clicked stays labeled (date +
-    //time + values). In live mode with no hover, no tooltip.
-    const hoverPct  = host._chartHoverPct;
-    const scrubbing = !host._isLiveMode && host._selectedTime !== null;
-    let pct:  number;
-    let atMs: number;
-    if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
-    {
-        pct  = hoverPct;
-        atMs = startMs + (pct / 100) * rangeMs;
-    }
-    else if (scrubbing)
-    {
-        atMs = host._selectedTime!.getTime();
-        pct  = ((atMs - startMs) / rangeMs) * 100;
-        if (pct < 0 || pct > 100) return html``;
-    }
-    else
+    if (!range || !series)
     {
         return html``;
     }
+
+    const startMs = range.start.getTime();
+    const rangeMs = range.end.getTime() - startMs;
+    if (rangeMs <= 0)
+    {
+        return html``;
+    }
+
+    //Tooltip shows ONLY while the pointer is actively over the chart
+    //(or actively dragging the scrub, which keeps _chartHoverPct in
+    //sync). Once the gesture ends, _chartHoverPct goes null and the
+    //tooltip disappears, leaving only the scrub line behind so the
+    //user reads the locked instant without a floating callout.
+    const hoverPct = host._chartHoverPct;
+    if (hoverPct === null || hoverPct < 0 || hoverPct > 100)
+    {
+        return html``;
+    }
+    const pct  = hoverPct;
+    const atMs = startMs + (pct / 100) * rangeMs;
 
     const irrV = interpAt(series.times, series.irradiance, atMs);
     const cldV = interpAt(series.times, series.cloud,      atMs);
     const pv   = pvValueAtTime(host, atMs);
     const hasPv = isFinite(pv.value);
 
-    //Colour configs no longer consulted, HA Energy palette via the
-    //defaults. Charts.ts keeps the locals so its blend/lerp logic
-    //downstream stays unchanged.
-    const sunColor    = DEFAULT_SUN_COLOR_HEX;
-    const cloudColor  = DEFAULT_CLOUD_COLOR_HEX;
-    const pvBaseColor = DEFAULT_PV_COLOR_HEX;
-    //Predicted PV reads "off-shade" from observed. Theme-aware so
-    //it stays readable on both backgrounds: light theme blends
-    //toward BLACK (darker, contrasts with white card), dark theme
-    //blends toward WHITE (lighter, contrasts with dark card). Mirrors
-    //the predictedColor logic in dashboard.ts.
-    const isDarkTheme = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
-    const pvColor = pv.isPredicted
-        ? (isDarkTheme
-            ? lerpHexToward(pvBaseColor, '#ffffff', 0.55)
-            : lerpHexToward(pvBaseColor, '#000000', 0.35))
-        : pvBaseColor;
+    //The scrub tooltip icons now inherit the active HA theme colour
+    //(see .tb-hover-tooltip-icon), so the per-series tints from the
+    //legacy DEFAULT_*_COLOR_HEX constants are no longer applied here.
 
-    const atDate    = new Date(atMs);
-    const timeLabel = atDate.toLocaleTimeString([], {
-        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    });
-    const dateLabel = formatDate(atDate, host.config?.['date-format']);
+    const atDate     = new Date(atMs);
+    const haLanguage = (host.hass?.language as string | undefined) || undefined;
+    const timeLabel  = new Intl.DateTimeFormat(haLanguage, {
+        hour: '2-digit', minute: '2-digit',
+    }).format(atDate);
 
-    const clampedPct = Math.max(8, Math.min(92, pct));
+    //Day total split into observed (past + today-so-far) and forecast
+    //(future days). Past + today scrub shows the observed production
+    //figure only, future scrub shows the forecast figure. No double
+    //row even when both inputs are populated for today, the observed
+    //total is already authoritative for the day-so-far.
+    const dayKey = new Date(atDate);
+    dayKey.setHours(0, 0, 0, 0);
+    const todayKey = new Date();
+    todayKey.setHours(0, 0, 0, 0);
+    const dayTotals      = computeDailyKwhTotals(host);
+    const dayKwh         = dayTotals.get(dayKey.getTime());
+    const isFutureDay    = dayKey.getTime() > todayKey.getTime();
+    const showProduction = !isFutureDay && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    const showForecast   =  isFutureDay && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
+        ? formatLocalisedNumber(host.hass, dayKwh, 1) + ' kWh'
+        : '';
 
-    //PV decimals: 1 for kW/MW under three digits, 0 otherwise. The user reads "1.2 kW" on residential gear but "1234 W" on the raw W entity, both
-    //compact.
+    //Magnet-snap detection. When the scrub pointer lands within a
+    //narrow band around the live cursor, applyTimelinePointer in
+    //timeline.ts auto-releases back to live mode. A small restore
+    //tab surfaces above the tooltip the moment the pointer enters
+    //that band so the user reads the upcoming snap visually. The
+    //px-based scrub check uses 8 px, this pct equivalent is sized to
+    //match at typical chart widths (8 px on a 700 px chart ~= 1.2 %).
+    const MAGNET_PCT   = 1.2;
+    const nowMsRef     = Date.now();
+    const inMagnetZone = nowMsRef >= startMs && nowMsRef <= startMs + rangeMs
+        && Math.abs(pct - ((nowMsRef - startMs) / rangeMs) * 100) <= MAGNET_PCT;
+
+    //PV decimals: 1 for kW/MW under three digits, 0 otherwise.
     const pvDecimals = !hasPv ? 0
                      : pv.unit === 'W' ? 0
                      : (Math.abs(pv.value) < 100 ? 1 : 0);
 
+    const haLang   = (host.hass?.language as string | undefined) || '';
+    const liveText = haLang.toLowerCase().startsWith('fr')
+        ? 'Retour au live'
+        : 'Back to live';
+
+    //Tooltip horizontal anchor: a continuous left-to-right slide
+    //driven by translateX(-${pct}%), so the tooltip's left edge sits
+    //at 0 when the scrub is at 0 % and its right edge sits at 100 %
+    //when the scrub is at 100 %. Net result: the tooltip never goes
+    //off-screen yet there's no jump-to-edge magnet at any threshold,
+    //the box just slides smoothly along with the scrub.
     return html`
         <div
-            class="tb-hover-tooltip"
-            style="left:${clampedPct.toFixed(2)}%"
+            class="tb-hover-tooltip-tail ${inMagnetZone ? 'is-magnet-snap' : ''}"
+            style="left:${pct.toFixed(2)}%"
+        ></div>
+        <div
+            class="tb-hover-tooltip-wrapper"
+            style="left:${pct.toFixed(2)}%; transform: translateX(-${pct.toFixed(2)}%)"
         >
-            <div class="tb-hover-tooltip-date">${dateLabel}</div>
-            <div class="tb-hover-tooltip-time">${timeLabel}</div>
-            ${isFinite(irrV) ? html`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+            ${inMagnetZone ? html`
+                <div
+                    class="tb-hover-tooltip-magnet-tab"
+                    title="${liveText}"
+                    aria-label="${liveText}"
+                >
+                    <ha-icon icon="mdi:restore"></ha-icon>
                 </div>
             ` : nothing}
-            ${isFinite(cldV) ? html`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline" style="color:${cloudColor}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
-                </div>
-            ` : nothing}
-            ${hasPv ? html`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:flash" style="color:${pvColor}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
-                </div>
-            ` : nothing}
+            <div class="tb-hover-tooltip">
+                <div class="tb-hover-tooltip-time">${timeLabel}</div>
+                ${showProduction && dayKwhText ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${dayKwhText}</span>
+                    </div>
+                ` : nothing}
+                ${showForecast && dayKwhText ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:chart-bell-curve-cumulative"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${dayKwhText}</span>
+                    </div>
+                ` : nothing}
+                ${isFinite(irrV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+                    </div>
+                ` : nothing}
+                ${isFinite(cldV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
+                    </div>
+                ` : nothing}
+                ${hasPv ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
+                    </div>
+                ` : nothing}
+            </div>
         </div>
-    `;
-}
-
-
-//Back-to-live tab. Rendered inside the time-bar overlay only when
-//the user is scrubbing (selected an instant that is not live), as
-//a true tab attached to the top edge of the time-bar (rounded top
-//corners only, flat bottom merging with the time-bar border).
-//Anchors at the OPPOSITE end of the timeline from the scrub
-//tooltip so the two never collide: scrub on the left half, tab on
-//the right; scrub on the right half, tab on the left. The click
-//and pointerdown both stop propagation so they don't bubble up to
-//the time-bar's scrub handler (`onTimelinePointerDown`), which
-//would otherwise re-scrub to the tab's X coordinate and the tap
-//would feel like a no-op.
-export function renderTimelineBackToLiveTab(host: ChartHost, onClick: () => void): TemplateResult
-{
-    if (host._isLiveMode || host._selectedTime === null || !host._timeRange) return html``;
-    const startMs = host._timeRange.start.getTime();
-    const rangeMs = host._timeRange.end.getTime() - startMs;
-    if (rangeMs <= 0) return html``;
-    const selPct  = ((host._selectedTime.getTime() - startMs) / rangeMs) * 100;
-    const onLeft  = selPct >= 50;
-    return html`
-        <button
-            type="button"
-            class="tb-back-to-live ${onLeft ? 'is-left' : 'is-right'}"
-            aria-label="Back to live"
-            @pointerdown="${(e: PointerEvent) => { e.stopPropagation(); }}"
-            @click="${(e: MouseEvent) => { e.stopPropagation(); onClick(); }}"
-        >
-            <ha-icon icon="mdi:restore"></ha-icon>
-            <span>Live</span>
-        </button>
     `;
 }
 
@@ -1311,13 +1326,27 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     const today0 = new Date(now);
     today0.setHours(0, 0, 0, 0);
 
+    //Active day during hover or scrub. The strip cell matching the
+    //pointer's day-bucket gets a faint brand-blue tint so the user
+    //reads "I am on this day" at a glance. Falls back to null when
+    //no hover or scrub is active, leaving every cell at rest.
+    const hoverPctRef = host._chartHoverPct;
+    let activeDayKey: number | null = null;
+    if (hoverPctRef !== null && hoverPctRef >= 0 && hoverPctRef <= 100)
+    {
+        const hoverMs   = start.getTime() + (hoverPctRef / 100) * rangeMs;
+        const hoverDate = new Date(hoverMs);
+        hoverDate.setHours(0, 0, 0, 0);
+        activeDayKey = hoverDate.getTime();
+    }
+
     //Build the per-day cells + the vertical separators between
     //them. Cells use absolute positioning over the strip so each
     //label sits at the geometric centre of its day's segment, even
     //when the first or last day is only partially visible. The
     //separator list collects the right edge of each day except the
     //last (no separator at the strip's outer right edge).
-    type Cell = { isToday: boolean; centrePct: number; widthPct: number; label: string };
+    type Cell = { isToday: boolean; isActive: boolean; centrePct: number; widthPct: number; label: string };
     const cells: Cell[] = [];
     const sepPcts: number[] = [];
     const cursor = new Date(start);
@@ -1338,11 +1367,13 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
             const w        = pEnd - pStart;
             const dayDelta = Math.round((cursor.getTime() - today0.getTime()) / 86_400_000);
             const isToday  = dayDelta === 0;
+            const isActive = activeDayKey !== null && cursor.getTime() === activeDayKey;
 
             const label    = formatDate(cursor, host.config?.['date-format']);
 
             cells.push({
                 isToday,
+                isActive,
                 centrePct: pStart + w / 2,
                 widthPct:  w,
                 label,
@@ -1363,7 +1394,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
         <div class="tb-day-strip">
             ${cells.map(c => html`
                 <div
-                    class="tb-day-strip-cell ${c.isToday ? 'is-today' : ''}"
+                    class="tb-day-strip-cell ${c.isToday ? 'is-today' : ''} ${c.isActive ? 'is-active' : ''}"
                     style="left:${(c.centrePct - c.widthPct / 2).toFixed(2)}%; width:${c.widthPct.toFixed(2)}%"
                 >
                     <span class="tb-day-strip-date">${c.label}</span>
@@ -1376,3 +1407,156 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     `;
 }
 
+
+
+//Compute kWh-per-day totals over the active timeline range. The helper integrates two sources:
+//
+//  - Past + today-so-far: sum of the observed PV history (from
+//    `_pvHistory`), respecting the entity's unit (W/kW power
+//    sensors are integrated by trapezoidal rule; cumulative
+//    energy sensors are differenced and summed).
+//  - Today-remainder + future: integration of the kWp × clear-
+//    sky × cloud model, hour by hour, using the engine's
+//    weather series.
+//
+//Returns a Map keyed by each day's local-midnight ms, with values in kWh. Days that fall outside the active range or carry no usable data are
+//omitted.
+export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
+{
+    const out = new Map<number, number>();
+    if (!host._timeRange) return out;
+    const { start, end } = host._timeRange;
+    const startMs  = start.getTime();
+    const endMsAbs = end.getTime();
+
+    const dayKey = (ms: number): number =>
+    {
+        const d = new Date(ms);
+        d.setHours(0, 0, 0, 0);
+        return d.getTime();
+    };
+
+    //Pass 1: past + today-so-far from the observed history. Combines two sources so days that fall outside the narrow raw window
+    //still get a value:
+    //  - `_pvHistory` (~2 days raw, finest resolution) covers today and yesterday.
+    //  - `_pvCalibStats` (5 days hourly stats) covers days 2-5 in the past so the per-day chips on the timeline keep showing real
+    //    figures instead of falling silently to zero.
+    //Days covered by `_pvHistory` are integrated from that slot only; the stats slot fills in days the raw window does not reach.
+    const unit = (host._pvUnit || '').toLowerCase();
+    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+
+    const rawHist = host._pvHistory;
+    const rawFirstMs = (rawHist && rawHist.times.length > 0) ? rawHist.times[0].getTime() : null;
+    const rawLastMs  = (rawHist && rawHist.times.length > 0) ? rawHist.times[rawHist.times.length - 1].getTime() : null;
+
+    const integrate = (
+        h:           PvHistory,
+        bucketGuard: (tMs: number) => boolean,
+    ): void =>
+    {
+        if (isCumulativeEnergy)
+        {
+            //Cumulative energy sensor: difference consecutive
+            //samples and sum the deltas per day. Counter resets
+            //(dv < 0) are dropped, same convention the chart uses.
+            for (let i = 1; i < h.times.length; i++)
+            {
+                const tMs = h.times[i].getTime();
+                if (tMs < startMs || tMs > endMsAbs) continue;
+                if (!bucketGuard(tMs)) continue;
+                const dv = h.values[i] - h.values[i - 1];
+                if (!isFinite(dv) || dv < 0) continue;
+                const kwh = unit === 'mwh' ? dv * 1000
+                          : unit === 'wh'  ? dv / 1000
+                          : dv;
+                const k = dayKey(tMs);
+                out.set(k, (out.get(k) ?? 0) + kwh);
+            }
+        }
+        else
+        {
+            //Power sensor: trapezoidal integration of the
+            //instantaneous reading over each consecutive pair.
+            //Skip gaps > 6 h (likely sensor outage, integrating
+            //across them would invent energy).
+            for (let i = 1; i < h.times.length; i++)
+            {
+                const tCurrMs = h.times[i].getTime();
+                if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
+                if (!bucketGuard(tCurrMs)) continue;
+                const tPrevMs = h.times[i - 1].getTime();
+                const dtH = (tCurrMs - tPrevMs) / 3_600_000;
+                if (dtH <= 0 || dtH > 6) continue;
+                const wPrev = pvNormalizeToWatts(h.values[i - 1], host._pvUnit);
+                const wCurr = pvNormalizeToWatts(h.values[i],     host._pvUnit);
+                if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+                const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
+                const k = dayKey(tCurrMs);
+                out.set(k, (out.get(k) ?? 0) + kwh);
+            }
+        }
+    };
+
+    if (rawHist && rawHist.times.length >= 2)
+    {
+        //Full integration over the raw slot; no gating, raw is authoritative for the days it covers.
+        integrate(rawHist, () => true);
+    }
+    const calib = host._pvCalibStats;
+    if (calib && calib.times.length >= 2)
+    {
+        //Stats slot fills the wider days only. A sample whose timestamp falls within the raw window is already counted; skip it.
+        integrate(calib, (tMs) =>
+        {
+            if (rawFirstMs === null || rawLastMs === null) return true;
+            return tMs < rawFirstMs || tMs > rawLastMs;
+        });
+    }
+
+    //Pass 2: future + today-remainder from the forecast model.
+    //Skipped silently when peak power is unset (no model, no
+    //forecast, only past observation contributes). Forecast kWh
+    //is multiplied by the 5-day rolling calibration ratio so the
+    //per-day chips match the "refined" dashboard headline + the
+    //dotted forecast curve next to them, then clipped at the
+    //inverter PMax so a bright midday hour can't push the daily
+    //total above what the hardware would actually deliver.
+    const k        = pvCalibK(host.config);   //W per percent of STC
+    const series   = host._chartSeries;
+    const coords   = getHomeCoords(host.config, host.hass);
+    const cal      = computeForecastCalibration(host);
+    const calR     = cal ? cal.ratio : 1;
+    trainShadingMap(host);
+    const shading  = currentShadingMap();
+    const capW     = pvInverterMaxW(host.config);
+    if (k !== null && k > 0 && series && coords)
+    {
+        //Index hourly forecast samples by hour-floor ms so we can integrate them by 1-hour rectangles per day. The series timestamps are already at
+        //hour boundaries from the engine's resampling.
+        const nowMs  = Date.now();
+        const raster = host._engine?.getLidarRaster() ?? null;
+        for (let i = 0; i < series.times.length; i++)
+        {
+            const tMs   = series.times[i].getTime();
+            if (tMs < startMs || tMs > endMsAbs) continue;
+            if (tMs < nowMs) continue;   //past covered by Pass 1
+            const cloud = series.cloud[i] ?? 0;
+            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
+            if (pct <= 0) continue;
+            //pct × k = watts at this hour midpoint × 1h = Wh.
+            //Divide by 1000 to land in kWh; clip first so the
+            //daily total honours the inverter cap.
+            const eff   = effectiveForecastRatio(shading, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
+            const watts = Math.min(capW, pct * k * eff);
+            const kwh   = watts / 1000;
+            const dk    = dayKey(tMs);
+            out.set(dk, (out.get(dk) ?? 0) + kwh);
+        }
+    }
+
+    return out;
+}

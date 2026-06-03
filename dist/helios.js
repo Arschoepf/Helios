@@ -3062,31 +3062,57 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
             class="hc-future-mask"
             style="left:${((pe-le)/ue*100).toFixed(2)}%"
         ></div>
-    `}function renderTimelineHoverTooltip(ae){const se=ae._timeRange,le=ae._chartSeries;if(!se||!le)return Cl``;const he=se.start.getTime(),ue=se.end.getTime()-he;if(ue<=0)return Cl``;const pe=ae._chartHoverPct,Pe=!ae._isLiveMode&&null!==ae._selectedTime;let rt,wt;if(null!==pe&&pe>=0&&pe<=100)rt=pe,wt=he+rt/100*ue;else{if(!Pe)return Cl``;if(wt=ae._selectedTime.getTime(),rt=(wt-he)/ue*100,rt<0||rt>100)return Cl``}const Lt=interpAt(le.times,le.irradiance,wt),Nt=interpAt(le.times,le.cloud,wt),Ot=function pvValueAtTime(ae,se){const le=(ae._pvUnit||"").trim();if(!le)return{value:NaN,unit:"",isPredicted:!1};const he=le.toLowerCase(),ue="wh"===he||"kwh"===he||"mwh"===he,pe=ue?"kwh"===he?"kW":"mwh"===he?"MW":"W":le,Pe=pe.toLowerCase(),rt="kw"===Pe?.001:"mw"===Pe?1e-6:1,wt=getHomeCoords(ae.config,ae.hass);if(wt&&getSunPosition(new Date(se),wt.lat,wt.lon).altitude<=0)return{value:0,unit:pe,isPredicted:!1};const Lt=ae._pvHistory,Nt=Lt&&Lt.times.length>=1?Lt.times[0].getTime():1/0,Ot=Lt&&Lt.times.length>=1?Lt.times[Lt.times.length-1].getTime():-1/0;if(Lt&&Lt.times.length>=2&&se>=Nt&&se<=Ot)if(ue)for(let pn=1;pn<Lt.times.length;pn++){const ae=Lt.times[pn].getTime();if(se>ae)continue;const le=Lt.times[pn-1].getTime();if(se<le)break;const he=(ae-le)/36e5;if(he<=0||he>6)break;const ue=Lt.values[pn]-Lt.values[pn-1];if(!isFinite(ue)||ue<0)break;return{value:Math.max(0,ue/he),unit:pe,isPredicted:!1}}else{const ae=interpAt(Lt.times,Lt.values,se);if(isFinite(ae))return{value:Math.max(0,ae),unit:pe,isPredicted:!1}}const jt=ae._pvCalibStats;if(jt&&jt.times.length>=2&&se<=Ot){const ae=interpAt(jt.times,jt.values,se);if(isFinite(ae))return{value:Math.max(0,ae),unit:pe,isPredicted:!1}}const di=ae._chartSeries,ha=pvCalibK(ae.config),da=computeForecastCalibration(ae),ja=da?da.ratio:1;trainShadingMap(ae);const or=currentShadingMap(),An=Date.now(),dn=pvInverterMaxW(ae.config);if(null!==ha&&di&&wt&&di.times.length>=2){const le=ae._engine?.getLidarRaster()??null;for(let he=1;he<di.times.length;he++){const ue=di.times[he].getTime();if(se>ue)continue;const Pe=di.times[he-1].getTime();if(se<Pe)break;const Lt=di.cloud[he-1]??0,Nt=di.cloud[he]??0,Ot=effectiveForecastRatio(or,di.times[he-1],wt.lat,wt.lon,Lt,ja,An),jt=effectiveForecastRatio(or,di.times[he],wt.lat,wt.lon,Nt,ja,An),da=Math.min(dn,computePvPowerWeighted(ae.config,di.times[he-1],wt.lat,wt.lon,Lt,{airTempC:di.temperature[he-1],windMs:di.windSpeed[he-1],raster:le})*ha*Ot),pn=Math.min(dn,computePvPowerWeighted(ae.config,di.times[he],wt.lat,wt.lon,Nt,{airTempC:di.temperature[he],windMs:di.windSpeed[he],raster:le})*ha*jt),fn=ue-Pe;if(fn<=0)return{value:Math.max(0,pn)*rt,unit:pe,isPredicted:!0};const yn=da+(pn-da)*(se-Pe)/fn;return{value:Math.max(0,yn)*rt,unit:pe,isPredicted:!0}}}return{value:NaN,unit:pe,isPredicted:!1}}(ae,wt),jt=isFinite(Ot.value),di=_C,ha=vC,da=CC,ja=!!ae.hass?.themes?.darkMode,or=Ot.isPredicted?ja?lerpHexToward(da,"#ffffff",.55):lerpHexToward(da,"#000000",.35):da,An=new Date(wt),dn=An.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",hourCycle:"h23"}),pn=formatDate(An,ae.config?.["date-format"]),fn=Math.max(8,Math.min(92,rt)),yn=jt?"W"===Ot.unit?0:Math.abs(Ot.value)<100?1:0:0;return Cl`
+    `}function renderTimelineHoverTooltip(ae){const se=ae._timeRange,le=ae._chartSeries;if(!se||!le)return Cl``;const he=se.start.getTime(),ue=se.end.getTime()-he;if(ue<=0)return Cl``;const pe=ae._chartHoverPct;if(null===pe||pe<0||pe>100)return Cl``;const Pe=pe,rt=he+Pe/100*ue,wt=interpAt(le.times,le.irradiance,rt),Lt=interpAt(le.times,le.cloud,rt),Nt=function pvValueAtTime(ae,se){const le=(ae._pvUnit||"").trim();if(!le)return{value:NaN,unit:"",isPredicted:!1};const he=le.toLowerCase(),ue="wh"===he||"kwh"===he||"mwh"===he,pe=ue?"kwh"===he?"kW":"mwh"===he?"MW":"W":le,Pe=pe.toLowerCase(),rt="kw"===Pe?.001:"mw"===Pe?1e-6:1,wt=getHomeCoords(ae.config,ae.hass);if(wt&&getSunPosition(new Date(se),wt.lat,wt.lon).altitude<=0)return{value:0,unit:pe,isPredicted:!1};const Lt=ae._pvHistory,Nt=Lt&&Lt.times.length>=1?Lt.times[0].getTime():1/0,Ot=Lt&&Lt.times.length>=1?Lt.times[Lt.times.length-1].getTime():-1/0;if(Lt&&Lt.times.length>=2&&se>=Nt&&se<=Ot)if(ue)for(let pn=1;pn<Lt.times.length;pn++){const ae=Lt.times[pn].getTime();if(se>ae)continue;const le=Lt.times[pn-1].getTime();if(se<le)break;const he=(ae-le)/36e5;if(he<=0||he>6)break;const ue=Lt.values[pn]-Lt.values[pn-1];if(!isFinite(ue)||ue<0)break;return{value:Math.max(0,ue/he),unit:pe,isPredicted:!1}}else{const ae=interpAt(Lt.times,Lt.values,se);if(isFinite(ae))return{value:Math.max(0,ae),unit:pe,isPredicted:!1}}const jt=ae._pvCalibStats;if(jt&&jt.times.length>=2&&se<=Ot){const ae=interpAt(jt.times,jt.values,se);if(isFinite(ae))return{value:Math.max(0,ae),unit:pe,isPredicted:!1}}const di=ae._chartSeries,ha=pvCalibK(ae.config),da=computeForecastCalibration(ae),ja=da?da.ratio:1;trainShadingMap(ae);const or=currentShadingMap(),An=Date.now(),dn=pvInverterMaxW(ae.config);if(null!==ha&&di&&wt&&di.times.length>=2){const le=ae._engine?.getLidarRaster()??null;for(let he=1;he<di.times.length;he++){const ue=di.times[he].getTime();if(se>ue)continue;const Pe=di.times[he-1].getTime();if(se<Pe)break;const Lt=di.cloud[he-1]??0,Nt=di.cloud[he]??0,Ot=effectiveForecastRatio(or,di.times[he-1],wt.lat,wt.lon,Lt,ja,An),jt=effectiveForecastRatio(or,di.times[he],wt.lat,wt.lon,Nt,ja,An),da=Math.min(dn,computePvPowerWeighted(ae.config,di.times[he-1],wt.lat,wt.lon,Lt,{airTempC:di.temperature[he-1],windMs:di.windSpeed[he-1],raster:le})*ha*Ot),pn=Math.min(dn,computePvPowerWeighted(ae.config,di.times[he],wt.lat,wt.lon,Nt,{airTempC:di.temperature[he],windMs:di.windSpeed[he],raster:le})*ha*jt),fn=ue-Pe;if(fn<=0)return{value:Math.max(0,pn)*rt,unit:pe,isPredicted:!0};const yn=da+(pn-da)*(se-Pe)/fn;return{value:Math.max(0,yn)*rt,unit:pe,isPredicted:!0}}}return{value:NaN,unit:pe,isPredicted:!1}}(ae,rt),Ot=isFinite(Nt.value),jt=new Date(rt),di=ae.hass?.language||void 0,ha=new Intl.DateTimeFormat(di,{hour:"2-digit",minute:"2-digit"}).format(jt),da=new Date(jt);da.setHours(0,0,0,0);const ja=/* @__PURE__ */new Date;ja.setHours(0,0,0,0);const or=function computeDailyKwhTotals(ae){const se=/* @__PURE__ */new Map;if(!ae._timeRange)return se;const{start:le,end:he}=ae._timeRange,ue=le.getTime(),pe=he.getTime(),dayKey=ae=>{const se=new Date(ae);return se.setHours(0,0,0,0),se.getTime()},Pe=(ae._pvUnit||"").toLowerCase(),rt="wh"===Pe||"kwh"===Pe||"mwh"===Pe,wt=ae._pvHistory,Lt=wt&&wt.times.length>0?wt.times[0].getTime():null,Nt=wt&&wt.times.length>0?wt.times[wt.times.length-1].getTime():null,integrate=(le,he)=>{if(rt)for(let ae=1;ae<le.times.length;ae++){const rt=le.times[ae].getTime();if(rt<ue||rt>pe)continue;if(!he(rt))continue;const wt=le.values[ae]-le.values[ae-1];if(!isFinite(wt)||wt<0)continue;const Lt="mwh"===Pe?1e3*wt:"wh"===Pe?wt/1e3:wt,Nt=dayKey(rt);se.set(Nt,(se.get(Nt)??0)+Lt)}else for(let Pe=1;Pe<le.times.length;Pe++){const rt=le.times[Pe].getTime();if(rt<ue||rt>pe)continue;if(!he(rt))continue;const wt=(rt-le.times[Pe-1].getTime())/36e5;if(wt<=0||wt>6)continue;const Lt=pvNormalizeToWatts(le.values[Pe-1],ae._pvUnit),Nt=pvNormalizeToWatts(le.values[Pe],ae._pvUnit);if(!isFinite(Lt)||!isFinite(Nt))continue;const Ot=(Lt+Nt)/2*wt/1e3,jt=dayKey(rt);se.set(jt,(se.get(jt)??0)+Ot)}};wt&&wt.times.length>=2&&integrate(wt,()=>!0);const Ot=ae._pvCalibStats;Ot&&Ot.times.length>=2&&integrate(Ot,ae=>null===Lt||null===Nt||(ae<Lt||ae>Nt));const jt=pvCalibK(ae.config),di=ae._chartSeries,ha=getHomeCoords(ae.config,ae.hass),da=computeForecastCalibration(ae),ja=da?da.ratio:1;trainShadingMap(ae);const or=currentShadingMap(),An=pvInverterMaxW(ae.config);if(null!==jt&&jt>0&&di&&ha){const le=Date.now(),he=ae._engine?.getLidarRaster()??null;for(let Pe=0;Pe<di.times.length;Pe++){const rt=di.times[Pe].getTime();if(rt<ue||rt>pe)continue;if(rt<le)continue;const wt=di.cloud[Pe]??0,Lt=computePvPowerWeighted(ae.config,di.times[Pe],ha.lat,ha.lon,wt,{airTempC:di.temperature[Pe],windMs:di.windSpeed[Pe],raster:he});if(Lt<=0)continue;const Nt=effectiveForecastRatio(or,di.times[Pe],ha.lat,ha.lon,wt,ja,le),Ot=Math.min(An,Lt*jt*Nt)/1e3,da=dayKey(rt);se.set(da,(se.get(da)??0)+Ot)}}return se}(ae).get(da.getTime()),An=da.getTime()>ja.getTime(),dn=!An&&void 0!==or&&isFinite(or)&&or>=.05,pn=An&&void 0!==or&&isFinite(or)&&or>=.05,fn=void 0!==or&&isFinite(or)&&or>=.05?formatLocalisedNumber(ae.hass,or,1)+" kWh":"",yn=Date.now(),In=yn>=he&&yn<=he+ue&&Math.abs(Pe-(yn-he)/ue*100)<=1.2,En=Ot?"W"===Nt.unit?0:Math.abs(Nt.value)<100?1:0:0,Bn=(ae.hass?.language||"").toLowerCase().startsWith("fr")?"Retour au live":"Back to live";return Cl`
         <div
-            class="tb-hover-tooltip"
-            style="left:${fn.toFixed(2)}%"
+            class="tb-hover-tooltip-tail ${In?"is-magnet-snap":""}"
+            style="left:${Pe.toFixed(2)}%"
+        ></div>
+        <div
+            class="tb-hover-tooltip-wrapper"
+            style="left:${Pe.toFixed(2)}%; transform: translateX(-${Pe.toFixed(2)}%)"
         >
-            <div class="tb-hover-tooltip-date">${pn}</div>
-            <div class="tb-hover-tooltip-time">${dn}</div>
-            ${isFinite(Lt)?Cl`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny" style="color:${di}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Lt))} W/m²</span>
+            ${In?Cl`
+                <div
+                    class="tb-hover-tooltip-magnet-tab"
+                    title="${Bn}"
+                    aria-label="${Bn}"
+                >
+                    <ha-icon icon="mdi:restore"></ha-icon>
                 </div>
             `:Dl}
-            ${isFinite(Nt)?Cl`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline" style="color:${ha}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,Nt)))} %</span>
-                </div>
-            `:Dl}
-            ${jt?Cl`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:flash" style="color:${or}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${formatLocalisedNumber(ae.hass,Ot.value,yn)} ${Ot.unit}</span>
-                </div>
-            `:Dl}
+            <div class="tb-hover-tooltip">
+                <div class="tb-hover-tooltip-time">${ha}</div>
+                ${dn&&fn?Cl`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${fn}</span>
+                    </div>
+                `:Dl}
+                ${pn&&fn?Cl`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:chart-bell-curve-cumulative"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${fn}</span>
+                    </div>
+                `:Dl}
+                ${isFinite(wt)?Cl`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,wt))} W/m²</span>
+                    </div>
+                `:Dl}
+                ${isFinite(Lt)?Cl`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0,Math.min(100,Lt)))} %</span>
+                    </div>
+                `:Dl}
+                ${Ot?Cl`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${formatLocalisedNumber(ae.hass,Nt.value,En)} ${Nt.unit}</span>
+                    </div>
+                `:Dl}
+            </div>
         </div>
     `}function interpAt(ae,se,le){const he=Math.min(ae.length,se.length);if(0===he)return NaN;if(le<=ae[0].getTime())return isFinite(se[0])?se[0]:NaN;if(le>=ae[he-1].getTime()){const ae=se[he-1];return isFinite(ae)?ae:NaN}for(let ue=1;ue<he;ue++){const he=ae[ue].getTime();if(le>he)continue;const pe=ae[ue-1].getTime(),Pe=se[ue-1],rt=se[ue];if(!isFinite(Pe)||!isFinite(rt))return NaN;const wt=he-pe;return wt<=0?rt:Pe+(rt-Pe)*(le-pe)/wt}return NaN}function handleChartHoverMove(ae,se){if(0!==se.buttons)return void(ae._chartHoverPct=null);const le=se.currentTarget;if(!le)return;const he=le.getBoundingClientRect();he.width<=0||(ae._chartHoverPct=100*Math.max(0,Math.min(1,(se.clientX-he.left)/he.width)))}function handleChartHoverLeave(ae){ae._chartHoverPct=null}function renderTimelineTicks(ae){if(!ae._timeRange)return Cl``;const{start:se,end:le}=ae._timeRange,he=le.getTime()-se.getTime(),toPct=ae=>Math.max(0,Math.min(100,(ae.getTime()-se.getTime())/he*100)),ue=toPct(/* @__PURE__ */new Date),pe=!ae._isLiveMode&&null!==ae._selectedTime,Pe=pe?toPct(ae._selectedTime):0;return Cl`
         <div class="tb-cursor-now" style="left:${ue}%"></div>
@@ -4680,18 +4706,6 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
                               area and the PV area visually balance
                               each other.  -->
                         ${renderTimelineHoverTooltip(this)}
-                        ${function renderTimelineBackToLiveTab(ae,se){if(ae._isLiveMode||null===ae._selectedTime||!ae._timeRange)return Cl``;const le=ae._timeRange.start.getTime(),he=ae._timeRange.end.getTime()-le;return he<=0?Cl``:Cl`
-        <button
-            type="button"
-            class="tb-back-to-live ${(ae._selectedTime.getTime()-le)/he*100>=50?"is-left":"is-right"}"
-            aria-label="Back to live"
-            @pointerdown="${ae=>{ae.stopPropagation()}}"
-            @click="${ae=>{ae.stopPropagation(),se()}}"
-        >
-            <ha-icon icon="mdi:restore"></ha-icon>
-            <span>Live</span>
-        </button>
-    `}(this,()=>function resetToLive(ae){ae._selectedTime=null,ae._isLiveMode=!0,ae._engine?.setSelectedTime(null)}(this))}
                         ${le?Cl`
                             <div
                                 class="tb-chart-card tb-pv-card"
@@ -4842,17 +4856,17 @@ return new Date((rt+wt)/2)}function renderTimelineNightZones(ae){const se=functi
                             ${renderTimelineFutureMask(this)}
                             ${renderTimelineTicks(this)}
                         </div>
-                        ${function renderTimelineDayLabels(ae){if(!ae._timeRange)return Cl``;const{start:se,end:le}=ae._timeRange,he=le.getTime()-se.getTime(),toPct=ae=>Math.max(0,Math.min(100,(ae.getTime()-se.getTime())/he*100)),ue=new Date(/* @__PURE__ */new Date);ue.setHours(0,0,0,0);const pe=[],Pe=[],rt=new Date(se);for(rt.setHours(0,0,0,0);rt.getTime()<=le.getTime();){const he=new Date(rt);he.setDate(he.getDate()+1);const wt=Math.max(se.getTime(),rt.getTime()),Lt=Math.min(le.getTime(),he.getTime());if(Lt>wt){const se=toPct(new Date(wt)),le=toPct(new Date(Lt)),he=le-se,Nt=0===Math.round((rt.getTime()-ue.getTime())/864e5),Ot=formatDate(rt,ae.config?.["date-format"]);pe.push({isToday:Nt,centrePct:se+he/2,widthPct:he,label:Ot}),Pe.push(le)}rt.setTime(he.getTime())}return Pe.length>0&&Pe.pop(),Cl`
+                        ${function renderTimelineDayLabels(ae){if(!ae._timeRange)return Cl``;const{start:se,end:le}=ae._timeRange,he=le.getTime()-se.getTime(),toPct=ae=>Math.max(0,Math.min(100,(ae.getTime()-se.getTime())/he*100)),ue=new Date(/* @__PURE__ */new Date);ue.setHours(0,0,0,0);const pe=ae._chartHoverPct;let Pe=null;if(null!==pe&&pe>=0&&pe<=100){const ae=se.getTime()+pe/100*he,le=new Date(ae);le.setHours(0,0,0,0),Pe=le.getTime()}const rt=[],wt=[],Lt=new Date(se);for(Lt.setHours(0,0,0,0);Lt.getTime()<=le.getTime();){const he=new Date(Lt);he.setDate(he.getDate()+1);const pe=Math.max(se.getTime(),Lt.getTime()),Nt=Math.min(le.getTime(),he.getTime());if(Nt>pe){const se=toPct(new Date(pe)),le=toPct(new Date(Nt)),he=le-se,Ot=0===Math.round((Lt.getTime()-ue.getTime())/864e5),jt=null!==Pe&&Lt.getTime()===Pe,di=formatDate(Lt,ae.config?.["date-format"]);rt.push({isToday:Ot,isActive:jt,centrePct:se+he/2,widthPct:he,label:di}),wt.push(le)}Lt.setTime(he.getTime())}return wt.length>0&&wt.pop(),Cl`
         <div class="tb-day-strip">
-            ${pe.map(ae=>Cl`
+            ${rt.map(ae=>Cl`
                 <div
-                    class="tb-day-strip-cell ${ae.isToday?"is-today":""}"
+                    class="tb-day-strip-cell ${ae.isToday?"is-today":""} ${ae.isActive?"is-active":""}"
                     style="left:${(ae.centrePct-ae.widthPct/2).toFixed(2)}%; width:${ae.widthPct.toFixed(2)}%"
                 >
                     <span class="tb-day-strip-date">${ae.label}</span>
                 </div>
             `)}
-            ${Pe.map(ae=>Cl`
+            ${wt.map(ae=>Cl`
                 <div class="tb-day-strip-sep" style="left:${ae.toFixed(2)}%"></div>
             `)}
         </div>

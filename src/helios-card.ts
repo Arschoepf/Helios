@@ -44,7 +44,6 @@ import
     renderTimelineNightZones,
     renderTimelineFutureMask,
     renderTimelineHoverTooltip,
-    renderTimelineBackToLiveTab,
     handleChartHoverMove,
     handleChartHoverLeave
 } from './card/charts';
@@ -69,7 +68,6 @@ import
     onTimelinePointerDown,
     onTimelinePointerMove,
     onTimelinePointerUp,
-    resetToLive,
     timelineEnabled,
     timelineWidthPct
 } from './card/timeline';
@@ -1869,7 +1867,6 @@ export class HeliosCard extends LitElement
                               area and the PV area visually balance
                               each other.  -->
                         ${renderTimelineHoverTooltip(this)}
-                        ${renderTimelineBackToLiveTab(this, () => resetToLive(this))}
                         ${pvEntityId ? html`
                             <div
                                 class="tb-chart-card tb-pv-card"
