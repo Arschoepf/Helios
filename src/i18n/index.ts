@@ -213,10 +213,6 @@ export interface Translations
         timelineEnabledHint:      string;
         timelineWidth:            string;
         timelineWidthHint:        string;
-        timelineConsumption:      string;
-        timelineConsumptionOn:    string;
-        timelineConsumptionOff:   string;
-        timelineConsumptionHint:  string;
         //Surrounding buildings options. Cluster radius grows the home group to include attached outbuildings, opacity controls the transparency of
         //the neighbours and the colour is the base tint reused for every rendered building.
         buildingsSection:         string;

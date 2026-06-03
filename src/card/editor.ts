@@ -10,8 +10,7 @@ import
     DEFAULT_SHADOW_OPACITY,
     DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
     DEFAULT_TIMELINE_ENABLED,
-    DEFAULT_TIMELINE_WIDTH_PCT,
-    DEFAULT_TIMELINE_CONSUMPTION_ENABLED
+    DEFAULT_TIMELINE_WIDTH_PCT
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 import { renderShadingMapSection } from './shadingMapView';
@@ -158,6 +157,11 @@ export class HeliosCardEditor extends LitElement
         'battery-power-entity',
         'battery-power-invert',
         'batteries',
+        //v1.8.3: the per-day kWh chip on the timeline date strip went
+        //away with the date strip redesign, so the toggle that gated
+        //it is silently stripped from saved YAML on the next editor
+        //open.
+        'timeline-consumption-enabled',
     ];
     private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
     {
@@ -737,22 +741,6 @@ export class HeliosCardEditor extends LitElement
                             </div>
                         </label>
                         <div class="hint">${t.editor.timelineWidthHint}</div>
-                        <div class="field">
-                            <span class="label">${t.editor.timelineConsumption}</span>
-                            <div class="segmented-toggle">
-                                <button
-                                    type="button"
-                                    class="seg-option ${((c['timeline-consumption-enabled'] ?? DEFAULT_TIMELINE_CONSUMPTION_ENABLED) === true) ? 'active' : ''}"
-                                    @click="${() => this._update('timeline-consumption-enabled', true)}"
-                                >${t.editor.timelineConsumptionOn}</button>
-                                <button
-                                    type="button"
-                                    class="seg-option ${((c['timeline-consumption-enabled'] ?? DEFAULT_TIMELINE_CONSUMPTION_ENABLED) !== true) ? 'active' : ''}"
-                                    @click="${() => this._update('timeline-consumption-enabled', false)}"
-                                >${t.editor.timelineConsumptionOff}</button>
-                            </div>
-                        </div>
-                        <div class="hint">${t.editor.timelineConsumptionHint}</div>
                     </details>
                 </details>
 

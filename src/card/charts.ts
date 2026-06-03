@@ -18,11 +18,9 @@ import
 {
     pvCalibK,
     pvInverterMaxW,
-    pvNormalizeToWatts,
     computePvPowerWeighted,
     type PvHistory
 } from './pv';
-import { timelineConsumptionEnabled } from './timeline';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { computeForecastCalibration } from './calibration';
@@ -1313,26 +1311,13 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     const today0 = new Date(now);
     today0.setHours(0, 0, 0, 0);
 
-    //Pre-compute the daily kWh totals once per render (cheap; the
-    //helper itself caches the observed bucketing). Past + today-
-    //so-far is integrated from the actual PV history; today-
-    //remainder + future days come from the kWp × clear-sky
-    //model. The map is keyed by the day's local-midnight ms.
-    //Skip the integration entirely when the user has the per-day
-    //consumption chip turned off: the chip is the only consumer
-    //here, no reason to spend cycles on the integration.
-    const showConsumption = timelineConsumptionEnabled(host.config);
-    const dailyKwh = showConsumption
-        ? computeDailyKwhTotals(host)
-        : new Map<number, number>();
-
     //Build the per-day cells + the vertical separators between
     //them. Cells use absolute positioning over the strip so each
     //label sits at the geometric centre of its day's segment, even
     //when the first or last day is only partially visible. The
     //separator list collects the right edge of each day except the
     //last (no separator at the strip's outer right edge).
-    type Cell = { isToday: boolean; centrePct: number; widthPct: number; label: string; kwhText: string; isForecast: boolean };
+    type Cell = { isToday: boolean; centrePct: number; widthPct: number; label: string };
     const cells: Cell[] = [];
     const sepPcts: number[] = [];
     const cursor = new Date(start);
@@ -1356,22 +1341,11 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 
             const label    = formatDate(cursor, host.config?.['date-format']);
 
-            const kwh   = dailyKwh.get(cursor.getTime());
-            //Forecast days (future + today's not-yet-produced
-            //share) are flagged so the cell can render the kWh
-            //in italic. Past days stay concrete.
-            const isForecast = kwh !== undefined && cursor.getTime() > today0.getTime();
-            const kwhText = (kwh !== undefined && isFinite(kwh) && kwh >= 0.05)
-                ? formatLocalisedNumber(host.hass, kwh, 1) + ' kWh'
-                : '';
-
             cells.push({
                 isToday,
                 centrePct: pStart + w / 2,
                 widthPct:  w,
                 label,
-                kwhText,
-                isForecast,
             });
             //Right edge of the day; becomes a separator unless
             //this day is the last one visible. We record it
@@ -1393,9 +1367,6 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
                     style="left:${(c.centrePct - c.widthPct / 2).toFixed(2)}%; width:${c.widthPct.toFixed(2)}%"
                 >
                     <span class="tb-day-strip-date">${c.label}</span>
-                    ${c.kwhText ? html`
-                        <span class="tb-day-strip-kwh ${c.isForecast ? 'is-forecast' : ''}">${c.kwhText}</span>
-                    ` : nothing}
                 </div>
             `)}
             ${sepPcts.map(p => html`
@@ -1405,155 +1376,3 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     `;
 }
 
-
-//Compute kWh-per-day totals over the active timeline range. The helper integrates two sources:
-//
-//  - Past + today-so-far: sum of the observed PV history (from
-//    `_pvHistory`), respecting the entity's unit (W/kW power
-//    sensors are integrated by trapezoidal rule; cumulative
-//    energy sensors are differenced and summed).
-//  - Today-remainder + future: integration of the kWp × clear-
-//    sky × cloud model, hour by hour, using the engine's
-//    weather series.
-//
-//Returns a Map keyed by each day's local-midnight ms, with values in kWh. Days that fall outside the active range or carry no usable data are
-//omitted.
-export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
-{
-    const out = new Map<number, number>();
-    if (!host._timeRange) return out;
-    const { start, end } = host._timeRange;
-    const startMs  = start.getTime();
-    const endMsAbs = end.getTime();
-
-    const dayKey = (ms: number): number =>
-    {
-        const d = new Date(ms);
-        d.setHours(0, 0, 0, 0);
-        return d.getTime();
-    };
-
-    //Pass 1: past + today-so-far from the observed history. Combines two sources so days that fall outside the narrow raw window
-    //still get a value:
-    //  - `_pvHistory` (~2 days raw, finest resolution) covers today and yesterday.
-    //  - `_pvCalibStats` (5 days hourly stats) covers days 2-5 in the past so the per-day chips on the timeline keep showing real
-    //    figures instead of falling silently to zero.
-    //Days covered by `_pvHistory` are integrated from that slot only; the stats slot fills in days the raw window does not reach.
-    const unit = (host._pvUnit || '').toLowerCase();
-    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-
-    const rawHist = host._pvHistory;
-    const rawFirstMs = (rawHist && rawHist.times.length > 0) ? rawHist.times[0].getTime() : null;
-    const rawLastMs  = (rawHist && rawHist.times.length > 0) ? rawHist.times[rawHist.times.length - 1].getTime() : null;
-
-    const integrate = (
-        h:           PvHistory,
-        bucketGuard: (tMs: number) => boolean,
-    ): void =>
-    {
-        if (isCumulativeEnergy)
-        {
-            //Cumulative energy sensor: difference consecutive
-            //samples and sum the deltas per day. Counter resets
-            //(dv < 0) are dropped, same convention the chart uses.
-            for (let i = 1; i < h.times.length; i++)
-            {
-                const tMs = h.times[i].getTime();
-                if (tMs < startMs || tMs > endMsAbs) continue;
-                if (!bucketGuard(tMs)) continue;
-                const dv = h.values[i] - h.values[i - 1];
-                if (!isFinite(dv) || dv < 0) continue;
-                const kwh = unit === 'mwh' ? dv * 1000
-                          : unit === 'wh'  ? dv / 1000
-                          : dv;
-                const k = dayKey(tMs);
-                out.set(k, (out.get(k) ?? 0) + kwh);
-            }
-        }
-        else
-        {
-            //Power sensor: trapezoidal integration of the
-            //instantaneous reading over each consecutive pair.
-            //Skip gaps > 6 h (likely sensor outage, integrating
-            //across them would invent energy).
-            for (let i = 1; i < h.times.length; i++)
-            {
-                const tCurrMs = h.times[i].getTime();
-                if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
-                if (!bucketGuard(tCurrMs)) continue;
-                const tPrevMs = h.times[i - 1].getTime();
-                const dtH = (tCurrMs - tPrevMs) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) continue;
-                const wPrev = pvNormalizeToWatts(h.values[i - 1], host._pvUnit);
-                const wCurr = pvNormalizeToWatts(h.values[i],     host._pvUnit);
-                if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
-                const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
-                const k = dayKey(tCurrMs);
-                out.set(k, (out.get(k) ?? 0) + kwh);
-            }
-        }
-    };
-
-    if (rawHist && rawHist.times.length >= 2)
-    {
-        //Full integration over the raw slot; no gating, raw is authoritative for the days it covers.
-        integrate(rawHist, () => true);
-    }
-    const calib = host._pvCalibStats;
-    if (calib && calib.times.length >= 2)
-    {
-        //Stats slot fills the wider days only. A sample whose timestamp falls within the raw window is already counted; skip it.
-        integrate(calib, (tMs) =>
-        {
-            if (rawFirstMs === null || rawLastMs === null) return true;
-            return tMs < rawFirstMs || tMs > rawLastMs;
-        });
-    }
-
-    //Pass 2: future + today-remainder from the forecast model.
-    //Skipped silently when peak power is unset (no model, no
-    //forecast, only past observation contributes). Forecast kWh
-    //is multiplied by the 5-day rolling calibration ratio so the
-    //per-day chips match the "refined" dashboard headline + the
-    //dotted forecast curve next to them, then clipped at the
-    //inverter PMax so a bright midday hour can't push the daily
-    //total above what the hardware would actually deliver.
-    const k        = pvCalibK(host.config);   //W per percent of STC
-    const series   = host._chartSeries;
-    const coords   = getHomeCoords(host.config, host.hass);
-    const cal      = computeForecastCalibration(host);
-    const calR     = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading  = currentShadingMap();
-    const capW     = pvInverterMaxW(host.config);
-    if (k !== null && k > 0 && series && coords)
-    {
-        //Index hourly forecast samples by hour-floor ms so we can integrate them by 1-hour rectangles per day. The series timestamps are already at
-        //hour boundaries from the engine's resampling.
-        const nowMs  = Date.now();
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let i = 0; i < series.times.length; i++)
-        {
-            const tMs   = series.times[i].getTime();
-            if (tMs < startMs || tMs > endMsAbs) continue;
-            if (tMs < nowMs) continue;   //past covered by Pass 1
-            const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            });
-            if (pct <= 0) continue;
-            //pct × k = watts at this hour midpoint × 1h = Wh.
-            //Divide by 1000 to land in kWh; clip first so the
-            //daily total honours the inverter cap.
-            const eff   = effectiveForecastRatio(shading, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
-            const watts = Math.min(capW, pct * k * eff);
-            const kwh   = watts / 1000;
-            const dk    = dayKey(tMs);
-            out.set(dk, (out.get(dk) ?? 0) + kwh);
-        }
-    }
-
-    return out;
-}

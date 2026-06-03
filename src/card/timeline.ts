@@ -1,5 +1,5 @@
 //Timeline subsystem: the periodic clock tick that advances the live cursor and re-projects the screen-space overlays, the pointer handlers that scrub
-//the timeline into the past, plus the three small config readers that drive the timeline's visibility, width, and per-day consumption chip.
+//the timeline into the past, plus the two small config readers that drive the timeline's visibility and width.
 //
 //Same host-driven pattern as the data modules: the card owns the `@state` timeline fields, the functions here read / write them through a structural
 //TimelineHost interface and Lit's reactivity falls out naturally on every assignment.
@@ -8,8 +8,7 @@ import type { HeliosConfig } from '../helios-config';
 import
 {
     DEFAULT_TIMELINE_ENABLED,
-    DEFAULT_TIMELINE_WIDTH_PCT,
-    DEFAULT_TIMELINE_CONSUMPTION_ENABLED
+    DEFAULT_TIMELINE_WIDTH_PCT
 } from '../helios-config';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
@@ -263,28 +262,4 @@ export function timelineWidthPct(config: HeliosConfig | undefined): number
     const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
     if (!isFinite(n)) return DEFAULT_TIMELINE_WIDTH_PCT;
     return Math.min(100, Math.max(50, n));
-}
-
-
-//Read the per-day consumption chip toggle. Default true so the existing kWh readouts stay visible on legacy configs.
-export function timelineConsumptionEnabled(config: HeliosConfig | undefined): boolean
-{
-    const raw = config?.['timeline-consumption-enabled'];
-    if (typeof raw === 'boolean')
-    {
-        return raw;
-    }
-    if (typeof raw === 'string')
-    {
-        const s = raw.trim().toLowerCase();
-        if (s === 'false' || s === '0' || s === 'off' || s === 'no')
-        {
-            return false;
-        }
-        if (s === 'true' || s === '1' || s === 'on' || s === 'yes')
-        {
-            return true;
-        }
-    }
-    return DEFAULT_TIMELINE_CONSUMPTION_ENABLED;
 }

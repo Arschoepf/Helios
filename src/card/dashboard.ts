@@ -36,9 +36,9 @@ import { getHomeCoords } from './init';
 
 //Structural surface the host card exposes to this module. Includes
 //everything ChartHost + BatteryHost require so dashboard renderers
-//can also call computeBatteryToday() and computeDailyKwhTotals()
-//on the same host, plus the dashboard-specific mutable fields the
-//hover / detail handlers update.
+//can also call computeBatteryToday() on the same host, plus the
+//dashboard-specific mutable fields the hover / detail handlers
+//update.
 export interface DashboardHost extends ChartHost, BatteryHost
 {
     readonly _engine?:     HeliosEngine;
