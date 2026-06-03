@@ -2075,13 +2075,6 @@ ha-card.detail-active .solar-svg,
         gap: 8px;
         pointer-events: none;
     }
-    /*  Cloud rail sits BELOW the mode bar so the two top-right rails
-        do not stack on the same anchor. Offset = mode-bar height (40px)
-        plus the 8 px standard corner inset, leaving an 8 px gap. */
-    .overlay-top-right.overlay-top-right--cloud
-    {
-        top: 56px;
-    }
 
     /*  Camera-lock toggle. Pinned top-left of the card, opens
         (lock-open) when the camera is free and closes (lock) when
@@ -2141,7 +2134,17 @@ ha-card.detail-active .solar-svg,
         display: flex;
         flex-direction: column;
         align-items: flex-start;
+        gap: 8px;
         pointer-events: none;
+    }
+    /*  Cloud rail sits BELOW the camera-lock toggle on the left edge,
+        so the two left-side rails do not stack on the same anchor.
+        Offset = lock button (40 px) + the 8 px corner inset + an 8 px
+        gap. Per-layer chips stack BELOW the toggle when cloud mode is
+        on so they read as a column under the toggle. */
+    .overlay-top-left.overlay-top-left--cloud
+    {
+        top: 56px;
     }
 
 
