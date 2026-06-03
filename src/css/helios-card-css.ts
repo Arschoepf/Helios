@@ -483,7 +483,12 @@ export const heliosCardStyles = css`
         width: min(440px, 46cqw);
         aspect-ratio: 4 / 6;
         border-radius: 18px;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
+            darker than --ha-card-background on both default HA themes. The inner bandeau + stat tiles + chart
+            placeholder then bind to --ha-card-background and end up LIGHTER than this outer body, matching
+            the HA frontend convention that "the card is lighter than its surrounding background" (visible on
+            tile-cards: white-on-page-grey in light theme, dark-gray-on-page-black in dark theme). */
+        background: var(--primary-background-color, var(--ha-card-background, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
         box-shadow:
             0 4px 12px rgba(0, 0, 0, 0.25),
@@ -617,15 +622,30 @@ export const heliosCardStyles = css`
         height: 30px;
     }
 
-    /*  Tight section view (helios-card container < 600 px): swap the long date for the short day + 3-letter
-        month format, drop the "Aujourd'hui / Hier / ..." chip, AND stack the Production / Prévision tiles
-        vertically instead of side by side so each tile keeps its title + value readable. */
+    /*  Container queries on the OUTER ha-card width. Each CoverFlow card is 46 cqw wide (~46 % of the ha-card),
+        which means a section view at the max 12 x 8 slot (~500 px ha-card) renders cards at ~230 px, where
+        2 tiles side by side reduce to ~95 px each and the label "Production 0,0 kWh" no longer fits. So the
+        4-tile 2 x 2 grid only stays when there is enough room: ha-card >= 1000 px (panel view, or a wide
+        free-form dashboard). Below that we stack to a single column so the labels stay readable. The 600 px
+        breakpoint below ALSO swaps the date strip to a short format and hides the day chip when even the
+        bandeau width gets tight. */
+    @container helios-card (max-width: 1000px)
+    {
+        .dash-cf-card-stats { grid-template-columns: 1fr; }
+        /*  Cards get taller in narrow mode so the 4 stacked tiles + chart placeholder both fit. The stage is
+            still ~448 px tall (8 rows x 56 px) so 4/7 is the comfortable ceiling. */
+        .dash-cf-card        { aspect-ratio: 4 / 7; }
+        /*  Tighter tile padding + smaller icon badge to keep each stacked tile compact so the chart slot
+            below still has visible height. */
+        .dash-cf-card-stat   { padding: 8px 10px; gap: 8px; }
+        .dash-cf-card-stat-icon { width: 28px; height: 28px; }
+        .dash-cf-card-stat-icon ha-icon { --mdc-icon-size: 16px; }
+    }
     @container helios-card (max-width: 600px)
     {
         .dash-cf-card-date-long  { display: none;   }
         .dash-cf-card-date-short { display: inline; }
         .dash-cf-card-day-chip   { display: none;   }
-        .dash-cf-card-stats      { grid-template-columns: 1fr; }
     }
 
     /*  First content block under the bandeau: Production on the left, Prévision on the right. Mushroom-card
@@ -656,11 +676,10 @@ export const heliosCardStyles = css`
         /*  Hard-coded 16 px, matches the bandeau radius. Same reasoning: some themes set
             --ha-card-border-radius low and the tiles read as near-square in those themes. */
         border-radius: 16px;
-        /*  Tile background = the ha-card background slightly darkened via color-mix with black, so the tile
-            reads as a recess inside the surrounding bandeau on both light and dark themes (light theme: white
-            card + 6 % black = very light grey; dark theme: dark card + 6 % black = slightly darker dark). No
-            HA theme variable does this exactly, color-mix lets us derive the shade from the live theme. */
-        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) 92%, #000 8%);
+        /*  Tile background = --ha-card-background (the card colour), so each mini-tile reads LIGHTER than
+            the outer card body (which now uses --primary-background-color, the dashboard "page" colour).
+            Matches the HA frontend convention that "the card body is lighter than its surrounding". */
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
         min-width: 0;
@@ -752,7 +771,7 @@ export const heliosCardStyles = css`
         min-height: 0;
         margin: 8px;
         border-radius: 16px;
-        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) 92%, #000 8%);
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
     }
 
