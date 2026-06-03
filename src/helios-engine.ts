@@ -3388,11 +3388,19 @@ export class HeliosEngine
                         this._shadowCanvas.width  = rasterSize;
                         this._shadowCanvas.height = rasterSize;
                     }
+                    //Shadow raster fade matches the LiDAR view fade radii (full opacity inside
+                    //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, ramped to 0 at LIDAR_VIEW_DISPLAY_RADIUS_M) so the two
+                    //overlays share the same visual extent and the shadow disc no longer reads as a hard
+                    //circular cut at the building-radius boundary.
+                    const radiusM = this._buildingRadiusMeters();
                     paintShadowRaster(
                         this.map,
                         this._shadowCanvas,
                         projected,
-                        shadowBoundsCornersLL(this.homeLat, this.homeLon, this._buildingRadiusMeters())
+                        shadowBoundsCornersLL(this.homeLat, this.homeLon, radiusM),
+                        radiusM,
+                        LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
+                        LIDAR_VIEW_DISPLAY_RADIUS_M,
                     );
                 }
             }

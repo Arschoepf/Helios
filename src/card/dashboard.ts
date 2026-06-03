@@ -21,6 +21,7 @@ import
     resolvePvLiveEntity
 } from './pv';
 import { computeBatteryToday, type BatteryHost } from './battery';
+import { cloudCoverIcon } from './cloud-icons';
 import { effectiveForecastRatio, pvSourceColor, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
@@ -181,6 +182,163 @@ function clampDayOffset(offset: number): number
 }
 
 
+//Per-day stats for the CoverFlow cards. Returns the produced kWh (from HA Energy / LTS recorder), the forecast
+//kWh + refined forecast kWh (via the 5-day calibration ratio), and a weighted average cloud coverage used by
+//the bandeau weather glyph.
+//
+//Production:
+//  - today (offset 0): prefer `_haSolarTodayKwh` (recorder day total). Fallback to integration of `_pvHistory`.
+//  - past (offset < 0): integrate `_pvCalibStats` (hourly LTS) over the day window. Power entities use a
+//    trapezoidal mean over the hourly samples, cumulative entities use the first-to-last delta within the day.
+//  - future (offset > 0): zero (no production data yet).
+//Forecast:
+//  - any day: walk `_chartSeries` over the day window, multiply each step by `pvCalibK` to get watts, sum to kWh.
+//Refined forecast:
+//  - `computeRefinedDailyKwh` (calibration ratio + shading map) when calibration is available, else null.
+function computeDayStats(host: DashboardHost, dayOffset: number): {
+    producedKwh: number;
+    forecastKwh: number;
+    refinedKwh:  number | null;
+    avgCloud:    number;
+}
+{
+    const HOUR_MS  = 3_600_000;
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    dayStart.setDate(dayStart.getDate() + dayOffset);
+    const dayEnd   = new Date(dayStart);
+    dayEnd.setDate(dayEnd.getDate() + 1);
+    const dayStartMs = dayStart.getTime();
+    const dayEndMs   = dayEnd.getTime();
+
+    //Production
+    let producedKwh = 0;
+    if (dayOffset === 0)
+    {
+        const haKwh = host._haSolarTodayKwh ?? null;
+        if (haKwh !== null)
+        {
+            producedKwh = Math.max(0, haKwh);
+        }
+        else
+        {
+            const cum = computeTodayCumulative(host);
+            producedKwh = cum.actualSamples.length > 0
+                ? Math.max(0, cum.actualSamples[cum.actualSamples.length - 1].kwh)
+                : 0;
+        }
+    }
+    else if (dayOffset < 0)
+    {
+        const calib = host._pvCalibStats;
+        if (calib && calib.times.length >= 2)
+        {
+            const unit       = (host._pvUnit || '').toLowerCase();
+            const isCum      = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+            const energyF    = unit === 'wh' ? 1 / 1000 : unit === 'mwh' ? 1000 : 1;
+            if (isCum)
+            {
+                let first: number | null = null;
+                let last:  number | null = null;
+                for (let i = 0; i < calib.times.length; i++)
+                {
+                    const t = calib.times[i].getTime();
+                    if (t < dayStartMs || t >= dayEndMs)
+                    {
+                        continue;
+                    }
+                    if (first === null)
+                    {
+                        first = calib.values[i];
+                    }
+                    last = calib.values[i];
+                }
+                if (first !== null && last !== null)
+                {
+                    producedKwh = Math.max(0, (last - first) * energyF);
+                }
+            }
+            else
+            {
+                let prevT: number | null = null;
+                let prevW: number | null = null;
+                for (let i = 0; i < calib.times.length; i++)
+                {
+                    const t = calib.times[i].getTime();
+                    if (t < dayStartMs || t >= dayEndMs)
+                    {
+                        continue;
+                    }
+                    const w = pvNormalizeToWatts(calib.values[i], host._pvUnit);
+                    if (!isFinite(w))
+                    {
+                        continue;
+                    }
+                    if (prevT !== null && prevW !== null)
+                    {
+                        const dh = (t - prevT) / HOUR_MS;
+                        if (dh > 0 && dh <= 6)
+                        {
+                            producedKwh += ((prevW + w) / 2) / 1000 * dh;
+                        }
+                    }
+                    prevT = t;
+                    prevW = w;
+                }
+            }
+        }
+    }
+
+    //Forecast + cloud average
+    let forecastKwh = 0;
+    let cloudSum    = 0;
+    let cloudWeight = 0;
+    const series = host._chartSeries;
+    const coords = getHomeCoords(host.config, host.hass);
+    const k      = pvCalibK(host.config);
+    if (series && coords)
+    {
+        const raster = host._engine?.getLidarRaster() ?? null;
+        const capW   = pvInverterMaxW(host.config);
+        for (let i = 0; i < series.times.length; i++)
+        {
+            const tMs = series.times[i].getTime();
+            if (tMs < dayStartMs || tMs >= dayEndMs)
+            {
+                continue;
+            }
+            const cloud = series.cloud[i] ?? 0;
+            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
+            if (pct > 0 && k !== null)
+            {
+                const watts = Math.min(capW, pct * k);
+                forecastKwh += watts / 1000;
+                cloudSum    += cloud * pct;
+                cloudWeight += pct;
+            }
+            else
+            {
+                cloudSum    += cloud;
+                cloudWeight += 1;
+            }
+        }
+    }
+    const avgCloud = cloudWeight > 0 ? cloudSum / cloudWeight : 0;
+
+    //Refined forecast
+    const calibration = computeForecastCalibration(host);
+    const refinedKwh  = calibration !== null
+        ? computeRefinedDailyKwh(host, dayStartMs, dayEndMs)
+        : null;
+
+    return { producedKwh, forecastKwh, refinedKwh, avgCloud };
+}
+
+
 //Render a single CoverFlow card. The transform is driven by the delta between the card's day offset and the
 //currently active offset: 0 = front, ±1 = mid (rotated 35°), ±2 = back (rotated 50°). Z-index ordering keeps the
 //front card on top of its neighbours regardless of stacking order in the DOM. Opacity fades the back cards so
@@ -226,6 +384,11 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const style = `transform: translate(-50%, -50%) translateX(${txPct}%) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity};`;
 
     const t = pickTranslations(host.hass?.language);
+
+    //Per-day stats for the production / forecast block.
+    const stats = computeDayStats(host, cardOffset);
+    const weatherIcon = cloudCoverIcon(stats.avgCloud);
+
     return html`
         <article
             class="dash-cf-card ${isFront ? 'dash-cf-card-front' : ''}"
@@ -244,8 +407,36 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
                 </button>
             ` : nothing}
             <header class="dash-cf-card-bandeau">
+                <span class="dash-cf-card-weather-chip" aria-hidden="true">
+                    <ha-icon icon="${weatherIcon}"></ha-icon>
+                </span>
                 <span class="dash-cf-card-date">${dateLabel}</span>
             </header>
+
+            <section class="dash-cf-card-stats">
+                <div class="dash-cf-card-stat dash-cf-card-stat-produced">
+                    <span class="dash-cf-card-stat-label">Production</span>
+                    <span class="dash-cf-card-stat-value">
+                        ${formatLocalisedNumber(host.hass, stats.producedKwh, 1)}<small> kWh</small>
+                    </span>
+                    ${stats.refinedKwh !== null ? html`
+                        <span class="dash-cf-card-stat-refined">
+                            ≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)} kWh affinée
+                        </span>
+                    ` : nothing}
+                </div>
+                <div class="dash-cf-card-stat dash-cf-card-stat-forecast">
+                    <span class="dash-cf-card-stat-label">Prévision</span>
+                    <span class="dash-cf-card-stat-value">
+                        ${formatLocalisedNumber(host.hass, stats.forecastKwh, 1)}<small> kWh</small>
+                    </span>
+                    ${stats.refinedKwh !== null ? html`
+                        <span class="dash-cf-card-stat-refined">
+                            ≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)} kWh affinée
+                        </span>
+                    ` : nothing}
+                </div>
+            </section>
         </article>
     `;
 }

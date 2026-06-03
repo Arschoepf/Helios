@@ -508,27 +508,49 @@ export const heliosCardStyles = css`
             0 24px 48px rgba(0, 0, 0, 0.22);
     }
 
-    /*  Top-of-card bandeau: high-contrast strip that holds the formatted date. Background colour is the active
-        HA theme's primary text colour (so it inverts naturally between light and dark themes) and the date
-        text sits on it in the matching card-background colour, giving the strongest possible legibility on
-        both themes without us coding a per-theme override. The text grows a touch on card hover so the
-        currently-highlighted day reads as the focus point. */
+    /*  Top-of-card bandeau: high-contrast strip with the formatted date in the centre, the day's weather glyph
+        in a circular chip on the left, and (on the front card) the close button absolute-positioned on the
+        right. Background colour = --primary-text-color, text colour = --ha-card-background, so the contrast
+        flips naturally between light and dark HA themes via the live theme tokens. Vertical padding tuned so
+        the bandeau ends up ~50 px tall, which lines up the absolute-positioned 30 px close button (top: 10 px)
+        with the bandeau's vertical centre. */
     .dash-cf-card-bandeau
     {
         background: var(--primary-text-color, #ffffff);
         color: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        padding: 14px 18px;
+        padding: 10px 50px 10px 12px;
         display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+        position: relative;
+    }
+    .dash-cf-card-weather-chip
+    {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: inline-flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid currentColor;
+    }
+    .dash-cf-card-weather-chip ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
     }
     .dash-cf-card-date
     {
-        font-size: clamp(14px, 2.6cqw, 20px);
+        font-size: clamp(13px, 2.4cqw, 18px);
         font-weight: 800;
-        letter-spacing: 0.4px;
+        letter-spacing: 0.3px;
         text-transform: capitalize;
+        text-align: center;
+        flex: 1;
         display: inline-block;
         transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
         transform-origin: center center;
@@ -536,6 +558,64 @@ export const heliosCardStyles = css`
     .dash-cf-card:hover .dash-cf-card-date
     {
         transform: scale(1.06);
+    }
+
+    /*  First content block under the bandeau: Production on the left, Prévision on the right. Mushroom-card
+        styling so the block reads as a native HA section: padded gutters, soft secondary-background tile per
+        stat, label uppercase + tracked, headline value big + bold, refined value below in a quieter shade.
+        Uses HA theme tokens throughout so the colours follow the active frontend theme. */
+    .dash-cf-card-stats
+    {
+        display: flex;
+        gap: 10px;
+        padding: 14px 14px 0 14px;
+    }
+    .dash-cf-card-stat
+    {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        padding: 12px;
+        border-radius: 14px;
+        background: var(--secondary-background-color, var(--ha-card-background, rgba(255, 255, 255, 0.04)));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+        min-width: 0;
+    }
+    .dash-cf-card-stat-label
+    {
+        font-size: 10px;
+        font-weight: 700;
+        letter-spacing: 0.6px;
+        text-transform: uppercase;
+        opacity: 0.65;
+    }
+    .dash-cf-card-stat-value
+    {
+        font-size: clamp(15px, 2.6cqw, 20px);
+        font-weight: 800;
+        line-height: 1.15;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .dash-cf-card-stat-value small
+    {
+        font-size: 0.6em;
+        font-weight: 600;
+        opacity: 0.7;
+        margin-left: 1px;
+    }
+    .dash-cf-card-stat-refined
+    {
+        font-size: 11px;
+        font-weight: 500;
+        opacity: 0.65;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous

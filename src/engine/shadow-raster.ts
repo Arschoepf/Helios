@@ -83,11 +83,19 @@ export function shadowBoundsCornersLL(
 //stacking); the layer's `raster-opacity` then applies a single
 //per-pixel opacity that matches the user setting exactly, no
 //matter how many shadow polygons overlapped.
+//
+//`fadeFullMeters` / `fadeOutMeters` add a radial alpha fall-off centred on the home so the raster's hard
+//circular edge stops reading as a visible boundary. Inside `fadeFullMeters` the painted shadows keep full alpha;
+//between the two radii the alpha ramps linearly down to zero. Aligned with the LiDAR view fade radii so the
+//two layers share their visual extent.
 export function paintShadowRaster(
-    map:      MapLibreMap,
-    canvas:   HTMLCanvasElement,
-    features: GeoJSON.FeatureCollection,
-    corners:  ShadowBoundsCorners
+    map:            MapLibreMap,
+    canvas:         HTMLCanvasElement,
+    features:       GeoJSON.FeatureCollection,
+    corners:        ShadowBoundsCorners,
+    radiusMeters:   number,
+    fadeFullMeters: number,
+    fadeOutMeters:  number,
 ): void
 {
     const src = map.getSource('helios-building-shadows-src') as
@@ -160,6 +168,34 @@ export function paintShadowRaster(
             }
             ctx.closePath();
             ctx.fill();
+        }
+    }
+
+    //Apply the radial fade-out so the raster's hard circular boundary no longer reads as a visible edge. The
+    //source-over polygon painting above leaves alpha 1.0 inside every shadow pixel and 0 elsewhere; the
+    //destination-in pass below multiplies each pixel's alpha by a radial gradient running from 1 at the
+    //full-opacity radius to 0 at the outer fade radius, so shadows close to the centre stay fully painted and
+    //shadows near the edge soft-fade to nothing. Centre of the canvas is the home position because
+    //`shadowBoundsCornersLL` lays out the bounds symmetrically around (homeLat, homeLon).
+    if (fadeOutMeters > fadeFullMeters && radiusMeters > 0)
+    {
+        const cx     = size / 2;
+        const cy     = size / 2;
+        const halfPx = size / 2;
+        const fullPx = Math.max(0, Math.min(halfPx, (fadeFullMeters / radiusMeters) * halfPx));
+        const fadePx = Math.max(fullPx, Math.min(halfPx, (fadeOutMeters / radiusMeters) * halfPx));
+        if (fadePx > fullPx)
+        {
+            const prevOp  = ctx.globalCompositeOperation;
+            const prevFill = ctx.fillStyle;
+            const grad   = ctx.createRadialGradient(cx, cy, fullPx, cx, cy, fadePx);
+            grad.addColorStop(0, 'rgba(0, 0, 0, 1)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+            ctx.globalCompositeOperation = 'destination-in';
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, size, size);
+            ctx.globalCompositeOperation = prevOp;
+            ctx.fillStyle = prevFill;
         }
     }
 
