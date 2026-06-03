@@ -27,6 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
+import { buildDashCharts, renderDayChartSVG, type DayChartData } from './dashboardChart';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -154,6 +155,11 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                     : host._dashAnimPhase === 'exiting'  ? 'dash-cf-exiting'
                     : '';
 
+    //Pre-compute the per-day chart data + the global Y maximum once per render so every card paints on the
+    //same Y axis (a low-cloud day reads taller than a heavily-overcast one). Built once here and threaded
+    //into each `renderCoverflowCard` call instead of having each card recompute its own chart.
+    const charts = buildDashCharts(host, DAY_OFFSETS);
+
     return html`
         <div class="detail-panel">
             <div class="dash-coverflow"
@@ -164,7 +170,9 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                  tabindex="0"
             >
                 <div class="dash-cf-stage ${animClass}">
-                    ${DAY_OFFSETS.map(offset => renderCoverflowCard(host, offset, active))}
+                    ${DAY_OFFSETS.map(offset =>
+                        renderCoverflowCard(host, offset, active, charts.byOffset.get(offset)!, charts.yMaxW)
+                    )}
                 </div>
             </div>
         </div>
@@ -343,7 +351,13 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
 //currently active offset: 0 = front, ±1 = mid (rotated 35°), ±2 = back (rotated 50°). Z-index ordering keeps the
 //front card on top of its neighbours regardless of stacking order in the DOM. Opacity fades the back cards so
 //they read as background context rather than competing for the user's attention.
-function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult
+function renderCoverflowCard(
+    host:         DashboardHost,
+    cardOffset:   number,
+    activeOffset: number,
+    chartData:    DayChartData,
+    chartYMaxW:   number,
+): TemplateResult
 {
     const delta    = cardOffset - activeOffset;
     const absDelta = Math.abs(delta);
@@ -497,7 +511,9 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
                 </div>
             </section>
 
-            <section class="dash-cf-card-chart" aria-hidden="true"></section>
+            <section class="dash-cf-card-chart" aria-hidden="true">
+                ${renderDayChartSVG(chartData, chartYMaxW)}
+            </section>
         </article>
     `;
 }

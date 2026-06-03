@@ -773,6 +773,29 @@ export const heliosCardStyles = css`
         border-radius: 16px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+        /*  overflow: hidden so the stacked area + forecast line never bleed past the rounded corners; the
+            inner SVG fills the chart box edge-to-edge. */
+        overflow: hidden;
+        position: relative;
+    }
+    .dash-cf-card-chart-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+    /*  Forecast trace: thin dashed line in the same solar palette as the stacked areas, slightly darker so
+        it reads as a separate trace on top of the fills. The vector-effect non-scaling-stroke attribute is
+        set on the path element so the dashes stay 1.4 px wide regardless of the SVG's non-uniform stretch. */
+    .dash-cf-card-chart-forecast
+    {
+        stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 75%, var(--primary-text-color, #000) 25%);
+        stroke-width: 1.4;
+        stroke-dasharray: 3 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
