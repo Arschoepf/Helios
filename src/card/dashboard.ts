@@ -199,12 +199,14 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const delta    = cardOffset - activeOffset;
     const absDelta = Math.abs(delta);
     const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
-    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the viewport. Tight spacing
-    //(55 % / 90 %) keeps the iTunes-CoverFlow feel where each card overlaps its neighbour slightly; the ±2 sits
-    //35 % further out than ±1, close enough to read as part of the same stack instead of floating in space.
-    const txPct    = sign * (absDelta === 1 ? 55 : absDelta === 2 ? 90 : 0);
-    const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.82 : 0.62;
-    const rotY     = sign * (absDelta === 1 ? 35 : absDelta === 2 ? 50 : 0);
+    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the container size. Closer
+    //spacing on ±2 (50 % / 75 %) so the back card sits BEHIND the mid card, partly hidden by it instead of
+    //floating off to the side with a visible gap. Higher rotation on ±2 keeps its face turned away enough to
+    //read as background, the visible sliver between the ±1 card's far edge and the ±2 card's far edge gives the
+    //fan its depth cue.
+    const txPct    = sign * (absDelta === 1 ? 50 : absDelta === 2 ? 75 : 0);
+    const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.85 : 0.65;
+    const rotY     = sign * (absDelta === 1 ? 30 : absDelta === 2 ? 50 : 0);
     const zIdx     = 10 - absDelta;
     const opacity  = absDelta === 0 ? 1 : absDelta === 1 ? 0.78 : 0.45;
     const isFront  = absDelta === 0;

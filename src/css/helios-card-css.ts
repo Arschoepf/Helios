@@ -474,8 +474,14 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 50%;
         left: 50%;
-        width: min(440px, 72vw);
-        height: min(540px, 62vh);
+        /*  Container-aware sizing via cqw (1 % of the ha-card width thanks to container-type: inline-size on
+            .ha-card). The CoverFlow then renders identically whether the card lives in a section dashboard
+            tile or fills the entire panel. 46 % of the container width keeps the total fan span (card +
+            translated siblings) under 100 % so all 5 cards fit horizontally regardless of container size.
+            440 px cap stops huge displays from blowing the cards into wall-sized rectangles. Height tracks via
+            aspect-ratio so the cards keep the same shape across widths. */
+        width: min(440px, 46cqw);
+        aspect-ratio: 5 / 6;
         border-radius: 18px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
