@@ -33,6 +33,16 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Multi-bank battery history aggregation
+
+Mirrors the alpha.30 PV history shape on the battery side. `fetchBatteryHistory` now accepts an array of SoC
+entities and an array of power entities, fires a single recorder / history WS round-trip with every wired bank,
+and aggregates per-entity histories via a generic last-known-carry-forward walker. SoC uses arithmetic mean (HA
+frontend convention), power uses a signed sum with per-entity inversion applied via `invertedRateEntities`
+before reduction so a mixed wiring (standard sign on bank A, inverted on bank B) still aggregates correctly.
+Single-bank installs collapse to the per-entity series unchanged. The fetch cache key embeds every entity sorted
+so adding / removing a bank invalidates the previous snapshot.
+
 ### Multi-source PV history + LTS aggregation + multi-bank battery live (Phase 2 / 2)
 
 Completes the multi-source story started in alpha.29:

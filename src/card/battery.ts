@@ -242,6 +242,13 @@ export function refreshBattery(host: BatteryHost): void
     {
         return;
     }
+
+    //SoC + power entity arrays already resolved above for the live read; reused here so the history fetch and the
+    //live chip see exactly the same wiring.
+    if (socEntities.length === 0 && powerEntities.length === 0)
+    {
+        return;
+    }
     //Two-tier window:
     //  - LTS arm uses `visibleStart`, full visible timeline range,
     //    so the dashboard panel's today's charged / discharged kWh
@@ -257,9 +264,13 @@ export function refreshBattery(host: BatteryHost): void
     const visibleStart = host._timeRange.start;
     const rawStart     = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
     const ltsStart     = visibleStart < rawStart ? visibleStart : rawStart;
-    const rangeKey = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
-    const sig      = `${socEntity ?? ''}|${powerEntity ?? ''}`;
-    const fetchKey = `${sig}@${rangeKey}`;
+    const rangeKey       = `${ltsStart.getTime()}|${rawStart.getTime()}|${host._timeRange.end.getTime()}`;
+    //Multi-bank aggregation: the fetch key carries every wired entity (sorted) so adding / removing a bank flips
+    //the key and invalidates the previous snapshot. Same shape as the PV multi-source fetch key, see pv.ts.
+    const sortedSoc      = [...socEntities].sort();
+    const sortedPower    = [...powerEntities].sort();
+    const sig            = `${sortedSoc.join(',')}|${sortedPower.join(',')}`;
+    const fetchKey       = `${sig}@${rangeKey}`;
     if (fetchKey === host._batteryFetchKey)
     {
         return;
@@ -275,7 +286,7 @@ export function refreshBattery(host: BatteryHost): void
         host._batteryPowerHistory = cached.power;
         return;
     }
-    fetchBatteryHistory(host, socEntity, powerEntity, ltsStart, rawStart, host._timeRange.end, fetchKey);
+    fetchBatteryHistory(host, sortedSoc, sortedPower, ltsStart, rawStart, host._timeRange.end, fetchKey);
 }
 
 
@@ -404,21 +415,82 @@ function parseStatBoundary(raw: unknown): number | null
 //fetch with `significant_changes_only` so the legacy code path still works for users with custom or non-`measurement` entities.
 //
 //SoC + power entities are bundled into one WS roundtrip when both are configured.
+//Last-known-carry-forward aggregator across N battery banks. Mirrors `aggregatePvHistoriesLkcf` in pv.ts but adds two
+//hooks for the battery semantics: a per-entity `transform` (used to flip the sign on `stat_rate_inverted` wirings
+//before the sum) and a top-level `reducer` (`sum` for power, `mean` for SoC). Walks the union of all per-entity
+//timestamps in O(entities * union) so multi-bank fetches stay sub-ms even at 1 Hz BMS cadence.
+function aggregateBatteryLkcf(
+    perEntity: BatteryHistory[],
+    reducer:   'sum' | 'mean',
+    transform: (value: number, entityIdx: number) => number,
+): BatteryHistory
+{
+    if (perEntity.length === 0)
+    {
+        return { times: [], values: [] };
+    }
+    if (perEntity.length === 1)
+    {
+        const only = perEntity[0];
+        return {
+            times:  only.times,
+            values: only.values.map((v, _i) => transform(v, 0)),
+        };
+    }
+    const tsSet = new Set<number>();
+    for (const h of perEntity)
+    {
+        for (const t of h.times)
+        {
+            tsSet.add(t.getTime());
+        }
+    }
+    const sortedTs = Array.from(tsSet).sort((a, b) => a - b);
+    const cursors  = new Array<number>(perEntity.length).fill(-1);
+    const out:     number[] = [];
+    for (const ts of sortedTs)
+    {
+        let sum   = 0;
+        let count = 0;
+        for (let i = 0; i < perEntity.length; i++)
+        {
+            const h = perEntity[i];
+            let c   = cursors[i];
+            while (c + 1 < h.times.length && h.times[c + 1].getTime() <= ts)
+            {
+                c++;
+            }
+            cursors[i] = c;
+            if (c >= 0 && isFinite(h.values[c]))
+            {
+                sum += transform(h.values[c], i);
+                count++;
+            }
+        }
+        out.push(count === 0 ? NaN : reducer === 'mean' ? sum / count : sum);
+    }
+    return {
+        times:  sortedTs.map(t => new Date(t)),
+        values: out,
+    };
+}
+
+
 export async function fetchBatteryHistory(
-    host:        BatteryHost,
-    socEntity:   string | null,
-    powerEntity: string | null,
-    ltsStart:    Date,
-    rawStart:    Date,
-    end:         Date,
-    cacheKey:    string = '',
+    host:          BatteryHost,
+    socEntities:   string[],
+    powerEntities: string[],
+    ltsStart:      Date,
+    rawStart:      Date,
+    end:           Date,
+    cacheKey:      string = '',
 ): Promise<void>
 {
     if (!host.hass?.callWS)
     {
         return;
     }
-    if (!socEntity && !powerEntity)
+    if (socEntities.length === 0 && powerEntities.length === 0)
     {
         return;
     }
@@ -436,15 +508,11 @@ export async function fetchBatteryHistory(
             return;
         }
 
-        const ids: string[] = [];
-        if (socEntity)
-        {
-            ids.push(socEntity);
-        }
-        if (powerEntity)
-        {
-            ids.push(powerEntity);
-        }
+        //Dedupe: an install that wires the same entity both as SoC and as power is degenerate but cheap to handle.
+        const idSet = new Set<string>();
+        for (const id of socEntities)   idSet.add(id);
+        for (const id of powerEntities) idSet.add(id);
+        const ids = Array.from(idSet);
 
         const perEntity: Record<string, BatteryHistory> = {};
 
@@ -495,18 +563,21 @@ export async function fetchBatteryHistory(
             }
         }
 
-        let socSeries:   BatteryHistory = { times: [], values: [] };
-        let powerSeries: BatteryHistory = { times: [], values: [] };
-        if (socEntity)
-        {
-            const raw = perEntity[socEntity] ?? { times: [], values: [] };
-            //Clamp SoC samples to [0, 100] in the history too, same out-of-range tolerance as the live read.
-            socSeries = { times: raw.times, values: raw.values.map(v => Math.max(0, Math.min(100, v))) };
-        }
-        if (powerEntity)
-        {
-            powerSeries = perEntity[powerEntity] ?? { times: [], values: [] };
-        }
+        //Multi-bank LKCF aggregation. SoC averages across every wired bank, power sums with per-entity sign-flips
+        //applied from `_energyDefaults.invertedRateEntities` before the sum so a mixed-wiring install (standard sign
+        //on bank A, inverted on bank B) still aggregates correctly. Single-bank installs collapse to the per-entity
+        //series unchanged.
+        const invertedSet = new Set(host._energyDefaults.invertedRateEntities);
+        const socSeries   = aggregateBatteryLkcf(
+            socEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
+            'mean',
+            v => Math.max(0, Math.min(100, v)),
+        );
+        const powerSeries = aggregateBatteryLkcf(
+            powerEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
+            'sum',
+            (v, idx) => invertedSet.has(powerEntities[idx]) ? -v : v,
+        );
         host._batterySocHistory   = socSeries;
         host._batteryPowerHistory = powerSeries;
 
