@@ -199,15 +199,14 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const delta    = cardOffset - activeOffset;
     const absDelta = Math.abs(delta);
     const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
-    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the viewport: on desktop a card
-    //is 360 px wide and the ±1 sibling sits 105 % to the side, on mobile a card is 60 vw wide and the sibling
-    //slides the same proportional amount, no edge spill, no overlap with the centre card. The CSS perspective
-    //depth (1200 px) keeps the rotation visible regardless of the absolute card width.
-    const txPct    = sign * (absDelta === 1 ? 105 : absDelta === 2 ? 180 : 0);
+    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the viewport. Tight spacing
+    //(60 % / 110 %) keeps the iTunes-CoverFlow feel where the back cards overlap the centre slightly; the
+    //rotateY tilt + the z-index stacking keep the centre card readable on top of the side overlap.
+    const txPct    = sign * (absDelta === 1 ? 60 : absDelta === 2 ? 110 : 0);
     const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.82 : 0.62;
     const rotY     = sign * (absDelta === 1 ? 35 : absDelta === 2 ? 50 : 0);
     const zIdx     = 10 - absDelta;
-    const opacity  = absDelta === 0 ? 1 : absDelta === 1 ? 0.85 : 0.5;
+    const opacity  = absDelta === 0 ? 1 : absDelta === 1 ? 0.78 : 0.45;
     const isFront  = absDelta === 0;
 
     //Date label: this card represents `today + cardOffset` days. Computed off a fresh midnight Date so day

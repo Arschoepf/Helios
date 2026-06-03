@@ -462,21 +462,20 @@ export const heliosCardStyles = css`
         position: relative;
         flex: 1;
         height: 100%;
-        max-height: 480px;
+        max-height: 440px;
         perspective: 1200px;
-        transform-style: preserve-3d;
-        /*  Clip the off-stage portion of the back cards on narrow viewports so a sibling that slides off the
-            right edge does not spill into the surrounding page chrome. The 3D transform itself stays unclipped
-            within the perspective box (transform-style: preserve-3d keeps the depth meaningful). */
-        overflow: hidden;
+        /*  No `transform-style: preserve-3d` here on purpose: with `flat` (the default), the children get the
+            perspective rendering from their parent but z-index still drives their stacking order, so the front
+            card always sits cleanly on top of the rotated siblings. Preserve-3d would override z-index with the
+            actual 3D position which made the back cards bleed through the centre on narrow viewports. */
     }
     .dash-cf-card
     {
         position: absolute;
         top: 50%;
         left: 50%;
-        width: min(340px, 60vw);
-        height: min(480px, 65vh);
+        width: min(320px, 72vw);
+        height: min(380px, 56vh);
         border-radius: 18px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
