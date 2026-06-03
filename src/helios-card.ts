@@ -533,7 +533,8 @@ export class HeliosCard extends LitElement
     //fetch-state fields on the card itself.
     _energyDefaultsLoaded = false;
     private _bootTimeoutTimer?: number;
-    private static readonly BOOT_TIMEOUT_MS = 15_000;
+    private _dailyTotalsKicked = false;
+    private static readonly BOOT_TIMEOUT_MS = 30_000;
     //True while the home is "focused": the existing overlay HUD is
     //hidden, the camera is eased to a closer / more pitched pose,
     //and a detail dashboard panel takes over. Toggled by clicking
@@ -904,8 +905,9 @@ export class HeliosCard extends LitElement
         //a centred home-outline build animation until every configured data source has landed. Re-fresh evaluation
         //runs on every `updated()` cycle; if the timeout fires first the state flips to `failed` and the warning
         //panel surfaces the missing pieces.
-        this._bootPhase        = 'loading';
-        this._bootMissing      = [];
+        this._bootPhase          = 'loading';
+        this._bootMissing        = [];
+        this._dailyTotalsKicked  = false;
         if (this._bootTimeoutTimer !== undefined)
         {
             window.clearTimeout(this._bootTimeoutTimer);
@@ -1055,6 +1057,17 @@ export class HeliosCard extends LitElement
         //Boot gate: re-evaluate readiness every Lit cycle while still loading. As soon as every configured data
         //source has landed, flip to `ready` and let the fade-in run via the CSS transition on .boot-loading. The
         //timeout watchdog set in connectedCallback handles the unhappy path independently.
+        //
+        //Daily-totals kickoff: refreshHaDailyTotals at connectedCallback time is a no-op because the parsed HA
+        //Energy defaults have not landed yet (subscribeEnergyPrefs is async). The 30 s tick is too far in the
+        //future for the boot gate, so the moment we see `_energyDefaultsLoaded` flip true here we fire one
+        //immediate refresh so the three `*_today` slots land within the boot window instead of waiting for the
+        //next tick. The static flag prevents a second fire on subsequent cycles.
+        if (this._energyDefaultsLoaded && !this._dailyTotalsKicked)
+        {
+            this._dailyTotalsKicked = true;
+            refreshHaDailyTotals(this);
+        }
         if (this._bootPhase === 'loading')
         {
             const missing = this._computeBootMissing();

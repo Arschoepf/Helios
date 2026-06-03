@@ -33,6 +33,23 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Boot loading hot-fix , daily-totals kickoff + 30 s timeout
+
+Reported by ReikanYsora: alpha.35 was reaching the 15 s timeout and surfacing the warning panel with
+`pv_today`, `grid_import_today`, `grid_export_today` missing every time. Two compounding causes:
+
+- `refreshHaDailyTotals` was called at `connectedCallback` time but the HA Energy defaults snapshot had not
+  landed yet (the parse is async), so the call was a no-op. The next actual run waited for the 30 s tick, which
+  was past the boot timeout.
+- 15 s was simply too tight for first-mount scenarios where the recorder query takes 5-10 s on installs with
+  many entities.
+
+Fix:
+
+- `updated()` now fires `refreshHaDailyTotals` exactly once the moment `_energyDefaultsLoaded` first reads true,
+  so the three `*_today` recorder queries land within the boot window.
+- Boot timeout extended from 15 s to 30 s.
+
 ### Boot loading state , map-only + home-build spinner + warning panel on timeout
 
 The card now boots in a dedicated loading state instead of paining its UI piece by piece as the various WS
