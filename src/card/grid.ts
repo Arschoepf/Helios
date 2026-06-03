@@ -499,19 +499,46 @@ function slotKey(slot: 'import' | 'export' | 'combined'): string
 //  - "sensor.foo"          (single entity)
 //  - ["sensor.foo", "sensor.bar"]  (multi-entity)
 //Empty / missing entities are silently dropped.
+//
+//Two layers in order of precedence:
+//  1. Explicit card YAML slot (`grid-import-entity` / `grid-export-entity` / `grid-power-entity`). Pre-#184 configs
+//     and the few hidden YAML overrides still flow through this path so an existing dashboard keeps working unchanged.
+//  2. HA Energy dashboard defaults parsed from `energy/get_prefs`. v1.8.3+ installs configure their grid wiring from
+//     HA Energy and have nothing in the card YAML; without this fallback the sample buffers stayed empty and the
+//     past-scrub chips on import / export read blank.
 function resolveEntities(host: GridHost, slot: 'import' | 'export' | 'combined'): string[]
 {
     const key = slotKey(slot);
     const raw = (host.config as Record<string, unknown> | undefined)?.[key];
     if (Array.isArray(raw))
     {
-        return (raw as unknown[])
+        const list = (raw as unknown[])
             .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
             .map(s => s.trim());
+        if (list.length > 0)
+        {
+            return list;
+        }
     }
-    if (typeof raw === 'string' && raw.trim() !== '')
+    else if (typeof raw === 'string' && raw.trim() !== '')
     {
         return [raw.trim()];
+    }
+    //Fall back only on the directional slots. The combined slot stays YAML-only so the display logic in
+    //helios-card.ts (which mirrors `isGridCombined(config)` to decide whether to render a single net chip vs a
+    //directional split) keeps the same decision tree as before. v1.8.3 grid wirings stream through directional
+    //here and pick up the HA Energy `stat_rate` mirror via `readStatRates` for the LIVE chip value separately.
+    const ed = host._energyDefaults;
+    if (ed)
+    {
+        if (slot === 'import')
+        {
+            return [...ed.gridStatEnergyFroms];
+        }
+        if (slot === 'export')
+        {
+            return [...ed.gridStatEnergyTos];
+        }
     }
     return [];
 }

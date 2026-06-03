@@ -33,6 +33,18 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Grid import / export past-scrub chip values restored
+
+The entity refonte in #184 retired the card-level `grid-import-entity` / `grid-export-entity` YAML slots, but
+`resolveEntities` inside `grid.ts` still only checked those keys. For v1.8.3 installs wired exclusively through the HA
+Energy dashboard, `readSlot` saw an empty entity list, never populated `_gridImportSamples` or `_gridExportSamples`,
+and the import / export chips read blank during past-scrub. The LIVE chip kept working because `readStatRates`
+mirrored the HA Energy `stat_rate` power sensor on top, but the sample buffers stayed empty so any scrub off the
+"now" cursor showed nothing. `resolveEntities` now falls back to `_energyDefaults.gridStatEnergyFroms` /
+`gridStatEnergyTos` when the YAML slot is empty, so the directional kWh sensors from HA Energy drive both the live
+slope derivation and the past-scrub sample buffer. The combined slot stays YAML-only, so the display logic in
+helios-card.ts keeps the same decision tree.
+
 ### Past scrub grid values restored after the hass setter throttle was rolled back
 
 The custom `hass` setter shipped in alpha.26 carried a stale-states corner case on installs where HA mutates
