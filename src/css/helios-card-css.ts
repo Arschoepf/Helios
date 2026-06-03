@@ -1537,19 +1537,36 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         justify-content: center;
+        gap: 3px;
         height: 18px;
-        padding: 0 10px;
+        padding: 0 8px 0 6px;
         background: var(--primary-color, #03a9f4);
         color: var(--text-on-primary-color, #ffffff);
         border: 1px solid var(--ha-card-border-color, var(--divider-color, rgba(0, 0, 0, 0.12)));
         border-bottom: 0;
         border-radius: 4px 4px 0 0;
         margin-bottom: -1px;
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.3px;
+        text-transform: uppercase;
     }
-    .tb-hover-tooltip-magnet-tab ha-icon
+    /*  The "live" dot pulses to mirror the HA Energy dashboard's own live-data indicator vocabulary. White on the
+        brand-blue plate keeps the recipe consistent with the rest of the on-primary surfaces. */
+    .tb-hover-tooltip-magnet-tab-dot
     {
-        --mdc-icon-size: 14px;
+        --mdc-icon-size: 12px;
         color: inherit;
+        animation: tb-hover-tooltip-live-pulse 1.4s ease-in-out infinite;
+    }
+    .tb-hover-tooltip-magnet-tab-label
+    {
+        line-height: 1;
+    }
+    @keyframes tb-hover-tooltip-live-pulse
+    {
+        0%, 100% { opacity: 1; }
+        50%      { opacity: 0.4; }
     }
 
     /*  Scrub tail: a vertical dotted line drawn at the scrub X,

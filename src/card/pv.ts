@@ -1172,7 +1172,20 @@ export function pvCalibK(config: HeliosConfig | undefined): number | null
     {
         return _pvCalibKCache.get(config) ?? null;
     }
-    const kwp = pvArrays(config).totalKwp;
+    //Preferred path: sum of per-row `peak-kwp` values. Drops back to the legacy top-level `pv-peak-kwp` when no row carries
+    //a peak-kwp (typical install with `pv-tilt` + `pv-azimuth` + `pv-peak-kwp`, no per-row breakdown). Either path lights
+    //the forecast curve; the editor surfaces the per-row field as the documented entry point but YAML configs that pre-
+    //date the per-row field keep working.
+    let kwp = pvArrays(config).totalKwp;
+    if (kwp <= 0)
+    {
+        const rawTop = (config as Record<string, unknown>)['pv-peak-kwp'];
+        const topKwp = typeof rawTop === 'number' ? rawTop : parseFloat(String(rawTop ?? ''));
+        if (isFinite(topKwp) && topKwp > 0)
+        {
+            kwp = topKwp;
+        }
+    }
     if (kwp <= 0)
     {
         _pvCalibKCache.set(config, null);

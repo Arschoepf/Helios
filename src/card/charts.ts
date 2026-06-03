@@ -510,29 +510,26 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
         hour: '2-digit', minute: '2-digit',
     }).format(atDate);
 
-    //Day total split into observed (past + today-so-far) and forecast
-    //(future days). Past + today scrub shows the observed production
-    //figure only, future scrub shows the forecast figure. No double
-    //row even when both inputs are populated for today, the observed
-    //total is already authoritative for the day-so-far. Today's bucket
-    //prefers the recorder-backed `_haSolarTodayKwh` so the tooltip
-    //matches the dashboard "produced today" chip to the watt-hour,
-    //falling back to the local trapezoidal integration when the HA
-    //Energy preference is not wired.
+    //Day total split into observed (past scrub) and forecast (future scrub). The split key is the cursor instant vs
+    //"now", not the day boundary, so scrubbing later-today hours shows the day's forecast projection (full-day kWh) and
+    //scrubbing earlier-today hours shows the observed production so far. Today's past bucket prefers the recorder-backed
+    //`_haSolarTodayKwh` so the tooltip matches the dashboard "produced today" chip to the watt-hour, falling back to the
+    //local trapezoidal integration when the HA Energy preference is not wired. Today's future bucket and every other
+    //future day stay on `computeDailyKwhTotals`, which adds the forecast model's remaining hours to the observed past.
     const dayKey = new Date(atDate);
     dayKey.setHours(0, 0, 0, 0);
     const todayKey = new Date();
     todayKey.setHours(0, 0, 0, 0);
-    const isFutureDay = dayKey.getTime() > todayKey.getTime();
-    const isToday     = dayKey.getTime() === todayKey.getTime();
-    const dayTotals   = computeDailyKwhTotals(host);
+    const isToday        = dayKey.getTime() === todayKey.getTime();
+    const isFutureCursor = atMs > Date.now();
+    const dayTotals      = computeDailyKwhTotals(host);
     let dayKwh: number | undefined = dayTotals.get(dayKey.getTime());
-    if (isToday && typeof host._haSolarTodayKwh === 'number' && isFinite(host._haSolarTodayKwh))
+    if (isToday && !isFutureCursor && typeof host._haSolarTodayKwh === 'number' && isFinite(host._haSolarTodayKwh))
     {
         dayKwh = host._haSolarTodayKwh;
     }
-    const showProduction = !isFutureDay && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
-    const showForecast   =  isFutureDay && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    const showProduction = !isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
     const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
         ? formatLocalisedNumber(host.hass, dayKwh, 1) + ' kWh'
         : '';
@@ -555,7 +552,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                      : (Math.abs(pv.value) < 100 ? 1 : 0);
 
     const haLang   = (host.hass?.language as string | undefined) || '';
-    const liveText = haLang.toLowerCase().startsWith('fr')
+    //Short label inside the magnet-snap tab. The tooltip title + aria-label still carry the long phrase for screen readers
+    //and hover hint; the inline label stays single-word so the tab does not bloat the tooltip width.
+    const liveLabel = 'Live';
+    const liveText  = haLang.toLowerCase().startsWith('fr')
         ? 'Retour au live'
         : 'Back to live';
 
@@ -580,7 +580,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                     title="${liveText}"
                     aria-label="${liveText}"
                 >
-                    <ha-icon icon="mdi:restore"></ha-icon>
+                    <ha-icon class="tb-hover-tooltip-magnet-tab-dot" icon="mdi:circle-medium"></ha-icon>
+                    <span class="tb-hover-tooltip-magnet-tab-label">${liveLabel}</span>
                 </div>
             ` : nothing}
             <div class="tb-hover-tooltip">
