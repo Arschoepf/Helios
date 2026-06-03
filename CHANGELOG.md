@@ -33,6 +33,18 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Per-source PV curves + tooltip breakdown
+
+Multi-source HA Energy installs now render one PV curve per source on the timeline chart, drawn under the
+aggregate line with reduced opacity so the headline total still reads as the dominant trace. Colours follow a
+hue rotation around the theme PV color token, so a 2-source split E / W lands on opposite hues, a 3-source
+install on 120 ° spacing, etc. The same per-source colour shows up as a pastille on the scrub tooltip breakdown
+rows that list every source by its HA `friendly_name` next to its value at the cursor instant, so the user can
+read row to curve at a glance.
+
+Single-source installs skip both the per-source curve loop and the breakdown rows (the per-entity map carries
+one entry equal to the aggregate, drawing it would just paint a duplicate trace at lower opacity).
+
 ### Multi-bank battery history aggregation
 
 Mirrors the alpha.30 PV history shape on the battery side. `fetchBatteryHistory` now accepts an array of SoC

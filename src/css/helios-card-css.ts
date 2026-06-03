@@ -1353,6 +1353,16 @@ export const heliosCardStyles = css`
         stroke-width: 1.8;
     }
 
+    /*  Per-source PV curves, one per HA Energy solar source on multi-source installs. Drawn UNDER the aggregate
+        line with lower opacity + the same 0.7 px stroke so the eye reads them as background context to the
+        headline total above. The stroke colour comes from the inline stroke attribute (a hue-rotated derivative
+        of the theme PV colour, see pvSourceColor in charts.ts) so the curve matches the colour pastille on the
+        corresponding tooltip row. */
+    .hc-chart-line-source
+    {
+        opacity: 0.35;
+    }
+
 
 
     /*  Dotted day separators inside the chart card. Boosted to 0.55
@@ -1546,6 +1556,33 @@ export const heliosCardStyles = css`
     {
         flex: 1;
         text-align: right;
+    }
+
+    /*  Per-source breakdown rows shown under the aggregate PV row on multi-source installs. Indent slightly so the
+        eye reads them as children of the aggregate row above. Smaller font + lighter weight to step them visually
+        below the headline without losing legibility. The colour pastille mirrors the hue-rotated per-source curve
+        drawn on the chart underneath so the user can match row to curve at a glance. */
+    .tb-hover-tooltip-row-sub
+    {
+        font-size: 11px;
+        opacity: 0.78;
+        padding-left: 4px;
+    }
+    .tb-hover-tooltip-dot
+    {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        display: inline-block;
+    }
+    .tb-hover-tooltip-sublabel
+    {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
     }
 
     /*  Magnet-snap tab: real chip tab stacked above the tooltip in

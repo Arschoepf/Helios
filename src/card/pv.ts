@@ -79,6 +79,11 @@ export interface PvHost
     _pvCurrent:             number | null;
     _pvUnit:                string;
     _pvHistory:             PvHistory | null;
+    //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
+    //source (LBDG_'s feature request) and the scrub tooltip can show a per-entity breakdown next to the summed
+    //value. The map is keyed by entity id; on single-source installs it carries a single entry that equals
+    //`_pvHistory`. Empty map = aggregated only (single-source or pre-fetch boot window).
+    _pvHistoryPerEntity:    Map<string, PvHistory>;
     _pvSampleBuffer:        PvSample[];
     _pvFetchKey:            string;
     _pvFetching:            boolean;
@@ -128,6 +133,10 @@ const PV_CACHE_TTL_MS = 15 * 60_000;
 interface PvHistoryCacheEntry
 {
     history:          PvHistory;
+    //Per-entity snapshots preserved in the cache so a cross-mount cache hit also primes the per-entity curves on the
+    //chart without a fresh round-trip. Stored as a plain object map for JSON-friendliness; the Map ↔ object coercion
+    //lives at the cache-set / cache-get boundary.
+    historyPerEntity: Record<string, PvHistory>;
     batteryHistory:   PvHistory | null;
     diagnostics:      { rawEntries: number; samples: number; windowH: number };
     ts:               number;
@@ -432,6 +441,11 @@ export function refreshPv(host: PvHost): void
                 host._pvHistory             = cached.history;
                 host._batteryHistory        = cached.batteryHistory;
                 host._pvHistoryDiagnostics  = cached.diagnostics;
+                host._pvHistoryPerEntity.clear();
+                for (const [id, h] of Object.entries(cached.historyPerEntity ?? {}))
+                {
+                    host._pvHistoryPerEntity.set(id, h);
+                }
             }
             else
             {
@@ -725,14 +739,18 @@ export async function fetchPvHistory(
 
         //Per-entity parse, then LKCF aggregate across the union of timestamps. Single-source installs go through the
         //fast path inside `aggregatePvHistoriesLkcf` (one history, returned as-is) so the cost stays at the existing
-        //single-entry parse.
-        const perEntity: PvHistory[] = [];
+        //single-entry parse. The per-entity parsed histories are also preserved on the host so the chart can render
+        //one curve per source and the scrub tooltip can show a per-entity breakdown next to the summed value.
+        const perEntity:        PvHistory[] = [];
+        const perEntityById:    Record<string, PvHistory> = {};
         let totalRawEntries = 0;
         for (const id of entityIds)
         {
             const arr: any[] = (result && result[id]) ?? [];
             totalRawEntries += arr.length;
-            perEntity.push(parseHistoryEntries(arr));
+            const parsed = parseHistoryEntries(arr);
+            perEntity.push(parsed);
+            perEntityById[id] = parsed;
         }
         const history: PvHistory = aggregatePvHistoriesLkcf(perEntity);
 
@@ -742,6 +760,14 @@ export async function fetchPvHistory(
         host._batteryHistory = batteryHistory;
 
         host._pvHistory = history;
+        //Refresh the per-entity map: clear, then repopulate with the freshly parsed series. Mutation in place keeps
+        //the Map identity stable across Lit cycles so downstream reactivity sees the change through the value reads
+        //rather than the reference flip (other state writes in the same refresh chain already drive re-render).
+        host._pvHistoryPerEntity.clear();
+        for (const id of entityIds)
+        {
+            host._pvHistoryPerEntity.set(id, perEntityById[id]);
+        }
         //Snapshot the fetch outcome so `window.heliosStats()` can
         //surface it without us logging on every fetch.
         const diagnostics =
@@ -753,10 +779,17 @@ export async function fetchPvHistory(
         host._pvHistoryDiagnostics = diagnostics;
 
         //Persist for the next mount. The TTL covers stale-read protection; the cache lives at module scope so nav-away / nav-back
-        //picks it up without a fresh recorder hit.
+        //picks it up without a fresh recorder hit. The per-entity snapshot also rides along so the per-source curves
+        //paint immediately on the cached path without re-parsing.
         if (cacheKey)
         {
-            _pvHistoryCache.set(cacheKey, { history, batteryHistory, diagnostics, ts: Date.now() });
+            _pvHistoryCache.set(cacheKey, {
+                history,
+                historyPerEntity: perEntityById,
+                batteryHistory,
+                diagnostics,
+                ts: Date.now()
+            });
         }
     }
     catch (e)

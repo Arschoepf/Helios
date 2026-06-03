@@ -348,6 +348,10 @@ export class HeliosCard extends LitElement
         times:  Date[];
         values: number[];
     } | null = null;
+    //Per-entity histories preserved alongside `_pvHistory` so the chart can render one curve per source (the
+    //feature LBDG_ asked for after the multi-source agg pass) and the scrub tooltip can show a per-entity
+    //breakdown. Keyed by entity id; cleared + repopulated in `fetchPvHistory` on every fresh fetch.
+    _pvHistoryPerEntity: Map<string, { times: Date[]; values: number[] }> = new Map();
     _pvFetchKey  = '';
     _pvFetching  = false;
     //Most recent PV history fetch outcome, surfaced via

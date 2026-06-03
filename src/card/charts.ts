@@ -294,7 +294,33 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 //window. Returns NaN value when neither source can supply a
 //number at the cursor instant (no entity configured, sample gap,
 //etc).
-function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit: string; isPredicted: boolean }
+//Hue-rotated palette built around the HA Energy `--energy-solar-color` theme token. The first source keeps the
+//base hue (so single-source installs reading this index get the exact theme colour), siblings step the hue by
+//`360 / N` degrees so a 2-source split E / W lands on opposite hues, a 3-source install on 120 ° spacing, and so
+//on. The CSS HSL `from` syntax lets us derive the rotation in pure CSS so the actual colour follows the user's
+//live theme without us having to parse the resolved RGB. Falls back to a fixed orange on browsers that don't
+//support the relative-colour syntax.
+function pvSourceColor(index: number, total: number): string
+{
+    if (total <= 1)
+    {
+        return 'var(--energy-solar-color, #ff9800)';
+    }
+    const step = 360 / total;
+    return `hsl(from var(--energy-solar-color, #ff9800) calc(h + ${index * step}) s l)`;
+}
+
+
+function pvValueAtTime(
+    host: ChartHost,
+    targetMs: number,
+    //Optional per-source history override. When supplied, the function reads from this series instead of the
+    //aggregated `_pvHistory`, used by the multi-source per-entity tooltip rows so each source displays its own
+    //value at the scrub instant. The calibration / LTS fallback is skipped in override mode (no per-entity LTS is
+    //fetched yet); the forecast pass on the aggregated path stays as-is, so a per-entity row simply reads "—" when
+    //the cursor lands past the per-entity history's tail.
+    seriesOverride?: { times: Date[]; values: number[] },
+): { value: number; unit: string; isPredicted: boolean }
 {
     const luRaw = (host._pvUnit || '').trim();
     if (!luRaw)
@@ -340,7 +366,7 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     //observed value would mean the tooltip reads "3 W" for noon
     //tomorrow just because that was the panel's reading at 16:00
     //yesterday (the late-afternoon tail of the last seen day).
-    const hist = host._pvHistory;
+    const hist = seriesOverride ?? host._pvHistory;
     const rawFirstMs = (hist && hist.times.length >= 1)
         ? hist.times[0].getTime()
         : Infinity;
@@ -391,14 +417,27 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     //power sensors, differentiated state for cumulative-energy
     //sensors) so a linear interpolation at the cursor instant is
     //the right thing to do regardless of the source entity type.
-    const calib = host._pvCalibStats;
-    if (calib && calib.times.length >= 2 && targetMs <= lastObsMs)
+    //Skipped in `seriesOverride` mode because no per-entity LTS is fetched alongside the per-entity raw history yet
+    //(the override carries only the 6 h raw window). Per-entity rows simply read "—" for older past until a
+    //per-entity LTS path is added.
+    if (!seriesOverride)
     {
-        const v = interpAt(calib.times, calib.values, targetMs);
-        if (isFinite(v))
+        const calib = host._pvCalibStats;
+        if (calib && calib.times.length >= 2 && targetMs <= lastObsMs)
         {
-            return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
+            const v = interpAt(calib.times, calib.values, targetMs);
+            if (isFinite(v))
+            {
+                return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
+            }
         }
+    }
+
+    //Per-entity override mode has no per-source forecast yet (the model is single-aggregate), so we stop here on a
+    //future cursor and let the caller show "—". The aggregated path below stays unchanged for the headline forecast.
+    if (seriesOverride)
+    {
+        return { value: NaN, unit: displayUnit, isPredicted: false };
     }
 
     //Forecast for future hours. Reuses the per-array PV power model + thermal / shading hooks the chart already feeds, plus the 5-day rolling
@@ -498,6 +537,33 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const irrV = interpAt(series.times, series.irradiance, atMs);
     const cldV = interpAt(series.times, series.cloud,      atMs);
     const pv   = pvValueAtTime(host, atMs);
+
+    //Per-entity breakdown rows for multi-source installs (LBDG_'s feature). Each row carries the friendly name from
+    //hass.states + a colour pastille derived by hue-rotating the theme PV colour, so the chip ↔ row visual link
+    //matches the per-source curve drawn on the chart underneath. Single-source installs skip the breakdown entirely
+    //(the per-entity map carries one entry equal to the aggregate, which would duplicate the headline row).
+    const perEntityMap     = host._pvHistoryPerEntity;
+    const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()).sort() : [];
+    const perEntityRows: Array<{ id: string; label: string; valueText: string; colorIdx: number }> = [];
+    for (let i = 0; i < perEntityIds.length; i++)
+    {
+        const id    = perEntityIds[i];
+        const ph    = perEntityMap.get(id);
+        if (!ph)
+        {
+            continue;
+        }
+        const val   = pvValueAtTime(host, atMs, ph);
+        if (!isFinite(val.value))
+        {
+            continue;
+        }
+        const stateObj    = host.hass?.states?.[id];
+        const friendly    = String(stateObj?.attributes?.friendly_name ?? id);
+        const localDec    = val.unit === 'W' ? 0 : (Math.abs(val.value) < 100 ? 1 : 0);
+        const valueText   = `${formatLocalisedNumber(host.hass, val.value, localDec)} ${val.unit}`;
+        perEntityRows.push({ id, label: friendly, valueText, colorIdx: i });
+    }
     const hasPv = isFinite(pv.value);
 
     //The scrub tooltip icons now inherit the active HA theme colour
@@ -618,6 +684,13 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                         <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
                     </div>
                 ` : nothing}
+                ${perEntityRows.map(row => html`
+                    <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                        <span class="tb-hover-tooltip-dot" style="background:${pvSourceColor(row.colorIdx, perEntityIds.length)}"></span>
+                        <span class="tb-hover-tooltip-sublabel">${row.label}</span>
+                        <span class="tb-hover-tooltip-value">${row.valueText}</span>
+                    </div>
+                `)}
             </div>
         </div>
     `;
@@ -646,6 +719,10 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
+    //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
+    //source and the scrub tooltip can show a per-source breakdown next to the summed value. Single-source installs
+    //carry a single entry equal to the aggregate; multi-source installs carry one entry per HA Energy source.
+    readonly _pvHistoryPerEntity: Map<string, PvHistory>;
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` because it
     //carries the same 5-day window with two orders of magnitude fewer rows on high-frequency installs. Null while the stats fetch is in
     //flight, or empty when the entity is not LTS-tracked, in both cases the consumer degrades to `_pvHistory`.
@@ -1316,6 +1393,93 @@ export function renderPvChart(host: ChartHost): TemplateResult
         line = `M ${points.join(' L ')}`;
     }
 
+    //Per-source curves. One light polyline per HA Energy source, drawn UNDER the aggregate line so the eye reads the
+    //total as the dominant trace and the breakdown as background context. Hue rotates around the theme PV colour so
+    //a split E / W lands on opposite hues; the same colour shows up in the tooltip pastille for the matching row,
+    //giving the user a row ↔ curve visual link. Skipped on single-source installs where the per-entity map carries
+    //one entry equal to the aggregate (drawing it would just paint a duplicate trace at lower opacity under the
+    //headline curve). The per-entity series uses the same cumulative-differentiation rule as the aggregate path so
+    //a 4 × stat_energy_from / no stat_rate setup paints as 4 power curves, not 4 monotonically climbing kWh ramps.
+    const perEntityIdsForCurves = host._pvHistoryPerEntity.size > 1
+        ? Array.from(host._pvHistoryPerEntity.keys()).sort()
+        : [];
+    const perEntityCurves: Array<{ id: string; line: string; color: string }> = [];
+    for (let idx = 0; idx < perEntityIdsForCurves.length; idx++)
+    {
+        const id = perEntityIdsForCurves[idx];
+        const ph = host._pvHistoryPerEntity.get(id);
+        if (!ph)
+        {
+            continue;
+        }
+        let eTimes:  Date[]   = ph.times;
+        let eValues: number[] = ph.values;
+        if (isCumulativeEnergy && eTimes.length >= 2)
+        {
+            const MIN_DTH = 0.05;
+            const dT: Date[]   = [];
+            const dV: number[] = [];
+            let prevIdx = 0;
+            for (let i = 1; i < eTimes.length; i++)
+            {
+                const dtH = (eTimes[i].getTime() - eTimes[prevIdx].getTime()) / 3_600_000;
+                if (dtH <= 0)
+                {
+                    continue;
+                }
+                if (dtH > 6)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                const dv = eValues[i] - eValues[prevIdx];
+                if (dv < 0)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                if (dtH < MIN_DTH)
+                {
+                    continue;
+                }
+                dT.push(eTimes[i]);
+                dV.push(dv / dtH);
+                prevIdx = i;
+            }
+            eTimes  = dT;
+            eValues = dV;
+        }
+        const ePoints: string[] = [];
+        //Lighter decimation than the aggregate: per-entity curves are background context, half the resolution is
+        //plenty and keeps the SVG path strings short on 4-source / 1 Hz installs (4 × 750 points stays under the
+        //browser path limit).
+        const stride = Math.max(1, Math.floor(eTimes.length / 750));
+        for (let i = 0; i < eTimes.length; i += stride)
+        {
+            const t = eTimes[i];
+            const v = eValues[i];
+            const tMs = t.getTime();
+            if (tMs < startMs || tMs > endMsAbs)
+            {
+                continue;
+            }
+            if (!isFinite(v))
+            {
+                continue;
+            }
+            ePoints.push(`${xOf(t).toFixed(2)},${yOf(v).toFixed(2)}`);
+        }
+        if (ePoints.length < 2)
+        {
+            continue;
+        }
+        perEntityCurves.push({
+            id,
+            line:  `M ${ePoints.join(' L ')}`,
+            color: pvSourceColor(idx, perEntityIdsForCurves.length),
+        });
+    }
+
     let predictedLine = '';
     if (predictedSamples.length >= 2)
     {
@@ -1388,6 +1552,15 @@ export function renderPvChart(host: ChartHost): TemplateResult
                     fill="${pvColor}"
                     fill-opacity="0.25"
                 ></path>
+            ` : nothing}
+            ${perEntityCurves.map(c => svg`
+                <path
+                    class="hc-chart-line hc-chart-line-source"
+                    d="${c.line}"
+                    stroke="${c.color}"
+                ></path>
+            `)}
+            ${line ? svg`
                 <path
                     class="hc-chart-line"
                     d="${line}"
