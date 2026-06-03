@@ -549,6 +549,10 @@ export class HeliosCard extends LitElement
     @state() _dashDayOffset:        number       = 0;
     _dashSwipeStartX:               number | null = null;
     _dashSwipeStartTime:            number       = 0;
+    //Enter / exit animation phase. Lasts 1 s; controls a class on the stage that drives the staged keyframe
+    //animations per card.
+    @state() _dashAnimPhase:        'idle' | 'entering' | 'exiting' = 'idle';
+    _dashAnimTimer?:                number;
     //True while the LiDAR View overlay is showing: the map UI fades
     //out, the engine's WebGL custom layer paints every loaded LiDAR
     //cell as a dot, and the same toggle button (top-right) brings the

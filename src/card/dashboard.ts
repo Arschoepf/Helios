@@ -59,6 +59,11 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //Touch / pointer swipe state, captured on pointerdown and consumed on pointerup. Null between gestures.
     _dashSwipeStartX:      number | null;
     _dashSwipeStartTime:   number;
+    //Enter / exit animation phase. 'entering' kicks the staged reveal (front fades in, mid slides out from
+    //behind, back slides out from behind mid), 'exiting' replays it backwards. Lasts 1 s total; afterwards the
+    //phase flips to 'idle' and the cards sit at their inline-style resting transforms.
+    _dashAnimPhase:        'idle' | 'entering' | 'exiting';
+    _dashAnimTimer?:       number;
 }
 
 
@@ -144,6 +149,10 @@ export function renderDashboard(host: DashboardHost): TemplateResult
     const DAY_OFFSETS = [-2, -1, 0, 1, 2];
     const active = clampDayOffset(host._dashDayOffset ?? 0);
 
+    const animClass = host._dashAnimPhase === 'entering' ? 'dash-cf-entering'
+                    : host._dashAnimPhase === 'exiting'  ? 'dash-cf-exiting'
+                    : '';
+
     return html`
         <div class="detail-panel">
             <div class="dash-coverflow"
@@ -153,27 +162,9 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                  @keydown="${(e: KeyboardEvent) => handleDashKey(host, e)}"
                  tabindex="0"
             >
-                <button
-                    class="dash-cf-arrow dash-cf-arrow-prev"
-                    ?disabled="${active <= -2}"
-                    @click="${(e: Event) => { e.stopPropagation(); navigateDashDay(host, active - 1); }}"
-                    aria-label="Jour précédent"
-                >
-                    <ha-icon icon="mdi:chevron-left"></ha-icon>
-                </button>
-
-                <div class="dash-cf-stage">
+                <div class="dash-cf-stage ${animClass}">
                     ${DAY_OFFSETS.map(offset => renderCoverflowCard(host, offset, active))}
                 </div>
-
-                <button
-                    class="dash-cf-arrow dash-cf-arrow-next"
-                    ?disabled="${active >= 2}"
-                    @click="${(e: Event) => { e.stopPropagation(); navigateDashDay(host, active + 1); }}"
-                    aria-label="Jour suivant"
-                >
-                    <ha-icon icon="mdi:chevron-right"></ha-icon>
-                </button>
             </div>
         </div>
     `;
@@ -199,16 +190,20 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const delta    = cardOffset - activeOffset;
     const absDelta = Math.abs(delta);
     const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
-    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the container size. Closer
-    //spacing on ±2 (50 % / 75 %) so the back card sits BEHIND the mid card, partly hidden by it instead of
-    //floating off to the side with a visible gap. Higher rotation on ±2 keeps its face turned away enough to
-    //read as background, the visible sliver between the ±1 card's far edge and the ±2 card's far edge gives the
-    //fan its depth cue.
+    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the container size. The ±2
+    //cards sit close to ±1 (75 % vs 50 %) and rotate steeply (65 °) so they read as truly edge-on, the visible
+    //sliver between the mid card's far edge and the back card's far edge is enough depth cue without competing
+    //with the front for attention. Opacity is full on every card, the perspective + rotation alone carry the
+    //sense of distance.
     const txPct    = sign * (absDelta === 1 ? 50 : absDelta === 2 ? 75 : 0);
     const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.85 : 0.65;
-    const rotY     = sign * (absDelta === 1 ? 30 : absDelta === 2 ? 50 : 0);
+    const rotY     = sign * (absDelta === 1 ? 30 : absDelta === 2 ? 65 : 0);
     const zIdx     = 10 - absDelta;
-    const opacity  = absDelta === 0 ? 1 : absDelta === 1 ? 0.78 : 0.45;
+    const opacity  = 1;
+    //Soft blur on the side cards, stronger on the back pair so the focal hierarchy reads cleanly even with full
+    //opacity: front sharp, ±1 lightly out of focus, ±2 more defocused. The filter is applied via the inline
+    //style so it stays applied through the enter / exit animations (keyframes never touch `filter`).
+    const blurPx   = absDelta === 0 ? 0 : absDelta === 1 ? 1.5 : 4;
     const isFront  = absDelta === 0;
 
     //Date label: this card represents `today + cardOffset` days. Computed off a fresh midnight Date so day
@@ -228,7 +223,8 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     //plane), then translateX as a percent of the SCALED bounding box, then the centring translate(-50%, -50%) on
     //the parent. The percent translate is applied AFTER scale, which means a sibling at 105 % sits roughly one
     //full card width to the side at its rendered (scaled) size, the right behaviour for the fan.
-    const style = `transform: translate(-50%, -50%) translateX(${txPct}%) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity};`;
+    const filterStr = blurPx > 0 ? `filter: blur(${blurPx}px);` : '';
+    const style = `transform: translate(-50%, -50%) translateX(${txPct}%) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity}; ${filterStr}`;
 
     const t = pickTranslations(host.hass?.language);
     return html`
@@ -1782,6 +1778,20 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
     //Always re-centre on today when the panel opens, even if the user closed it on a different day mid-swipe.
     host._dashDayOffset = 0;
     host._dashSwipeStartX = null;
+    //Kick the staged enter animation. Phase 'entering' lasts 1 s, after which the cards settle into their
+    //resting transforms. A guard against re-entrance during the animation window is unnecessary because the
+    //timer below cancels any in-flight one when the panel re-opens.
+    if (host._dashAnimTimer !== undefined)
+    {
+        window.clearTimeout(host._dashAnimTimer);
+    }
+    host._dashAnimPhase = 'entering';
+    host._dashAnimTimer = window.setTimeout(() =>
+    {
+        host._dashAnimPhase = 'idle';
+        host._dashAnimTimer = undefined;
+        (host as unknown as { requestUpdate(): void }).requestUpdate();
+    }, 1000);
     host._engine?.setDetailMode(true);
     startDashCountUpLoop(host);
 }
@@ -1791,14 +1801,33 @@ export function handleExitDetail(host: DashboardHost, e: Event): void
 {
     e.stopPropagation();
     if (!host._detailMode) { return; }
-    host._detailMode = false;
-    host._dashOpenedAtMs = null;
-    if (host._dashCountUpRaf !== undefined)
+    //Stage the exit animation: phase 'exiting' kicks the staged retreat (back tucks behind mid first, then mid
+    //behind front, finally the front fades out). Lasts 1 s; only after that do we actually unmount the panel
+    //and tell the engine to leave detail mode.
+    if (host._dashAnimPhase === 'exiting')
     {
-        cancelAnimationFrame(host._dashCountUpRaf);
-        host._dashCountUpRaf = undefined;
+        return;
     }
-    host._engine?.setDetailMode(false);
+    if (host._dashAnimTimer !== undefined)
+    {
+        window.clearTimeout(host._dashAnimTimer);
+    }
+    host._dashAnimPhase = 'exiting';
+    (host as unknown as { requestUpdate(): void }).requestUpdate();
+    host._dashAnimTimer = window.setTimeout(() =>
+    {
+        host._detailMode    = false;
+        host._dashOpenedAtMs = null;
+        host._dashAnimPhase = 'idle';
+        host._dashAnimTimer = undefined;
+        if (host._dashCountUpRaf !== undefined)
+        {
+            cancelAnimationFrame(host._dashCountUpRaf);
+            host._dashCountUpRaf = undefined;
+        }
+        host._engine?.setDetailMode(false);
+        (host as unknown as { requestUpdate(): void }).requestUpdate();
+    }, 1000);
 }
 
 

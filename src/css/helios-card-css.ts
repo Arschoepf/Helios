@@ -481,7 +481,7 @@ export const heliosCardStyles = css`
             440 px cap stops huge displays from blowing the cards into wall-sized rectangles. Height tracks via
             aspect-ratio so the cards keep the same shape across widths. */
         width: min(440px, 46cqw);
-        aspect-ratio: 5 / 6;
+        aspect-ratio: 4 / 6;
         border-radius: 18px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
@@ -558,57 +558,85 @@ export const heliosCardStyles = css`
         color: inherit;
     }
 
-    /*  Navigation arrows. Sit on each side of the stage, full height so they catch clicks anywhere along the
-        edge. Chevron glyph centred, sized to feel comfortable on touch + mouse. Disabled state fades out so the
-        boundary at offset = ±2 reads as "you cannot go further". */
-    .dash-cf-arrow
+    /*  Hover highlight on every card: border picks up the active theme primary so the user gets a clear
+        visual cue that the card is interactive. Inline style still drives the transform / opacity / filter,
+        only the border colour changes here. The transition runs against the existing 420 ms ease on the
+        transform too so the hover lift feels smooth. */
+    .dash-cf-card:hover
     {
-        flex: 0 0 auto;
-        width: 48px;
-        height: 48px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
-        border-radius: 50%;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        color: var(--primary-text-color, #ffffff);
-        cursor: pointer;
-        padding: 0;
-        transition: transform 160ms ease, opacity 160ms ease;
-        z-index: 5;
+        border-color: var(--primary-color, #03a9f4);
     }
-    .dash-cf-arrow:hover:not(:disabled)
+
+    /*  Enter animation, 1 s total, staged in three phases:
+        - 0 - 300 ms: the front (today) card fades in.
+        - 300 - 650 ms: ±1 cards slide out from behind the front card to their resting position.
+        - 650 - 1000 ms: ±2 cards slide out from behind the ±1 cards.
+        Each keyframe's "to" state matches the inline transform so the handover to inline-only styling at
+        animation end is seamless. animation-fill-mode: both keeps the from-state visible during the delay and
+        the to-state visible after the animation completes (until the .dash-cf-entering class drops off).      */
+    @keyframes dash-cf-enter-front
     {
-        transform: scale(1.08);
+        0%   { opacity: 0; }
+        100% { opacity: 1; }
     }
-    .dash-cf-arrow:active:not(:disabled)
+    @keyframes dash-cf-enter-mid-left
     {
-        transform: scale(0.94);
+        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 1; }
     }
-    .dash-cf-arrow:disabled
+    @keyframes dash-cf-enter-mid-right
     {
-        opacity: 0.25;
-        cursor: not-allowed;
+        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 1; }
     }
-    .dash-cf-arrow ha-icon
+    @keyframes dash-cf-enter-back-left
     {
-        --mdc-icon-size: 24px;
-        color: inherit;
+        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-75%) scale(0.65) rotateY(-65deg); opacity: 1; }
     }
-    @media (max-width: 640px)
+    @keyframes dash-cf-enter-back-right
     {
-        .dash-cf-arrow
-        {
-            /*  On narrow screens the arrows steal too much width from the 75 vw cards; hide them and let the
-                user swipe to navigate. The keyboard fallback still works for connected keyboards. */
-            display: none;
-        }
-        .dash-coverflow
-        {
-            padding: 16px 8px;
-        }
+        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(75%) scale(0.65) rotateY(65deg); opacity: 1; }
     }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-enter-mid-right  350ms ease-out 300ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-enter-back-left  350ms ease-out 650ms both; }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-enter-back-right 350ms ease-out 650ms both; }
+
+    /*  Exit animation, same 1 s budget but reverse order: back cards tuck behind mid first, then mid behind
+        front, finally the front fades out. The panel only actually unmounts after the full second elapses. */
+    @keyframes dash-cf-exit-back-left
+    {
+        0%   { transform: translate(-50%, -50%) translateX(-75%) scale(0.65) rotateY(-65deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 0; }
+    }
+    @keyframes dash-cf-exit-back-right
+    {
+        0%   { transform: translate(-50%, -50%) translateX(75%) scale(0.65) rotateY(65deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 0; }
+    }
+    @keyframes dash-cf-exit-mid-left
+    {
+        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-30deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+    }
+    @keyframes dash-cf-exit-mid-right
+    {
+        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(30deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+    }
+    @keyframes dash-cf-exit-front
+    {
+        0%   { opacity: 1; }
+        100% { opacity: 0; }
+    }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-exit-back-left  350ms ease-in 0ms   both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-exit-back-right 350ms ease-in 0ms   both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-exit-mid-left   350ms ease-in 350ms both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="1"]  { animation: dash-cf-exit-mid-right  350ms ease-in 350ms both; }
+    .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-exit-front      300ms ease-in 700ms both; }
 
     /*  Each dashboard section is rendered with the HA card frame:
         same background, border colour, border radius and box-shadow
