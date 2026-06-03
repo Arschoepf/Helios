@@ -452,7 +452,7 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
                 </div>
                 <div class="dash-cf-card-stat dash-cf-card-stat-forecast">
                     <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-forecast" aria-hidden="true">
-                        <ha-icon icon="mdi:crystal-ball"></ha-icon>
+                        <ha-icon icon="mdi:chart-bell-curve-cumulative"></ha-icon>
                     </span>
                     <span class="dash-cf-card-stat-body">
                         <span class="dash-cf-card-stat-label">Prévision</span>

@@ -643,8 +643,8 @@ export const heliosCardStyles = css`
         align-items: center;
         gap: 10px;
         padding: 10px 12px;
-        /*  HA default --ha-card-border-radius is 12 px, match it exactly so the inner tiles share the same
-            corner radius as the surrounding ha-card. */
+        /*  Inherit the HA theme's card radius via `--ha-card-border-radius` (12 px default) so the inner tiles
+            share the same corner radius as the surrounding ha-card / bandeau. */
         border-radius: var(--ha-card-border-radius, 12px);
         background: var(--secondary-background-color, var(--ha-card-background, rgba(255, 255, 255, 0.04)));
         color: var(--primary-text-color, #ffffff);
@@ -653,11 +653,12 @@ export const heliosCardStyles = css`
     }
     .dash-cf-card-stat-icon
     {
-        width: 36px;
-        height: 36px;
-        /*  HA frontend tile-card icon badges (state-badge, mushroom-shape-icon) render as full circles by
-            default, not rounded squares; match that here so the tiles read as native HA. */
-        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        /*  HA frontend tile-card icon badges render as rounded SQUARES (~12 px radius for a 32 px badge), not
+            full circles. Reverted from 50 % to 12 px after a side-by-side comparison with the native HA tile
+            card the user shared. */
+        border-radius: 12px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -666,7 +667,7 @@ export const heliosCardStyles = css`
     }
     .dash-cf-card-stat-icon ha-icon
     {
-        --mdc-icon-size: 20px;
+        --mdc-icon-size: 18px;
         color: inherit;
         display: flex;
         align-items: center;
