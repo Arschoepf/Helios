@@ -29,9 +29,8 @@ import
     refreshBattery,
     batterySampleAtTime,
     formatBatteryPower,
-    effectiveBatteryBanks,
-    clearBatteryModuleCaches,
-    type BatteryBank
+    resolveBatteryEntities,
+    clearBatteryModuleCaches
 } from './card/battery';
 import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
 import { computeForecastCalibration } from './card/calibration';
@@ -374,11 +373,10 @@ export class HeliosCard extends LitElement
     @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
     _pvTrainerStatsFetchKey  = '';
     _pvTrainerStatsFetching  = false;
-    //Per-bank companion battery SoC histories fetched alongside PV history when the user has at least one battery configured AND armed
-    //the inverter-cutoff guard (`inverter-cutoff-soc-pct`). One entry per bank, parallel to parseBatteryBanks(config). Empty when the
-    //guard is off or no battery is configured; the shading trainer reads it to skip buckets where ALL banks were at or above the cutoff
-    //(min across banks). Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
-    _batteryHistories: { times: Date[]; values: number[] }[] = [];
+    //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
+    //(`inverter-cutoff-soc-pct`). The shading trainer reads it to skip buckets where SoC reached the cutoff. Null when the guard is
+    //off or no battery is configured. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
+    _batteryHistory: { times: Date[]; values: number[] } | null = null;
     //Idempotency flag for the one-time wipe of legacy PV calibration
     //buffers (see _wipeLegacyPvCalibStorage). Per-instance so we
     //attempt the cleanup at most once per card mount; the persisted
@@ -809,7 +807,7 @@ export class HeliosCard extends LitElement
         this._batterySocHistory           = null;
         this._batteryPowerHistory         = null;
         this._batteryFetchKey             = '';
-        this._batteryHistories            = [];
+        this._batteryHistory              = null;
         this._solarRadiationHistory       = null;
         this._solarRadiationFetchKey      = '';
         //Drop the module-level caches too. Without these calls the per-LitElement state above is reset but the next refresh hits the
@@ -1458,13 +1456,12 @@ export class HeliosCard extends LitElement
         //hass.states; past-scrub mode reads from the historical
         //series fetched via WS; future-scrub hides both chips
         //because no battery data exists past "now".
-        //Bank-aware gates. A chip is allowed to render when AT LEAST one configured bank exposes the corresponding entity (SoC for the
-        //SoC chip, power for the Power chip), so a multi-bank install with one bank reporting still gets the aggregated chip painted.
-        //Falls back transparently to legacy single-bank configs because parseBatteryBanks wraps the flat keys into a one-row list when
-        //the `batteries:` array is absent.
-        const batteryBanks       = this._getBatteryBanks();
-        const hasAnyBankSoc      = batteryBanks.some(b => b.socEntity   !== '');
-        const hasAnyBankPower    = batteryBanks.some(b => b.powerEntity !== '');
+        //Chip eligibility comes off the HA Energy defaults: a SoC source (`stat_soc`) lights the SoC chip, a power source (`stat_rate`,
+        //or `stat_energy_from` / `stat_energy_to` when the source did not declare a power_config block) lights the Power chip. The
+        //chips render independently so a SoC-only install still gets the vessel painted.
+        const batteryEntities    = resolveBatteryEntities(this._energyDefaults);
+        const hasAnyBankSoc      = batteryEntities.socEntity   !== null;
+        const hasAnyBankPower    = batteryEntities.powerEntity !== null;
         const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
         const batteryScrubFuture = batteryScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
@@ -2648,25 +2645,6 @@ export class HeliosCard extends LitElement
 
     //Per-card unique id used to namespace SVG <defs> ids so multiple Helios cards on the same dashboard don't clash on gradient / filter references.
     _instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
-
-    //Memoised parseBatteryBanks result, keyed on the config object identity. parseBatteryBanks walks the YAML, allocates a fresh array
-    //and N objects, and re-trims every entity string on each call, expensive when the Lit render fires at 60-120 Hz during scrub.
-    //Hass swaps the config reference whenever the user edits it, so identity equality is the right invalidation signal.
-    private _cachedBatteryBanks?: BatteryBank[];
-    private _cachedBatteryBanksCfg?: HeliosConfig;
-    private _cachedBatteryBanksDefaults?: EnergyDefaults;
-    private _getBatteryBanks(): BatteryBank[]
-    {
-        if (this.config !== this._cachedBatteryBanksCfg
-            || this._energyDefaults !== this._cachedBatteryBanksDefaults
-            || !this._cachedBatteryBanks)
-        {
-            this._cachedBatteryBanks         = effectiveBatteryBanks(this.config, this._energyDefaults);
-            this._cachedBatteryBanksCfg      = this.config;
-            this._cachedBatteryBanksDefaults = this._energyDefaults;
-        }
-        return this._cachedBatteryBanks;
-    }
 
     //Hover handlers on the home hitbox. Toggle the sun-coloured glow halo around the home silhouette so the focal building reads as interactive
     //before the user clicks. Cleared on exit so the glow doesn't get stuck on if the cursor leaves while the detail overlay is fading in.

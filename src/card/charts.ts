@@ -592,10 +592,9 @@ export interface ChartHost
     readonly _pvCalibStats:   PvHistory | null;
     //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same fallback contract as `_pvCalibStats`.
     readonly _pvTrainerStats: PvHistory | null;
-    //Optional per-bank companion battery SoC histories, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
-    //One entry per bank (parallel to parseBatteryBanks(config)); empty when the guard is off or no battery is configured. The shading
-    //trainer reads it to skip buckets where ALL banks reached the cutoff (min SoC across banks).
-    readonly _batteryHistories: PvHistory[];
+    //Optional companion battery SoC history, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
+    //Null when the guard is off or no battery is configured. The shading trainer reads it to skip buckets where SoC reached the cutoff.
+    readonly _batteryHistory: PvHistory | null;
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;

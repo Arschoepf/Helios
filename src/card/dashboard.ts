@@ -26,7 +26,7 @@ import
     pvInverterMaxW,
     computePvPowerWeighted
 } from './pv';
-import { computeBatteryToday, parseBatteryBanks, type BatteryHost } from './battery';
+import { computeBatteryToday, resolveBatteryEntities, type BatteryHost } from './battery';
 import { effectiveForecastRatio, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
@@ -133,10 +133,11 @@ export function renderDashboard(host: DashboardHost): TemplateResult
     const pvColor      = DEFAULT_PV_COLOR_HEX;
     const batteryColor = DEFAULT_BATTERY_COLOR_HEX;
 
-    //Multi-bank aware presence check: any configured bank exposing SoC or power makes the battery card eligible. parseBatteryBanks
-    //transparently wraps the legacy flat keys into a one-row list, so single-bank configs still trigger here.
-    const banks = parseBatteryBanks(host.config);
-    const hasBattery = banks.some(b => b.socEntity !== '' || b.powerEntity !== '');
+    //Battery card eligibility: the HA Energy defaults expose either a SoC source (`stat_soc`) or a power source (`stat_rate`,
+    //`stat_energy_from` or `stat_energy_to`). Either side alone lights the card; the renderer handles the missing-slot case
+    //by leaving the corresponding chip empty.
+    const batteryEntities = resolveBatteryEntities(host._energyDefaults);
+    const hasBattery = batteryEntities.socEntity !== null || batteryEntities.powerEntity !== null;
 
     return html`
         <div class="detail-panel">

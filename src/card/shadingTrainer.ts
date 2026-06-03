@@ -83,23 +83,13 @@ export function trainShadingMap(host: ChartHost): number
     const pvUnit   = host._pvUnit;
     const sensorIsEnergy = isCumulativeEnergyUnit(pvUnit);
 
-    //Inverter-cutoff guard: when the user has configured a battery (one bank via flat keys, or N banks via `batteries:`) AND
-    //`inverter-cutoff-soc-pct`, skip every bucket where EVERY bank's SoC at the midpoint reached or exceeded the cutoff (min across
-    //banks ≥ cutoff). Those buckets see the inverter clamp PV output even when the sun is up, training them as "shadow" would otherwise
-    //carve a permanent phantom shadow at the matching sun azimuth/altitude/cloud bin. Threshold varies per inverter model (95 / 98 /
-    //100), the user knows their own; we just consult the config and the freshly-fetched per-bank SoC histories. A half-full sibling
-    //bank correctly trains the bucket while one full bank does not block it.
-    const cutoffPct  = inverterCutoffSocPct(host.config);
-    const socSeries  = (cutoffPct !== null) ? host._batteryHistories : [];
-    //Silent fallback: when the user set the cutoff threshold AND at
-    //least one bank is configured, but no bank exposes a SoC entity
-    //(power-only banks are a legitimate config, e.g. an inverter that
-    //only reports W), the cutoff guard simply stays inactive for
-    //this pass. The legacy warn flooded the console at every trainer
-    //tick which the user found noisy; the trainer just skips the
-    //guard and trains every bucket. The shading map self-corrects
-    //within a few sunny days as long as the user's SoC plateau is
-    //rare relative to the wider dataset.
+    //Inverter-cutoff guard: when the user has configured a battery (HA Energy `stat_soc` source) AND `inverter-cutoff-soc-pct`,
+    //skip every bucket where SoC at the midpoint reached or exceeded the cutoff. Those buckets see the inverter clamp PV output
+    //even when the sun is up, training them as "shadow" would otherwise carve a permanent phantom shadow at the matching sun
+    //azimuth / altitude / cloud bin. Threshold varies per inverter model (95 / 98 / 100), the user knows their own; we just
+    //consult the config and the freshly-fetched SoC history.
+    const cutoffPct = inverterCutoffSocPct(host.config);
+    const socHist   = (cutoffPct !== null) ? host._batteryHistory : null;
 
     let updated = 0;
     let skippedInhibit = 0;
@@ -157,41 +147,25 @@ export function trainShadingMap(host: ChartHost): number
             //falls back to either the scalar calibration or its existing prior. The watermark still advances so we do not
             //re-evaluate the same bucket on the next refresh.
             //
-            //The SoC histories piggyback on the raw PV fetch and therefore only cover roughly the chart's visible past window
-            //(~2 days). The trainer itself walks back 30 days. For any bucket older than the SoC window the lookup returns null
-            //on every bank, `anyBank` stays false, and pre-#155 the bucket trained without the guard, accumulating phantom shadows
-            //at the bound sun bins. When the user has explicitly armed the cutoff (`inverter-cutoff-soc-pct` configured and at
-            //least one bank with a SoC entity), we now treat "no SoC coverage for this bucket" as "skip the bucket" rather than
-            //train it blind. The trainer will pick up the same buckets again on the next 30-day pass; once the SoC window catches
-            //up on the chart side, they get trained with the guard active.
-            if (cutoffPct !== null && socSeries.length > 0)
+            //The SoC history piggybacks on the raw PV fetch and therefore only covers roughly the chart's visible past window
+            //(~2 days). The trainer itself walks back 30 days. For any bucket older than the SoC window the lookup returns null;
+            //with the guard armed we treat "no SoC coverage" as "skip the bucket" rather than train it blind. The trainer will
+            //pick up the same buckets again on the next 30-day pass; once the SoC window catches up they get trained with the
+            //guard active.
+            if (cutoffPct !== null && socHist && socHist.times.length > 0)
             {
-                //Min SoC across banks at the bucket midpoint. A bank with no sample at this instant (empty series) is skipped so a
-                //half-reporting setup degrades to "skip the bucket if every reporting bank is full" rather than poisoning the
-                //gate. We mark blocked when every bank that DID report sits at or above the cutoff, OR when no bank reported at
-                //all (out-of-window) and the user has the guard armed.
-                let minSoc:  number | null = null;
-                let anyBank: boolean = false;
-                let anySocConfigured: boolean = false;
-                for (const s of socSeries)
-                {
-                    if (s.times.length > 0) anySocConfigured = true;
-                    const v = valueAtMs(s, tMid.getTime());
-                    if (v === null) continue;
-                    anyBank = true;
-                    if (minSoc === null || v < minSoc) minSoc = v;
-                }
-                if (anyBank && minSoc !== null && minSoc >= cutoffPct)
+                const soc = valueAtMs(socHist, tMid.getTime());
+                if (soc !== null && soc >= cutoffPct)
                 {
                     skippedInhibit++;
                     if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
                     continue;
                 }
-                //No bank reported at this bucket midpoint. With the cutoff guard armed and at least one bank wired, "no coverage"
-                //means we cannot prove the inverter was not clamping. Skip the bucket and advance the watermark so we revisit it
-                //once the SoC window expands.
-                if (!anyBank && anySocConfigured)
+                if (soc === null)
                 {
+                    //No sample at this bucket midpoint. With the cutoff guard armed, "no coverage" means we cannot prove the
+                    //inverter was not clamping. Skip the bucket and advance the watermark so we revisit it once the SoC window
+                    //expands.
                     skippedInhibit++;
                     if (bucketEndMs > highestProcessedMs) highestProcessedMs = bucketEndMs;
                     continue;

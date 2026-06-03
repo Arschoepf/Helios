@@ -12,7 +12,7 @@ import type { EnergyDefaults } from './energy-prefs';
 import { computePvPower, getSunPosition, type PanelOrientation } from '../engine/sun';
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
-import { parseBatteryBanks } from './battery';
+import { resolveBatteryEntities } from './battery';
 import { callWSWithTimeout, WsTimeoutError, scheduleIdle } from './ws-timeout';
 
 
@@ -83,12 +83,11 @@ export interface PvHost
     _pvFetchKey:            string;
     _pvFetching:            boolean;
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
-    //Parallel per-bank SoC histories fetched alongside _pvHistory when at least one battery bank is configured AND `inverter-cutoff-soc-pct`
-    //is set. One entry per bank (indices parallel to parseBatteryBanks(config)). The shading-map trainer scans them to detect inverter-
-    //cutoff buckets (every bank full + production blocked) and skip them so the map doesn't accumulate phantom shadow at the matching sun
-    //bin. Empty array when the guard is off or no battery is configured; the trainer then falls back to the legacy "train every bucket"
-    //path.
-    _batteryHistories:      PvHistory[];
+    //Companion battery SoC history fetched alongside _pvHistory when a battery is wired AND `inverter-cutoff-soc-pct` is set. The
+    //shading-map trainer scans it to detect inverter-cutoff buckets (battery full + production blocked) and skip them so the map
+    //doesn't accumulate phantom shadow at the matching sun bin. Null when the guard is off or no battery is configured; the trainer
+    //then falls back to the legacy "train every bucket" path.
+    _batteryHistory:        PvHistory | null;
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same parallel times[] / values[] shape as `_pvHistory`,
     //but populated via `recorder/statistics_during_period` with `period: 'hour'` over the past 5 days. Power sensors land here as bucket
     //means; cumulative-energy sensors land as the bucket-end `state` field. Carries roughly 120 rows where the legacy raw-history path
@@ -129,7 +128,7 @@ const PV_CACHE_TTL_MS = 15 * 60_000;
 interface PvHistoryCacheEntry
 {
     history:          PvHistory;
-    batteryHistories: PvHistory[];
+    batteryHistory:   PvHistory | null;
     diagnostics:      { rawEntries: number; samples: number; windowH: number };
     ts:               number;
 }
@@ -329,29 +328,29 @@ export function refreshPv(host: PvHost): void
         const cap          = new Date(Date.now() - RAW_WINDOW_H * HOUR_MS);
         const fetchStart   = visibleStart < cap ? cap : visibleStart;
         const rangeKey   = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
-        //Optional per-bank battery SoC companion fetch. We only ask HA for the SoC histories when the user has explicitly armed the
-        //inverter-cutoff guard (cutoff percent configured AND at least one bank); otherwise the trainer doesn't need them and the extra
-        //entities in the WS payload would be a waste of HA recorder bandwidth. The fetch key includes the joined bank entity ids so
-        //swapping any bank forces a re-fetch on the next refresh.
-        const batteryEntities = batterySocEntitiesForInhibit(host.config);
+        //Optional battery SoC companion fetch. We only ask HA for the SoC history when the user has explicitly armed the
+        //inverter-cutoff guard (cutoff percent configured AND a battery SoC source resolved from the HA Energy defaults); otherwise
+        //the trainer doesn't need it and the extra entity in the WS payload would be a waste of HA recorder bandwidth. The fetch
+        //key includes the SoC entity id so swapping it forces a re-fetch on the next refresh.
+        const battSocId = batterySocEntityForInhibit(host.config, host._energyDefaults);
         const fullFetchKey = `${entity}@${rangeKey}`
-            + (batteryEntities.length > 0 ? '|bsoc:' + batteryEntities.join(',') : '');
+            + (battSocId ? '|bsoc:' + battSocId : '');
         if (fullFetchKey !== host._pvFetchKey)
         {
             host._pvFetchKey = fullFetchKey;
             //Cache hit short-circuits the WS round-trip: the user navigates away from the card and back, the module-level cache still
             //has the previous fetch parsed and ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (entity / range /
-            //SoC bank) change since that flips the key.
+            //SoC) change since that flips the key.
             const cached = pvHistoryCacheGet(fullFetchKey);
             if (cached)
             {
                 host._pvHistory             = cached.history;
-                host._batteryHistories      = cached.batteryHistories;
+                host._batteryHistory        = cached.batteryHistory;
                 host._pvHistoryDiagnostics  = cached.diagnostics;
             }
             else
             {
-                fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities, fullFetchKey);
+                fetchPvHistory(host, entity, fetchStart, fetchEnd, battSocId, fullFetchKey);
             }
         }
     }
@@ -404,17 +403,12 @@ export function refreshPv(host: PvHost): void
 }
 
 
-//Returns the per-bank SoC entity ids only when the inverter-cutoff guard is armed (cutoff percent set AND at least one bank configured),
-//empty array otherwise. Centralises the gate so both the trainer and the fetch path agree on when the SoC histories are needed and on
-//which bank order. Indices stay parallel to parseBatteryBanks(config).
-export function batterySocEntitiesForInhibit(cfg: HeliosConfig | undefined): string[]
+//Returns the SoC entity id only when the inverter-cutoff guard is armed (cutoff percent set AND a battery SoC source resolved from the HA
+//Energy defaults), null otherwise. Centralises the gate so both the trainer and the fetch path agree on when the SoC history is needed.
+export function batterySocEntityForInhibit(cfg: HeliosConfig | undefined, defaults: EnergyDefaults): string | null
 {
-    if (!cfg) return [];
-    const cutoff = cfg['inverter-cutoff-soc-pct'];
-    const cutoffN = typeof cutoff === 'number' ? cutoff : typeof cutoff === 'string' ? parseFloat(cutoff) : NaN;
-    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return [];
-    const banks = parseBatteryBanks(cfg);
-    return banks.map(b => b.socEntity).filter(e => e.length > 0);
+    if (inverterCutoffSocPct(cfg) === null) return null;
+    return resolveBatteryEntities(defaults).socEntity;
 }
 
 
@@ -504,14 +498,14 @@ export function valueAtMs(series: PvHistory | null, ms: number): number | null
 
 //Pull a historical series from HA's `history/history_during_period` WebSocket command, coerce the heterogeneous payload into parallel times[] /
 //values[] arrays, and snapshot the fetch outcome for `window.heliosStats()`. Fires off `host._pvFetching` for the duration; the gate in refreshPv
-//prevents overlapping calls. When `batterySocEntityIds` is non-empty we fold them all into the same WS request and store the parsed
-//per-bank series on `host._batteryHistories`, the shading-map trainer scans them to skip buckets where every bank reached the cutoff.
+//prevents overlapping calls. When `batterySocId` is non-null we fold it into the same WS request and store the parsed series on
+//`host._batteryHistory`, the shading-map trainer scans it to skip buckets where SoC reached the cutoff.
 export async function fetchPvHistory(
     host: PvHost,
     entityId: string,
     start: Date,
     end: Date,
-    batterySocEntityIds: string[] = [],
+    batterySocId: string | null = null,
     cacheKey: string = '',
 ): Promise<void>
 {
@@ -529,12 +523,12 @@ export async function fetchPvHistory(
         if (start >= fetchEnd)
         {
             host._pvHistory = { times: [], values: [] };
-            host._batteryHistories = [];
+            host._batteryHistory = null;
             return;
         }
 
-        const entityIds = batterySocEntityIds.length > 0
-            ? [entityId, ...batterySocEntityIds]
+        const entityIds = batterySocId
+            ? [entityId, batterySocId]
             : [entityId];
         const result: any = await callWSWithTimeout<any>(host.hass, {
             type:                     'history/history_during_period',
@@ -553,12 +547,10 @@ export async function fetchPvHistory(
         const times = parsed.times;
         const values = parsed.values;
 
-        //Per-bank parse for battery SoC when requested. Failure for any one bank is silent: the trainer just sees an empty series for
-        //that bank and the min-SoC computation skips it, no need to fail the whole PV fetch over an optional companion entity.
-        const batteryHistories: PvHistory[] = batterySocEntityIds.length > 0
-            ? batterySocEntityIds.map(id => parseHistoryEntries((result && result[id]) ?? []))
-            : [];
-        host._batteryHistories = batteryHistories;
+        const batteryHistory: PvHistory | null = batterySocId
+            ? parseHistoryEntries((result && result[batterySocId]) ?? [])
+            : null;
+        host._batteryHistory = batteryHistory;
 
         const history: PvHistory = { times, values };
         host._pvHistory = history;
@@ -576,7 +568,7 @@ export async function fetchPvHistory(
         //picks it up without a fresh recorder hit.
         if (cacheKey)
         {
-            _pvHistoryCache.set(cacheKey, { history, batteryHistories, diagnostics, ts: Date.now() });
+            _pvHistoryCache.set(cacheKey, { history, batteryHistory, diagnostics, ts: Date.now() });
         }
     }
     catch (e)
