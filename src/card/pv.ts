@@ -8,12 +8,31 @@
 //re-render exactly as the inline version did.
 
 import type { HeliosConfig } from '../helios-config';
-import { resolveEffectiveEntity } from './energy-prefs';
+import type { EnergyDefaults } from './energy-prefs';
 import { computePvPower, getSunPosition, type PanelOrientation } from '../engine/sun';
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
 import { parseBatteryBanks } from './battery';
 import { callWSWithTimeout, WsTimeoutError, scheduleIdle } from './ws-timeout';
+
+
+//Resolve the live PV entity from the HA Energy dashboard solar source. Prefers the optional `stat_rate` (signed W or kW)
+//over the cumulative `stat_energy_from` (kWh) so the chart and chip plot the live power directly instead of going
+//through the trapezoidal differentiation path that reads as flat-topped plateaus on sparse meters. Returns an empty
+//string when no solar source is configured, the caller treats that as "chip + chart hidden". Multi-source installs
+//collapse to the first entry today; full per-source aggregation across all solar sources lands in a follow-up.
+function resolvePvLiveEntity(defaults: EnergyDefaults): string
+{
+    if (defaults.solarStatRates.length > 0)
+    {
+        return defaults.solarStatRates[0];
+    }
+    if (defaults.solarStatEnergyFroms.length > 0)
+    {
+        return defaults.solarStatEnergyFroms[0];
+    }
+    return '';
+}
 
 //Default panel height above ground in metres when the user didn't
 //set a per-array `height`. 5 m matches the eaves of a single-storey
@@ -167,7 +186,7 @@ export function clearPvModuleCaches(): void
 //when the (entity, range) tuple matches the last successful fetch.
 export function refreshPv(host: PvHost): void
 {
-    const entity = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
+    const entity = resolvePvLiveEntity(host._energyDefaults);
 
     if (!entity || !host.hass)
     {
@@ -760,7 +779,7 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
     if (!hist) return null;
 
     //Classification, same logic as currentPvRate. Repeated inline so each helper is self-contained.
-    const entity   = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
+    const entity   = resolvePvLiveEntity(host._energyDefaults);
     const stateObj = host.hass?.states?.[entity];
     const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
     const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
@@ -852,7 +871,7 @@ export function currentPvRate(host: PvHost): PvRate | null
         return null;
     }
 
-    const entity   = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
+    const entity   = resolvePvLiveEntity(host._energyDefaults);
     const stateObj = host.hass?.states?.[entity];
     const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
     const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
