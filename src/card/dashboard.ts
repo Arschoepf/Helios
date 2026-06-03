@@ -199,9 +199,11 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const delta    = cardOffset - activeOffset;
     const absDelta = Math.abs(delta);
     const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
-    //Step values chosen so a 5-card stack reads as a fan around the focused front card. Tweaked together with the
-    //CSS perspective depth (1200 px) so the off-axis cards keep their face partly visible instead of edge-on.
-    const tx       = sign * (absDelta === 1 ? 180 : absDelta === 2 ? 280 : 0);
+    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the viewport: on desktop a card
+    //is 360 px wide and the ±1 sibling sits 105 % to the side, on mobile a card is 60 vw wide and the sibling
+    //slides the same proportional amount, no edge spill, no overlap with the centre card. The CSS perspective
+    //depth (1200 px) keeps the rotation visible regardless of the absolute card width.
+    const txPct    = sign * (absDelta === 1 ? 105 : absDelta === 2 ? 180 : 0);
     const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.82 : 0.62;
     const rotY     = sign * (absDelta === 1 ? 35 : absDelta === 2 ? 50 : 0);
     const zIdx     = 10 - absDelta;
@@ -221,7 +223,11 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
                        : cardOffset ===  1 ? 'Demain'
                        :                     'Après-demain';
 
-    const style = `transform: translate(-50%, -50%) translateX(${tx}px) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity};`;
+    //Transform order (right-to-left): rotateY first (sets the depth perspective), then scale (shrinks the rotated
+    //plane), then translateX as a percent of the SCALED bounding box, then the centring translate(-50%, -50%) on
+    //the parent. The percent translate is applied AFTER scale, which means a sibling at 105 % sits roughly one
+    //full card width to the side at its rendered (scaled) size, the right behaviour for the fan.
+    const style = `transform: translate(-50%, -50%) translateX(${txPct}%) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity};`;
 
     const t = pickTranslations(host.hass?.language);
     return html`

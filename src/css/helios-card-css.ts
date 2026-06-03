@@ -465,13 +465,17 @@ export const heliosCardStyles = css`
         max-height: 480px;
         perspective: 1200px;
         transform-style: preserve-3d;
+        /*  Clip the off-stage portion of the back cards on narrow viewports so a sibling that slides off the
+            right edge does not spill into the surrounding page chrome. The 3D transform itself stays unclipped
+            within the perspective box (transform-style: preserve-3d keeps the depth meaningful). */
+        overflow: hidden;
     }
     .dash-cf-card
     {
         position: absolute;
         top: 50%;
         left: 50%;
-        width: min(360px, 75vw);
+        width: min(340px, 60vw);
         height: min(480px, 65vh);
         border-radius: 18px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
