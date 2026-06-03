@@ -435,26 +435,36 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
 
             <section class="dash-cf-card-stats">
                 <div class="dash-cf-card-stat dash-cf-card-stat-produced">
-                    <span class="dash-cf-card-stat-label">Production</span>
-                    <span class="dash-cf-card-stat-value">
-                        ${formatLocalisedNumber(host.hass, stats.producedKwh, 1)}<small> kWh</small>
+                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-solar" aria-hidden="true">
+                        <ha-icon icon="mdi:solar-power-variant"></ha-icon>
                     </span>
-                    ${stats.refinedKwh !== null ? html`
-                        <span class="dash-cf-card-stat-refined">
-                            ≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)} kWh affinée
+                    <span class="dash-cf-card-stat-body">
+                        <span class="dash-cf-card-stat-label">Production</span>
+                        <span class="dash-cf-card-stat-value">
+                            ${formatLocalisedNumber(host.hass, stats.producedKwh, 1)} kWh
+                            ${stats.refinedKwh !== null ? html`
+                                <span class="dash-cf-card-stat-refined">
+                                    (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
+                                </span>
+                            ` : nothing}
                         </span>
-                    ` : nothing}
+                    </span>
                 </div>
                 <div class="dash-cf-card-stat dash-cf-card-stat-forecast">
-                    <span class="dash-cf-card-stat-label">Prévision</span>
-                    <span class="dash-cf-card-stat-value">
-                        ${formatLocalisedNumber(host.hass, stats.forecastKwh, 1)}<small> kWh</small>
+                    <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-forecast" aria-hidden="true">
+                        <ha-icon icon="mdi:crystal-ball"></ha-icon>
                     </span>
-                    ${stats.refinedKwh !== null ? html`
-                        <span class="dash-cf-card-stat-refined">
-                            ≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)} kWh affinée
+                    <span class="dash-cf-card-stat-body">
+                        <span class="dash-cf-card-stat-label">Prévision</span>
+                        <span class="dash-cf-card-stat-value">
+                            ${formatLocalisedNumber(host.hass, stats.forecastKwh, 1)} kWh
+                            ${stats.refinedKwh !== null ? html`
+                                <span class="dash-cf-card-stat-refined">
+                                    (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
+                                </span>
+                            ` : nothing}
                         </span>
-                    ` : nothing}
+                    </span>
                 </div>
             </section>
         </article>

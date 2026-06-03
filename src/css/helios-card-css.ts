@@ -609,13 +609,14 @@ export const heliosCardStyles = css`
     }
 
     /*  Tight section view (helios-card container < 600 px): swap the long date for the short day + 3-letter
-        month format and drop the "Aujourd'hui / Hier / ..." chip so the bandeau still fits on one row without
-        truncation. */
+        month format, drop the "Aujourd'hui / Hier / ..." chip, AND stack the Production / Prévision tiles
+        vertically instead of side by side so each tile keeps its title + value readable. */
     @container helios-card (max-width: 600px)
     {
         .dash-cf-card-date-long  { display: none;   }
         .dash-cf-card-date-short { display: inline; }
         .dash-cf-card-day-chip   { display: none;   }
+        .dash-cf-card-stats      { flex-direction: column; }
     }
 
     /*  First content block under the bandeau: Production on the left, Prévision on the right. Mushroom-card
@@ -631,52 +632,84 @@ export const heliosCardStyles = css`
         gap: 8px;
         padding: 0 8px;
     }
+    /*  HA frontend tile style: rounded-square coloured icon badge on the left, title + value stacked on the
+        right. Icon background = colour token at low opacity, icon glyph = the same token at full opacity, so
+        the badge follows the active theme automatically and reads like every other tile in the HA dashboard.
+        Card itself stays neutral (--secondary-background-color), the colour comes from the icon badge only. */
     .dash-cf-card-stat
     {
         flex: 1;
         display: flex;
-        flex-direction: column;
-        gap: 3px;
-        padding: 12px;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 12px;
         border-radius: 14px;
         background: var(--secondary-background-color, var(--ha-card-background, rgba(255, 255, 255, 0.04)));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
         min-width: 0;
     }
+    .dash-cf-card-stat-icon
+    {
+        width: 36px;
+        height: 36px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        line-height: 0;
+    }
+    .dash-cf-card-stat-icon ha-icon
+    {
+        --mdc-icon-size: 20px;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    /*  Production = solar colour palette (HA Energy --energy-solar-color), Prévision = HA info / accent so
+        the two tiles read as "actual" vs "predicted" through colour alone. */
+    .dash-cf-card-stat-icon-solar
+    {
+        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 18%, transparent);
+        color: var(--energy-solar-color, #ff9800);
+    }
+    .dash-cf-card-stat-icon-forecast
+    {
+        background: color-mix(in srgb, var(--info-color, #039be5) 18%, transparent);
+        color: var(--info-color, #039be5);
+    }
+    .dash-cf-card-stat-body
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+    }
     .dash-cf-card-stat-label
     {
-        font-size: 10px;
-        font-weight: 700;
-        letter-spacing: 0.6px;
-        text-transform: uppercase;
-        opacity: 0.65;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--primary-text-color, #ffffff);
+        line-height: 1.2;
     }
     .dash-cf-card-stat-value
     {
-        font-size: clamp(15px, 2.6cqw, 20px);
-        font-weight: 800;
-        line-height: 1.15;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        line-height: 1.25;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-    }
-    .dash-cf-card-stat-value small
-    {
-        font-size: 0.6em;
-        font-weight: 600;
-        opacity: 0.7;
-        margin-left: 1px;
     }
     .dash-cf-card-stat-refined
     {
-        font-size: 11px;
         font-weight: 500;
-        opacity: 0.65;
-        margin-top: 2px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+        opacity: 0.75;
+        margin-left: 2px;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
