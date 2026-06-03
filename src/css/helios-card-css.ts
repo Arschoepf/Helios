@@ -464,7 +464,7 @@ export const heliosCardStyles = css`
         height: 100%;
         max-height: 440px;
         perspective: 1200px;
-        /*  No `transform-style: preserve-3d` here on purpose: with `flat` (the default), the children get the
+        /*  No transform-style: preserve-3d here on purpose: with the default flat value, the children get the
             perspective rendering from their parent but z-index still drives their stacking order, so the front
             card always sits cleanly on top of the rotated siblings. Preserve-3d would override z-index with the
             actual 3D position which made the back cards bleed through the centre on narrow viewports. */
