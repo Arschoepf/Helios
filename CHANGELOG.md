@@ -33,6 +33,28 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Multi-source PV history + LTS aggregation + multi-bank battery live (Phase 2 / 2)
+
+Completes the multi-source story started in alpha.29:
+
+- `fetchPvHistory` now accepts the full array of wired solar entities, fires a single WS round-trip with every
+  entity id, parses each per-entity history, and aggregates via last-known-carry-forward at the union of
+  timestamps. The cache key embeds every entity (sorted) so adding / removing a source invalidates the previous
+  snapshot. The chart curve + scrub-past now reflect the SUM, matching the live chip + tooltip + dashboard
+  headline that alpha.29 fixed.
+- `fetchPvStatistics` follows the same shape for both the 5-day hourly calibration LTS and the 30-day 5-min
+  trainer LTS. The calibration ratio is learned against the summed predicted-vs-actual instead of the
+  first-entity share, and the shading trainer trains on total production.
+- `_pvHistory` tail-extension is restored in multi-source mode (it was gated off in alpha.29 to keep the
+  single-entity historical tail visually consistent), since `_pvHistory` now carries the summed series.
+- Battery multi-bank live SoC averages across every `stat_soc` entity, mirroring the HA frontend logic in
+  `hui-energy-distribution-card.ts:213-225`. Battery multi-bank live power sums across every wired source with
+  per-entity sign-flips applied via `invertedRateEntities` before the sum, so a mixed wiring (standard sign on
+  bank A, inverted on bank B) still aggregates correctly.
+
+Outstanding for a follow-up: battery multi-bank HISTORY aggregation (scrub-past on multi-bank installs still
+walks the first bank's series until the recorder + interpolation refactor lands for `fetchBatteryHistory`).
+
 ### Multi-source PV live aggregation (Phase 1 / 2)
 
 Installs with several solar sources declared in HA Energy (typically split E / W arrays each declared as its own

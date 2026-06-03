@@ -226,12 +226,19 @@ export function refreshPv(host: PvHost): void
         let liveTs:       number        = 0;
         if (isMultiEntity)
         {
-            //Sum every configured live entity at its current state. Watts is the canonical unit because
-            //pvNormalizeToWatts collapses every per-source declared unit (W / kW / MW) into a single scale; the chip
-            //+ tooltip + dashboard already know how to format from W. Skip entries that fail to parse so a single
-            //unavailable sensor doesn't wipe out the aggregate.
-            let sumW       = 0;
-            let anyValid   = false;
+            //Sum the raw value across every configured live entity and keep the unit of the first valid sample. The
+            //downstream consumer (currentPvRate / pvRateAtTime) classifies cumulative vs measurement off `_pvUnit` so
+            //a kWh-only HA Energy install (4 stat_energy_from sources, no stat_rate) lands as a summed kWh stream
+            //and the buffer differentiation derives total W exactly as it does for a single source; a stat_rate-on-
+            //every-source install lands as a summed W stream and the chip skips the buffer path. Skipping
+            //pvNormalizeToWatts on the sum avoids the kWh → 0 regression that Phase 1 alpha.29 introduced. The unit
+            //is taken from the first valid entity, multi-source installs where the per-source units disagree are an
+            //HA config error (one source in W, another in kW would mis-sum), so we don't reach for a normalisation
+            //helper, the single-source assumption that every Helios install respected pre-multi-source still holds
+            //inside a single HA Energy battery / solar / grid block.
+            let sumValue  = 0;
+            let firstUnit = '';
+            let anyValid  = false;
             for (const id of liveEntities)
             {
                 const so = host.hass.states?.[id];
@@ -244,8 +251,11 @@ export function refreshPv(host: PvHost): void
                 {
                     continue;
                 }
-                const u = String(so.attributes?.unit_of_measurement ?? '');
-                sumW += pvNormalizeToWatts(v, u);
+                if (!firstUnit)
+                {
+                    firstUnit = String(so.attributes?.unit_of_measurement ?? '');
+                }
+                sumValue += v;
                 anyValid = true;
                 const ts = so.last_updated
                     ? new Date(so.last_updated).getTime()
@@ -257,8 +267,8 @@ export function refreshPv(host: PvHost): void
             }
             if (anyValid)
             {
-                nextValue = sumW;
-                nextUnit  = 'W';
+                nextValue = sumValue;
+                nextUnit  = firstUnit;
             }
         }
         else
@@ -306,16 +316,12 @@ export function refreshPv(host: PvHost): void
             //and the arrays grew unbounded. Push mutates the existing arrays (Lit re-renders are driven by the live state
             //assignment above, not by `_pvHistory` identity), and we trim entries that drift before `_timeRange.start` so the
             //tail does not balloon past the visible window.
-            //
-            //Multi-source caveat: `_pvHistory` carries the primary entity's history until the recorder + interpolation
-            //refactor lands. Appending the multi-entity SUM here would create a visible jump where the historical
-            //single-entity tail meets the summed live tip, so we only extend the tail in single-entity mode.
             const hist = host._pvHistory;
-            if (hist && !isMultiEntity)
+            if (hist)
             {
                 const lastIdx = hist.times.length - 1;
                 const lastTs  = lastIdx >= 0 ? hist.times[lastIdx].getTime() : 0;
-                if (ts > lastTs)
+                if (ts > lastTs && nextValue !== null)
                 {
                     hist.times.push(new Date(ts));
                     hist.values.push(nextValue);
@@ -382,6 +388,12 @@ export function refreshPv(host: PvHost): void
     //orders of magnitude faster. Raw only needs to cover the live
     //tail accurately enough for the tooltip and the head of the
     //chart curve.
+    //Hoisted out of the `_pvFetching` block so the calibration + trainer paths below see the same entity set for
+    //their cache keys. A drift between the raw / LTS keys would re-fetch one path on every refresh, defeating the
+    //hourly / 5-min cadence guarantees.
+    const sortedLive   = [...liveEntities].sort();
+    const fetchKeyPart = sortedLive.length > 0 ? sortedLive.join(',') : entity;
+
     const RAW_WINDOW_H = 6;
     if (!host._pvFetching)
     {
@@ -402,7 +414,11 @@ export function refreshPv(host: PvHost): void
         //the trainer doesn't need it and the extra entity in the WS payload would be a waste of HA recorder bandwidth. The fetch
         //key includes the SoC entity id so swapping it forces a re-fetch on the next refresh.
         const battSocId = batterySocEntityForInhibit(host.config, host._energyDefaults);
-        const fullFetchKey = `${entity}@${rangeKey}`
+        //Multi-source aggregation: the fetch key embeds every wired entity id so adding / removing a source flips the
+        //key and invalidates the previous single- or differently-sourced cache entry. Sort to make the key stable
+        //regardless of HA Energy storage order. The caller (`fetchPvHistory`) now consumes the array directly and
+        //sums the per-entity histories via LKCF at the union of timestamps.
+        const fullFetchKey = `${fetchKeyPart}@${rangeKey}`
             + (battSocId ? '|bsoc:' + battSocId : '');
         if (fullFetchKey !== host._pvFetchKey)
         {
@@ -419,16 +435,18 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                fetchPvHistory(host, entity, fetchStart, fetchEnd, battSocId, fullFetchKey);
+                const fetchIds = sortedLive.length > 0 ? sortedLive : [entity];
+                fetchPvHistory(host, fetchIds, fetchStart, fetchEnd, battSocId, fullFetchKey);
             }
         }
     }
 
-    //Hourly LTS for calibration (5 days).
+    //Hourly LTS for calibration (5 days). Multi-source aggregation matches the raw-history path so the calibration
+    //ratio is learned against the SUMMED predicted-vs-actual instead of the first-entity-only fraction.
     if (!host._pvCalibStatsFetching)
     {
         const calibStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
-        const calibKey   = `${entity}@h|${calibStart.getTime()}|${fetchEnd.getTime()}`;
+        const calibKey   = `${fetchKeyPart}@h|${calibStart.getTime()}|${fetchEnd.getTime()}`;
         if (calibKey !== host._pvCalibStatsFetchKey)
         {
             host._pvCalibStatsFetchKey = calibKey;
@@ -439,16 +457,18 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                fetchPvStatistics(host, entity, calibStart, fetchEnd, 'hour', 'calib', calibKey);
+                const calibIds = sortedLive.length > 0 ? sortedLive : [entity];
+                fetchPvStatistics(host, calibIds, calibStart, fetchEnd, 'hour', 'calib', calibKey);
             }
         }
     }
 
-    //5-min LTS for shading-map trainer (30 days).
+    //5-min LTS for shading-map trainer (30 days). Same multi-source aggregation as the calib path so the trainer
+    //sees total production rather than the first-entity share.
     if (!host._pvTrainerStatsFetching)
     {
         const trainerStart = new Date(today0.getTime() - 30 * 24 * HOUR_MS);
-        const trainerKey   = `${entity}@5m|${trainerStart.getTime()}|${fetchEnd.getTime()}`;
+        const trainerKey   = `${fetchKeyPart}@5m|${trainerStart.getTime()}|${fetchEnd.getTime()}`;
         if (trainerKey !== host._pvTrainerStatsFetchKey)
         {
             host._pvTrainerStatsFetchKey = trainerKey;
@@ -462,9 +482,10 @@ export function refreshPv(host: PvHost): void
                 //Defer to browser idle time so the user-facing fetches (raw PV history + calib stats) land first and the chart paints
                 //quickly. The trainer feeds the shading-map heuristic which the engine can rebuild from any non-empty sample stream, so
                 //the trainer is effectively a background optimisation, not a blocker for the chip / chart render.
+                const trainerIds = sortedLive.length > 0 ? sortedLive : [entity];
                 scheduleIdle(() =>
                 {
-                    fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
+                    fetchPvStatistics(host, trainerIds, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
                 });
             }
         }
@@ -598,20 +619,78 @@ export function valueAtMs(series: PvHistory | null, ms: number): number | null
 }
 
 
+//Last-known-carry-forward aggregator. Walks the union of all per-entity timestamps and at each tick reads each
+//entity's most recent sample at or before the cursor, then sums. The cursor monotonicity (every series is sorted by
+//time) makes the walk O((entities + timestamps) total) instead of O(entities * timestamps). Works equally well for
+//power sensors (instantaneous reading at each tick) and cumulative kWh sensors (sum of cumulative counters is also
+//cumulative; the downstream differentiation derives total power from neighbour-pair deltas).
+function aggregatePvHistoriesLkcf(perEntity: PvHistory[]): PvHistory
+{
+    if (perEntity.length === 0)
+    {
+        return { times: [], values: [] };
+    }
+    if (perEntity.length === 1)
+    {
+        return perEntity[0];
+    }
+    //Union of all timestamps, sorted ascending. Set + sort beats a merge-of-sorted because the entity histories can
+    //carry tens of thousands of samples each on 1 Hz sensors and the explicit Set dedupes coincident timestamps.
+    const tsSet = new Set<number>();
+    for (const h of perEntity)
+    {
+        for (const t of h.times)
+        {
+            tsSet.add(t.getTime());
+        }
+    }
+    const sortedTs = Array.from(tsSet).sort((a, b) => a - b);
+    //One walking index per entity; advances monotonically through the sorted timestamps.
+    const cursors = new Array<number>(perEntity.length).fill(-1);
+    const summed:  number[] = [];
+    for (const ts of sortedTs)
+    {
+        let sum = 0;
+        for (let i = 0; i < perEntity.length; i++)
+        {
+            const h = perEntity[i];
+            //Advance cursor while the next sample is at or before the cursor timestamp.
+            let c = cursors[i];
+            while (c + 1 < h.times.length && h.times[c + 1].getTime() <= ts)
+            {
+                c++;
+            }
+            cursors[i] = c;
+            if (c >= 0 && isFinite(h.values[c]))
+            {
+                sum += h.values[c];
+            }
+        }
+        summed.push(sum);
+    }
+    return {
+        times:  sortedTs.map(t => new Date(t)),
+        values: summed,
+    };
+}
+
+
 //Pull a historical series from HA's `history/history_during_period` WebSocket command, coerce the heterogeneous payload into parallel times[] /
 //values[] arrays, and snapshot the fetch outcome for `window.heliosStats()`. Fires off `host._pvFetching` for the duration; the gate in refreshPv
 //prevents overlapping calls. When `batterySocId` is non-null we fold it into the same WS request and store the parsed series on
-//`host._batteryHistory`, the shading-map trainer scans it to skip buckets where SoC reached the cutoff.
+//`host._batteryHistory`, the shading-map trainer scans it to skip buckets where SoC reached the cutoff. Accepts an
+//array of PV entity ids so multi-source HA Energy installs (split E / W arrays declared as separate solar sources)
+//land an entity-summed `_pvHistory` instead of the previous first-entry-only collapse.
 export async function fetchPvHistory(
     host: PvHost,
-    entityId: string,
+    entityIds: string[],
     start: Date,
     end: Date,
     batterySocId: string | null = null,
     cacheKey: string = '',
 ): Promise<void>
 {
-    if (!host.hass?.callWS)
+    if (!host.hass?.callWS || entityIds.length === 0)
     {
         return;
     }
@@ -629,14 +708,14 @@ export async function fetchPvHistory(
             return;
         }
 
-        const entityIds = batterySocId
-            ? [entityId, batterySocId]
-            : [entityId];
+        const wsEntityIds = batterySocId
+            ? [...entityIds, batterySocId]
+            : [...entityIds];
         const result: any = await callWSWithTimeout<any>(host.hass, {
             type:                     'history/history_during_period',
             start_time:               start.toISOString(),
             end_time:                 fetchEnd.toISOString(),
-            entity_ids:               entityIds,
+            entity_ids:               wsEntityIds,
             minimal_response:         true,
             no_attributes:            true,
             //Lets HA drop bucket-internal duplicates server-side. On a Victron MPPT at >1 Hz that trims roughly 30-70 % of the rows
@@ -644,24 +723,31 @@ export async function fetchPvHistory(
             significant_changes_only: true,
         });
 
-        const arr: any[] = (result && result[entityId]) ?? [];
-        const parsed = parseHistoryEntries(arr);
-        const times = parsed.times;
-        const values = parsed.values;
+        //Per-entity parse, then LKCF aggregate across the union of timestamps. Single-source installs go through the
+        //fast path inside `aggregatePvHistoriesLkcf` (one history, returned as-is) so the cost stays at the existing
+        //single-entry parse.
+        const perEntity: PvHistory[] = [];
+        let totalRawEntries = 0;
+        for (const id of entityIds)
+        {
+            const arr: any[] = (result && result[id]) ?? [];
+            totalRawEntries += arr.length;
+            perEntity.push(parseHistoryEntries(arr));
+        }
+        const history: PvHistory = aggregatePvHistoriesLkcf(perEntity);
 
         const batteryHistory: PvHistory | null = batterySocId
             ? parseHistoryEntries((result && result[batterySocId]) ?? [])
             : null;
         host._batteryHistory = batteryHistory;
 
-        const history: PvHistory = { times, values };
         host._pvHistory = history;
         //Snapshot the fetch outcome so `window.heliosStats()` can
         //surface it without us logging on every fetch.
         const diagnostics =
         {
-            rawEntries: arr.length,
-            samples:    times.length,
+            rawEntries: totalRawEntries,
+            samples:    history.times.length,
             windowH:    Number(((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1))
         };
         host._pvHistoryDiagnostics = diagnostics;
@@ -715,7 +801,7 @@ export async function fetchPvHistory(
 //entity is not LTS-tracked HA returns an empty array; we surface that as an empty `PvHistory` and let the consumer fall back to `_pvHistory`.
 export async function fetchPvStatistics(
     host: PvHost,
-    entityId: string,
+    entityIds: string[],
     start: Date,
     end: Date,
     period: '5minute' | 'hour' | 'day' | 'week' | 'month',
@@ -723,7 +809,7 @@ export async function fetchPvStatistics(
     cacheKey: string = '',
 ): Promise<void>
 {
-    if (!host.hass?.callWS)
+    if (!host.hass?.callWS || entityIds.length === 0)
     {
         return;
     }
@@ -748,7 +834,7 @@ export async function fetchPvStatistics(
             type:           'recorder/statistics_during_period',
             start_time:     start.toISOString(),
             end_time:       fetchEnd.toISOString(),
-            statistic_ids:  [entityId],
+            statistic_ids:  entityIds,
             period,
             //Request both `mean` and `state`. Power sensors populate `mean`, cumulative-energy sensors populate `state`. The parser
             //below prefers `mean` and falls back to `state`, so a single round-trip covers both wirings without depending on the
@@ -759,46 +845,51 @@ export async function fetchPvStatistics(
             units:          { energy: 'kWh', power: 'W' },
         });
 
-        const arr: any[] = (result && result[entityId]) ?? [];
-        const times:  Date[]   = [];
-        const values: number[] = [];
-
-        for (const item of arr)
+        //Per-entity bucket parse, then LKCF aggregation over the union of bucket midpoints. LTS buckets typically
+        //align across same-period entities (every entity has a 14:00 hour bucket etc.), in which case the LKCF
+        //walker collapses to a clean per-bucket sum; on misaligned series the carry-forward keeps the per-source
+        //contribution stable across gaps.
+        const perEntity: PvHistory[] = [];
+        for (const id of entityIds)
         {
-            //Bucket boundaries arrive as ISO 8601 strings or millisecond epochs depending on the HA version; coerce both.
-            const startRaw = item?.start;
-            const endRaw   = item?.end;
-            const startMs  = parseStatBoundary(startRaw);
-            const endMs    = parseStatBoundary(endRaw);
-            if (startMs === null)
+            const arr: any[] = (result && result[id]) ?? [];
+            const times:  Date[]   = [];
+            const values: number[] = [];
+            for (const item of arr)
             {
-                continue;
+                const startRaw = item?.start;
+                const endRaw   = item?.end;
+                const startMs  = parseStatBoundary(startRaw);
+                const endMs    = parseStatBoundary(endRaw);
+                if (startMs === null)
+                {
+                    continue;
+                }
+                let valueRaw: unknown = item?.mean;
+                if (valueRaw === null || valueRaw === undefined)
+                {
+                    valueRaw = item?.state;
+                }
+                if (valueRaw === null || valueRaw === undefined)
+                {
+                    continue;
+                }
+                const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
+                if (!isFinite(v))
+                {
+                    continue;
+                }
+                //Bucket midpoint anchor for both flavours. Aligns with the trapezoidal integration in `calibration.ts` and
+                //`shadingTrainer.ts`. Mid-bucket attribution averages out across the day boundary for cumulative sensors when the
+                //calibration's cross-day guard tolerates the trailing slice.
+                const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
+                times.push(new Date(anchorMs));
+                values.push(v);
             }
-            //Prefer `mean` (populated for power / measurement entities); fall back to `state` (populated for cumulative-energy
-            //entities). Both buckets null is treated as a gap and skipped silently.
-            let valueRaw: unknown = item?.mean;
-            if (valueRaw === null || valueRaw === undefined)
-            {
-                valueRaw = item?.state;
-            }
-            if (valueRaw === null || valueRaw === undefined)
-            {
-                continue;
-            }
-            const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
-            if (!isFinite(v))
-            {
-                continue;
-            }
-            //Bucket midpoint anchor for both flavours. Aligns with the trapezoidal integration in `calibration.ts` and
-            //`shadingTrainer.ts`. Mid-bucket attribution averages out across the day boundary for cumulative sensors when the
-            //calibration's cross-day guard tolerates the trailing slice.
-            const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
-            times.push(new Date(anchorMs));
-            values.push(v);
+            perEntity.push({ times, values });
         }
 
-        const stats: PvHistory = { times, values };
+        const stats: PvHistory = aggregatePvHistoriesLkcf(perEntity);
         host[targetSlot] = stats;
         if (cacheKey)
         {

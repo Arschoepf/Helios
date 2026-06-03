@@ -158,31 +158,67 @@ export function refreshBattery(host: BatteryHost): void
     //Live SoC + power readouts. SoC clamped to [0, 100] because some BMS entities briefly report 100.5 % during absorption or dip
     //negative around calibration, neither of which is meaningful to the user. Power normalised to watts so downstream consumers can
     //work with a single unit regardless of how the source reports.
-    let nextSoc:  number | null = null;
-    if (socEntity)
+    //
+    //Multi-bank SoC averaging mirrors the HA frontend logic
+    //(`src/panels/lovelace/cards/energy/hui-energy-distribution-card.ts:213-225`): plain arithmetic mean of every
+    //wired `stat_soc` value, NaN entries filtered out, single-bank installs collapse to the single value. The
+    //capacity-weighted average from HA core PR #172817 lands once the field exists in the storage schema.
+    let nextSoc: number | null = null;
+    const socEntities = host._energyDefaults.batteryStatSocs;
+    if (socEntities.length > 0)
     {
-        const so = host.hass.states?.[socEntity];
-        const v  = so ? parseFloat(so.state) : NaN;
-        if (isFinite(v))
+        let sum = 0;
+        let count = 0;
+        for (const id of socEntities)
         {
-            nextSoc = Math.max(0, Math.min(100, v));
+            const so = host.hass.states?.[id];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (isFinite(v))
+            {
+                sum   += v;
+                count += 1;
+            }
+        }
+        if (count > 0)
+        {
+            nextSoc = Math.max(0, Math.min(100, sum / count));
         }
     }
-    let nextPower:  number | null = null;
-    let nextUnit:   string        = '';
-    if (powerEntity)
+    //Multi-bank power summation: every `power_config.stat_rate` (or its `stat_energy_from` / `stat_energy_to`
+    //fallback) declared on the HA Energy battery sources contributes to the chip. Sign-flips are applied per entity
+    //via the `invertedRateEntities` list before the sum so a mixed wiring (standard sign on bank A, inverted on bank
+    //B) still aggregates correctly. Single-bank installs go through the same loop and collapse to the single value.
+    let nextPower: number | null = null;
+    let nextUnit:  string        = '';
+    const powerEntities = host._energyDefaults.batteryStatRates.length > 0
+        ? host._energyDefaults.batteryStatRates
+        : host._energyDefaults.batteryStatEnergyFroms.length > 0
+            ? host._energyDefaults.batteryStatEnergyFroms
+            : host._energyDefaults.batteryStatEnergyTos;
+    if (powerEntities.length > 0)
     {
-        const so = host.hass.states?.[powerEntity];
-        const v  = so ? parseFloat(so.state) : NaN;
-        if (isFinite(v))
+        let sum = 0;
+        let anyValid = false;
+        for (const id of powerEntities)
         {
-            const unit    = String(so.attributes?.unit_of_measurement ?? '');
-            const watts   = pvNormalizeToWatts(v, unit);
+            const so = host.hass.states?.[id];
+            const v  = so ? parseFloat(so.state) : NaN;
+            if (!isFinite(v))
+            {
+                continue;
+            }
+            const unit  = String(so.attributes?.unit_of_measurement ?? '');
+            const watts = pvNormalizeToWatts(v, unit);
             //HA Energy `power_config.stat_rate_inverted` flips the sign so positive reads as charging. The dashboard
             //carries the inversion flag alongside the entity id; apply it here so the chip + leader + scrub buffer all
             //see the canonical "positive = charging" convention regardless of how the user wired the source.
-            const inverted = host._energyDefaults.invertedRateEntities.includes(powerEntity);
-            nextPower = inverted ? -watts : watts;
+            const inverted = host._energyDefaults.invertedRateEntities.includes(id);
+            sum += inverted ? -watts : watts;
+            anyValid = true;
+        }
+        if (anyValid)
+        {
+            nextPower = sum;
             nextUnit  = 'W';
         }
     }
