@@ -35,6 +35,12 @@ export interface EnergyDefaults
     //chip + vessel visualisation. Multi-bank weighting by capacity is no longer supported, HA Energy has no concept of
     //per-source capacity.
     batteryStatSocs:        string[];
+    //Entity ids whose raw value reads with the inverse sign convention from the rest of the card (the user wired the
+    //source through `power_config.stat_rate_inverted` instead of `stat_rate`, or through `stat_rate_from` for grid /
+    //`stat_rate_to` for battery, where the slot's directional meaning flips the sign vs the card's "positive = charging
+    /// positive = import" convention). Consumers (refreshBattery, refreshGrid) flip the sign at sample time so the
+    //downstream chips / leaders / scrub buffers see the canonical convention.
+    invertedRateEntities:   string[];
 }
 
 
@@ -49,6 +55,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     batteryStatEnergyFroms: [],
     batteryStatEnergyTos:   [],
     batteryStatSocs:        [],
+    invertedRateEntities:   [],
 };
 
 
@@ -278,6 +285,7 @@ export function parseEnergyPrefs(prefs: {
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
         batteryStatSocs:        [],
+        invertedRateEntities:   [],
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -314,10 +322,22 @@ export function parseEnergyPrefs(prefs: {
             {
                 out.gridStatEnergyTos.push(exp);
             }
-            const rate = pickFirstString(src['stat_rate']) ?? pickPowerConfigRate(src['power_config']);
-            if (rate)
+            const directRate = pickFirstString(src['stat_rate']);
+            if (directRate)
             {
-                out.gridStatRates.push(rate);
+                out.gridStatRates.push(directRate);
+            }
+            else
+            {
+                const slot = pickPowerConfigRate(src['power_config']);
+                if (slot)
+                {
+                    out.gridStatRates.push(slot.entity);
+                    if (slot.inverted)
+                    {
+                        out.invertedRateEntities.push(slot.entity);
+                    }
+                }
             }
         }
         else if (type === 'battery')
@@ -337,10 +357,14 @@ export function parseEnergyPrefs(prefs: {
             {
                 out.batteryStatSocs.push(soc);
             }
-            const rate = pickPowerConfigRate(src['power_config']);
-            if (rate)
+            const slot = pickPowerConfigRate(src['power_config']);
+            if (slot)
             {
-                out.batteryStatRates.push(rate);
+                out.batteryStatRates.push(slot.entity);
+                if (slot.inverted)
+                {
+                    out.invertedRateEntities.push(slot.entity);
+                }
             }
         }
     }
@@ -348,23 +372,37 @@ export function parseEnergyPrefs(prefs: {
 }
 
 
-//Resolve `power_config.stat_rate` (preferred, signed convention) with a fall-back through the paired form. Returns null
-//when the source has no power_config block or none of the slots carry a usable entity id. `stat_rate_to` is the second
-//half of a paired sensor wiring (typical Victron / SolarEdge multi-MQTT install where charge and discharge come from
-//separate power sensors); we return the `_from` half to stay on the legacy single-entity contract, the trainer + chip
-//path remains correct since both members of the pair report the same magnitude.
-function pickPowerConfigRate(raw: unknown): string | null
+//Resolve a `power_config` slot. Returns `{ entity, inverted }` so the consumer can flip the sign at sample time when
+//the user wired the source through `stat_rate_inverted` (HA Energy's own UI toggle). Returns null when the block is
+//absent or none of the slots carry a usable entity id.
+function pickPowerConfigRate(raw: unknown): { entity: string; inverted: boolean } | null
 {
     if (!raw || typeof raw !== 'object')
     {
         return null;
     }
     const pc = raw as Record<string, unknown>;
-    return pickFirstString(pc['stat_rate'])
-        ?? pickFirstString(pc['stat_rate_inverted'])
-        ?? pickFirstString(pc['stat_rate_from'])
-        ?? pickFirstString(pc['stat_rate_to'])
-        ?? null;
+    const direct = pickFirstString(pc['stat_rate']);
+    if (direct)
+    {
+        return { entity: direct, inverted: false };
+    }
+    const inverted = pickFirstString(pc['stat_rate_inverted']);
+    if (inverted)
+    {
+        return { entity: inverted, inverted: true };
+    }
+    const fromEntity = pickFirstString(pc['stat_rate_from']);
+    if (fromEntity)
+    {
+        return { entity: fromEntity, inverted: false };
+    }
+    const toEntity = pickFirstString(pc['stat_rate_to']);
+    if (toEntity)
+    {
+        return { entity: toEntity, inverted: false };
+    }
+    return null;
 }
 
 

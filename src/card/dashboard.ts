@@ -605,11 +605,13 @@ export function renderDashTodaySection(
     //the predicted peak (highest forecast bin). In the morning the
     //actual one is null until production crosses ~50 W; in that
     //case the row falls back to showing only "PIC PRÉVU".
+    const haLanguage = (host.hass?.language as string | undefined) || undefined;
+    const peakTimeFormatter = new Intl.DateTimeFormat(haLanguage, {
+        hour: '2-digit', minute: '2-digit',
+    });
     const formatPeakTime = (hourTs: number | null): string =>
         hourTs !== null
-            ? new Date(hourTs + HOUR_MS / 2).toLocaleTimeString([], {
-                hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-            })
+            ? peakTimeFormatter.format(new Date(hourTs + HOUR_MS / 2))
             : '';
     const peakActualTime    = formatPeakTime(data.peakActualHourTs);
     const peakActualValue   = formatPvWatts(host.hass, data.peakActualW);
@@ -914,9 +916,9 @@ export function renderDashTodayChart(
         hoverPredictedKwh = interpolateKwhAt(cum.predictedSamples, hoverTs);
         hoverX            = xFor(hoverTs);
         hoverFracX        = (hoverX / W) * 100;
-        hoverTimeLabel    = new Date(hoverTs).toLocaleTimeString([], {
-            hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-        });
+        hoverTimeLabel    = new Intl.DateTimeFormat((host.hass?.language as string | undefined) || undefined, {
+            hour: '2-digit', minute: '2-digit',
+        }).format(new Date(hoverTs));
     }
     const showHover = hoverActualKwh !== null || hoverPredictedKwh !== null;
 
@@ -1130,13 +1132,13 @@ export function formatPvWatts(hass: any, w: number): string
 {
     if (!isFinite(w) || w < 0)
     {
-        return '0 W';
+        return formatLocalisedNumber(hass, 0, 0, true) + ' W';
     }
-    if (w >= 1000) return formatLocalisedNumber(hass, w / 1000, 2)
+    if (w >= 1000)
     {
-        + ' kW';
+        return formatLocalisedNumber(hass, w / 1000, 2) + ' kW';
     }
-    return Math.round(w) + ' W';
+    return formatLocalisedNumber(hass, Math.round(w), 0, true) + ' W';
 }
 
 
@@ -1216,9 +1218,9 @@ export function renderDashTomorrowSection(
     const HOUR_MS = 3_600_000;
 
     const peakTimeLabel = data.peakHourTs !== null
-        ? new Date(data.peakHourTs + HOUR_MS / 2).toLocaleTimeString([], {
-            hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
-        })
+        ? new Intl.DateTimeFormat((host.hass?.language as string | undefined) || undefined, {
+            hour: '2-digit', minute: '2-digit',
+        }).format(new Date(data.peakHourTs + HOUR_MS / 2))
         : '';
 
     //Tomorrow is a pure forecast so its big stat uses the same lighter PV shade as the today section's "prévu" value, so the user reads both at a

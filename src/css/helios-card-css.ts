@@ -1533,31 +1533,30 @@ export const heliosCardStyles = css`
         bottom border is dropped so the seam between the tab and the
         tooltip reads as one continuous frame. -1 px margin pulls the
         tab down onto the tooltip's top border, sharing the 1 px line. */
-    /*  Compact LIVE chip pinned to the top-right corner of the scrub tooltip when the pointer enters the magnet-snap
-        zone. Outline recipe: transparent backdrop + 1 px theme primary border + primary-colour glyph + label, so the
-        chip stays readable across light + dark themes without ever clashing with the tooltip's own background. The
-        dot pulses to mirror the HA Energy dashboard's live-data vocabulary. */
+    /*  LIVE chip floated at the top-right of the scrub tooltip, sharing the tooltip's own 6 px / 8 px padding so the
+        chip baseline matches the time row. Outline recipe: transparent backdrop + 1 px theme primary border +
+        primary-colour glyph + label, so the chip reads consistently across light + dark themes without ever clashing
+        with the tooltip background. The dot pulses to mirror the HA Energy dashboard's live-data vocabulary. */
     .tb-hover-tooltip-live-chip
     {
         position: absolute;
-        top: 3px;
-        right: 3px;
+        top: 6px;
+        right: 8px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 2px;
-        height: 12px;
-        padding: 0 4px 0 3px;
+        gap: 4px;
+        padding: 1px 6px 1px 4px;
         box-sizing: border-box;
         background: transparent;
         color: var(--primary-color, #03a9f4);
         border: 1px solid var(--primary-color, #03a9f4);
-        border-radius: 2px;
-        font-size: 8px;
+        border-radius: 3px;
+        font-size: inherit;
         font-weight: 700;
         letter-spacing: 0.4px;
         text-transform: uppercase;
-        line-height: 1;
+        line-height: 1.25;
         /*  Fade in / out instead of pop in / out: render the chip in every tooltip pass and toggle visibility via
             opacity + transform so the entry / exit transition can play in both directions. The small translateY makes
             the appearance read as "settling into place" rather than a flat fade. */
@@ -1573,7 +1572,7 @@ export const heliosCardStyles = css`
     }
     .tb-hover-tooltip-live-chip-dot
     {
-        --mdc-icon-size: 9px;
+        --mdc-icon-size: 12px;
         color: inherit;
         display: inline-flex;
         align-items: center;

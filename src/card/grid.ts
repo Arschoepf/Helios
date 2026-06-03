@@ -459,8 +459,13 @@ function readStatRates(host: GridHost, rates: string[]): void
         {
             continue;
         }
-        const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        signedWatts += pvNormalizeToWatts(num, unit);
+        const unit  = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
+        const watts = pvNormalizeToWatts(num, unit);
+        //Per-entity inversion: HA Energy `power_config.stat_rate_inverted` flips the sign convention for one source
+        //in a multi-source grid wiring. Apply the flag at read time so the directional split below sees the canonical
+        //"positive = import" convention.
+        const inverted = host._energyDefaults?.invertedRateEntities.includes(entity) ?? false;
+        signedWatts += inverted ? -watts : watts;
         sawAny = true;
     }
     if (!sawAny)

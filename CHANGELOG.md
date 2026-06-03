@@ -33,6 +33,14 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Battery sign convention follows the HA Energy `stat_rate_inverted` slot (#185)
+
+Battery and grid live reads now respect the inverted slot that some installs use when the meter reports the opposite of
+the HA convention (typically positive on discharge / export instead of positive on charge / import). The energy-prefs
+parser tracks which entities were declared in `stat_rate_inverted` and the per-sample readers flip the sign at read
+time, so the +/- battery icon, the live chip, the chart and the daily totals stay consistent with what the HA Energy
+dashboard itself shows.
+
 ### Entity configuration refonte: HA Energy dashboard is the single source of truth (#184)
 
 The card retires the per-card entity slots for everything the HA Energy dashboard already declares: `pv-power-entity`,

@@ -1851,7 +1851,6 @@ export class HeliosCard extends LitElement
             this._detailMode      ? 'detail-active'        : '',
             this._lidarViewMode   ? 'lidar-view-active'    : '',
             this._shadingDomeChipMask ? 'shading-dome-active'  : '',
-            this._cloudMode       ? 'cloud-mode-active'    : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -2771,9 +2770,9 @@ export class HeliosCard extends LitElement
         {
             toggleShadingDome(this);
         }
-        //LiDAR and Shading replace the whole HUD; force the cloud mode
-        //OFF so the per-layer chips don't leak through. The aggregate
-        //cloud chip itself is hidden via .cloud-mode-active CSS.
+        //LiDAR and Shading replace the whole HUD; force the cloud mode OFF so the per-layer chips don't leak through.
+        //Mode-bar handlers do NOT write to localStorage so the user's underlying cloud-mode preference survives, see
+        //_onModeLayer for the restore.
         this._cloudMode = false;
         if (!this._lidarViewMode)
         {
