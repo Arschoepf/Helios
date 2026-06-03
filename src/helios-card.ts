@@ -657,6 +657,76 @@ export class HeliosCard extends LitElement
             throw new Error('Invalid HELIOS configuration');
         }
         this.config = { ...config };
+        this._warnIfLegacyEntityKeys(config);
+    }
+
+    //Card YAML keys that the v1.8.3 entity refonte dropped from the editor. The card now reads these entirely from the
+    //HA Energy dashboard global settings; any value still set on the card config is silently ignored at runtime.
+    //Detected here only so the user gets a one-shot persistent notification telling them what was retired and where the
+    //replacement lives, instead of staring at a chip that no longer reacts to the entity they wired.
+    private static readonly _LEGACY_ENTITY_KEYS: ReadonlyArray<string> =
+    [
+        'pv-power-entity',
+        'grid-import-entity',
+        'grid-export-entity',
+        'grid-power-entity',
+        'grid-power-invert',
+        'battery-soc-entity',
+        'battery-power-entity',
+        'battery-power-invert',
+        'batteries',
+    ];
+    private _legacyKeyWarningFired = false;
+
+    //Fire a one-shot HA persistent notification when the card YAML carries any of the keys the entity refonte retired.
+    //Silent when none are present, when hass is not yet attached (Lit's setConfig can land before the hass property
+    //setter), or when the persistent_notification service is denied for RBAC reasons. The flag prevents repeated
+    //notifications on subsequent setConfig calls during the same card lifetime; HA dedupes by notification_id anyway,
+    //the flag is a belt-and-braces.
+    private _warnIfLegacyEntityKeys(config: HeliosConfig): void
+    {
+        if (this._legacyKeyWarningFired)
+        {
+            return;
+        }
+        if (!this.hass?.callService)
+        {
+            return;
+        }
+        const detected: string[] = [];
+        for (const key of HeliosCard._LEGACY_ENTITY_KEYS)
+        {
+            const v = (config as Record<string, unknown>)[key];
+            if (v !== undefined && v !== null && v !== '')
+            {
+                detected.push(key);
+            }
+        }
+        if (detected.length === 0)
+        {
+            return;
+        }
+        this._legacyKeyWarningFired = true;
+        const message =
+              `The Helios card no longer reads its PV, grid and battery entities from the card YAML. `
+            + `The following key${detected.length > 1 ? 's are' : ' is'} silently ignored: ${detected.map(k => '`' + k + '`').join(', ')}. `
+            + `Helios now resolves these directly from the official Home Assistant Energy dashboard `
+            + `(Settings → Dashboards → Energy → your sources). The PV install configuration (peak kWp, `
+            + `panel tilt and azimuth via \`pv-arrays\`, optional inverter cap, LiDAR providers, visual options) `
+            + `still lives in the card YAML, only the entity slots were retired.`;
+        try
+        {
+            this.hass.callService('persistent_notification', 'create', {
+                notification_id: 'helios-legacy-entity-config',
+                title:           'Helios card: deprecated entity keys ignored',
+                message,
+            });
+        }
+        catch (_)
+        {
+            //Service call denied or unavailable; the chips still light up from the HA Energy resolution and the user
+            //will eventually find the deprecation note via the CHANGELOG or the README.
+        }
     }
 
     static getConfigElement(): HTMLElement
