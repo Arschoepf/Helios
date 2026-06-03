@@ -206,17 +206,18 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
     const deltaAttr = delta;
 
     //Date label: this card represents `today + cardOffset` days. Computed off a fresh midnight Date so day
-    //rollover at midnight does not leave a stale offset cached.
+    //rollover at midnight does not leave a stale offset cached. Full weekday + day + month format,
+    //text-transform: capitalize on the rendered span turns the locale's lowercase output (e.g. fr "mercredi 4
+    //juin") into "Mercredi 4 Juin" without us coding locale-specific capitalisation rules.
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() + cardOffset);
-    const dateLabel = formatDate(d, host.hass);
-
-    const friendlyLabel = cardOffset === -2 ? 'Avant-hier'
-                       : cardOffset === -1 ? 'Hier'
-                       : cardOffset ===  0 ? "Aujourd'hui"
-                       : cardOffset ===  1 ? 'Demain'
-                       :                     'Après-demain';
+    const haLanguage = (host.hass?.language as string | undefined) || undefined;
+    const dateLabel  = new Intl.DateTimeFormat(haLanguage, {
+        weekday: 'long',
+        day:     'numeric',
+        month:   'long',
+    }).format(d);
 
     //Transform order (right-to-left): rotateY first (sets the depth perspective), then scale (shrinks the rotated
     //plane), then translateX as a percent of the SCALED bounding box, then the centring translate(-50%, -50%) on
@@ -242,8 +243,9 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
                     <ha-icon icon="mdi:close"></ha-icon>
                 </button>
             ` : nothing}
-            <div class="dash-cf-card-day">${friendlyLabel}</div>
-            <div class="dash-cf-card-date">${dateLabel}</div>
+            <header class="dash-cf-card-bandeau">
+                <span class="dash-cf-card-date">${dateLabel}</span>
+            </header>
         </article>
     `;
 }

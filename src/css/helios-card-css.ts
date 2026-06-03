@@ -475,10 +475,10 @@ export const heliosCardStyles = css`
         top: 50%;
         left: 50%;
         /*  Container-aware sizing via cqw (1 % of the ha-card width thanks to container-type: inline-size on
-            .ha-card). The CoverFlow then renders identically whether the card lives in a section dashboard
-            tile or fills the entire panel. 46 % of the container width keeps the total fan span (card +
-            translated siblings) under 100 % so all 5 cards fit horizontally regardless of container size.
-            440 px cap stops huge displays from blowing the cards into wall-sized rectangles. Height tracks via
+            .ha-card). The CoverFlow renders identically whether the card lives in a section dashboard tile or
+            fills the entire panel. 46 % of the container width keeps the total fan span (card + translated
+            siblings) under 100 % so all 5 cards fit horizontally regardless of container size. 440 px cap
+            stops huge displays from blowing the cards into wall-sized rectangles. Height tracks via
             aspect-ratio so the cards keep the same shape across widths. */
         width: min(440px, 46cqw);
         aspect-ratio: 4 / 6;
@@ -490,16 +490,14 @@ export const heliosCardStyles = css`
             0 12px 32px rgba(0, 0, 0, 0.18);
         display: flex;
         flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 12px;
-        padding: 32px;
+        align-items: stretch;
         cursor: pointer;
         transition:
             transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
             opacity   420ms cubic-bezier(0.22, 1, 0.36, 1);
         transform-origin: center center;
         backface-visibility: hidden;
+        overflow: hidden;
         will-change: transform, opacity;
     }
     .dash-cf-card-front
@@ -509,22 +507,35 @@ export const heliosCardStyles = css`
             0 8px 24px rgba(0, 0, 0, 0.35),
             0 24px 48px rgba(0, 0, 0, 0.22);
     }
-    .dash-cf-card-day
+
+    /*  Top-of-card bandeau: high-contrast strip that holds the formatted date. Background colour is the active
+        HA theme's primary text colour (so it inverts naturally between light and dark themes) and the date
+        text sits on it in the matching card-background colour, giving the strongest possible legibility on
+        both themes without us coding a per-theme override. The text grows a touch on card hover so the
+        currently-highlighted day reads as the focus point. */
+    .dash-cf-card-bandeau
     {
-        font-size: 28px;
-        font-weight: 700;
-        letter-spacing: 0.3px;
-        color: var(--primary-text-color, #ffffff);
-        text-align: center;
+        background: var(--primary-text-color, #ffffff);
+        color: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        padding: 14px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
     }
     .dash-cf-card-date
     {
-        font-size: 14px;
-        font-weight: 600;
-        letter-spacing: 1.2px;
-        text-transform: uppercase;
-        opacity: 0.65;
-        color: var(--primary-text-color, #ffffff);
+        font-size: clamp(14px, 2.6cqw, 20px);
+        font-weight: 800;
+        letter-spacing: 0.4px;
+        text-transform: capitalize;
+        display: inline-block;
+        transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
+        transform-origin: center center;
+    }
+    .dash-cf-card:hover .dash-cf-card-date
+    {
+        transform: scale(1.06);
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
@@ -584,16 +595,16 @@ export const heliosCardStyles = css`
         from blurred on the left to sharp on the right. */
     .dash-cf-card[data-delta="-1"]::after
     {
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
         mask-image: linear-gradient(to right, black 0%, black 25%, transparent 90%);
         -webkit-mask-image: linear-gradient(to right, black 0%, black 25%, transparent 90%);
     }
     /*  delta = 1 → card sits to the RIGHT. Far side = right, near side = left. */
     .dash-cf-card[data-delta="1"]::after
     {
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
+        backdrop-filter: blur(2px);
+        -webkit-backdrop-filter: blur(2px);
         mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
         -webkit-mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
     }
@@ -601,16 +612,16 @@ export const heliosCardStyles = css`
         card stays clearly visible alongside the depth cue. */
     .dash-cf-card[data-delta="-2"]::after
     {
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
         mask-image: linear-gradient(to right, black 0%, black 35%, transparent 95%);
         -webkit-mask-image: linear-gradient(to right, black 0%, black 35%, transparent 95%);
     }
     /*  delta = 2 → back right card. */
     .dash-cf-card[data-delta="2"]::after
     {
-        backdrop-filter: blur(4px);
-        -webkit-backdrop-filter: blur(4px);
+        backdrop-filter: blur(3px);
+        -webkit-backdrop-filter: blur(3px);
         mask-image: linear-gradient(to left, black 0%, black 35%, transparent 95%);
         -webkit-mask-image: linear-gradient(to left, black 0%, black 35%, transparent 95%);
     }
@@ -632,8 +643,11 @@ export const heliosCardStyles = css`
     }
     @keyframes dash-cf-enter-front
     {
-        0%   { opacity: 0; }
-        100% { opacity: 1; }
+        /*  Scale + opacity so the entrance is visible even while the parent .detail-panel runs its own 250 ms
+            opacity fade-in (the two overlap during 0-250 ms; the parent fade alone would mask a pure opacity
+            change on the card). Drop opacity to 0 too so the card properly fades in once the panel settles. */
+        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+        100% { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
     }
     @keyframes dash-cf-enter-mid-left
     {
@@ -683,8 +697,10 @@ export const heliosCardStyles = css`
     }
     @keyframes dash-cf-exit-front
     {
-        0%   { opacity: 1; }
-        100% { opacity: 0; }
+        /*  Symmetric exit: scale down + fade out. The parent .detail-panel does NOT fade out (it just unmounts
+            at t=1 s), so this is the only motion on the front card during exit. */
+        0%   { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
     }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-exit-back-left  350ms ease-in 0ms   both; }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-exit-back-right 350ms ease-in 0ms   both; }
