@@ -7,8 +7,19 @@ preserved from the in-tree history that used to live inside
 
 ## v1.8.3
 
-> Patch-and-polish release on top of v1.8.2. The cycle delivers
-> three regression fixes for the grid history backfill that
+> Bigger cycle than v1.8.3 originally scoped for. After triaging the long tail of bug reports on v1.8.2 (always-0 grid
+> chips on slow-cadence meters, two cards on the same dashboard disagreeing on grid power, PV daily total drifting from
+> PowerCalc by 38 % on a 1 Hz Victron install, multi-tariff Linky setups quietly mis-aggregating) I decided to walk away
+> from per-card entity configuration for everything the official HA Energy dashboard already declares globally. The card
+> now reads PV, grid and battery entities directly from `Settings → Dashboards → Energy`, eliminating the entire class of
+> "the Helios chip points at sensor X but my dashboard uses sensor Y" bugs and reducing the configuration surface to the
+> install-specific bits HA does not know about (PV peak kWp + per-string tilt and azimuth via `pv-arrays`, optional
+> inverter cap, LiDAR providers, visual options). One source of truth, less ambiguity, fewer ways to land in a half-broken
+> state. The transition is staged across several commits inside this cycle; the breaking change lands as a one-shot HA
+> persistent notification telling the user which retired keys in their card YAML are silently ignored, and pointing them
+> at the Energy dashboard for the entity configuration.
+>
+> The cycle also delivers three regression fixes for the grid history backfill that
 > shipped in v1.8.2 (a raw arm that could fail silently leaving
 > the buffer empty, a scrub buffer that never populated for
 > power-native grid sensors, and a 24 h LTS window that capped
@@ -21,6 +32,28 @@ preserved from the in-tree history that used to live inside
 > Upcoming work is tracked live on the public roadmap at
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
+
+### Entity configuration refonte: HA Energy dashboard is the single source of truth (#184)
+
+The card retires the per-card entity slots for everything the HA Energy dashboard already declares: `pv-power-entity`,
+`grid-import-entity`, `grid-export-entity`, `grid-power-entity`, `grid-power-invert`, `battery-soc-entity`,
+`battery-power-entity`, `battery-power-invert`, `batteries`. The runtime resolver now walks `EnergyPreferences` from the
+`energy/get_prefs` WebSocket call and feeds every consumer (live chips, scrub past, chart, daily totals, calibration)
+from there. When the user opens their card YAML and one of the retired keys is set, the card fires a one-shot HA
+persistent notification listing the ignored keys and pointing them at `Settings → Dashboards → Energy → your sources`.
+The chip stays hidden when no matching Energy dashboard source is configured, no in-between guessing layer.
+
+Kept on the card YAML, because the Energy dashboard does not surface them: `pv-peak-kwp`, `pv-arrays` (per-string tilt,
+azimuth, share, optional GPS position), `pv-inverter-max-kw`, `solar-radiation-entity`, `inverter-cutoff-soc-pct` (now
+reading the resolved `stat_soc`), `home-latitude` / `home-longitude` (override for the `hass.config.latitude` staleness
+bug), every LiDAR provider and rendering option, every visual / camera / timeline option.
+
+`EnergyDefaults` is restructured around per-source arrays: `solarStatRates`, `solarStatEnergyFroms`, `gridStatRates`,
+`gridStatEnergyFroms`, `gridStatEnergyTos`, `batteryStatRates`, `batteryStatEnergyFroms`, `batteryStatEnergyTos`,
+`batteryStatSocs`. Multi-source installs (multi-tariff grid, multi-bank battery) aggregate by simple sum across the
+arrays at the consumer; the multi-bank weighted-SoC model from earlier cycles is dropped because HA Energy has no
+concept of per-source capacity. The deep multi-source fan-out inside `pv.ts`, `grid.ts` and `battery.ts` lands across
+follow-up commits in this same cycle; the foundation commit ships the new shape, the runtime + the migration warning.
 
 ### Live grid chip matches HA Energy dashboard (#172)
 
