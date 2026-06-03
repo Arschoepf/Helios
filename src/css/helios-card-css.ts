@@ -270,6 +270,131 @@ ha-card.detail-active .solar-svg,
         pointer-events: none;
     }
 
+    /*  When LiDAR View is active, fade out every overlay layer so
+        the dot cloud reads on its own against a quiet basemap. The
+        toggle button itself is opted back in (selector below) so
+        the user can always exit. The map container stays visible
+        so the dots are projected onto a real basemap.
+
+        Selector list mirrors what .detail-active fades earlier in
+        this file, plus the corners (top-left clock + top-right rail
+        minus the LiDAR button itself), the home hitbox / glow, and
+        the timeline. Easier to audit if any future overlay needs
+        to be hidden in LiDAR View by looking at this single block. */
+    /*  Base transition + composite-layer hint kept on the unprefixed
+        selectors so the fade runs in BOTH directions across every
+        browser. Declaring the transition only inside .lidar-view-
+        active made entry smooth but the exit snap-back instantly
+        because the selector no longer matched and the transition
+        property left scope; declaring it here keeps it in scope at
+        all times. The will-change: opacity hint promotes each element
+        to its own composite layer so the GPU drives the alpha sweep
+        instead of asking the painter to redo layout per frame,
+        which used to drop frames on the chips that sit inside
+        transform-less wrappers (time-bar, solar-svg).               */
+    .overlay-top-left,
+    .home-glow-svg,
+    .home-hitbox,
+    .home-silhouette-svg,
+    .home-drop-leader-svg,
+    .solar-svg,
+    .solar-pct-label,
+    .cloud-pct-label,
+    .pv-home-anchor-svg,
+    .pv-home-leader-svg,
+    .pv-pct-label,
+    .battery-leader-svg,
+    .battery-pct-label,
+    .grid-leader-svg,
+    .grid-import-label,
+    .grid-export-label,
+    .home-pill
+    {
+        transition: opacity 0.35s ease;
+    }
+    /*  will-change opt-in: scope the composite-layer promotion to the
+        transition windows only. At rest, 15+ elements declared
+        will-change: opacity unconditionally was pinning that many
+        GPU layers in idle VRAM (~15-30 MB on devices with limited
+        budgets) and forcing the compositor to re-sync them on every
+        Lit re-render. Promote only when a mode actually toggles. */
+    ha-card.lidar-view-active     .overlay-top-left, ha-card.lidar-view-active     .home-glow-svg,
+    ha-card.lidar-view-active     .home-hitbox,      ha-card.lidar-view-active     .home-silhouette-svg,
+    ha-card.lidar-view-active     .home-drop-leader-svg, ha-card.lidar-view-active .solar-svg,
+    ha-card.lidar-view-active     .solar-pct-label,  ha-card.lidar-view-active     .cloud-pct-label,
+    ha-card.lidar-view-active     .pv-home-anchor-svg, ha-card.lidar-view-active   .pv-home-leader-svg,
+    ha-card.lidar-view-active     .pv-pct-label,     ha-card.lidar-view-active     .battery-leader-svg,
+    ha-card.lidar-view-active     .battery-pct-label,ha-card.lidar-view-active     .grid-leader-svg,
+    ha-card.lidar-view-active     .grid-import-label,ha-card.lidar-view-active     .grid-export-label,
+    ha-card.lidar-view-active     .home-pill,
+    ha-card.shading-dome-active   .overlay-top-left, ha-card.shading-dome-active   .home-glow-svg,
+    ha-card.shading-dome-active   .home-hitbox,      ha-card.shading-dome-active   .home-silhouette-svg,
+    ha-card.shading-dome-active   .home-drop-leader-svg, ha-card.shading-dome-active .solar-svg,
+    ha-card.shading-dome-active   .solar-pct-label,  ha-card.shading-dome-active   .cloud-pct-label,
+    ha-card.shading-dome-active   .pv-home-anchor-svg, ha-card.shading-dome-active .pv-home-leader-svg,
+    ha-card.shading-dome-active   .pv-pct-label,     ha-card.shading-dome-active   .battery-leader-svg,
+    ha-card.shading-dome-active   .battery-pct-label,ha-card.shading-dome-active   .grid-leader-svg,
+    ha-card.shading-dome-active   .grid-import-label,ha-card.shading-dome-active   .grid-export-label,
+    ha-card.shading-dome-active   .home-pill,
+    ha-card.detail-active         .overlay-top-left, ha-card.detail-active         .home-glow-svg,
+    ha-card.detail-active         .home-hitbox,      ha-card.detail-active         .pv-home-anchor-svg,
+    ha-card.detail-active         .pv-home-leader-svg, ha-card.detail-active       .pv-pct-label,
+    ha-card.detail-active         .battery-leader-svg, ha-card.detail-active       .battery-pct-label,
+    ha-card.detail-active         .solar-svg,        ha-card.detail-active         .solar-pct-label,
+    ha-card.detail-active         .cloud-pct-label
+    {
+        will-change: opacity;
+    }
+
+    /*  Timeline SLIDES out below the card / slides back in from the
+        bottom edge instead of fading. The X centring (translateX
+        -50%) is kept inside every keyframe so the bar never drifts
+        horizontally during the slide. */
+    .time-bar
+    {
+        transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+        will-change: transform;
+    }
+    ha-card.lidar-view-active .home-glow-svg,
+    ha-card.lidar-view-active .home-hitbox,
+    ha-card.lidar-view-active .home-silhouette-svg,
+    ha-card.lidar-view-active .home-drop-leader-svg,
+    ha-card.lidar-view-active .solar-svg,
+    ha-card.lidar-view-active .solar-pct-label,
+    ha-card.lidar-view-active .cloud-pct-label,
+    ha-card.lidar-view-active .pv-home-anchor-svg,
+    ha-card.lidar-view-active .pv-home-leader-svg,
+    ha-card.lidar-view-active .pv-pct-label,
+    ha-card.lidar-view-active .battery-leader-svg,
+    ha-card.lidar-view-active .battery-pct-label,
+    ha-card.lidar-view-active .grid-leader-svg,
+    ha-card.lidar-view-active .grid-import-label,
+    ha-card.lidar-view-active .grid-export-label,
+    ha-card.lidar-view-active .home-pill
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+    /*  Timeline slides out below the card edge. Pointer-events
+        disabled so the drifting element cannot intercept clicks
+        while off-screen. translateX kept so the bar stays centred. */
+    ha-card.lidar-view-active .time-bar
+    {
+        transform: translateX(-50%) translateY(140%);
+        pointer-events: none;
+    }
+    ha-card.lidar-view-active .overlay-top-left
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+    ha-card.lidar-view-active .overlay-top-right
+    {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+
     /*  Detail panel, takes over the card while detail mode is on.
         Hosts the three-section dashboard (today / tomorrow /
         battery, the last two sat side by side when both render).
@@ -2051,8 +2176,8 @@ ha-card.detail-active .solar-svg,
         smoothing keeps the text sharp at any sub-pixel offset. */
     .pv-pct-label,
     .battery-pct-label,
-    .solar-pct-label,
-{
+    .solar-pct-label
+    {
         text-rendering: geometricPrecision;
         -webkit-font-smoothing: antialiased;
     }
@@ -2084,6 +2209,8 @@ ha-card.detail-active .solar-svg,
         pastille appears when locked, matching cloud-cover-toggle.is-on. */
     .camera-lock-btn
     {
+        appearance: none;
+        -webkit-appearance: none;
         display: inline-flex;
         align-items: center;
         justify-content: center;
@@ -2091,16 +2218,29 @@ ha-card.detail-active .solar-svg,
         height: 40px;
         box-sizing: border-box;
         padding: 0;
-        background: transparent;
+        background-color: transparent;
+        background-clip: padding-box;
         color: var(--primary-text-color, #212121);
         border: 0;
+        outline: 0 !important;
+        outline-offset: 0;
         border-radius: 50%;
+        overflow: hidden;
         cursor: pointer;
         pointer-events: auto;
         position: relative;
         z-index: 50;
         opacity: 1;
-        transition: background 0.15s, color 0.15s;
+        -webkit-tap-highlight-color: transparent;
+        transition: background-color 0.15s, color 0.15s;
+    }
+    .camera-lock-btn:hover,
+    .camera-lock-btn:focus,
+    .camera-lock-btn:focus-visible,
+    .camera-lock-btn:active
+    {
+        outline: 0 !important;
+        box-shadow: none !important;
     }
     .camera-lock-btn ha-icon
     {
@@ -2108,9 +2248,10 @@ ha-card.detail-active .solar-svg,
         color: inherit;
         display: inline-flex;
         align-items: center;
+        pointer-events: none;
     }
-    .camera-lock-btn:hover  { background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
-    .camera-lock-btn:active { background: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
+    .camera-lock-btn:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
+    .camera-lock-btn:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
     .camera-lock-btn.is-on
     {
         background: var(--primary-color, #03a9f4);
