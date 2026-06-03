@@ -3293,4 +3293,106 @@ export const heliosCardStyles = css`
     }
 
 
+    /*  Boot loading state. The map basemap is allowed to render immediately so the user always has a visual
+        anchor, but every other DOM piece (chips, leaders, timeline, dashboard, mode bar, sun, cloud overlays)
+        is hidden behind opacity 0 + pointer-events none until the data fetches converge. Once the boot gate
+        flips to ready the .boot-loading class drops off and the cascade fades the UI in over 500 ms via the
+        transition declared on ha-card itself. .boot-failed shows the warning panel in place of the spinner.
+        .boot-ready is the post-loading default and exists purely so future styles can target the
+        transitioned-in state if needed.                                                                       */
+    ha-card.boot-loading > :not(#map-container):not(.boot-overlay),
+    ha-card.boot-failed  > :not(#map-container):not(.boot-overlay)
+    {
+        opacity: 0 !important;
+        pointer-events: none !important;
+        transition: none !important;
+    }
+    ha-card.boot-ready > *
+    {
+        transition: opacity 500ms ease-out;
+    }
+    .boot-overlay
+    {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        z-index: 10;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.45);
+        backdrop-filter: blur(4px);
+        -webkit-backdrop-filter: blur(4px);
+    }
+    /*  Home-outline spinner. The path traces the house frame with a stroke-dasharray loop, the offset goes
+        from full-length (invisible) to 0 (fully drawn) then back, giving the "wall being built then erased
+        then built again" pattern the user asked for. Path length is ~160 viewBox units for the M-L sequence;
+        we set dasharray + dashoffset to a comfortable 200 so the line cleanly enters and exits inside the
+        animation window.                                                                                       */
+    .boot-spinner-home
+    {
+        width: 72px;
+        height: 72px;
+        color: var(--primary-color, #ff9800);
+    }
+    .boot-spinner-home-path
+    {
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2.2;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        stroke-dasharray: 200;
+        stroke-dashoffset: 200;
+        animation: boot-home-build 2.4s ease-in-out infinite;
+    }
+    @keyframes boot-home-build
+    {
+        0%   { stroke-dashoffset: 200; opacity: 0.4; }
+        10%  { opacity: 1; }
+        55%  { stroke-dashoffset: 0;   opacity: 1; }
+        75%  { stroke-dashoffset: 0;   opacity: 1; }
+        100% { stroke-dashoffset: -200; opacity: 0.4; }
+    }
+
+    /*  Failure panel. Centred card with a warning glyph + title + body + the per-source missing list. Same
+        backdrop blur as the loading overlay so the visual hierarchy is continuous.                          */
+    .boot-overlay-failed
+    {
+        gap: 8px;
+        padding: 16px 24px;
+        text-align: center;
+        color: var(--primary-text-color, #ffffff);
+    }
+    .boot-warning-icon
+    {
+        --mdc-icon-size: 48px;
+        color: var(--warning-color, #ffa726);
+    }
+    .boot-warning-title
+    {
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .boot-warning-body
+    {
+        font-size: 13px;
+        max-width: 320px;
+        opacity: 0.9;
+        line-height: 1.4;
+    }
+    .boot-warning-missing
+    {
+        list-style: none;
+        padding: 0;
+        margin: 6px 0 0 0;
+        font-size: 11px;
+        opacity: 0.8;
+        font-family: var(--ha-font-family-code, ui-monospace, monospace);
+    }
+
+
 `;

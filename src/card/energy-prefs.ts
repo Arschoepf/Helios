@@ -63,6 +63,10 @@ export interface EnergyPrefsHost
 {
     readonly hass: any;
     _energyDefaults: EnergyDefaults;
+    //Flips true the first time `fetchEnergyPrefs` lands a parsed snapshot, including the "no energy_sources at all"
+    //case where the parsed defaults are empty arrays. Boot-time gating reads this so an install that genuinely has
+    //no HA Energy dashboard configured stops blocking on a never-arriving prefs payload.
+    _energyDefaultsLoaded: boolean;
     _energyPrefsUnsub?: () => void;
     requestUpdate(): void;
 }
@@ -82,13 +86,16 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
             energy_sources?: Array<Record<string, unknown>>;
         };
         const next = parseEnergyPrefs(prefs);
-        host._energyDefaults = next;
+        host._energyDefaults       = next;
+        host._energyDefaultsLoaded = true;
         host.requestUpdate();
     }
     catch (_)
     {
         //Subscription stays wired; a transient WS error or a not-yet-configured dashboard collapses the chips silently
-        //and the next push from `energy_preferences_updated` will retry.
+        //and the next push from `energy_preferences_updated` will retry. The boot gate still flips so the spinner
+        //does not block indefinitely on RBAC-denied or older HA cores that do not expose energy/get_prefs.
+        host._energyDefaultsLoaded = true;
     }
 }
 

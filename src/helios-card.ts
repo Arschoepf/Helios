@@ -519,6 +519,21 @@ export class HeliosCard extends LitElement
     //mode-bar LiDAR icon swap (icon -> spinner) and the mode-switch
     //lock so the user cannot change modes mid-compute.
     @state() _lidarExposureBusy = false;
+
+    //Boot-time loading state. Card starts in `loading`: only the map basemap renders, the rest of the UI (chips,
+    //leaders, timeline, dashboard) is hidden behind opacity 0 and a centred home-outline build animation indicates
+    //"chargement en cours". When every configured data source has landed (engine ready + HA Energy prefs parsed +
+    //PV / battery / grid history fetched as applicable + LTS calib + LTS trainer), state flips to `ready` and the
+    //UI fades in over 500 ms. If the boot timeout elapses without reaching `ready`, state flips to `failed` and a
+    //warning panel takes over the same overlay.
+    @state() _bootPhase: 'loading' | 'ready' | 'failed' = 'loading';
+    //Per-source boot status for the warning panel readout. Only populated when state is `failed`.
+    @state() _bootMissing:  string[] = [];
+    //Flag flipped by `fetchEnergyPrefs` after the first parse lands. Used by the boot gate alongside the various
+    //fetch-state fields on the card itself.
+    _energyDefaultsLoaded = false;
+    private _bootTimeoutTimer?: number;
+    private static readonly BOOT_TIMEOUT_MS = 15_000;
     //True while the home is "focused": the existing overlay HUD is
     //hidden, the camera is eased to a closer / more pitched pose,
     //and a detail dashboard panel takes over. Toggled by clicking
@@ -885,6 +900,25 @@ export class HeliosCard extends LitElement
         super.connectedCallback();
         _liveCards.add(this);
         this._connectedAt = performance.now();
+        //Boot-loading state. The map basemap shows immediately, every other UI piece is hidden behind opacity 0 +
+        //a centred home-outline build animation until every configured data source has landed. Re-fresh evaluation
+        //runs on every `updated()` cycle; if the timeout fires first the state flips to `failed` and the warning
+        //panel surfaces the missing pieces.
+        this._bootPhase        = 'loading';
+        this._bootMissing      = [];
+        if (this._bootTimeoutTimer !== undefined)
+        {
+            window.clearTimeout(this._bootTimeoutTimer);
+        }
+        this._bootTimeoutTimer = window.setTimeout(() =>
+        {
+            if (this._bootPhase === 'loading')
+            {
+                this._bootMissing = this._computeBootMissing();
+                this._bootPhase   = 'failed';
+                this.requestUpdate();
+            }
+        }, HeliosCard.BOOT_TIMEOUT_MS);
         tick(this);
         //30 s tick: the clock displays HH:MM only (seconds dropped),
         //the sun moves ~0.13° per refresh (visually smooth at that
@@ -922,6 +956,11 @@ export class HeliosCard extends LitElement
         super.disconnectedCallback();
         _liveCards.delete(this);
         window.clearInterval(this._timer);
+        if (this._bootTimeoutTimer !== undefined)
+        {
+            window.clearTimeout(this._bootTimeoutTimer);
+            this._bootTimeoutTimer = undefined;
+        }
         this._visibilityObserver?.disconnect();
         this._visibilityObserver = undefined;
         if (this._onVisibilityChange)
@@ -1011,6 +1050,23 @@ export class HeliosCard extends LitElement
         if (this.hass && !this._energyPrefsUnsub)
         {
             subscribeEnergyPrefs(this);
+        }
+
+        //Boot gate: re-evaluate readiness every Lit cycle while still loading. As soon as every configured data
+        //source has landed, flip to `ready` and let the fade-in run via the CSS transition on .boot-loading. The
+        //timeout watchdog set in connectedCallback handles the unhappy path independently.
+        if (this._bootPhase === 'loading')
+        {
+            const missing = this._computeBootMissing();
+            if (missing.length === 0)
+            {
+                this._bootPhase = 'ready';
+                if (this._bootTimeoutTimer !== undefined)
+                {
+                    window.clearTimeout(this._bootTimeoutTimer);
+                    this._bootTimeoutTimer = undefined;
+                }
+            }
         }
 
         if (!this.hass?.config || !this.config)
@@ -1185,6 +1241,94 @@ export class HeliosCard extends LitElement
     //typeof + property read so caching it adds risk for no gain.
     //setCardThemeIsDark is invoked on every call so the engine
     //stays in sync even when the engine spawns mid-session.
+    //Computes the list of data sources that have not landed yet for the boot gate. Empty list = ready, non-empty
+    //list = either still loading or, on timeout, surfaced inside the warning panel so the user can see which piece
+    //failed (HA Energy not configured, recorder timeout on a specific entity, MapLibre style fetch blocked by a
+    //corporate proxy, etc.). The check skips sources the install does not configure (no battery wired → battery
+    //rows omitted) so a PV-only setup does not block on a never-arriving battery history.
+    private _computeBootMissing(): string[]
+    {
+        const missing: string[] = [];
+
+        //Engine + basemap. Until the MapLibre style finishes loading and the engine has projected its first sun
+        //scene + label layout, the camera-driven SVG overlays cannot be positioned, so the whole UI stays in
+        //loading state regardless of the data fetches.
+        if (!this._engine || this._timeRange === null)
+        {
+            missing.push('engine');
+        }
+        if (this._chartSeries === null)
+        {
+            missing.push('weather');
+        }
+
+        //HA Energy prefs snapshot. Flips on the first fetchEnergyPrefs resolution (success or RBAC-denied), so an
+        //install without HA Energy still escapes the gate.
+        if (!this._energyDefaultsLoaded)
+        {
+            missing.push('energy_prefs');
+        }
+
+        //Per-source data: only required when the install actually configures the source. PV / battery / grid each
+        //gate independently on the relevant HA Energy default array being non-empty and on the corresponding
+        //history slot being non-null.
+        const ed = this._energyDefaults;
+        const hasPv      = ed.solarStatRates.length > 0 || ed.solarStatEnergyFroms.length > 0;
+        const hasBattery = ed.batteryStatRates.length > 0
+                        || ed.batteryStatEnergyFroms.length > 0
+                        || ed.batteryStatEnergyTos.length > 0
+                        || ed.batteryStatSocs.length > 0;
+        const hasGrid    = ed.gridStatRates.length > 0
+                        || ed.gridStatEnergyFroms.length > 0
+                        || ed.gridStatEnergyTos.length > 0;
+
+        if (hasPv)
+        {
+            if (this._pvHistory === null)
+            {
+                missing.push('pv_history');
+            }
+            if (this._pvCalibStats === null)
+            {
+                missing.push('pv_calib');
+            }
+            if (this._pvTrainerStats === null)
+            {
+                missing.push('pv_trainer');
+            }
+            if (this._haSolarTodayKwh === null)
+            {
+                missing.push('pv_today');
+            }
+        }
+        if (hasBattery)
+        {
+            const battEd = this._energyDefaults;
+            if (battEd.batteryStatSocs.length > 0 && this._batterySocHistory === null)
+            {
+                missing.push('battery_soc_history');
+            }
+            if ((battEd.batteryStatRates.length > 0 || battEd.batteryStatEnergyFroms.length > 0 || battEd.batteryStatEnergyTos.length > 0)
+                && this._batteryPowerHistory === null)
+            {
+                missing.push('battery_power_history');
+            }
+        }
+        if (hasGrid)
+        {
+            if (this._haGridImportTodayKwh === null && ed.gridStatEnergyFroms.length > 0)
+            {
+                missing.push('grid_import_today');
+            }
+            if (this._haGridExportTodayKwh === null && ed.gridStatEnergyTos.length > 0)
+            {
+                missing.push('grid_export_today');
+            }
+        }
+        return missing;
+    }
+
+
     private _resolveIsDark(themesObj: { darkMode?: boolean } | undefined): boolean
     {
         let isDark: boolean;
@@ -1855,11 +1999,43 @@ export class HeliosCard extends LitElement
             this._detailMode      ? 'detail-active'        : '',
             this._lidarViewMode   ? 'lidar-view-active'    : '',
             this._shadingDomeChipMask ? 'shading-dome-active'  : '',
+            this._bootPhase === 'loading'  ? 'boot-loading' : '',
+            this._bootPhase === 'failed'   ? 'boot-failed'  : '',
+            this._bootPhase === 'ready'    ? 'boot-ready'   : '',
         ].filter(Boolean).join(' ');
+
+        const bootOverlay = this._bootPhase === 'loading'
+            ? html`
+                <div class="boot-overlay" aria-hidden="true">
+                    <svg class="boot-spinner-home" viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet">
+                        <path
+                            class="boot-spinner-home-path"
+                            d="M12 36 L32 16 L52 36 M18 36 L18 52 L46 52 L46 36"
+                        ></path>
+                    </svg>
+                </div>
+              `
+            : this._bootPhase === 'failed'
+                ? html`
+                    <div class="boot-overlay boot-overlay-failed" role="alert">
+                        <ha-icon class="boot-warning-icon" icon="mdi:alert-circle-outline"></ha-icon>
+                        <div class="boot-warning-title">Helios , le chargement a échoué</div>
+                        <div class="boot-warning-body">
+                            Certaines données n'ont pas pu être récupérées avant le délai d'attente (15 s). Vérifiez votre dashboard HA Energy + votre connexion Home Assistant.
+                        </div>
+                        ${this._bootMissing.length > 0 ? html`
+                            <ul class="boot-warning-missing">
+                                ${this._bootMissing.map(m => html`<li>${m}</li>`)}
+                            </ul>
+                        ` : nothing}
+                    </div>
+                  `
+                : nothing;
 
         return html`
             <ha-card class="${cardClasses}">
 
+                ${bootOverlay}
                 <div id="map-container"></div>
 
                 ${hasApiKey && this._timeRange ? html`

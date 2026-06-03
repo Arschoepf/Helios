@@ -33,6 +33,23 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Boot loading state , map-only + home-build spinner + warning panel on timeout
+
+The card now boots in a dedicated loading state instead of paining its UI piece by piece as the various WS
+round-trips resolve. Only the map basemap renders during the loading phase; every other DOM element (chips,
+leaders, timeline, dashboard, mode bar, sun, cloud, irradiance overlays) is hidden behind opacity 0 +
+pointer-events none, and a centred home-outline build animation draws and re-draws under a backdrop-blurred
+overlay to signal "chargement en cours". The gate watches every configured data source independently: engine
++ MapLibre style ready, HA Energy prefs parsed, PV history + LTS calib + LTS trainer + today-kWh recorder
+totals if PV is wired, battery SoC + power histories if battery is wired, grid import + export daily totals
+if grid is wired. Sources the install does not configure are skipped, so a PV-only setup never blocks on a
+never-arriving battery payload.
+
+When every required source has landed the gate flips to `ready` and the full UI fades in over 500 ms. If the
+15 s timeout watchdog fires first the gate flips to `failed` and a warning panel takes over the same overlay
+with the per-source missing list so the user can see which piece of the dashboard the WS round-trip never
+returned (HA Energy not configured, recorder timeout, MapLibre style fetch blocked by a corporate proxy, etc.).
+
 ### Critical fixes , "data outdated on first open" + "production curve shifted in time"
 
 Two regressions converged into one root-cause investigation kicked off by LBDG_'s reports.
