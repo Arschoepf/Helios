@@ -22,6 +22,7 @@ import
     computePvPowerWeighted,
     wipeLegacyPvCalibStorage,
     formatPvValue,
+    resolvePvLiveEntity,
     clearPvModuleCaches
 } from './card/pv';
 import
@@ -764,8 +765,7 @@ export class HeliosCard extends LitElement
             engine: this._engine ? this._engine.getStatsSnapshot() : null,
             pv:
             {
-                entityConfigured: typeof this.config?.['pv-power-entity'] === 'string'
-                    && (this.config['pv-power-entity'] as string).length > 0,
+                entityConfigured: resolvePvLiveEntity(this._energyDefaults) !== '',
                 unit:             this._pvUnit || null,
                 lastHistory:      this._pvHistoryDiagnostics,
                 calibrationK:     pvCalibK(this.config)

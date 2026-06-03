@@ -21,7 +21,7 @@ import { callWSWithTimeout, WsTimeoutError, scheduleIdle } from './ws-timeout';
 //through the trapezoidal differentiation path that reads as flat-topped plateaus on sparse meters. Returns an empty
 //string when no solar source is configured, the caller treats that as "chip + chart hidden". Multi-source installs
 //collapse to the first entry today; full per-source aggregation across all solar sources lands in a follow-up.
-function resolvePvLiveEntity(defaults: EnergyDefaults): string
+export function resolvePvLiveEntity(defaults: EnergyDefaults): string
 {
     if (defaults.solarStatRates.length > 0)
     {

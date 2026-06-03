@@ -35,16 +35,6 @@ export interface EnergyDefaults
     //chip + vessel visualisation. Multi-bank weighting by capacity is no longer supported, HA Energy has no concept of
     //per-source capacity.
     batteryStatSocs:        string[];
-    //Transitional single-entity slots derived from the arrays above. The refonte to the array-only model is staged
-    //across multiple consumer rewires (refreshPv, refreshGrid, refreshBattery, dashboard headlines); these slots keep
-    //the older single-entity consumers compiling against the new shape. Each slot picks the first array entry,
-    //matching the historical "first non-null" behaviour of the previous parser. Future cleanup pass collapses the
-    //consumers onto the arrays directly and these fields disappear.
-    pvPowerEntity:          string | null;
-    gridImportEntity:       string | null;
-    gridExportEntity:       string | null;
-    batteryPowerEntity:     string | null;
-    batterySocEntity:       string | null;
 }
 
 
@@ -59,11 +49,6 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
     batteryStatEnergyFroms: [],
     batteryStatEnergyTos:   [],
     batteryStatSocs:        [],
-    pvPowerEntity:          null,
-    gridImportEntity:       null,
-    gridExportEntity:       null,
-    batteryPowerEntity:     null,
-    batterySocEntity:       null,
 };
 
 
@@ -290,11 +275,6 @@ export function parseEnergyPrefs(prefs: {
         batteryStatEnergyFroms: [],
         batteryStatEnergyTos:   [],
         batteryStatSocs:        [],
-        pvPowerEntity:          null,
-        gridImportEntity:       null,
-        gridExportEntity:       null,
-        batteryPowerEntity:     null,
-        batterySocEntity:       null,
     };
     const sources = Array.isArray(prefs?.energy_sources) ? prefs!.energy_sources! : [];
 
@@ -361,14 +341,6 @@ export function parseEnergyPrefs(prefs: {
             }
         }
     }
-    //Derive the transitional single-entity slots from the arrays so the consumers that have not yet migrated to the
-    //multi-source model keep reading sensible values. Picks the first usable entity in each array, matching the legacy
-    //"first non-null" parser behaviour.
-    out.pvPowerEntity      = out.solarStatRates[0]         ?? out.solarStatEnergyFroms[0]   ?? null;
-    out.gridImportEntity   = out.gridStatEnergyFroms[0]    ?? null;
-    out.gridExportEntity   = out.gridStatEnergyTos[0]      ?? null;
-    out.batteryPowerEntity = out.batteryStatRates[0]       ?? out.batteryStatEnergyFroms[0] ?? out.batteryStatEnergyTos[0] ?? null;
-    out.batterySocEntity   = out.batteryStatSocs[0]        ?? null;
     return out;
 }
 
@@ -406,26 +378,4 @@ function pickFirstString(v: unknown): string | null
         }
     }
     return null;
-}
-
-
-//Transitional helper. Returns the resolved entity for the given Helios slot, reading from the HA Energy dashboard
-//defaults. The refonte removed every user-configurable entity from the card YAML, the `config` argument is kept on the
-//signature only to keep existing call sites compiling, it is not consulted any more. Consumers that need to fan out
-//across multiple HA sources read the arrays directly on `EnergyDefaults`.
-export function resolveEffectiveEntity(
-    _config: unknown,
-    defaults: EnergyDefaults,
-    key: 'pv-power-entity' | 'battery-soc-entity' | 'battery-power-entity'
-       | 'grid-import-entity' | 'grid-export-entity',
-): string
-{
-    switch (key)
-    {
-        case 'pv-power-entity':      return defaults.pvPowerEntity      ?? '';
-        case 'grid-import-entity':   return defaults.gridImportEntity   ?? '';
-        case 'grid-export-entity':   return defaults.gridExportEntity   ?? '';
-        case 'battery-power-entity': return defaults.batteryPowerEntity ?? '';
-        case 'battery-soc-entity':   return defaults.batterySocEntity   ?? '';
-    }
 }
