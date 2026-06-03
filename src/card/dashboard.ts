@@ -377,6 +377,12 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
         month:   'long',
     }).format(d);
 
+    const friendlyLabel = cardOffset === -2 ? 'Avant-hier'
+                        : cardOffset === -1 ? 'Hier'
+                        : cardOffset ===  0 ? "Aujourd'hui"
+                        : cardOffset ===  1 ? 'Demain'
+                        :                     'Après-demain';
+
     //Transform order (right-to-left): rotateY first (sets the depth perspective), then scale (shrinks the rotated
     //plane), then translateX as a percent of the SCALED bounding box, then the centring translate(-50%, -50%) on
     //the parent. The percent translate is applied AFTER scale, which means a sibling at 105 % sits roughly one
@@ -397,20 +403,26 @@ function renderCoverflowCard(host: DashboardHost, cardOffset: number, activeOffs
             data-delta="${deltaAttr}"
             @click="${(e: Event) => { if (!isFront) { e.stopPropagation(); navigateDashDay(host, cardOffset); } }}"
         >
-            ${isFront ? html`
-                <button
-                    class="dash-cf-close-btn"
-                    @click="${(e: Event) => handleExitDetail(host, e)}"
-                    aria-label="${t.detail.exitHint}"
-                >
-                    <ha-icon icon="mdi:close"></ha-icon>
-                </button>
-            ` : nothing}
             <header class="dash-cf-card-bandeau">
                 <span class="dash-cf-card-weather-chip" aria-hidden="true">
                     <ha-icon icon="${weatherIcon}"></ha-icon>
                 </span>
-                <span class="dash-cf-card-date">${dateLabel}</span>
+                <span class="dash-cf-card-bandeau-center">
+                    <ha-icon class="dash-cf-card-cal-icon" icon="mdi:calendar"></ha-icon>
+                    <span class="dash-cf-card-date">${dateLabel}</span>
+                    <span class="dash-cf-card-day-chip">${friendlyLabel}</span>
+                </span>
+                ${isFront ? html`
+                    <button
+                        class="dash-cf-close-btn"
+                        @click="${(e: Event) => handleExitDetail(host, e)}"
+                        aria-label="${t.detail.exitHint}"
+                    >
+                        <ha-icon icon="mdi:close"></ha-icon>
+                    </button>
+                ` : html`
+                    <span class="dash-cf-card-bandeau-spacer" aria-hidden="true"></span>
+                `}
             </header>
 
             <section class="dash-cf-card-stats">

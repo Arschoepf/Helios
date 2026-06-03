@@ -508,56 +508,98 @@ export const heliosCardStyles = css`
             0 24px 48px rgba(0, 0, 0, 0.22);
     }
 
-    /*  Top-of-card bandeau: high-contrast strip with the formatted date in the centre, the day's weather glyph
-        in a circular chip on the left, and (on the front card) the close button absolute-positioned on the
-        right. Background colour = --primary-text-color, text colour = --ha-card-background, so the contrast
-        flips naturally between light and dark HA themes via the live theme tokens. Vertical padding tuned so
-        the bandeau ends up ~50 px tall, which lines up the absolute-positioned 30 px close button (top: 10 px)
-        with the bandeau's vertical centre. */
+    /*  Top-of-card bandeau styled as a Mushroom-card header strip anchored at the top with a small margin all
+        around so it reads as a card-inside-card. Grid layout (auto / 1fr / auto) keeps the weather chip on the
+        left, the date group in the centre and the close button (or a spacer on non-front cards) on the right
+        regardless of card width. Background and border colours bind to the HA theme tokens so the strip
+        follows the active frontend theme. */
     .dash-cf-card-bandeau
     {
-        background: var(--primary-text-color, #ffffff);
-        color: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        padding: 10px 50px 10px 12px;
-        display: flex;
+        margin: 8px;
+        padding: 6px 10px;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        display: grid;
+        grid-template-columns: auto 1fr auto;
         align-items: center;
-        gap: 10px;
+        gap: 8px;
         flex-shrink: 0;
-        position: relative;
     }
+    /*  Weather chip on the left. Circular, slightly larger than the inner glyph so the icon sits centred
+        without nudging up or down. line-height: 0 on the chip + a flex-centred ha-icon kills the default
+        text-baseline alignment that was pushing the glyph 1-2 px off centre. */
     .dash-cf-card-weather-chip
     {
-        width: 30px;
-        height: 30px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        background: var(--secondary-background-color, rgba(127, 127, 127, 0.1));
         color: var(--primary-text-color, #ffffff);
-        border: 1px solid currentColor;
+        line-height: 0;
     }
     .dash-cf-card-weather-chip ha-icon
     {
-        --mdc-icon-size: 16px;
+        --mdc-icon-size: 18px;
         color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    /*  Centre group: calendar glyph + date + "Aujourd'hui / Hier / ..." chip styled like the HA frontend
+        "Now"-style neutral chip in the screenshot the user shared. */
+    .dash-cf-card-bandeau-center
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        min-width: 0;
+        overflow: hidden;
+    }
+    .dash-cf-card-cal-icon
+    {
+        --mdc-icon-size: 18px;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        flex-shrink: 0;
     }
     .dash-cf-card-date
     {
-        font-size: clamp(13px, 2.4cqw, 18px);
-        font-weight: 800;
-        letter-spacing: 0.3px;
+        font-size: clamp(13px, 2.2cqw, 16px);
+        font-weight: 700;
+        letter-spacing: 0.2px;
         text-transform: capitalize;
-        text-align: center;
-        flex: 1;
-        display: inline-block;
-        transition: transform 200ms cubic-bezier(0.22, 1, 0.36, 1);
-        transform-origin: center center;
+        color: var(--primary-text-color, #ffffff);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
-    .dash-cf-card:hover .dash-cf-card-date
+    .dash-cf-card-day-chip
     {
-        transform: scale(1.06);
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 18%, transparent);
+        color: var(--primary-color, #03a9f4);
+        border-radius: 14px;
+        padding: 2px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.4;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    /*  Right-side slot. Either the close button (front card) or an invisible 30 px spacer so the grid keeps
+        the centre column properly centred on every card. */
+    .dash-cf-card-bandeau-spacer
+    {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
     }
 
     /*  First content block under the bandeau: Production on the left, Prévision on the right. Mushroom-card
@@ -621,11 +663,12 @@ export const heliosCardStyles = css`
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
         .detail-close-btn shape (28 px round, primary tint, soft shadow) but now lives inside the front card so
         it travels with the navigation rather than sitting in a fixed corner of the screen. */
+    /*  Close button, now a flex / grid child of the bandeau instead of an absolute-positioned overlay. Sits on
+        the right edge of the bandeau next to the date group and auto-aligns vertically with the weather chip
+        on the opposite side. line-height: 0 + inline-flex centred ha-icon keeps the glyph rendered on the
+        exact centre. */
     .dash-cf-close-btn
     {
-        position: absolute;
-        top: 10px;
-        right: 10px;
         width: 30px;
         height: 30px;
         display: inline-flex;
@@ -637,9 +680,10 @@ export const heliosCardStyles = css`
         color: var(--text-primary-color, #ffffff);
         cursor: pointer;
         padding: 0;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
         transition: transform 160ms ease;
-        z-index: 2;
+        line-height: 0;
+        flex-shrink: 0;
     }
     .dash-cf-close-btn:hover  { transform: scale(1.06); }
     .dash-cf-close-btn:active { transform: scale(0.94); }
@@ -647,6 +691,10 @@ export const heliosCardStyles = css`
     {
         --mdc-icon-size: 16px;
         color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
     }
 
     /*  Hover highlight on every card: border picks up the active theme primary so the user gets a clear
