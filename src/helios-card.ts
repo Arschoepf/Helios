@@ -589,8 +589,10 @@ export class HeliosCard extends LitElement
 
     //Cloud-cover dome overlay state. Mutually exclusive with the
     //LiDAR view and the shading dome (click handlers below close
-    //any other active mode before opening this one).
-    @state() _cloudMode = false;
+    //any other active mode before opening this one). Initial value
+    //comes from localStorage so the per-layer chip view sticks across
+    //page reloads.
+    @state() _cloudMode = HeliosCard._readCloudModePref();
     _cloudDomeFadeInStartMs:  number | null = null;
     _cloudDomeFadeOutStartMs: number | null = null;
     _cloudDomeFadeRaf?:       number;
@@ -2729,7 +2731,32 @@ export class HeliosCard extends LitElement
     private _onCloudChipToggle = (): void =>
     {
         this._cloudMode = !this._cloudMode;
+        HeliosCard._writeCloudModePref(this._cloudMode);
     };
+    private static _CLOUD_MODE_STORAGE_KEY = 'helios:cloud-mode';
+    private static _readCloudModePref(): boolean
+    {
+        try
+        {
+            return window.localStorage.getItem(HeliosCard._CLOUD_MODE_STORAGE_KEY) === '1';
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    private static _writeCloudModePref(on: boolean): void
+    {
+        try
+        {
+            window.localStorage.setItem(HeliosCard._CLOUD_MODE_STORAGE_KEY, on ? '1' : '0');
+        }
+        catch
+        {
+            //Disabled storage / quota / private windows: silently
+            //degrade to per-tab state.
+        }
+    }
     private _onModeLidar = (): void =>
     {
         this._exitScrubMode();
