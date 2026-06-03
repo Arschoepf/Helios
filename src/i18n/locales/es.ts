@@ -3,9 +3,7 @@ import type { Translations } from '../index';
 export const es: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real',
-    lidarViewChipLabel: 'Vista LiDAR',
 
-    shadingDomeChipLabel: 'Sombras',
     detail:
     {
         exitHint: 'Toca en cualquier lugar para salir',
@@ -34,7 +32,7 @@ export const es: Translations = {
         homeLatitude:       'Latitud del hogar',
         homeLongitude:      'Longitud del hogar',
         locationHint:       'Anula la dirección del hogar usada como centro de la tarjeta. Deja ambos campos vacíos para usar el hogar configurado en Home Assistant. La anulación se aplica solo cuando AMBOS campos contienen coordenadas válidas.',
-        mapSection:         'Mapa',
+        uiAndMapSection:    'UI y mapa',
         mapStyle:           'Estilo del mapa',
         mapStyleHint:       'Dos mapas base: Calles (sobrio, urbano, con etiquetas completas) o Minimal (carga Calles y elimina todas las etiquetas, iconos POI y escudos viarios superfluos para un renderizado más rápido). La variante oscura del estilo elegido se usa automáticamente cuando el tema de la tarjeta está en oscuro.',
         mapStyleStreet:     'Calles',
@@ -46,8 +44,7 @@ export const es: Translations = {
         autoRotateHint:     'Tras unos segundos de inactividad, la cámara orbita lentamente alrededor de la casa (aprox. 1,5°/s, en sentido contrario al movimiento aparente del sol). Un gesto con un dedo la pausa al instante; se reanuda cuando sueltas.',
         autoRotateOn:       'Activada',
         autoRotateOff:      'Desactivada',
-        uiSection:          'UI',
-        pvSection:          'Producción solar',
+        installationSection: 'Instalación PV',
         pvPeakPower:        'Potencia pico total (kWp)',
         pvPeakPowerHelp:    'Potencia pico instalada total de tu instalación en kilovatios-pico. Controla la curva de previsión punteada y la saturación del flujo PV → casa. Déjalo vacío cuando introduzcas una potencia pico por hilera abajo (el total es la suma). Sin ninguna de las dos, no se traza la previsión; la producción observada y el pico del día se siguen mostrando.',
         pvInverterMaxKw:    'Potencia máxima del inversor (kW)',
@@ -72,11 +69,8 @@ export const es: Translations = {
         pvArrayHeight:      'Altura de los paneles (m)',
         pvArrayHeightHelp:  'Opcional, valor por defecto 5. Altura de este grupo de paneles sobre el suelo en metros; usada por la previsión FV con sombreado LiDAR para posicionar el origen del trazado de rayos al comprobar si el grupo está en sombra por un vecino o un árbol. Auméntala para un tejado de planta superior (8-10 m), redúcela para una instalación a nivel de suelo (0-1 m). Sin efecto si ningún proveedor LiDAR cubre tu hogar.',
         pvArrayCoordsPlaceholder: 'opcional',
-        batterySection:     'Batería doméstica',
         inverterCutoffSocPct:       'SoC de corte del inversor (%)',
-        inverterCutoffSocPctHelp:   'Porcentaje al que tu inversor híbrido bloquea la producción PV cuando la batería alcanza su techo configurado. Déjalo vacío para desactivar. Cuando se establece, el entrenador del mapa de sombreado omite cada intervalo de observación donde el SoC de la batería alcanzó este valor, para que la producción bloqueada por el inversor no contamine el mapa con sombras fantasma en esas posiciones solares. Requiere que la entidad de SoC de batería de arriba esté configurada.',
-        weatherSection:           'Meteorología',
-        weatherHint:              'Opcional. Conecta entidades meteo locales para que Helios use mediciones tomadas en tu casa en lugar del modelo Open-Meteo interpolado a tu celda de la malla. Cada entidad es opcional de forma independiente y solo se usa cuando reporta un valor reciente; las muestras ausentes o caducadas vuelven al modelo de forma transparente.',
+        inverterCutoffSocPctHelp:   'Porcentaje al que tu inversor híbrido bloquea la producción PV cuando la batería alcanza su techo configurado. Déjalo vacío para desactivar. Cuando se establece, el entrenador del mapa de sombreado omite cada intervalo de observación donde el SoC de la batería alcanzó este valor, para que la producción bloqueada por el inversor no contamine el mapa con sombras fantasma en esas posiciones solares.',
         solarRadiationEntity:     'Entidad de radiación solar',
         solarRadiationEntityHelp: 'Elige un sensor que reporte irradiancia solar global en W/m² (típicamente una estación meteo Ecowitt / Davis / personal). Cuando está definido, su estado actual y su historial del recorder reemplazan a Open-Meteo en los valores live y pasados de irradiancia en todos los sitios donde aparecen (número de la pastilla sol, eje Y del gráfico FV, coloración del arco solar). Las horas de previsión siguen usando Open-Meteo, un sensor solo conoce el presente.',
         buildingsSection:   'Edificio',

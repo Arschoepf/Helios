@@ -613,7 +613,7 @@ export class HeliosCardEditor extends LitElement
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'map'}" @toggle="${(e: Event) => this._onSectionToggle('map', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.mapSection}</summary>
+                    <summary class="section-title section-title-collapse">${t.editor.uiAndMapSection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.mapStyle}</span>
                     <select
@@ -642,27 +642,22 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </div>
                 <div class="hint">${t.editor.showLabelsHint}</div>
-
-                </details>
-
-                <details class="advanced-section" ?open="${this._openSection === 'ui'}" @toggle="${(e: Event) => this._onSectionToggle('ui', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.uiSection}</summary>
-                    <div class="field">
-                        <span class="label">${t.editor.autoRotate}</span>
-                        <div class="segmented-toggle">
-                            <button
-                                type="button"
-                                class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
-                                @click="${() => this._update('auto-rotate-enabled', true)}"
-                            >${t.editor.autoRotateOn}</button>
-                            <button
-                                type="button"
-                                class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
-                                @click="${() => this._update('auto-rotate-enabled', false)}"
-                            >${t.editor.autoRotateOff}</button>
-                        </div>
+                <div class="field">
+                    <span class="label">${t.editor.autoRotate}</span>
+                    <div class="segmented-toggle">
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-rotate-enabled'] === true) ? 'active' : ''}"
+                            @click="${() => this._update('auto-rotate-enabled', true)}"
+                        >${t.editor.autoRotateOn}</button>
+                        <button
+                            type="button"
+                            class="seg-option ${(c['auto-rotate-enabled'] !== true) ? 'active' : ''}"
+                            @click="${() => this._update('auto-rotate-enabled', false)}"
+                        >${t.editor.autoRotateOff}</button>
                     </div>
-                    <div class="hint">${t.editor.autoRotateHint}</div>
+                </div>
+                <div class="hint">${t.editor.autoRotateHint}</div>
 
                 </details>
 
@@ -742,8 +737,8 @@ export class HeliosCardEditor extends LitElement
 
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'pv'}" @toggle="${(e: Event) => this._onSectionToggle('pv', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.pvSection}</summary>
+                <details class="advanced-section" ?open="${this._openSection === 'installation'}" @toggle="${(e: Event) => this._onSectionToggle('installation', e)}">
+                    <summary class="section-title section-title-collapse">${t.editor.installationSection}</summary>
                 <label class="field">
                     <span class="label">${t.editor.pvPeakPower}</span>
                     <input
@@ -768,6 +763,33 @@ export class HeliosCardEditor extends LitElement
                     />
                 </label>
                 <div class="field-help">${t.editor.pvInverterMaxKwHelp}</div>
+                <div class="field">
+                    <span class="label">${t.editor.inverterCutoffSocPct}</span>
+                    <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="1"
+                        .value="${c['inverter-cutoff-soc-pct'] != null ? String(c['inverter-cutoff-soc-pct']) : ''}"
+                        placeholder="95"
+                        @change="${(e: Event) => this._numField('inverter-cutoff-soc-pct', e)}"
+                    />
+                </div>
+                <div class="field-help">${t.editor.inverterCutoffSocPctHelp}</div>
+                <div class="field field-block">
+                    <span class="label">${t.editor.solarRadiationEntity}</span>
+                    ${this._pickerReady ? html`
+                        <ha-entity-picker
+                            allow-custom-entity
+                            .hass="${this.hass}"
+                            .value="${String(c['solar-radiation-entity'] ?? '')}"
+                            .includeDomains="${['sensor', 'input_number']}"
+                            .entityFilter="${this._solarRadiationEntityFilter}"
+                            @value-changed="${(e: CustomEvent) => this._update('solar-radiation-entity', e.detail.value ?? '')}"
+                        ></ha-entity-picker>
+                    ` : nothing}
+                </div>
+                <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
                 ${(() => {
                     const arrays   = this._readPvArrays();
                     const sharesSum = this._arraySharesSum(arrays);
@@ -919,41 +941,6 @@ export class HeliosCardEditor extends LitElement
                     ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
                 </details>
 
-                <details class="advanced-section" ?open="${this._openSection === 'battery'}" @toggle="${(e: Event) => this._onSectionToggle('battery', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.batterySection}</summary>
-                    <div class="field">
-                        <span class="label">${t.editor.inverterCutoffSocPct}</span>
-                        <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            step="1"
-                            .value="${c['inverter-cutoff-soc-pct'] != null ? String(c['inverter-cutoff-soc-pct']) : ''}"
-                            placeholder="95"
-                            @change="${(e: Event) => this._numField('inverter-cutoff-soc-pct', e)}"
-                        />
-                    </div>
-                    <div class="field-help">${t.editor.inverterCutoffSocPctHelp}</div>
-                </details>
-
-                <details class="advanced-section" ?open="${this._openSection === 'weather'}" @toggle="${(e: Event) => this._onSectionToggle('weather', e)}">
-                    <summary class="section-title section-title-collapse">${t.editor.weatherSection}</summary>
-                    <div class="hint">${t.editor.weatherHint}</div>
-                    <div class="field field-block">
-                        <span class="label">${t.editor.solarRadiationEntity}</span>
-                        ${this._pickerReady ? html`
-                            <ha-entity-picker
-                                allow-custom-entity
-                                .hass="${this.hass}"
-                                .value="${String(c['solar-radiation-entity'] ?? '')}"
-                                .includeDomains="${['sensor', 'input_number']}"
-                                .entityFilter="${this._solarRadiationEntityFilter}"
-                                @value-changed="${(e: CustomEvent) => this._update('solar-radiation-entity', e.detail.value ?? '')}"
-                            ></ha-entity-picker>
-                        ` : nothing}
-                    </div>
-                    <div class="field-help">${t.editor.solarRadiationEntityHelp}</div>
-                </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'lidarView'}" @toggle="${(e: Event) => this._onSectionToggle('lidarView', e)}">
                     <summary class="section-title section-title-collapse">${t.editor.lidarViewSection}</summary>

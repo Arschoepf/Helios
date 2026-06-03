@@ -6,9 +6,7 @@ import type { Translations } from '../index';
 export const cs: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Slunce, mraky, FV produkce, baterie a LiDAR stíny na vašem domě, ve 3D v reálném čase',
-    lidarViewChipLabel: 'Zobrazení LiDAR',
 
-    shadingDomeChipLabel: 'Stíny',
     detail:
     {
         exitHint: 'Klikněte kamkoli pro ukončení',
@@ -36,7 +34,7 @@ export const cs: Translations = {
         homeLatitude:       'Zeměpisná šířka domova',
         homeLongitude:      'Zeměpisná délka domova',
         locationHint:       'Přepíše adresu domova použitou jako střed mapy. Ponechte obě pole prázdná pro použití domova nakonfigurovaného v Home Assistant. Přepsání se použije pouze tehdy, když OBĚ pole obsahují platné souřadnice.',
-        mapSection:         'Mapa',
+        uiAndMapSection:    'UI a mapa',
         mapStyle:           'Styl mapy',
         mapStyleHint:       'Dvě mapy: Ulice (střízlivá, městská, s plnými popisky) nebo Minimální (načte styl Ulice a poté odstraní všechny nepodstatné popisky, ikony POI a značky silnic pro rychlejší vykreslování). Tmavá varianta zvoleného stylu se používá automaticky, když je motiv karty nastaven na tmavý.',
         mapStyleStreet:     'Ulice',
@@ -48,8 +46,7 @@ export const cs: Translations = {
         autoRotateHint:     'Po několika sekundách nečinnosti kamera pomalu obíhá kolem domu (asi 1,5°/s, opačně ke zdánlivému pohybu slunce). Tažení jedním prstem ji okamžitě pozastaví a pokračuje, jakmile pustíte.',
         autoRotateOn:       'Zapnuto',
         autoRotateOff:      'Vypnuto',
-        uiSection:          'UI',
-        pvSection:          'Solární produkce',
+        installationSection: 'Fotovoltaická instalace',
         pvPeakPower:        'Špičkový výkon (kWp)',
         pvPeakPowerHelp:    'Celkový instalovaný špičkový výkon vašeho pole v kilowatt-pícech. Pohání tečkovanou linku předpovědi v grafu FV a sytost toku vedoucího FV → dům. Ponechte prázdné, když zadáváte špičkový výkon na řádek níže (součet je pak celkem). Bez žádného z nich se předpověď nevykresluje; pozorovaná produkce a denní maximum se stále vykreslují.',
         pvInverterMaxKw:    'Max výstup invertoru (kW)',
@@ -74,11 +71,8 @@ export const cs: Translations = {
         pvArrayHeight:      'Výška panelů (m)',
         pvArrayHeightHelp:  'Volitelné, výchozí 5. Výška této skupiny panelů nad zemí v metrech; používaná předpovědí FV se znalostí LiDAR pro umístění počátku ray-marchingu při kontrole, zda jsou panely zastíněny sousedem nebo stromem. Zvyšte pro střechu vyššího patra (8-10 m), snižte pro pozemní instalaci (0-1 m). Nemá vliv, pokud žádný poskytovatel LiDAR nepokrývá domov.',
         pvArrayCoordsPlaceholder: 'volitelné',
-        batterySection:     'Domácí baterie',
         inverterCutoffSocPct:       'SoC odpojení střídače (%)',
-        inverterCutoffSocPctHelp:   'Procento, při kterém váš hybridní střídač blokuje výrobu PV, jakmile baterie dosáhne nastaveného stropu. Ponechte prázdné pro deaktivaci. Když je nastaveno, trénovač mapy stínování přeskočí každé pozorovací okno, ve kterém SoC baterie dosáhl této hodnoty, aby výroba blokovaná střídačem neznečišťovala mapu fantomovými stíny v odpovídajících pozicích Slunce. Vyžaduje, aby entita SoC baterie výše byla nakonfigurována.',
-        weatherSection:           'Počasí',
-        weatherHint:              'Volitelné. Připojte místní entity počasí, aby Helios používal měření z vašeho domova místo modelu Open-Meteo interpolovaného na vaši buňku mřížky. Každá entita je nezávisle volitelná a používá se pouze tehdy, když nese čerstvou hodnotu; chybějící nebo neaktuální vzorky se průhledně vrací k modelu.',
+        inverterCutoffSocPctHelp:   'Procento, při kterém váš hybridní střídač blokuje výrobu PV, jakmile baterie dosáhne nastaveného stropu. Ponechte prázdné pro deaktivaci. Když je nastaveno, trénovač mapy stínování přeskočí každé pozorovací okno, ve kterém SoC baterie dosáhl této hodnoty, aby výroba blokovaná střídačem neznečišťovala mapu fantomovými stíny v odpovídajících pozicích Slunce.',
         solarRadiationEntity:     'Entita slunečního záření',
         solarRadiationEntityHelp: 'Vyberte senzor hlásící globální krátkovlnné záření ve W/m² (typicky Ecowitt / Davis / osobní meteostanice). Po nastavení jeho aktuální stav a historie recordera nahrazují Open-Meteo pro živé + minulé záření všude, kde se objevuje (číslo chipu slunce, osa Y grafu FV, zbarvení slunečního oblouku). Hodiny předpovědi vždy používají Open-Meteo, protože senzor zná jen současnost.',
         buildingsSection:   'Budova',

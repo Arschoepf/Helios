@@ -375,20 +375,23 @@ ha-card.detail-active .solar-svg,
         opacity: 0;
         pointer-events: none;
     }
-    /*  Timeline slides out below the card edge. Pointer-events
-        disabled so the drifting element cannot intercept clicks
-        while off-screen. translateX kept so the bar stays centred. */
-    ha-card.lidar-view-active .time-bar
+    /*  Timeline slides out below the card edge for the two full-screen modes (LiDAR View, Shading Dome). Pointer-events
+        disabled so the drifting element cannot intercept clicks while off-screen. translateX kept so the bar stays
+        centred. */
+    ha-card.lidar-view-active   .time-bar,
+    ha-card.shading-dome-active .time-bar
     {
         transform: translateX(-50%) translateY(140%);
         pointer-events: none;
     }
-    ha-card.lidar-view-active .overlay-top-left
+    ha-card.lidar-view-active   .overlay-top-left,
+    ha-card.shading-dome-active .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
     }
-    ha-card.lidar-view-active .overlay-top-right
+    ha-card.lidar-view-active   .overlay-top-right,
+    ha-card.shading-dome-active .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;

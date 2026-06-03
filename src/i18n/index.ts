@@ -19,17 +19,6 @@ export interface Translations
     cardName:        string;
     cardDescription: string;
     //Label on the always-visible LiDAR-view chip in the top-right
-    //corner of the card (the half of the LiDAR cluster that's
-    //purely a text label; the adjacent button carries the state
-    //icon). Stays short, ~10 chars max, to balance the clock chip
-    //width on the opposite corner.
-    lidarViewChipLabel: string;
-    //Label on the shading-dome chip in the top-centre cluster.
-    //Same short noun-phrase convention as lidarViewChipLabel; the
-    //chip toggles the dome overlay where the learned PV residuals
-    //are painted on the celestial hemisphere above the home.
-    shadingDomeChipLabel: string;
-
     //Detail dashboard, opened by clicking the home. The camera eases
     //in (zoom + pitch) and a full-card overlay takes over while the
     //pre-existing HUD fades out.
@@ -95,7 +84,9 @@ export interface Translations
         homeLatitude:             string;
         homeLongitude:            string;
         locationHint:             string;
-        mapSection:               string;
+        //Top section grouping the map style + label visibility + camera auto-rotate toggle. Title reads "UI & map" because it bundles the basemap
+        //chrome with the camera animation that drives the user-facing motion.
+        uiAndMapSection:          string;
         mapStyle:                 string;
         mapStyleHint:             string;
         mapStyleStreet:           string;
@@ -107,14 +98,9 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
-        //UI section, hosts the chrome-level customisation that
-        //doesn't belong to a specific data overlay: sun + cloud
-        //colours (the two phenomena that don't have their own
-        //section), plus the date and time format toggles for the
-        //clock chip + the timeline labels.
-        uiSection:                string;
-        //Optional photovoltaic production overlay.
-        pvSection:                string;
+        //Single section for the user's PV install. Bundles the manual peak power, the inverter cap, the inverter-cutoff SoC guard
+        //and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy dashboard equivalent.
+        installationSection:      string;
         //Manual peak-power input (kWp). When set, drives the dotted
         //prediction line on the PV chart and the PV→home leader's
         //flow saturation. Optional; without it the card uses live
@@ -166,40 +152,15 @@ export interface Translations
         //per-array shading check.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
-        batterySection:           string;
-        //Multi-bank battery editor. The section renders one collapsible card per bank (same widget as pv-arrays) so a user with house +
-        //garage banks (or a hybrid + standalone) gets a dedicated row each. The chip on the card stays single, aggregating the banks as
-        //a capacity-weighted SoC + summed signed power. `batteryBankTitle` carries the auto-numbered fallback used when the user hasn't
-        //typed a name; `{n}` is substituted with the 1-based row index.
-        //Battery power sign-convention toggle. When the user's
-        //entity reports charging as negative (some GivEnergy /
-        //GivTCP setups), the inverted option flips the value once
-        //at ingest so the rest of the card stays on the
-        //"positive = charging" convention.
         //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
         //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
-        //train as phantom shadow. Leave the field empty to keep the legacy "train every bucket" behaviour.
+        //train as phantom shadow.
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;
-        //Grid section: import / export power readouts. Both sides
-        //accept multiple entities; the chip displays whichever entity
-        //last changed (typical for peak / off-peak indexes that never
-        //increment at the same time).
-        //Combined signed grid-power entity: one sensor whose sign
-        //routes to the import (>=0) or export (<0) chip, superseding
-        //the two directional slots. The invert toggle flips the sign
-        //convention for meters that report feed-in as positive.
-        //Weather section. Hosts the optional solar-radiation entity
-        //override: when wired to a physical W/m² sensor at the home
-        //(typical Ecowitt / Davis / personal weather station), the
-        //card prefers it over Open-Meteo for the live + past
-        //irradiance values. Forecast hours always fall through to
-        //the model since a sensor only knows the present.
-        weatherSection:           string;
-        weatherHint:              string;
+        //Optional W/m² sensor override (Ecowitt / Davis / personal weather station). When wired, the card prefers it over Open-Meteo
+        //for the live + past irradiance values. Forecast hours always fall through to the model since a sensor only knows the present.
         solarRadiationEntity:     string;
         solarRadiationEntityHelp: string;
-        //Timeline sub-section, nested inside the UI section. Hosts the visibility toggle, the width slider and the per-day consumption-chip toggle.
         //Surrounding buildings options. Cluster radius grows the home group to include attached outbuildings, opacity controls the transparency of
         //the neighbours and the colour is the base tint reused for every rendered building.
         buildingsSection:         string;

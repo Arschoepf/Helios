@@ -6,9 +6,7 @@ import type { Translations } from '../index';
 export const pl: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Słońce, chmury, produkcja PV, bateria i cienie LiDAR na Twoim domu, w 3D w czasie rzeczywistym',
-    lidarViewChipLabel: 'Widok LiDAR',
 
-    shadingDomeChipLabel: 'Cienie',
     detail:
     {
         exitHint: 'Kliknij gdziekolwiek, aby wyjść',
@@ -36,7 +34,7 @@ export const pl: Translations = {
         homeLatitude:       'Szerokość geograficzna domu',
         homeLongitude:      'Długość geograficzna domu',
         locationHint:       'Zastępuje adres domu używany jako środek mapy. Pozostaw oba pola puste, aby użyć domu skonfigurowanego w Home Assistant. Zastąpienie jest stosowane tylko gdy OBA pola zawierają prawidłowe współrzędne.',
-        mapSection:         'Mapa',
+        uiAndMapSection:    'UI i mapa',
         mapStyle:           'Styl mapy',
         mapStyleHint:       'Dwie mapy podkładowe: Ulice (stonowana, miejska, z pełnymi etykietami) lub Minimalna (ładuje styl Ulice, a następnie usuwa wszystkie nieistotne etykiety, ikony POI i tarcze dróg dla szybszego renderowania). Ciemny wariant wybranego stylu jest używany automatycznie, gdy motyw karty jest ustawiony na ciemny.',
         mapStyleStreet:     'Ulice',
@@ -48,8 +46,7 @@ export const pl: Translations = {
         autoRotateHint:     'Po kilku sekundach bezczynności kamera powoli orbituje wokół domu (około 1,5°/s, w kierunku przeciwnym do pozornego ruchu słońca). Przeciągnięcie jednym palcem natychmiast ją zatrzymuje, wznawia się po zwolnieniu.',
         autoRotateOn:       'Włączona',
         autoRotateOff:      'Wyłączona',
-        uiSection:          'UI',
-        pvSection:          'Produkcja słoneczna',
+        installationSection: 'Instalacja PV',
         pvPeakPower:        'Moc szczytowa (kWp)',
         pvPeakPowerHelp:    'Całkowita zainstalowana moc szczytowa Twojej instalacji w kilowatach-pikach. Steruje przerywaną linią prognozy na wykresie PV oraz nasyceniem przepływu lidera PV → dom. Pozostaw puste, gdy wpisujesz moc szczytową dla każdego stringu w wierszach poniżej (suma stanowi wtedy całość). Bez żadnego z nich prognoza nie jest rysowana; obserwowana produkcja i dzienny szczyt nadal się renderują.',
         pvInverterMaxKw:    'Maks. moc falownika (kW)',
@@ -74,11 +71,8 @@ export const pl: Translations = {
         pvArrayHeight:      'Wysokość paneli (m)',
         pvArrayHeightHelp:  'Opcjonalne, domyślnie 5. Wysokość tej grupy paneli nad ziemią w metrach; używana przez prognozę PV ze świadomością LiDAR do pozycjonowania źródła ray-marchingu podczas sprawdzania, czy panele są zasłonięte przez sąsiada lub drzewo. Podnieś dla dachu wyższego piętra (8-10 m), obniż dla instalacji naziemnej (0-1 m). Nie ma efektu, gdy żaden dostawca LiDAR nie obejmuje domu.',
         pvArrayCoordsPlaceholder: 'opcjonalnie',
-        batterySection:     'Bateria domowa',
         inverterCutoffSocPct:       'SoC odcięcia falownika (%)',
-        inverterCutoffSocPctHelp:   'Procent, przy którym Twój falownik hybrydowy blokuje produkcję PV, gdy bateria osiągnie ustawiony pułap. Pozostaw puste, aby wyłączyć. Po ustawieniu trener mapy zacienienia pomija każde okno obserwacji, w którym SoC baterii osiągnął tę wartość, aby produkcja zablokowana przez falownik nie zanieczyszczała mapy fantomowymi cieniami w odpowiadających pozycjach Słońca. Wymaga skonfigurowania encji SoC baterii powyżej.',
-        weatherSection:           'Pogoda',
-        weatherHint:              'Opcjonalne. Podłącz lokalne encje pogody, aby Helios używał pomiarów z Twojego domu zamiast modelu Open-Meteo interpolowanego do komórki siatki. Każda encja jest niezależnie opcjonalna i używana tylko wtedy, gdy niesie świeżą wartość; brakujące lub nieaktualne próbki przezroczyście wracają do modelu.',
+        inverterCutoffSocPctHelp:   'Procent, przy którym Twój falownik hybrydowy blokuje produkcję PV, gdy bateria osiągnie ustawiony pułap. Pozostaw puste, aby wyłączyć. Po ustawieniu trener mapy zacienienia pomija każde okno obserwacji, w którym SoC baterii osiągnął tę wartość, aby produkcja zablokowana przez falownik nie zanieczyszczała mapy fantomowymi cieniami w odpowiadających pozycjach Słońca.',
         solarRadiationEntity:     'Encja promieniowania słonecznego',
         solarRadiationEntityHelp: 'Wybierz czujnik raportujący globalne natężenie promieniowania krótkofalowego w W/m² (typowo Ecowitt / Davis / osobista stacja pogodowa). Po ustawieniu jego aktualny stan i historia recordera zastępują Open-Meteo dla bieżącego + przeszłego natężenia wszędzie, gdzie się pojawia (numer chipa słońca, oś Y wykresu PV, kolorowanie łuku słońca). Godziny prognozy zawsze używają Open-Meteo, ponieważ czujnik zna tylko teraźniejszość.',
         buildingsSection:   'Budynek',

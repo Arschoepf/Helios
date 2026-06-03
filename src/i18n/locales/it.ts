@@ -3,9 +3,7 @@ import type { Translations } from '../index';
 export const it: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sole, nuvole, produzione FV, batteria e ombre LiDAR sulla tua casa, in 3D e tempo reale',
-    lidarViewChipLabel: 'Vista LiDAR',
 
-    shadingDomeChipLabel: 'Ombre',
     detail:
     {
         exitHint: 'Tocca un punto qualsiasi per uscire',
@@ -34,7 +32,7 @@ export const it: Translations = {
         homeLatitude:       'Latitudine di casa',
         homeLongitude:      'Longitudine di casa',
         locationHint:       'Sovrascrive l\'indirizzo di casa usato come centro della scheda. Lascia entrambi i campi vuoti per usare l\'indirizzo configurato in Home Assistant. La sovrascrittura è applicata solo quando ENTRAMBI i campi contengono coordinate valide.',
-        mapSection:         'Mappa',
+        uiAndMapSection:    'UI e mappa',
         mapStyle:           'Stile della mappa',
         mapStyleHint:       'Due mappe di base: Strade (sobria, urbana, con etichette complete) o Minimal (carica Strade e rimuove tutte le etichette, icone POI e segnali stradali superflui per un rendering più rapido). La variante scura dello stile scelto viene usata automaticamente quando il tema della scheda è impostato su scuro.',
         mapStyleStreet:     'Strade',
@@ -46,8 +44,7 @@ export const it: Translations = {
         autoRotateHint:     'Dopo qualche secondo di inattività, la camera ruota lentamente attorno alla casa (circa 1,5°/s, in senso opposto al moto apparente del sole). Un gesto con un dito la mette in pausa all\'istante e riprende non appena rilasci.',
         autoRotateOn:       'Attiva',
         autoRotateOff:      'Disattiva',
-        uiSection:          'UI',
-        pvSection:          'Produzione solare',
+        installationSection: 'Impianto PV',
         pvPeakPower:        'Potenza di picco totale (kWp)',
         pvPeakPowerHelp:    'Potenza di picco installata totale del tuo impianto in kilowatt-picco. Regola la curva di previsione tratteggiata e la saturazione del flusso PV → casa. Lascia vuoto quando inserisci una potenza di picco per stringa qui sotto (il totale è la somma). Senza nessuna delle due, la previsione non viene tracciata; produzione osservata e picco del giorno restano visibili.',
         pvInverterMaxKw:    'Potenza max inverter (kW)',
@@ -72,11 +69,8 @@ export const it: Translations = {
         pvArrayHeight:      'Altezza dei pannelli (m)',
         pvArrayHeightHelp:  'Opzionale, valore predefinito 5. Altezza di questo gruppo di pannelli rispetto al suolo in metri; usata dalla previsione FV con ombreggiamento LiDAR per posizionare l’origine del ray-march nel controllo dell’ombra di un vicino o di un albero. Aumenta per un tetto del piano superiore (8-10 m), riduci per un montaggio a terra (0-1 m). Nessun effetto se nessun provider LiDAR copre la tua casa.',
         pvArrayCoordsPlaceholder: 'opzionale',
-        batterySection:     'Batteria domestica',
         inverterCutoffSocPct:       'SoC di stacco inverter (%)',
-        inverterCutoffSocPctHelp:   'Percentuale alla quale il tuo inverter ibrido blocca la produzione PV quando la batteria raggiunge il suo limite impostato. Lascia vuoto per disattivare. Quando impostato, il trainer della mappa di ombreggiatura salta ogni intervallo di osservazione in cui il SoC della batteria ha raggiunto questo valore, in modo che la produzione bloccata dall\'inverter non inquini la mappa con ombre fantasma nelle posizioni solari corrispondenti. Richiede che l\'entità SoC batteria qui sopra sia configurata.',
-        weatherSection:           'Meteo',
-        weatherHint:              'Opzionale. Collega entità meteo locali perché Helios usi misure prese a casa tua invece del modello Open-Meteo interpolato sulla tua cella di griglia. Ogni entità è indipendentemente opzionale e viene usata solo quando riporta un valore fresco; i campioni mancanti o stantii ricadono sul modello in modo trasparente.',
+        inverterCutoffSocPctHelp:   'Percentuale alla quale il tuo inverter ibrido blocca la produzione PV quando la batteria raggiunge il suo limite impostato. Lascia vuoto per disattivare. Quando impostato, il trainer della mappa di ombreggiatura salta ogni intervallo di osservazione in cui il SoC della batteria ha raggiunto questo valore, in modo che la produzione bloccata dall\'inverter non inquini la mappa con ombre fantasma nelle posizioni solari corrispondenti.',
         solarRadiationEntity:     'Entità irradianza solare',
         solarRadiationEntityHelp: 'Scegli un sensore che riporti l\'irradianza solare globale in W/m² (tipicamente una stazione meteo Ecowitt / Davis / personale). Quando è impostato, il suo stato attuale e la sua storia del recorder sostituiscono Open-Meteo per i valori live e passati di irradianza ovunque appaiano (numero sulla pastiglia sole, asse Y del grafico FV, colorazione dell\'arco solare). Le ore di previsione continuano a usare Open-Meteo, un sensore conosce solo il presente.',
         buildingsSection:   'Edificio',

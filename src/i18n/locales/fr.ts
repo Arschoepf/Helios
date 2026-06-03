@@ -11,9 +11,7 @@ import type { Translations } from '../index';
 export const fr: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel',
-    lidarViewChipLabel: 'Vue LiDAR',
 
-    shadingDomeChipLabel: 'Ombres',
     detail:
     {
         exitHint: 'Cliquez n\'importe où pour quitter',
@@ -41,7 +39,7 @@ export const fr: Translations = {
         homeLatitude:       'Latitude du domicile',
         homeLongitude:      'Longitude du domicile',
         locationHint:       'Remplace l\'adresse du domicile utilisée comme centre de la carte. Laissez les deux champs vides pour utiliser le domicile configuré dans Home Assistant. La substitution n\'est appliquée que lorsque LES DEUX champs contiennent des coordonnées valides.',
-        mapSection:         'Carte',
+        uiAndMapSection:    'UI & carte',
         mapStyle:           'Style de la carte',
         mapStyleHint:       'Deux fonds de carte : Rues (sobre, urbain, libellés complets) ou Minimal (charge le fond Rues puis retire tous les libellés, icônes POI et boucliers routiers superflus pour gagner en performance). La variante sombre du style choisi est utilisée automatiquement quand le thème de la carte est en mode sombre.',
         mapStyleStreet:     'Rues',
@@ -53,8 +51,7 @@ export const fr: Translations = {
         autoRotateHint:     'Après quelques secondes d\'inactivité, la caméra tourne lentement autour de la maison (environ 1,5°/s, dans le sens inverse du mouvement apparent du soleil). Un glissement à un doigt met la rotation en pause immédiatement, elle reprend dès que tu lâches.',
         autoRotateOn:       'Activée',
         autoRotateOff:      'Désactivée',
-        uiSection:          'UI',
-        pvSection:          'Production photovoltaïque',
+        installationSection: 'Installation photovoltaïque',
         pvPeakPower:        'Puissance crête totale (kWp)',
         pvPeakPowerHelp:    'Puissance crête totale de ton installation, en kilowatts-crête. Sert à tracer la courbe de prévision et à caler la cadence du flux PV → maison. Laisse vide quand tu renseignes une puissance crête par string ci-dessous (le total est alors la somme). Sans l\'un ni l\'autre, la prévision n\'est pas affichée ; la production observée et le pic du jour restent visibles.',
         pvInverterMaxKw:    'Puissance max onduleur (kW)',
@@ -79,11 +76,8 @@ export const fr: Translations = {
         pvArrayHeight:      'Hauteur des panneaux (m)',
         pvArrayHeightHelp:  'Optionnel, par défaut 5. Hauteur de ce groupe de panneaux au-dessus du sol en mètres ; utilisée par la prévision PV avec ombrage LiDAR pour positionner l’origine du raycast lors du test d’ombrage par un voisin ou un arbre. Augmentez pour un toit d’étage (8-10 m), abaissez pour un montage au sol (0-1 m). Sans effet si aucun fournisseur LiDAR ne couvre votre domicile.',
         pvArrayCoordsPlaceholder: 'optionnel',
-        batterySection:     'Batterie domestique',
         inverterCutoffSocPct:       'Seuil de coupure onduleur (%)',
-        inverterCutoffSocPctHelp:   'Pourcentage à partir duquel votre onduleur hybride bloque la production PV une fois que la batterie atteint son plafond. Laissez vide pour désactiver. Quand renseigné, l\'apprentissage de la carte d\'ombrage ignore chaque créneau d\'observation où le SoC batterie a atteint cette valeur, pour ne pas polluer la carte avec des ombres fantômes aux positions solaires concernées. Nécessite que l\'entité SoC batterie ci-dessus soit configurée.',
-        weatherSection:           'Météo',
-        weatherHint:              'Optionnel. Branche des entités météo locales pour qu\'Helios utilise des mesures prises chez toi plutôt que le modèle Open-Meteo interpolé à ta cellule de grille. Chaque entité est indépendamment optionnelle et n\'est utilisée que lorsqu\'elle remonte une valeur fraîche ; les échantillons manquants ou périmés retombent sur le modèle de manière transparente.',
+        inverterCutoffSocPctHelp:   'Pourcentage à partir duquel votre onduleur hybride bloque la production PV une fois que la batterie atteint son plafond. Laissez vide pour désactiver. Quand renseigné, l\'apprentissage de la carte d\'ombrage ignore chaque créneau d\'observation où le SoC batterie a atteint cette valeur, pour ne pas polluer la carte avec des ombres fantômes aux positions solaires concernées.',
         solarRadiationEntity:     'Entité d\'irradiance solaire',
         solarRadiationEntityHelp: 'Choisis un capteur qui remonte l\'irradiance solaire globale en W/m² (typiquement une station météo Ecowitt / Davis / perso). Quand il est défini, son état actuel et son historique recorder remplacent Open-Meteo pour les valeurs live + passées partout où elles apparaissent (nombre sur la pastille soleil, axe Y du graphique PV, coloration de l\'arc solaire). Les heures de prévision continuent d\'utiliser Open-Meteo, un capteur ne connaît que le présent.',
         buildingsSection:   'Bâtiment',

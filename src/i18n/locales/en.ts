@@ -13,9 +13,7 @@ import type { Translations } from '../index';
 export const en: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home',
-    lidarViewChipLabel: 'LiDAR view',
 
-    shadingDomeChipLabel: 'Shadows',
     detail:
     {
         exitHint: 'Tap anywhere to exit',
@@ -44,7 +42,7 @@ export const en: Translations = {
         homeLatitude:       'Home latitude',
         homeLongitude:      'Home longitude',
         locationHint:       'Override the home address used as the card\'s center. Leave both fields empty to use Home Assistant\'s configured home. The override is only applied when BOTH fields are set to valid coordinates.',
-        mapSection:         'Map',
+        uiAndMapSection:    'UI & map',
         mapStyle:           'Map style',
         mapStyleHint:       'Two basemaps: Streets (sober, urban, with full labels) or Minimal (loads Streets then strips every non-essential label, POI icon and road shield for a faster render). The dark variant of the chosen style is used automatically when the card theme is set to dark.',
         mapStyleStreet:     'Streets',
@@ -56,8 +54,7 @@ export const en: Translations = {
         autoRotateHint:     'When idle for a few seconds, the camera slowly orbits the home (about 1.5°/s, opposite to the sun\'s apparent motion). A single-finger drag pauses it instantly and it resumes once you let go.',
         autoRotateOn:       'On',
         autoRotateOff:      'Off',
-        uiSection:          'UI',
-        pvSection:          'Solar production',
+        installationSection: 'PV installation',
         pvPeakPower:        'Peak power (kWp)',
         pvPeakPowerHelp:    'Total installed peak power of your array in kilowatt-peak. Drives the dotted forecast line on the PV chart and the PV → home leader\'s flow saturation. Leave empty when you enter a per-string peak-kWp on each row below (the total is then the sum). Without either, no forecast is drawn; observed production and the daily peak still render.',
         pvInverterMaxKw:    'Inverter max output (kW)',
@@ -82,11 +79,8 @@ export const en: Translations = {
         pvArrayHeight:      'Panel height (m)',
         pvArrayHeightHelp:  'Optional, default 5. Height of this group of panels above ground in metres; used by the LiDAR-aware PV forecast to position the ray-march origin when checking whether the array is shaded by a neighbour or a tree. Raise it for an upper-floor roof (8-10 m), lower it for a ground-mounted array (0-1 m). Has no effect when no LiDAR provider covers the home.',
         pvArrayCoordsPlaceholder: 'optional',
-        batterySection:     'Home battery',
         inverterCutoffSocPct:       'Inverter cutoff SoC (%)',
-        inverterCutoffSocPctHelp:   'Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the shading-map trainer skips every observation bucket where the battery SoC reached this value so the inverter-blocked production does not pollute the shading map with phantom shadow at those sun positions. Requires the battery SoC entity above to be configured.',
-        weatherSection:           'Weather',
-        weatherHint:              'Optional. Wire local weather entities to feed Helios with measurements taken at your home instead of the Open-Meteo model interpolated to your grid cell. Each entity is independently optional and only used when it carries a fresh value; missing or stale samples fall back to the model transparently.',
+        inverterCutoffSocPctHelp:   'Percent at which your hybrid inverter clamps PV output once the battery hits its set ceiling. Leave empty to disable. When set, the shading-map trainer skips every observation bucket where the battery SoC reached this value so the inverter-blocked production does not pollute the shading map with phantom shadow at those sun positions.',
         solarRadiationEntity:     'Solar radiation entity',
         solarRadiationEntityHelp: 'Pick a sensor reporting global shortwave irradiance in W/m² (typical Ecowitt / Davis / personal weather station). When set, its current state and recorder history replace Open-Meteo for the live + past irradiance everywhere it appears (sun chip number, PV chart Y axis, sun arc colouring). Forecast hours always use Open-Meteo since a sensor only knows the present.',
         buildingsSection:   'Building',

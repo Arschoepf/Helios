@@ -6,9 +6,7 @@ import type { Translations } from '../index';
 export const sv: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sol, moln, PV-produktion, batteri och LiDAR-skuggor på ditt hem, i 3D i realtid',
-    lidarViewChipLabel: 'LiDAR-vy',
 
-    shadingDomeChipLabel: 'Skuggor',
     detail:
     {
         exitHint: 'Klicka var som helst för att avsluta',
@@ -36,7 +34,7 @@ export const sv: Translations = {
         homeLatitude:       'Hemmets latitud',
         homeLongitude:      'Hemmets longitud',
         locationHint:       'Åsidosätter hemadressen som används som kortets centrum. Lämna båda fälten tomma för att använda Home Assistants konfigurerade hem. Åsidosättningen tillämpas endast när BÅDA fälten är inställda på giltiga koordinater.',
-        mapSection:         'Karta',
+        uiAndMapSection:    'UI och karta',
         mapStyle:           'Kartstil',
         mapStyleHint:       'Två baskartor: Gator (nykter, urban, med fullständiga etiketter) eller Minimal (laddar Gator-stilen och tar sedan bort alla oviktiga etiketter, POI-ikoner och vägskyltar för snabbare rendering). Den mörka varianten av vald stil används automatiskt när korttemat är inställt på mörkt.',
         mapStyleStreet:     'Gator',
@@ -48,8 +46,7 @@ export const sv: Translations = {
         autoRotateHint:     'Efter några sekunders inaktivitet roterar kameran långsamt runt hemmet (ungefär 1,5°/s, mot solens skenbara rörelse). Ett enfingersdrag pausar den omedelbart och den återupptas så snart du släpper.',
         autoRotateOn:       'På',
         autoRotateOff:      'Av',
-        uiSection:          'UI',
-        pvSection:          'Solproduktion',
+        installationSection: 'Solanläggning',
         pvPeakPower:        'Topp-effekt (kWp)',
         pvPeakPowerHelp:    'Total installerad topp-effekt för din anläggning i kilowatt-peak. Driver den prickade prognoslinjen i PV-diagrammet och PV → hem-ledarens flödesmättnad. Lämna tomt när du anger en topp-kWp per sträng på varje rad nedan (totalen är då summan). Utan någondera ritas ingen prognos; observerad produktion och dagstoppen renderas fortfarande.',
         pvInverterMaxKw:    'Växelriktarens maxeffekt (kW)',
@@ -74,11 +71,8 @@ export const sv: Translations = {
         pvArrayHeight:      'Panelhöjd (m)',
         pvArrayHeightHelp:  'Valfritt, standard 5. Höjden på denna panelgrupp över marken i meter; används av den LiDAR-medvetna PV-prognosen för att placera ray-marchingens ursprung när det kontrolleras om matrisen är skuggad av en granne eller ett träd. Höj för ett tak på övre våningen (8-10 m), sänk för en markmonterad anläggning (0-1 m). Har ingen effekt när ingen LiDAR-leverantör täcker hemmet.',
         pvArrayCoordsPlaceholder: 'valfritt',
-        batterySection:     'Hembatteri',
         inverterCutoffSocPct:       'Växelriktarens avstängnings-SoC (%)',
-        inverterCutoffSocPctHelp:   'Procenten där din hybridväxelriktare blockerar PV-produktionen när batteriet når sin inställda gräns. Lämna tomt för att inaktivera. När det är satt hoppar skuggkartans tränare över varje observationsfönster där batteriets SoC nådde detta värde, så att den växelriktar-blockerade produktionen inte förorenar skuggkartan med spökskuggor vid motsvarande solpositioner. Kräver att batteri-SoC-entiteten ovan är konfigurerad.',
-        weatherSection:           'Väder',
-        weatherHint:              'Valfritt. Anslut lokala väderentiteter för att mata Helios med mätningar gjorda hemma hos dig istället för Open-Meteo-modellen interpolerad till din rutcell. Varje entitet är oberoende valfri och används endast när den bär ett färskt värde; saknade eller inaktuella prov faller tillbaka till modellen transparent.',
+        inverterCutoffSocPctHelp:   'Procenten där din hybridväxelriktare blockerar PV-produktionen när batteriet når sin inställda gräns. Lämna tomt för att inaktivera. När det är satt hoppar skuggkartans tränare över varje observationsfönster där batteriets SoC nådde detta värde, så att den växelriktar-blockerade produktionen inte förorenar skuggkartan med spökskuggor vid motsvarande solpositioner.',
         solarRadiationEntity:     'Solstrålningsentitet',
         solarRadiationEntityHelp: 'Välj en sensor som rapporterar global kortvågsstrålning i W/m² (typisk Ecowitt / Davis / personlig väderstation). När den är inställd ersätter dess aktuella tillstånd och recorder-historik Open-Meteo för den levande + tidigare strålningen överallt där den visas (solchipets nummer, PV-diagrammets Y-axel, solbågsfärgning). Prognostimmar använder alltid Open-Meteo eftersom en sensor bara känner nuet.',
         buildingsSection:   'Byggnad',

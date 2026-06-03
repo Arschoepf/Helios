@@ -3,9 +3,7 @@ import type { Translations } from '../index';
 export const de: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sonne, Wolken, PV-Erzeugung, Batterie und LiDAR-Schatten am Haus, in 3D-Echtzeit',
-    lidarViewChipLabel: 'LiDAR-Ansicht',
 
-    shadingDomeChipLabel: 'Schatten',
     detail:
     {
         exitHint: 'Tippe irgendwo, um zu schließen',
@@ -34,7 +32,7 @@ export const de: Translations = {
         homeLatitude:       'Breitengrad des Zuhauses',
         homeLongitude:      'Längengrad des Zuhauses',
         locationHint:       'Überschreibt die Heimadresse, die als Mittelpunkt der Karte verwendet wird. Beide Felder leer lassen, um die in Home Assistant konfigurierte Adresse zu nutzen. Die Überschreibung wird nur angewendet, wenn BEIDE Felder gültige Koordinaten enthalten.',
-        mapSection:         'Karte',
+        uiAndMapSection:    'UI & Karte',
         mapStyle:           'Kartenstil',
         mapStyleHint:       'Zwei Basiskarten: Straßen (nüchtern, urban, mit vollständigen Beschriftungen) oder Minimal (lädt Straßen und entfernt anschließend alle überflüssigen Beschriftungen, POI-Symbole und Beschilderungen für eine flüssigere Darstellung). Die dunkle Variante des gewählten Stils wird automatisch verwendet, wenn das Karten-Thema auf dunkel gesetzt ist.',
         mapStyleStreet:     'Straßen',
@@ -46,8 +44,7 @@ export const de: Translations = {
         autoRotateHint:     'Nach ein paar Sekunden Inaktivität kreist die Kamera langsam um das Haus (ca. 1,5°/s, gegenläufig zur scheinbaren Sonnenbahn). Eine Ein-Finger-Geste pausiert sie sofort; sie setzt fort, sobald du loslässt.',
         autoRotateOn:       'Ein',
         autoRotateOff:      'Aus',
-        uiSection:          'UI',
-        pvSection:          'Solarproduktion',
+        installationSection: 'PV-Anlage',
         pvPeakPower:        'Gesamt-Spitzenleistung (kWp)',
         pvPeakPowerHelp:    'Gesamte installierte Spitzenleistung deiner Anlage in Kilowatt-Peak. Bestimmt die gepunktete Prognoselinie im PV-Diagramm und die Sättigung des PV → Haus-Flusses. Leer lassen, wenn du unten pro String eine Spitzenleistung eingibst (Gesamt = Summe). Ohne beides wird keine Prognose angezeigt; gemessene Produktion und Tagesspitze bleiben sichtbar.',
         pvInverterMaxKw:    'Wechselrichter-Maximalleistung (kW)',
@@ -72,11 +69,8 @@ export const de: Translations = {
         pvArrayHeight:      'Modulhöhe (m)',
         pvArrayHeightHelp:  'Optional, Standardwert 5. Höhe dieser Modulgruppe über dem Boden in Metern; wird von der LiDAR-bewussten PV-Vorhersage verwendet, um den Ursprung des Raycasts beim Beschattungstest durch einen Nachbarn oder Baum zu positionieren. Für ein Obergeschossdach erhöhen (8-10 m), für eine Bodenmontage absenken (0-1 m). Ohne Wirkung, wenn kein LiDAR-Anbieter Ihr Zuhause abdeckt.',
         pvArrayCoordsPlaceholder: 'optional',
-        batterySection:     'Hausbatterie',
         inverterCutoffSocPct:       'Wechselrichter-Cutoff SoC (%)',
-        inverterCutoffSocPctHelp:   'Prozentwert, ab dem Ihr Hybrid-Wechselrichter die PV-Einspeisung kappt, sobald die Batterie ihre Obergrenze erreicht. Leer lassen, um zu deaktivieren. Wenn gesetzt, überspringt der Shading-Map-Trainer jedes Beobachtungsfenster, in dem der Batterie-SoC diesen Wert erreicht hat, damit die vom Wechselrichter blockierte Produktion die Shading-Karte nicht mit Phantom-Schatten an den entsprechenden Sonnenpositionen verschmutzt. Erfordert die oben konfigurierte Batterie-SoC-Entität.',
-        weatherSection:           'Wetter',
-        weatherHint:              'Optional. Verbinde lokale Wetter-Entitäten, damit Helios direkt bei dir gemessene Werte verwendet, statt das Open-Meteo-Modell, das auf deine Gitterzelle interpoliert wird. Jede Entität ist unabhängig optional und wird nur verwendet, wenn sie einen frischen Wert liefert; fehlende oder veraltete Messwerte fallen transparent auf das Modell zurück.',
+        inverterCutoffSocPctHelp:   'Prozentwert, ab dem Ihr Hybrid-Wechselrichter die PV-Einspeisung kappt, sobald die Batterie ihre Obergrenze erreicht. Leer lassen, um zu deaktivieren. Wenn gesetzt, überspringt der Shading-Map-Trainer jedes Beobachtungsfenster, in dem der Batterie-SoC diesen Wert erreicht hat, damit die vom Wechselrichter blockierte Produktion die Shading-Karte nicht mit Phantom-Schatten an den entsprechenden Sonnenpositionen verschmutzt.',
         solarRadiationEntity:     'Solarstrahlungs-Entität',
         solarRadiationEntityHelp: 'Wähle einen Sensor, der die globale Kurzwellenstrahlung in W/m² meldet (typisch Ecowitt / Davis / private Wetterstation). Wenn gesetzt, ersetzt sein aktueller Zustand und sein Recorder-Verlauf Open-Meteo bei allen Live- und Vergangenheitswerten der Bestrahlungsstärke (Zahl an der Sonnenpastille, Y-Achse des PV-Charts, Färbung des Sonnenbogens). Vorhersagestunden verwenden weiterhin Open-Meteo, da ein Sensor nur die Gegenwart kennt.',
         buildingsSection:   'Gebäude',

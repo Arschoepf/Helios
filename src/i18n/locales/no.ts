@@ -12,9 +12,7 @@ import type { Translations } from '../index';
 export const no: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid',
-    lidarViewChipLabel: 'LiDAR-visning',
 
-    shadingDomeChipLabel: 'Skygger',
     detail:
     {
         exitHint: 'Trykk hvor som helst for å gå ut',
@@ -43,7 +41,7 @@ export const no: Translations = {
         homeLatitude:       'Hjemmets breddegrad',
         homeLongitude:      'Hjemmets lengdegrad',
         locationHint:       'Overstyrer hjemmeadressen som brukes som kortets sentrum. La begge feltene være tomme for å bruke hjemmet som er konfigurert i Home Assistant. Overstyringen brukes kun når BEGGE feltene har gyldige koordinater.',
-        mapSection:         'Kart',
+        uiAndMapSection:    'UI og kart',
         mapStyle:           'Kartstil',
         mapStyleHint:       'To grunnkart: Gater (nøkternt, urbant, med fulle etiketter) eller Minimal (laster Gater og fjerner alle ikke-essensielle etiketter, POI-ikoner og veiskilt for raskere rendering). Den mørke varianten av valgt stil brukes automatisk når korttemaet er satt til mørkt.',
         mapStyleStreet:     'Gater',
@@ -55,8 +53,7 @@ export const no: Translations = {
         autoRotateHint:     'Etter noen sekunder uten aktivitet roterer kameraet sakte rundt huset (omtrent 1,5°/s, motsatt av solens tilsynelatende bevegelse). En enfingers-bevegelse pauser den umiddelbart, og den fortsetter så snart du slipper.',
         autoRotateOn:       'På',
         autoRotateOff:      'Av',
-        uiSection:          'UI',
-        pvSection:          'Solproduksjon',
+        installationSection: 'Solcelleanlegg',
         pvPeakPower:        'Total toppeffekt (kWp)',
         pvPeakPowerHelp:    'Total installert toppeffekt for anlegget i kilowatt-peak. Driver den prikkete prognoselinjen og strømningsmetningen for PV → hus-leaderen. La stå tom når du oppgir en toppeffekt per streng nedenfor (totalen er summen). Uten noen av delene tegnes ingen prognose; observert produksjon og dagens topp vises likevel.',
         pvInverterMaxKw:    'Maks vekselretter-effekt (kW)',
@@ -81,11 +78,8 @@ export const no: Translations = {
         pvArrayHeight:      'Panelhøyde (m)',
         pvArrayHeightHelp:  'Valgfritt, standard 5. Høyde for denne panelgruppen over bakken i meter; brukes av den LiDAR-bevisste PV-prognosen til å plassere ray-march-opphavet ved kontroll av skygge fra en nabo eller et tre. Øk for et tak i øverste etasje (8-10 m), reduser for en bakkemontering (0-1 m). Ingen effekt hvis ingen LiDAR-leverandør dekker hjemmet ditt.',
         pvArrayCoordsPlaceholder: 'valgfritt',
-        batterySection:     'Husbatteri',
         inverterCutoffSocPct:       'Vekselretter avbrudd SoC (%)',
-        inverterCutoffSocPctHelp:   'Prosenten der din hybridvekselretter blokkerer PV-produksjonen når batteriet når sin innstilte grense. La være tom for å deaktivere. Når satt, hopper skyggekart-treneren over hvert observasjonsvindu der batteriets SoC nådde denne verdien, slik at den vekselretter-blokkerte produksjonen ikke forurenser skyggekartet med spøkelses-skygger på de tilsvarende solposisjonene. Krever at batteri-SoC-enheten over er konfigurert.',
-        weatherSection:           'Vær',
-        weatherHint:              'Valgfritt. Koble til lokale værentiteter slik at Helios bruker målinger tatt hjemme hos deg i stedet for Open-Meteo-modellen som interpoleres til rutecellen din. Hver entitet er uavhengig valgfri og brukes bare når den rapporterer en fersk verdi; manglende eller utdaterte prøver faller transparent tilbake til modellen.',
+        inverterCutoffSocPctHelp:   'Prosenten der din hybridvekselretter blokkerer PV-produksjonen når batteriet når sin innstilte grense. La være tom for å deaktivere. Når satt, hopper skyggekart-treneren over hvert observasjonsvindu der batteriets SoC nådde denne verdien, slik at den vekselretter-blokkerte produksjonen ikke forurenser skyggekartet med spøkelses-skygger på de tilsvarende solposisjonene.',
         solarRadiationEntity:     'Solinnstrålings-entitet',
         solarRadiationEntityHelp: 'Velg en sensor som rapporterer global kortbølget innstråling i W/m² (typisk en Ecowitt / Davis / personlig værstasjon). Når satt, erstatter dens nåværende tilstand og recorder-historikk Open-Meteo for live og tidligere innstrålingsverdier overalt der de vises (tall på solpastillen, Y-aksen i PV-grafen, fargen på solbuen). Prognose-timene bruker fortsatt Open-Meteo, en sensor kjenner bare nået.',
         buildingsSection:   'Bygning',

@@ -536,7 +536,7 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
                 ` : nothing}
                 ${showForecast && dayKwhText ? html`
                     <div class="tb-hover-tooltip-row">
-                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:chart-bell-curve-cumulative"></ha-icon>
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:crystal-ball"></ha-icon>
                         <span class="tb-hover-tooltip-value">${dayKwhText}</span>
                     </div>
                 ` : nothing}

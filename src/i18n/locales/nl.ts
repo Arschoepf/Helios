@@ -3,9 +3,7 @@ import type { Translations } from '../index';
 export const nl: Translations = {
     cardName:        'HELIOS',
     cardDescription: '☀️ Zon, wolken, PV-opwekking, batterij en LiDAR-schaduwen rond je huis, in 3D realtime',
-    lidarViewChipLabel: 'LiDAR-weergave',
 
-    shadingDomeChipLabel: 'Schaduwen',
     detail:
     {
         exitHint: 'Tik ergens om te sluiten',
@@ -34,7 +32,7 @@ export const nl: Translations = {
         homeLatitude:       'Breedtegraad woning',
         homeLongitude:      'Lengtegraad woning',
         locationHint:       'Overschrijft het thuisadres dat als middelpunt van de kaart wordt gebruikt. Laat beide velden leeg om het in Home Assistant geconfigureerde adres te gebruiken. De override geldt alleen wanneer BEIDE velden geldige coördinaten bevatten.',
-        mapSection:         'Kaart',
+        uiAndMapSection:    'UI & kaart',
         mapStyle:           'Kaartstijl',
         mapStyleHint:       'Twee basiskaarten: Straten (sober, stedelijk, met volledige labels) of Minimal (laadt Straten en verwijdert vervolgens alle overbodige labels, POI-iconen en wegbeschildering voor een vlotter renderen). De donkere variant van de gekozen stijl wordt automatisch gebruikt wanneer het kaartthema op donker staat.',
         mapStyleStreet:     'Straten',
@@ -46,8 +44,7 @@ export const nl: Translations = {
         autoRotateHint:     'Na een paar seconden inactiviteit draait de camera langzaam rond het huis (ongeveer 1,5°/s, tegen de schijnbare beweging van de zon in). Een veeg met één vinger pauzeert de rotatie direct; ze hervat zodra je loslaat.',
         autoRotateOn:       'Aan',
         autoRotateOff:      'Uit',
-        uiSection:          'UI',
-        pvSection:          'Zonneproductie',
+        installationSection: 'PV-installatie',
         pvPeakPower:        'Totaal piekvermogen (kWp)',
         pvPeakPowerHelp:    'Geïnstalleerd totaal piekvermogen van je installatie in kilowattpiek. Stuurt de gestippelde voorspellingslijn en de stroomverzadiging van de PV → huis-leider. Laat leeg als je hieronder per string een piekvermogen invult (totaal = som). Zonder beide wordt geen voorspelling getekend; gemeten productie en de dagelijkse piek blijven zichtbaar.',
         pvInverterMaxKw:    'Max omvormervermogen (kW)',
@@ -72,11 +69,8 @@ export const nl: Translations = {
         pvArrayHeight:      'Paneelhoogte (m)',
         pvArrayHeightHelp:  'Optioneel, standaard 5. Hoogte van deze groep panelen boven de grond in meters; gebruikt door de LiDAR-bewuste PV-prognose om de oorsprong van de ray-march te plaatsen bij het controleren van schaduw door een buur of boom. Verhoog voor een dak op een bovenverdieping (8-10 m), verlaag voor een grondmontage (0-1 m). Geen effect als geen LiDAR-provider je woning dekt.',
         pvArrayCoordsPlaceholder: 'optioneel',
-        batterySection:     'Thuisbatterij',
         inverterCutoffSocPct:       'Omvormer cutoff SoC (%)',
-        inverterCutoffSocPctHelp:   'Percentage waarbij je hybride omvormer de PV-output blokkeert zodra de batterij zijn ingestelde plafond bereikt. Leeg laten om uit te schakelen. Wanneer ingesteld, slaat de schaduwkaart-trainer elk observatie-interval over waarin het batterij-SoC deze waarde bereikte, zodat de door de omvormer geblokkeerde productie de schaduwkaart niet vervuilt met spookschaduwen op die zonneposities. Vereist dat de batterij-SoC entiteit hierboven geconfigureerd is.',
-        weatherSection:           'Weer',
-        weatherHint:              'Optioneel. Koppel lokale weerentiteiten zodat Helios metingen bij jou thuis gebruikt in plaats van het Open-Meteo-model dat geïnterpoleerd wordt naar je rastercel. Elke entiteit is onafhankelijk optioneel en wordt alleen gebruikt wanneer ze een verse waarde levert; ontbrekende of verouderde monsters vallen transparant terug op het model.',
+        inverterCutoffSocPctHelp:   'Percentage waarbij je hybride omvormer de PV-output blokkeert zodra de batterij zijn ingestelde plafond bereikt. Leeg laten om uit te schakelen. Wanneer ingesteld, slaat de schaduwkaart-trainer elk observatie-interval over waarin het batterij-SoC deze waarde bereikte, zodat de door de omvormer geblokkeerde productie de schaduwkaart niet vervuilt met spookschaduwen op die zonneposities.',
         solarRadiationEntity:     'Entiteit zonnestraling',
         solarRadiationEntityHelp: 'Kies een sensor die de globale kortgolvige instraling rapporteert in W/m² (typisch een Ecowitt / Davis / persoonlijk weerstation). Wanneer ingesteld, vervangen de huidige status en de recorder-geschiedenis Open-Meteo voor de live + verleden instralingswaarden overal waar ze verschijnen (cijfer op de zonpastille, Y-as van de PV-grafiek, kleuring van de zonneboog). Voorspellingsuren blijven Open-Meteo gebruiken, een sensor kent alleen het heden.',
         buildingsSection:   'Gebouw',
