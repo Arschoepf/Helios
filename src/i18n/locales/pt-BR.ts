@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * vocabulary tuned for a Brazilian audience.
  */
 export const ptBR: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a sua casa, em 3D e tempo real',
 
     detail:

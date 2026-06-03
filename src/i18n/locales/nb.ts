@@ -5,7 +5,7 @@ import type { Translations } from '../index';
 // variant. Terminology mirrors Kartverket's solar/PV usage; LiDAR-relevant
 // hint mentions the national NHM (Nasjonal Høydemodell) provider.
 export const nb: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid',
 
     detail:

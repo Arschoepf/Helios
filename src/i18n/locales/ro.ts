@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * Home Assistant context.
  */
 export const ro: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Soare, nori, producție FV, baterie și umbre LiDAR peste casa ta, în 3D și timp real',
 
     detail:

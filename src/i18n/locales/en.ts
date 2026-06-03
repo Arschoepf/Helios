@@ -11,7 +11,7 @@ import type { Translations } from '../index';
  * error in every locale that hasn't been updated.
  */
 export const en: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home',
 
     detail:

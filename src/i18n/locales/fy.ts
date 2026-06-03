@@ -4,7 +4,7 @@ import type { Translations } from '../index';
 // Standard West Frisian as taught and used in formal writing. Technical
 // units (kWp, kW, kWh, W/m², SoC, LiDAR) kept verbatim.
 export const fy: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Realtime 3D-sinne, wolken, PV-produksje, batterij en LiDAR-skaden op dyn hûs',
 
     detail:

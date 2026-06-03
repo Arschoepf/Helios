@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * Assistant context. Uses the standard tu-formo (vi).
  */
 export const eo: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Reala 3D suno, nuboj, FV-produktado, baterio kaj LiDAR-ombroj sur via hejmo',
 
     detail:

@@ -5,7 +5,7 @@ import type { Translations } from '../index';
  * Standard Galician (Normas RAG/ILG), idiomatic for solar / Home Assistant context.
  */
 export const gl: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, nubes, produción FV, batería e sombras LiDAR sobre a túa casa, en 3D e tempo real',
 
     detail:

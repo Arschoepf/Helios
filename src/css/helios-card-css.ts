@@ -3326,35 +3326,38 @@ export const heliosCardStyles = css`
         backdrop-filter: blur(4px);
         -webkit-backdrop-filter: blur(4px);
     }
-    /*  Home-outline spinner. The path traces the house frame with a stroke-dasharray loop, the offset goes
-        from full-length (invisible) to 0 (fully drawn) then back, giving the "wall being built then erased
-        then built again" pattern the user asked for. Path length is ~160 viewBox units for the M-L sequence;
-        we set dasharray + dashoffset to a comfortable 200 so the line cleanly enters and exits inside the
-        animation window.                                                                                       */
-    .boot-spinner-home
+    /*  Boot spinner sun, mirrors the 4-layer disc the engine paints over the home on the 3D card: halo radial
+        gradient + low-opacity background disc + inner fill that grows radially with progress + outer rim. The
+        inner-fill radius and halo radius/alpha are computed in the renderer from the boot progress ratio
+        (resolved / total required), so the disc literally fills as each WS round-trip lands and the irradiation
+        reads as growing alongside. The geometry attributes (r, opacity) transition with a soft 400 ms ease so
+        each progress increment glides in instead of snapping.                                                  */
+    .boot-spinner-sun
     {
-        width: 72px;
-        height: 72px;
-        color: var(--primary-color, #ff9800);
+        width: 96px;
+        height: 96px;
+        color: var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
+        overflow: visible;
     }
-    .boot-spinner-home-path
+    .boot-sun-halo,
+    .boot-sun-fill
     {
-        fill: none;
-        stroke: currentColor;
-        stroke-width: 2.2;
-        stroke-linejoin: round;
-        stroke-linecap: round;
-        stroke-dasharray: 200;
-        stroke-dashoffset: 200;
-        animation: boot-home-build 2.4s ease-in-out infinite;
+        transition: r 400ms ease-out;
     }
-    @keyframes boot-home-build
+    .boot-sun-halo
     {
-        0%   { stroke-dashoffset: 200; opacity: 0.4; }
-        10%  { opacity: 1; }
-        55%  { stroke-dashoffset: 0;   opacity: 1; }
-        75%  { stroke-dashoffset: 0;   opacity: 1; }
-        100% { stroke-dashoffset: -200; opacity: 0.4; }
+        transition: r 400ms ease-out, opacity 400ms ease-out;
+    }
+    /*  Subtle breathing pulse on the rim so the spinner never sits perfectly still even at 0 % progress; gives
+        a "alive" cue while we wait for the first WS round-trip to land. */
+    .boot-sun-rim
+    {
+        animation: boot-sun-rim-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes boot-sun-rim-pulse
+    {
+        0%, 100% { opacity: 0.6; }
+        50%      { opacity: 1;   }
     }
 
     /*  Failure panel. Centred card with a warning glyph + title + body + the per-source missing list. Same

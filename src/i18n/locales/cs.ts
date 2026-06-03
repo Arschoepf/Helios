@@ -4,7 +4,7 @@ import type { Translations } from '../index';
 //jsou vítány (PR / issue do repozitáře).
 
 export const cs: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Slunce, mraky, FV produkce, baterie a LiDAR stíny na vašem domě, ve 3D v reálném čase',
 
     detail:

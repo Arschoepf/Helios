@@ -4,7 +4,7 @@ import type { Translations } from '../index';
 // Standard spelling per the official 2019 reform; mixes German-rooted PV
 // vocabulary with French-derived UI terms where common in Luxembourg.
 export const lb: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Realtime 3D-Sonn, Wolleken, PV-Produktioun, Batterie an LiDAR-Schiet op dengem Haus',
 
     detail:

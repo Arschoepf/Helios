@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * because they are internationally recognised.
  */
 export const ru: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ 3D-солнце, облака, выработка PV, аккумулятор и LiDAR-тени вашего дома в реальном времени',
 
     detail:

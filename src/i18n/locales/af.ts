@@ -4,7 +4,7 @@ import type { Translations } from '../index';
 // Uses standard Afrikaans solar PV terminology; technical units (kWp,
 // W/m², SoC, LiDAR) kept verbatim.
 export const af: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Intydse 3D-son, wolke, PV-produksie, battery en LiDAR-skaduwees op jou huis',
 
     detail:

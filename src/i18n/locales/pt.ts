@@ -1,7 +1,7 @@
 import type { Translations } from '../index';
 
 export const pt: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, nuvens, produção FV, bateria e sombras LiDAR sobre a tua casa, em 3D e tempo real',
 
     detail:

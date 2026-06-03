@@ -10,7 +10,7 @@ import type { Translations } from '../index';
 //  - LiDAR survey provider in Norway is Kartverket NHM
 //    (Nasjonal Høydemodell), referenced in the LiDAR precision hint.
 export const no: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skygger ved hjemmet, i 3D og sanntid',
 
     detail:

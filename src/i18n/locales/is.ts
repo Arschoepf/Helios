@@ -5,7 +5,7 @@ import type { Translations } from '../index';
 // the LOCALES map keeps the canonical `'is'` key. LiDAR provider for
 // Iceland is Landmælingar Íslands / IslandsDEM where relevant.
 export const is_: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Rauntíma þrívíð sól, ský, sólarframleiðsla, rafhlaða og LiDAR-skuggar á heimilið þitt',
 
     detail:

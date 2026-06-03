@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * context.
  */
 export const tr: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Eviniz üzerinde gerçek zamanlı 3D güneş, bulutlar, FV üretimi, batarya ve LiDAR gölgeleri',
 
     detail:

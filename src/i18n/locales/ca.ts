@@ -5,7 +5,7 @@ import type { Translations } from '../index';
  * Standard Catalan, idiomatic phrasing for solar / Home Assistant context.
  */
 export const ca: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, núvols, producció FV, bateria i ombres LiDAR sobre casa teva, en 3D i temps real',
 
     detail:

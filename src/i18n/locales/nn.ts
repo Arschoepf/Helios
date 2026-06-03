@@ -4,7 +4,7 @@ import type { Translations } from '../index';
 // Nynorsk variant for Norwegian users who prefer the western written
 // standard. Mirrors Kartverket terminology where it overlaps with Bokmål.
 export const nn: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, skyer, PV-produksjon, batteri og LiDAR-skuggar ved heimen, i 3D og sanntid',
 
     detail:

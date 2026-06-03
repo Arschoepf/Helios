@@ -4,7 +4,7 @@ import type { Translations } from '../index';
 // Terminology kept close to common Danish solar PV jargon (vekselretter for inverter,
 // solcelleanlæg for PV installation, kWp/W/m²/SoC stay as-is).
 export const da: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, skyer, PV-produktion, batteri og LiDAR-skygger på dit hjem, i 3D og realtid',
 
     detail:

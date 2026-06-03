@@ -4,7 +4,7 @@ import type { Translations } from '../index';
 //modersmålstalare välkomnas (PR / issue till repo).
 
 export const sv: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, moln, PV-produktion, batteri och LiDAR-skuggor på ditt hem, i 3D i realtid',
 
     detail:

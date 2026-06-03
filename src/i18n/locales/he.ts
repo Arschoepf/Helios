@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * layout through CSS direction.
  */
 export const he: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ שמש תלת-ממדית, עננים, ייצור PV, סוללה וצללי LiDAR בזמן אמת על הבית שלך',
 
     detail:

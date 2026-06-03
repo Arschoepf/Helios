@@ -9,7 +9,7 @@ import type { Translations } from '../index';
 //    de Home Assistant en français.
 
 export const fr: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Soleil, nuages, production PV, batterie et ombres LiDAR sur ta maison, en 3D temps réel',
 
     detail:

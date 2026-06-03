@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * other Latin American vocabulary.
  */
 export const es419: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Sol, nubes, producción FV, batería y sombras LiDAR sobre tu casa, en 3D y tiempo real',
 
     detail:

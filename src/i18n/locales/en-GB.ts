@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * (colour, centre, behaviour, personalised, etc.).
  */
 export const enGB: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Real-time 3D sun, clouds, PV production, battery and LiDAR shadows on your home',
 
     detail:

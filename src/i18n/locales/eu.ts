@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * Assistant context.
  */
 export const eu: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Eguzkia, hodeiak, FV ekoizpena, bateria eta LiDAR itzalak zure etxearen gainean, 3D eta denbora errealean',
 
     detail:

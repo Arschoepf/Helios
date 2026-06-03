@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * and product names (LiDAR, HACS, Open-Meteo, Home Assistant, etc.) stay in Latin script.
  */
 export const lv: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ 3D saule, mākoņi, PV ražošana, akumulators un LiDAR ēnas reāllaikā uz jūsu mājām',
 
     detail:

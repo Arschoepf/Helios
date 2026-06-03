@@ -5,7 +5,7 @@ import type { Translations } from '../index';
 // LiDAR) kept verbatim. LiDAR provider hint generically references the
 // national surveying authority (Maanmittauslaitos) where relevant.
 export const fi: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Reaaliaikainen 3D-aurinko, pilvet, aurinkotuotanto, akku ja LiDAR-varjot kodillesi',
 
     detail:

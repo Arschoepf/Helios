@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * international Latin form.
  */
 export const sk: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ 3D slnko, oblaky, výroba PV, batéria a LiDAR tiene na vašom dome v reálnom čase',
 
     detail:

@@ -5,7 +5,7 @@ import type { Translations } from '../index';
 // terms stay close to Standard German since most Swiss installers write
 // them that way (Wechselrichter, Solaranlage).
 export const gsw: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Echtzyt-3D-Sunne, Wolke, PV-Produktion, Batterie und LiDAR-Schatte uf dim Huus',
 
     detail:

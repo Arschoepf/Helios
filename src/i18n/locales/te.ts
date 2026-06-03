@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * script per project convention.
  */
 export const te: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ మీ ఇంటిపై రియల్-టైమ్ 3D సూర్యుడు, మేఘాలు, PV ఉత్పత్తి, బ్యాటరీ మరియు LiDAR నీడలు',
 
     detail:

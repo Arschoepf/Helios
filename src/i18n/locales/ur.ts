@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * layout through CSS direction.
  */
 export const ur: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ آپ کے گھر پر حقیقی وقت میں تھری ڈی سورج، بادل، PV پیداوار، بیٹری اور LiDAR کے سائے',
 
     detail:

@@ -916,7 +916,7 @@ export class HeliosCard extends LitElement
         {
             if (this._bootPhase === 'loading')
             {
-                this._bootMissing = this._computeBootMissing();
+                this._bootMissing = this._computeBootStatus().missing;
                 this._bootPhase   = 'failed';
                 this.requestUpdate();
             }
@@ -1070,7 +1070,7 @@ export class HeliosCard extends LitElement
         }
         if (this._bootPhase === 'loading')
         {
-            const missing = this._computeBootMissing();
+            const missing = this._computeBootStatus().missing;
             if (missing.length === 0)
             {
                 this._bootPhase = 'ready';
@@ -1254,22 +1254,27 @@ export class HeliosCard extends LitElement
     //typeof + property read so caching it adds risk for no gain.
     //setCardThemeIsDark is invoked on every call so the engine
     //stays in sync even when the engine spawns mid-session.
-    //Computes the list of data sources that have not landed yet for the boot gate. Empty list = ready, non-empty
-    //list = either still loading or, on timeout, surfaced inside the warning panel so the user can see which piece
-    //failed (HA Energy not configured, recorder timeout on a specific entity, MapLibre style fetch blocked by a
-    //corporate proxy, etc.). The check skips sources the install does not configure (no battery wired → battery
-    //rows omitted) so a PV-only setup does not block on a never-arriving battery history.
-    private _computeBootMissing(): string[]
+    //Computes the loading status for the boot gate: the list of data sources that have not landed yet AND the
+    //total number of required sources currently known. The progress ratio `(total - missing) / total` drives the
+    //sun-disc fill on the spinner. Empty `missing` list = ready, non-empty list = either still loading or, on
+    //timeout, surfaced inside the warning panel so the user can see which piece failed (HA Energy not configured,
+    //recorder timeout on a specific entity, MapLibre style fetch blocked by a corporate proxy, etc.). The check
+    //skips sources the install does not configure (no battery wired → battery rows omitted) so a PV-only setup
+    //does not block on a never-arriving battery history.
+    private _computeBootStatus(): { missing: string[]; total: number }
     {
         const missing: string[] = [];
+        let   total            = 0;
 
         //Engine + basemap. Until the MapLibre style finishes loading and the engine has projected its first sun
         //scene + label layout, the camera-driven SVG overlays cannot be positioned, so the whole UI stays in
         //loading state regardless of the data fetches.
+        total++;
         if (!this._engine || this._timeRange === null)
         {
             missing.push('engine');
         }
+        total++;
         if (this._chartSeries === null)
         {
             missing.push('weather');
@@ -1277,6 +1282,7 @@ export class HeliosCard extends LitElement
 
         //HA Energy prefs snapshot. Flips on the first fetchEnergyPrefs resolution (success or RBAC-denied), so an
         //install without HA Energy still escapes the gate.
+        total++;
         if (!this._energyDefaultsLoaded)
         {
             missing.push('energy_prefs');
@@ -1297,18 +1303,22 @@ export class HeliosCard extends LitElement
 
         if (hasPv)
         {
+            total++;
             if (this._pvHistory === null)
             {
                 missing.push('pv_history');
             }
+            total++;
             if (this._pvCalibStats === null)
             {
                 missing.push('pv_calib');
             }
+            total++;
             if (this._pvTrainerStats === null)
             {
                 missing.push('pv_trainer');
             }
+            total++;
             if (this._haSolarTodayKwh === null)
             {
                 missing.push('pv_today');
@@ -1317,28 +1327,59 @@ export class HeliosCard extends LitElement
         if (hasBattery)
         {
             const battEd = this._energyDefaults;
-            if (battEd.batteryStatSocs.length > 0 && this._batterySocHistory === null)
+            if (battEd.batteryStatSocs.length > 0)
             {
-                missing.push('battery_soc_history');
+                total++;
+                if (this._batterySocHistory === null)
+                {
+                    missing.push('battery_soc_history');
+                }
             }
-            if ((battEd.batteryStatRates.length > 0 || battEd.batteryStatEnergyFroms.length > 0 || battEd.batteryStatEnergyTos.length > 0)
-                && this._batteryPowerHistory === null)
+            if (battEd.batteryStatRates.length > 0 || battEd.batteryStatEnergyFroms.length > 0 || battEd.batteryStatEnergyTos.length > 0)
             {
-                missing.push('battery_power_history');
+                total++;
+                if (this._batteryPowerHistory === null)
+                {
+                    missing.push('battery_power_history');
+                }
             }
         }
         if (hasGrid)
         {
-            if (this._haGridImportTodayKwh === null && ed.gridStatEnergyFroms.length > 0)
+            if (ed.gridStatEnergyFroms.length > 0)
             {
-                missing.push('grid_import_today');
+                total++;
+                if (this._haGridImportTodayKwh === null)
+                {
+                    missing.push('grid_import_today');
+                }
             }
-            if (this._haGridExportTodayKwh === null && ed.gridStatEnergyTos.length > 0)
+            if (ed.gridStatEnergyTos.length > 0)
             {
-                missing.push('grid_export_today');
+                total++;
+                if (this._haGridExportTodayKwh === null)
+                {
+                    missing.push('grid_export_today');
+                }
             }
         }
-        return missing;
+        return { missing, total };
+    }
+
+
+    //Convenience read used by the renderer + the warning panel. The progress ratio is monotonic over a single
+    //boot run because once the HA Energy prefs land the `total` only grows (new required slots come into scope),
+    //and `missing` only shrinks (fetches resolve, never un-resolve). The denominator floor (`Math.max(1, total)`)
+    //keeps the ratio defined while `_computeBootStatus` returns 0 known requirements during the brief boot window
+    //before the engine has spawned its first checks.
+    private _bootProgress(): number
+    {
+        const { missing, total } = this._computeBootStatus();
+        if (total <= 0)
+        {
+            return 0;
+        }
+        return Math.max(0, Math.min(1, (total - missing.length) / total));
     }
 
 
@@ -2017,14 +2058,31 @@ export class HeliosCard extends LitElement
             this._bootPhase === 'ready'    ? 'boot-ready'   : '',
         ].filter(Boolean).join(' ');
 
+        const bootProgress = this._bootPhase === 'loading' ? this._bootProgress() : 0;
+        //Sun spinner geometry, mirrors the 4-layer disc the engine paints over the home (halo + bg + inner fill +
+        //rim) so the loading-state visual reads as "the same sun is being built up" instead of an unrelated
+        //placeholder. The inner fill `rInner = r * sunFillRatio` is what the engine ties to live irradiance; we
+        //tie it to boot progress instead so the disc literally fills as data lands. Halo radius + alpha scale with
+        //the same ratio so the irradiation reads as growing with the disc.
+        const bootR        = 22;
+        const bootRInner   = bootR * bootProgress;
+        const bootHaloR    = bootR * (1.4 + 1.6 * bootProgress);
+        const bootHaloA    = bootProgress * 0.55;
+        const bootGradId   = `boot-sun-halo-${this._instanceId}`;
         const bootOverlay = this._bootPhase === 'loading'
             ? html`
                 <div class="boot-overlay" aria-hidden="true">
-                    <svg class="boot-spinner-home" viewBox="0 0 64 64" preserveAspectRatio="xMidYMid meet">
-                        <path
-                            class="boot-spinner-home-path"
-                            d="M12 36 L32 16 L52 36 M18 36 L18 52 L46 52 L46 36"
-                        ></path>
+                    <svg class="boot-spinner-sun" viewBox="-50 -50 100 100" preserveAspectRatio="xMidYMid meet">
+                        <defs>
+                            <radialGradient id="${bootGradId}">
+                                <stop offset="0%"   stop-color="currentColor" stop-opacity="${bootHaloA}"></stop>
+                                <stop offset="100%" stop-color="currentColor" stop-opacity="0"></stop>
+                            </radialGradient>
+                        </defs>
+                        <circle class="boot-sun-halo" cx="0" cy="0" r="${bootHaloR}" fill="url(#${bootGradId})"></circle>
+                        <circle class="boot-sun-bg"   cx="0" cy="0" r="${bootR}"     fill="currentColor" fill-opacity="0.18"></circle>
+                        <circle class="boot-sun-fill" cx="0" cy="0" r="${bootRInner}" fill="currentColor"></circle>
+                        <circle class="boot-sun-rim"  cx="0" cy="0" r="${bootR}"     fill="none" stroke="currentColor" stroke-width="1.2"></circle>
                     </svg>
                 </div>
               `

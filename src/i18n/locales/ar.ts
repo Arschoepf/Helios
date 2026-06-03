@@ -6,7 +6,7 @@ import type { Translations } from '../index';
  * layout through CSS direction.
  */
 export const ar: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ شمس ثلاثية الأبعاد وسحب وإنتاج الطاقة الكهروضوئية والبطارية وظلال LiDAR في الوقت الفعلي على منزلك',
 
     detail:

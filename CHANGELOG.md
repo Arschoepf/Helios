@@ -33,6 +33,16 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Boot spinner = the 3D card sun, fills with progress + Helios casing in HA catalog
+
+- The boot loading spinner is now the exact same 4-layer sun disc the engine paints over the home on the 3D
+  card: halo radial gradient + low-opacity background disc + inner fill + outer rim. The inner-fill radius and
+  halo radius / alpha are driven by the boot progress ratio (resolved required slots over total required slots),
+  so the disc literally fills as each WS round-trip lands and the irradiation reads as growing alongside.
+  Subtle rim breathing pulse so the spinner never sits perfectly still even at 0 %.
+- The card name in the HA card catalog is now `Helios` instead of `HELIOS` (all 63 locales updated). The
+  console banners + diagnostic messages keep their stylised `☀ HELIOS` because they are developer-facing.
+
 ### Dashboard chart morning gap , LTS calib blended into the cumulative + hourly aggregators
 
 The dashboard's today-card cumulative kWh chart and the hourly-bin aggregator that feeds the headline "X kWh

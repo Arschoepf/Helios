@@ -5,7 +5,7 @@ import type { Translations } from '../index';
  * Mirrors the structure of en.ts; technical terms (kWp, kW, LiDAR, etc.) are kept in Latin script.
  */
 export const id: Translations = {
-    cardName:        'HELIOS',
+    cardName:        'Helios',
     cardDescription: '☀️ Tampilan 3D waktu nyata matahari, awan, produksi PV, baterai, dan bayangan LiDAR di rumah Anda',
 
     detail:
