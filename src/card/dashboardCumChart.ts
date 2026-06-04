@@ -455,13 +455,19 @@ function renderCumChartSVG(
             ${cursorX !== null ? svg`
                 <line class="dash-cf-cum-chart-cursor" x1="${cursorX.toFixed(2)}" y1="0" x2="${cursorX.toFixed(2)}" y2="${H}"></line>
             ` : nothing}
-            ${cursorX !== null && actualDotY !== null ? svg`
-                <circle class="dash-cf-cum-chart-dot dash-cf-cum-chart-dot-actual" cx="${cursorX.toFixed(2)}" cy="${actualDotY.toFixed(2)}" r="4"></circle>
-            ` : nothing}
-            ${cursorX !== null && predictedDotY !== null ? svg`
-                <circle class="dash-cf-cum-chart-dot dash-cf-cum-chart-dot-predicted" cx="${cursorX.toFixed(2)}" cy="${predictedDotY.toFixed(2)}" r="4" style="stroke: ${predictedColor};"></circle>
-            ` : nothing}
         </svg>
+        ${cursorX !== null && actualDotY !== null ? html`
+            <span
+                class="dash-cf-cum-chart-dot dash-cf-cum-chart-dot-actual"
+                style="left: ${((cursorX / W) * 100).toFixed(2)}%; top: ${((actualDotY / H) * 100).toFixed(2)}%;"
+            ></span>
+        ` : nothing}
+        ${cursorX !== null && predictedDotY !== null ? html`
+            <span
+                class="dash-cf-cum-chart-dot dash-cf-cum-chart-dot-predicted"
+                style="left: ${((cursorX / W) * 100).toFixed(2)}%; top: ${((predictedDotY / H) * 100).toFixed(2)}%; border-color: ${predictedColor};"
+            ></span>
+        ` : nothing}
     `;
 }
 

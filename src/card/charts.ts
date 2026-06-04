@@ -510,7 +510,10 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
-    if (!range || !series)
+    //Tooltip stays available even when _chartSeries is null (Open-Meteo unreachable). The PV +
+    //per-entity rows read from the recorder and render fine; the irradiance + cloud cells just go
+    //missing for that hover, falling back to NaN handled below.
+    if (!range)
     {
         return html``;
     }
@@ -535,8 +538,8 @@ export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
     const pct  = hoverPct;
     const atMs = startMs + (pct / 100) * rangeMs;
 
-    const irrV = interpAt(series.times, series.irradiance, atMs);
-    const cldV = interpAt(series.times, series.cloud,      atMs);
+    const irrV = series ? interpAt(series.times, series.irradiance, atMs) : NaN;
+    const cldV = series ? interpAt(series.times, series.cloud,      atMs) : NaN;
     const pv   = pvValueAtTime(host, atMs);
 
     //Per-entity breakdown rows for multi-source installs (LBDG_'s feature). Each row carries the friendly name from

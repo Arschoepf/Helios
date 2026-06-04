@@ -1706,7 +1706,11 @@ export class HeliosEngine
 
     private _renderForCurrentSelection(): void
     {
-        if (!this.map || !this._homeHourlyData)
+        //Only the map is strictly required: _getWeatherAtTime returns sensible zero defaults when
+        //_homeHourlyData is null, so the sun position + sun arc + scrub tooltip still update during a
+        //scrub even when Open-Meteo is unreachable. Cloud / irradiance / forecast traces fall back to
+        //their analytical defaults via the Haurwitz path and the (empty) cloud cover.
+        if (!this.map)
         {
             return;
         }
@@ -4702,7 +4706,7 @@ export class HeliosEngine
             this._clearWeatherTimer();
         }
 
-        if (this._mapReady && this._homeHourlyData)
+        if (this._mapReady)
         {
             //Force atmosphere refresh: the user just scrubbed time, so the "have we moved enough" guard would otherwise short-circuit.
             this._lastAtmosphereAlt = -999;

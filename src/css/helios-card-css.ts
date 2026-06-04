@@ -920,15 +920,30 @@ export const heliosCardStyles = css`
         vector-effect: non-scaling-stroke;
         pointer-events: none;
     }
+    /*  Hover dots are absolute-positioned HTML spans (not SVG circles) so they stay perfectly round
+        regardless of the SVG's non-uniform stretch (preserveAspectRatio="none"). 6 px diameter with a
+        1.5 px halo of the card background for contrast against the curve. */
     .dash-cf-cum-chart-dot
     {
-        stroke: var(--ha-card-background, #1c1c1c);
-        stroke-width: 1.5;
-        vector-effect: non-scaling-stroke;
+        position: absolute;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
         pointer-events: none;
+        box-shadow: 0 0 0 1.5px var(--ha-card-background, #1c1c1c);
+        z-index: 3;
     }
-    .dash-cf-cum-chart-dot-actual    { fill: var(--energy-solar-color, #ff9800); }
-    .dash-cf-cum-chart-dot-predicted { fill: var(--ha-card-background, #1c1c1c); }
+    .dash-cf-cum-chart-dot-actual
+    {
+        background: var(--energy-solar-color, #ff9800);
+    }
+    .dash-cf-cum-chart-dot-predicted
+    {
+        background: var(--ha-card-background, #1c1c1c);
+        border: 1.5px solid;
+        box-shadow: none;
+    }
 
     /*  Per-mount grow animation: every time the SVG mounts (i.e. the card becomes the active front), the
         curves grow from the baseline upward. Same recipe as the previous chart's reveal: scaleY from 0 to
