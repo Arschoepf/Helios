@@ -475,10 +475,10 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         min-height: 0;
-        /*  No perspective: the 3D rotateY on the back cards rasterised the whole stage into a low-res 3D
-            texture even at 2400 px perspective. The CoverFlow fan now uses 2D transforms only (translate
-            + scale), no rotateY. Loses the 3D tilt feel on the side cards but every card renders at native
-            pixel resolution. */
+        /*  Perspective restored on the stage so the rotateY on side cards reads as 3D depth. The earlier
+            blur the user reported turned out to come from backdrop-filter on the back card overlays, not
+            from perspective; with those overlays gone, the side-card 3D tilt is back without the cost. */
+        perspective: 2400px;
     }
     .dash-cf-card
     {
@@ -1200,23 +1200,23 @@ export const heliosCardStyles = css`
     }
     @keyframes dash-cf-enter-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1);    opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1);    opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.58); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.58); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
     }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
@@ -1226,23 +1226,23 @@ export const heliosCardStyles = css`
 
     @keyframes dash-cf-exit-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.58); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.58); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1);    opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1);    opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
     }
     @keyframes dash-cf-exit-front
     {

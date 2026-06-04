@@ -408,9 +408,10 @@ function renderCoverflowCard(
     //front card layout).
     const txPct    = sign * (absDelta === 1 ? 32 : absDelta === 2 ? 50 : 0);
     const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.74 : 0.58;
-    //rotateY removed: any 3D rotation triggered the GPU to rasterise the whole CoverFlow stage into a
-    //low-resolution 3D texture (the whole dashboard appeared 'flou' per the user). 2D transforms only.
-    const rotY     = 0;
+    //rotateY restored on the side cards now that the true blur source (backdrop-filter on .dash-cf-card
+    //::after) is gone. The 3D context still rasterises side cards but the FRONT card has no 3D transform
+    //in its own transform list (rotY = 0 below), so it stays sharp.
+    const rotY     = sign * (absDelta === 1 ? 22 : absDelta === 2 ? 38 : 0);
     const zIdx     = 10 - absDelta;
     const opacity  = 1;
     const isFront  = absDelta === 0;
