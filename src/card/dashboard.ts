@@ -27,7 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { buildLifeline, renderLifelineSVG } from './dashboardLifeline';
+import { computeDayCumulative, renderCumChart } from './dashboardCumChart';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -508,9 +508,7 @@ function renderCoverflowCard(
                 ` : nothing}
             </section>
 
-            <div class="dash-cf-card-lifeline">
-                ${renderLifelineSVG(buildLifeline(host, cardOffset), `${cardOffset}-${host._instanceId}`)}
-            </div>
+            ${renderCumChart(host, cardOffset, activeOffset, computeDayCumulative(host, cardOffset))}
         </article>
     `;
 }

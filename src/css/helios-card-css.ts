@@ -812,9 +812,10 @@ export const heliosCardStyles = css`
         intentionally empty for now (chart implementation is the next iteration), the placeholder still
         renders the framed area with the same tile recipe as the stat tiles so the empty card already reads
         as "this is where the chart will go". */
-    /*  Energy Lifeline frame: takes all remaining vertical space in the card, framed with the same tile
-        recipe as the stat tiles. The SVG inside fills the frame edge to edge via preserveAspectRatio: none. */
-    .dash-cf-card-lifeline
+    /*  Cumulative-production chart frame: takes all remaining vertical space in the card, framed with the
+        same tile recipe as the stat tiles. Header on top (Production left + Forecast right) with a value
+        below each title, the SVG curves fill the rest. */
+    .dash-cf-cum-chart
     {
         flex: 1 1 auto;
         min-height: 0;
@@ -823,37 +824,128 @@ export const heliosCardStyles = css`
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
         overflow: hidden;
-        position: relative;
+        display: flex;
+        flex-direction: column;
     }
-    .dash-cf-lifeline-svg
+    .dash-cf-cum-chart-header
     {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 14px 6px;
+        flex-shrink: 0;
+    }
+    .dash-cf-cum-chart-meta
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    .dash-cf-cum-chart-meta-predicted { align-items: flex-end; text-align: right; }
+    .dash-cf-cum-chart-title
+    {
+        font-size: 12px;
+        font-weight: 500;
+        opacity: 0.85;
+        white-space: nowrap;
+    }
+    .dash-cf-cum-chart-value
+    {
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1.1;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .dash-cf-cum-chart-unit
+    {
+        font-size: 12px;
+        font-weight: 500;
+        opacity: 0.75;
+    }
+    .dash-cf-cum-chart-plot
+    {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    .dash-cf-cum-chart-svg
+    {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
         display: block;
     }
-    .dash-cf-lifeline-axis
+    /*  Night zones: flat opacity overlay (no hatch). Same vocabulary as the dashboard scrim, just on the
+        chart area. */
+    .dash-cf-cum-chart-night
     {
-        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 15%, transparent);
-        stroke-width: 1;
-        stroke-dasharray: 2 2;
-        vector-effect: non-scaling-stroke;
+        fill: color-mix(in srgb, var(--primary-text-color, #ffffff) 8%, transparent);
     }
-    .dash-cf-lifeline-net
+    /*  Y=0 baseline band, in the solar palette at low opacity so the chart's floor reads as the "ground"
+        the curves rise from. */
+    .dash-cf-cum-chart-baseline-band
+    {
+        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 18%, transparent);
+    }
+    .dash-cf-cum-chart-actual-area
+    {
+        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 30%, transparent);
+    }
+    .dash-cf-cum-chart-actual-line
     {
         fill: none;
+        stroke: var(--energy-solar-color, #ff9800);
         stroke-width: 2;
         stroke-linejoin: round;
         stroke-linecap: round;
         vector-effect: non-scaling-stroke;
     }
-    .dash-cf-lifeline-net-surplus { stroke: var(--energy-solar-color, #ff9800); }
-    .dash-cf-lifeline-net-deficit { stroke: var(--energy-grid-consumption-color, #488fc2); }
-    .dash-cf-lifeline-net.is-dashed { stroke-dasharray: 4 3; }
-    .dash-cf-lifeline-cursor
+    .dash-cf-cum-chart-predicted
+    {
+        fill: none;
+        stroke-width: 1.6;
+        stroke-dasharray: 4 3;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-cf-cum-chart-cursor
     {
         stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 60%, transparent);
         stroke-width: 1;
+        stroke-dasharray: 3 2;
         vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    .dash-cf-cum-chart-dot
+    {
+        stroke: var(--ha-card-background, #1c1c1c);
+        stroke-width: 1.5;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    .dash-cf-cum-chart-dot-actual    { fill: var(--energy-solar-color, #ff9800); }
+    .dash-cf-cum-chart-dot-predicted { fill: var(--ha-card-background, #1c1c1c); }
+
+    /*  Per-mount grow animation: every time the SVG mounts (i.e. the card becomes the active front), the
+        curves grow from the baseline upward. Same recipe as the previous chart's reveal: scaleY from 0 to
+        1 anchored to the bottom. */
+    @keyframes dash-cf-cum-chart-grow
+    {
+        from { transform: scaleY(0); }
+        to   { transform: scaleY(1); }
+    }
+    .dash-cf-cum-chart-svg
+    {
+        transform-origin: bottom;
+        animation: dash-cf-cum-chart-grow 600ms cubic-bezier(0.22, 1, 0.36, 1) 0ms both;
+    }
+    .dash-cf-stage.dash-cf-entering .dash-cf-cum-chart-svg
+    {
+        animation-delay: 280ms;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
