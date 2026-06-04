@@ -367,12 +367,13 @@ function renderCoverflowCard(
     const delta    = cardOffset - activeOffset;
     const absDelta = Math.abs(delta);
     const sign     = delta < 0 ? -1 : delta > 0 ? 1 : 0;
-    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the container size. Tuned so
-    //the back ±2 cards stay clearly visible at rest (not too edge-on, not too small), the depth cue comes from
-    //rotation + gradient blur rather than from making them tiny / invisible.
-    const txPct    = sign * (absDelta === 1 ? 50 : absDelta === 2 ? 80 : 0);
-    const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.85 : 0.70;
-    const rotY     = sign * (absDelta === 1 ? 25 : absDelta === 2 ? 45 : 0);
+    //Offsets expressed as a PERCENT of the card's own width so the fan adapts to the container size. Front
+    //card is now sized to fill ~90 % of the stage, so the side translation + scale of the back cards is
+    //pulled tighter (the previous 50 / 80 % offsets sent the back cards off-screen on the new, bigger
+    //front card layout).
+    const txPct    = sign * (absDelta === 1 ? 32 : absDelta === 2 ? 50 : 0);
+    const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.74 : 0.58;
+    const rotY     = sign * (absDelta === 1 ? 22 : absDelta === 2 ? 38 : 0);
     const zIdx     = 10 - absDelta;
     const opacity  = 1;
     const isFront  = absDelta === 0;
@@ -521,7 +522,7 @@ function renderCoverflowCard(
                 ${renderGridTiles(host, cardOffset)}
             </section>
 
-            ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW)}
+            ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW, stats.producedKwh)}
         </article>
     `;
 }
@@ -579,7 +580,7 @@ function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResul
         ${hasIn ? html`
             <div class="dash-cf-card-stat dash-cf-card-stat-grid-in${soloClass}">
                 <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-grid-in" aria-hidden="true">
-                    <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
+                    <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
                 </span>
                 <span class="dash-cf-card-stat-body">
                     <span class="dash-cf-card-stat-label">Import</span>
@@ -592,7 +593,7 @@ function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResul
         ${hasOut ? html`
             <div class="dash-cf-card-stat dash-cf-card-stat-grid-out${soloClass}">
                 <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-grid-out" aria-hidden="true">
-                    <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
+                    <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
                 </span>
                 <span class="dash-cf-card-stat-body">
                     <span class="dash-cf-card-stat-label">Export</span>
@@ -617,16 +618,20 @@ function renderCardChartBlock(
     activeOffset: number,
     data:         DayChartData,
     yMaxW:        number,
+    producedKwh:  number,
 ): TemplateResult
 {
     const isFront = cardOffset === activeOffset;
     const N       = data.forecastW.length || (data.sources[0]?.valuesW.length ?? 0);
 
-    //Default headline = the day's peak stacked W (or peak forecast for future days where no actual exists).
-    //Hover on the front card overrides with the interpolated stacked W at the cursor X.
-    let displayW = peakOfDay(data);
-    let hoverPct:  number | null = null;
-    let hoverTime: string | null = null;
+    //Default headline (no hover) = the day's TOTAL produced kWh, matching the Production tile's value so
+    //the chart header reads as "today's daily total" at rest. Hover on the front card swaps in the
+    //instantaneous stacked W at the cursor X (with the unit dropping from kWh to W / kW).
+    let displayValue: string;
+    let displayUnit:  string;
+    let hoverPct:     number | null = null;
+    let hoverTime:    string | null = null;
+    let tooltipRows:  Array<{ label: string; color: string; valueStr: string; unitStr: string; isDashed: boolean }> = [];
     if (isFront && host._dashChartHoverFrac !== null && N >= 2)
     {
         const frac  = Math.max(0, Math.min(1, host._dashChartHoverFrac));
@@ -636,12 +641,48 @@ function renderCardChartBlock(
         const f     = idxF - i0;
         const v0    = stackedAtIndex(data, i0) || (data.forecastW[i0] ?? 0);
         const v1    = stackedAtIndex(data, i1) || (data.forecastW[i1] ?? 0);
-        displayW    = v0 * (1 - f) + v1 * f;
-        hoverPct    = frac * 100;
-        hoverTime   = formatHoverTimeLabel(host.hass, cardOffset, frac);
+        const hoverW = v0 * (1 - f) + v1 * f;
+        const f1 = formatPowerForChart(host.hass, hoverW);
+        displayValue = f1.value;
+        displayUnit  = f1.unit;
+        hoverPct     = frac * 100;
+        hoverTime    = formatHoverTimeLabel(host.hass, cardOffset, frac);
+
+        //Tooltip rows: one per production source (color dot + friendly name + W at hover) + one for the
+        //model forecast (dashed dot + 'Prévision' + W at hover). Friendly names are pulled from
+        //hass.states[id].attributes.friendly_name with a fallback to a short label.
+        for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
+        {
+            const src = data.sources[srcIdx];
+            const sw  = (src.valuesW[i0] ?? 0) * (1 - f) + (src.valuesW[i1] ?? 0) * f;
+            let name: string;
+            if (src.id === 'lts')
+            {
+                name = 'Production mesurée';
+            }
+            else
+            {
+                name = host.hass?.states?.[src.id]?.attributes?.friendly_name ?? src.id;
+            }
+            const fp = formatPowerForChart(host.hass, sw);
+            tooltipRows.push({ label: name, color: src.color, valueStr: fp.value, unitStr: fp.unit, isDashed: false });
+        }
+        const fcW = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
+        const ffc = formatPowerForChart(host.hass, fcW);
+        tooltipRows.push({ label: 'Prévision', color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
+    }
+    else
+    {
+        //Default at-rest value: the day's total produced kWh, formatted to one decimal so it matches the
+        //Production tile to the watt-hour.
+        displayValue = formatLocalisedNumber(host.hass, producedKwh, 1);
+        displayUnit  = 'kWh';
     }
 
-    const formatted = formatPowerForChart(host.hass, displayW);
+    //Tooltip placement: when the cursor is in the left half of the plot the tooltip sits on the RIGHT of
+    //the cursor, when on the right half it flips LEFT, so the tooltip never sits on top of the chart edge
+    //and never covers the curve on the side the cursor is moving toward.
+    const tooltipOnRight = hoverPct !== null && hoverPct < 50;
 
     return html`
         <section class="dash-cf-card-chart" aria-hidden="${!isFront}">
@@ -649,11 +690,11 @@ function renderCardChartBlock(
                 <div class="dash-cf-card-chart-meta">
                     <span class="dash-cf-card-chart-title">Production journalière</span>
                     <span class="dash-cf-card-chart-value">
-                        ${formatted.value}<span class="dash-cf-card-chart-unit"> ${formatted.unit}</span>
+                        ${displayValue}<span class="dash-cf-card-chart-unit"> ${displayUnit}</span>
                     </span>
                 </div>
                 <span class="dash-cf-card-chart-icon" aria-hidden="true">
-                    <ha-icon icon="mdi:lightning-bolt"></ha-icon>
+                    <ha-icon icon="mdi:sun-clock-outline"></ha-icon>
                 </span>
             </header>
             <div
@@ -668,6 +709,29 @@ function renderCardChartBlock(
                             <span class="dash-cf-card-chart-cursor-time">${hoverTime}</span>
                         ` : nothing}
                     </span>
+                    ${tooltipRows.length > 0 ? html`
+                        <div
+                            class="dash-cf-card-chart-tooltip"
+                            style="${tooltipOnRight
+                                ? `left: calc(${hoverPct.toFixed(2)}% + 10px); right: auto;`
+                                : `right: calc(${(100 - hoverPct).toFixed(2)}% + 10px); left: auto;`
+                            }"
+                        >
+                            ${tooltipRows.map(row => html`
+                                <div class="dash-cf-card-chart-tooltip-row">
+                                    <span
+                                        class="dash-cf-card-chart-tooltip-dot ${row.isDashed ? 'is-dashed' : ''}"
+                                        style="${row.isDashed
+                                            ? `border-color: ${row.color}; background: transparent;`
+                                            : `background: ${row.color};`
+                                        }"
+                                    ></span>
+                                    <span class="dash-cf-card-chart-tooltip-label">${row.label}</span>
+                                    <span class="dash-cf-card-chart-tooltip-value">${row.valueStr} ${row.unitStr}</span>
+                                </div>
+                            `)}
+                        </div>
+                    ` : nothing}
                 ` : nothing}
             </div>
         </section>

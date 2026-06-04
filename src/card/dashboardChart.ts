@@ -27,9 +27,11 @@ import { getHomeCoords } from './init';
 import type { DashboardHost } from './dashboard';
 
 
-//2-min grid over 24 h (720 steps + 1 end-of-day endpoint). At 1 pixel per grid point on a 720 px chart, the
-//resolution is high enough to keep sharp cloud-edge spikes that 5-min averaging used to round off. 721 x 4
-//sources x 5 cards = ~14 k path nodes worst case, still well within the browser path-parser sweet spot.
+//2-min grid over 24 h (720 steps + 1 end-of-day endpoint). Combined with peak-in-window resampling so each
+//bucket keeps the sharpest spike of its 2-min window, plus a Catmull-Rom cubic-Bezier smoothing pass on the
+//rendered SVG path. The combination gives detail AND a soft curve like the HA frontend's native chart card
+//uses (Apex Charts under the hood applies a similar cubic smoothing). 721 x 4 sources x 5 cards = ~14 k
+//path nodes worst case.
 const CHART_GRID_STEPS = 720;
 
 
@@ -352,6 +354,37 @@ export function peakOfDay(data: DayChartData): number
 }
 
 
+//Catmull-Rom to cubic-Bezier smoothing for an SVG path string. Each consecutive (Pi, Pi+1) pair becomes a
+//cubic-Bezier with control points derived from the neighbours (Pi-1, Pi+2), so the rendered curve passes
+//through every input point but the joins are tangent-continuous instead of polyline kinks. Tension = 1 is
+//the canonical uniform Catmull-Rom; lowering it tightens the curve toward straight lines but at 1.0 the
+//visual matches the HA frontend chart card the user pointed to as a reference.
+function smoothPathD(coords: Array<[number, number]>): string
+{
+    const n = coords.length;
+    if (n === 0) return '';
+    if (n === 1) return `M ${coords[0][0].toFixed(2)} ${coords[0][1].toFixed(2)}`;
+    if (n === 2)
+    {
+        return `M ${coords[0][0].toFixed(2)} ${coords[0][1].toFixed(2)} L ${coords[1][0].toFixed(2)} ${coords[1][1].toFixed(2)}`;
+    }
+    let d = `M ${coords[0][0].toFixed(2)} ${coords[0][1].toFixed(2)}`;
+    for (let i = 0; i < n - 1; i++)
+    {
+        const p0 = coords[Math.max(0,     i - 1)];
+        const p1 = coords[i];
+        const p2 = coords[i + 1];
+        const p3 = coords[Math.min(n - 1, i + 2)];
+        const cp1x = p1[0] + (p2[0] - p0[0]) / 6;
+        const cp1y = p1[1] + (p2[1] - p0[1]) / 6;
+        const cp2x = p2[0] - (p3[0] - p1[0]) / 6;
+        const cp2y = p2[1] - (p3[1] - p1[1]) / 6;
+        d += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)} ${cp2x.toFixed(2)} ${cp2y.toFixed(2)} ${p2[0].toFixed(2)} ${p2[1].toFixed(2)}`;
+    }
+    return d;
+}
+
+
 //Render the SVG for a single CoverFlow card. viewBox is normalised 0 to 100 on both axes so the inner
 //area + line paths express points as percentages and the CSS sizes the SVG to fill its parent (the
 //.dash-cf-card-chart-plot frame). preserveAspectRatio="none" lets the chart stretch to whatever shape the
@@ -393,28 +426,23 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
         {
             topValues[i] = bottomValues[i] + (src.valuesW[i] ?? 0);
         }
-        //Bottom baseline of the fill polygon. The first stacked source closes back along y=H (the chart's
-        //actual lower edge) instead of the W=0 line, so the bottom padding band picks up the same colour
-        //as the bottom area. Subsequent sources keep their natural bottom = the previous stacked top.
         const bottomYOf = (i: number) => isFirst ? H : yPctOf(bottomValues[i]);
-        let dFill = `M ${xPctOf(0).toFixed(2)} ${bottomYOf(0).toFixed(2)}`;
+        const topCoords: Array<[number, number]> = [];
         for (let i = 0; i < N; i++)
         {
-            dFill += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(topValues[i]).toFixed(2)}`;
+            topCoords.push([xPctOf(i), yPctOf(topValues[i])]);
         }
+        //Fill path: cubic-Bezier smoothed top edge + straight L closure along the bottom edge of this
+        //stacked layer (bottom is by definition flat / monotone, no smoothing buys anything there).
+        let dFill = smoothPathD(topCoords);
         for (let i = N - 1; i >= 0; i--)
         {
             dFill += ` L ${xPctOf(i).toFixed(2)} ${bottomYOf(i).toFixed(2)}`;
         }
         dFill += ' Z';
-        //Stroke path: only the TOP edge (the production curve), drawn as a separate open polyline so the
-        //bottom + side edges of the fill polygon stay invisible. Without this the side closing lines of the
-        //fill polygon would render as ugly vertical strokes at the chart edges.
-        let dStroke = `M ${xPctOf(0).toFixed(2)} ${yPctOf(topValues[0]).toFixed(2)}`;
-        for (let i = 1; i < N; i++)
-        {
-            dStroke += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(topValues[i]).toFixed(2)}`;
-        }
+        //Stroke path: only the TOP edge, same smoothing recipe, drawn as a separate open path so the
+        //bottom + side edges of the fill polygon stay invisible.
+        const dStroke = smoothPathD(topCoords);
         areaPaths.push(svg`
             <path d="${dFill}" fill="${src.color}" fill-opacity="0.32" stroke="none"></path>
             <path
@@ -436,15 +464,14 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
     let forecastPath: TemplateResult | null = null;
     if (data.forecastW.length >= 2)
     {
-        let dFc = '';
+        const fcCoords: Array<[number, number]> = [];
         for (let i = 0; i < N; i++)
         {
-            const cmd = i === 0 ? 'M' : 'L';
-            dFc += `${cmd} ${xPctOf(i).toFixed(2)} ${yPctOf(data.forecastW[i]).toFixed(2)} `;
+            fcCoords.push([xPctOf(i), yPctOf(data.forecastW[i])]);
         }
         forecastPath = svg`
             <path
-                d="${dFc.trim()}"
+                d="${smoothPathD(fcCoords)}"
                 class="dash-cf-card-chart-forecast"
                 fill="none"
                 vector-effect="non-scaling-stroke"

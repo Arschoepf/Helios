@@ -483,13 +483,13 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 50%;
         left: 50%;
-        /*  Container-aware sizing via cqw (1 % of the ha-card width thanks to container-type: inline-size on
-            .ha-card). The CoverFlow renders identically whether the card lives in a section dashboard tile or
-            fills the entire panel. 46 % of the container width keeps the total fan span (card + translated
-            siblings) under 100 % so all 5 cards fit horizontally regardless of container size. 440 px cap
-            stops huge displays from blowing the cards into wall-sized rectangles. Height tracks via
-            aspect-ratio so the cards keep the same shape across widths. */
-        width: min(440px, 46cqw);
+        /*  Card sized to LEAVE ONLY ~5 % space top + bottom so the front card fills the available vertical
+            stage (was a more conservative 46 cqw fixed width which read as tiny on phone). cqh is the stage
+            height container query unit, so 90 cqh fills 90 % of the vertical space. Width derives from the
+            same 90 cqh via the aspect ratio (90 cqh x 4/6 = 60 cqh on desktop). A second cap at 82 cqw keeps
+            the card from overflowing horizontally on landscape phones / narrow wide containers where the
+            height-derived width would exceed the container width. */
+        width: min(82cqw, calc(90cqh * 4 / 6));
         aspect-ratio: 4 / 6;
         border-radius: 18px;
         /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
@@ -729,15 +729,21 @@ export const heliosCardStyles = css`
     }
     /*  Battery in / out tinted with the HA Energy battery palette so the four tiles read as the same family
         as the matching slots on the native HA Energy dashboard. */
+    /*  HA Energy reads the battery palette tokens from the energy-graph node perspective: battery-in =
+        energy flowing IN to the battery node (= charge, green default) and battery-out = energy flowing
+        OUT of the battery node (= discharge, teal default). The dashboard tile names are user-facing
+        (Charge / Décharge), so the binding matches: Charge tile = --energy-battery-out-color, Décharge
+        tile = --energy-battery-in-color, which is the convention the user pointed to on their HA Energy
+        dashboard reference. */
     .dash-cf-card-stat-icon-battery-in
-    {
-        background: color-mix(in srgb, var(--energy-battery-in-color, #4caf50) 18%, transparent);
-        color: var(--energy-battery-in-color, #4caf50);
-    }
-    .dash-cf-card-stat-icon-battery-out
     {
         background: color-mix(in srgb, var(--energy-battery-out-color, #1b6c75) 18%, transparent);
         color: var(--energy-battery-out-color, #1b6c75);
+    }
+    .dash-cf-card-stat-icon-battery-out
+    {
+        background: color-mix(in srgb, var(--energy-battery-in-color, #4caf50) 18%, transparent);
+        color: var(--energy-battery-in-color, #4caf50);
     }
     /*  Grid import / export, same recipe as battery: HA Energy palette token tinted at 18 %. */
     .dash-cf-card-stat-icon-grid-in
@@ -828,20 +834,22 @@ export const heliosCardStyles = css`
         overflow: hidden;
         text-overflow: ellipsis;
     }
+    /*  Big bold value below the title, matches the HA frontend's native power-curve card recipe so the
+        figure reads as the headline of the chart block instead of a quiet caption. */
     .dash-cf-card-chart-value
     {
-        font-size: 13px;
-        font-weight: 500;
-        line-height: 1.25;
-        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 1.1;
+        color: var(--primary-text-color, #ffffff);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
     }
     .dash-cf-card-chart-unit
     {
-        font-size: 13px;
+        font-size: 14px;
         font-weight: 500;
-        margin-left: 2px;
+        margin-left: 3px;
         color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
     }
     /*  Icon top-right: plain coloured glyph, no chip background. Matches the HA frontend convention where
@@ -882,16 +890,80 @@ export const heliosCardStyles = css`
         height: 100%;
         display: block;
     }
+    /*  Vertical guide line at the cursor X. Rendered as a 0 px wide div with a dashed left border so the
+        line itself is a CSS dash pattern (1.5 px wide dashes, 3 px gaps), matching the HA frontend chart
+        card's tooltip cursor style. */
     .dash-cf-card-chart-cursor
     {
         position: absolute;
         top: 0;
         bottom: 0;
-        width: 1px;
-        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 35%, transparent);
+        width: 0;
+        background: transparent;
+        border-left: 1.5px dashed color-mix(in srgb, var(--primary-text-color, #ffffff) 55%, transparent);
         pointer-events: none;
-        transform: translateX(-0.5px);
+        transform: translateX(-0.75px);
     }
+    /*  Hover tooltip with one row per production source (color dot + friendly name + watts at hover) and
+        a final row for the model forecast (dashed dot + Prévision + watts at hover). The tooltip flips
+        side based on the cursor X to stay inside the plot frame: cursor in left half = tooltip to the
+        right of the cursor, cursor in right half = tooltip to the left. Vertical anchor is the top of the
+        plot frame with a small offset so the time pill and the tooltip do not overlap. */
+    .dash-cf-card-chart-tooltip
+    {
+        position: absolute;
+        top: 32px;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+        padding: 6px 8px;
+        min-width: 130px;
+        max-width: 220px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 11px;
+        pointer-events: none;
+        z-index: 4;
+    }
+    .dash-cf-card-chart-tooltip-row
+    {
+        display: grid;
+        grid-template-columns: 10px 1fr auto;
+        gap: 6px;
+        align-items: center;
+        min-width: 0;
+    }
+    .dash-cf-card-chart-tooltip-dot
+    {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .dash-cf-card-chart-tooltip-dot.is-dashed
+    {
+        background: transparent;
+        border-style: dashed;
+        border-width: 1.5px;
+    }
+    .dash-cf-card-chart-tooltip-label
+    {
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 500;
+    }
+    .dash-cf-card-chart-tooltip-value
+    {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
     /*  Hover time pill anchored to the top of the cursor line, centred horizontally on it. Same pill recipe
         as the day chip in the bandeau so the two read as the same family. */
     .dash-cf-card-chart-cursor-time
