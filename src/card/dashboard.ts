@@ -27,7 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, type DayChartData } from './dashboardChart';
+import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, bracketHover, type DayChartData } from './dashboardChart';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -622,7 +622,7 @@ function renderCardChartBlock(
 ): TemplateResult
 {
     const isFront = cardOffset === activeOffset;
-    const N       = data.forecastW.length || (data.sources[0]?.valuesW.length ?? 0);
+    const N       = data.timesMs.length;
 
     //Default headline (no hover) = the day's TOTAL produced kWh, matching the Production tile's value so
     //the chart header reads as "today's daily total" at rest. Hover on the front card swaps in the
@@ -634,11 +634,11 @@ function renderCardChartBlock(
     let tooltipRows:  Array<{ label: string; color: string; valueStr: string; unitStr: string; isDashed: boolean }> = [];
     if (isFront && host._dashChartHoverFrac !== null && N >= 2)
     {
-        const frac  = Math.max(0, Math.min(1, host._dashChartHoverFrac));
-        const idxF  = frac * (N - 1);
-        const i0    = Math.floor(idxF);
-        const i1    = Math.min(N - 1, i0 + 1);
-        const f     = idxF - i0;
+        const frac    = Math.max(0, Math.min(1, host._dashChartHoverFrac));
+        const bracket = bracketHover(data, frac);
+        const i0 = bracket.i0;
+        const i1 = bracket.i1;
+        const f  = bracket.f;
         const v0    = stackedAtIndex(data, i0) || (data.forecastW[i0] ?? 0);
         const v1    = stackedAtIndex(data, i1) || (data.forecastW[i1] ?? 0);
         const hoverW = v0 * (1 - f) + v1 * f;

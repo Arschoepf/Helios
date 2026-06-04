@@ -4,14 +4,16 @@
 //between days stay comparable (a low-cloud day reads taller than a heavily-overcast one).
 //
 //Data plumbing:
-//- Today + multi-source: per-source values from `_pvHistoryPerEntity`. Each source rendered as its own
-//  stacked area in the source-color hue rotation `pvSourceColor` already uses on the timeline chart.
-//- Today + single-source: still one area, pulled from `_pvHistoryPerEntity` (the single entry).
-//- Past day: one unified area from `_pvCalibStats` (hourly LTS, the 5-day window includes the past 2 days
-//  the dashboard shows). No per-source breakdown is available for past days yet, the LTS rows pre-aggregate.
-//- Future day: no production area, only the forecast line.
+//- Today (live): each `_pvHistoryPerEntity` source's RAW sample timestamps + values are read directly. No
+//  resampling to an arbitrary grid, so every cloud-edge spike the HA Energy entity reports lands on the
+//  curve. Cumulative-energy entities are differentiated between consecutive raw samples. Multi-source
+//  installs are stacked by union-merging every source's raw timestamps and interpolating each source at
+//  that unified timeline (so the stacked top correctly reflects the per-instant sum).
+//- Past day: same recipe but pulled from `_pvCalibStats` (hourly LTS). Hourly cadence means ~24 points,
+//  the curve is naturally coarser than today's live path.
+//- Future day: no actual production area, only the forecast line.
 //- Forecast (any day): `_chartSeries` hourly forecast pulled through `computePvPowerWeighted` + the active
-//  calibration ratio / shading map, integrated to the chart's 15-min grid via linear interp.
+//  calibration ratio / shading map, interpolated onto the same unified timeline so it overlays correctly.
 
 import { html, svg, TemplateResult } from 'lit';
 import
@@ -27,22 +29,26 @@ import { getHomeCoords } from './init';
 import type { DashboardHost } from './dashboard';
 
 
-//2-min grid over 24 h (720 steps + 1 end-of-day endpoint). Combined with peak-in-window resampling so each
-//bucket keeps the sharpest spike of its 2-min window, plus a Catmull-Rom cubic-Bezier smoothing pass on the
-//rendered SVG path. The combination gives detail AND a soft curve like the HA frontend's native chart card
-//uses (Apex Charts under the hood applies a similar cubic smoothing). 721 x 4 sources x 5 cards = ~14 k
-//path nodes worst case.
-const CHART_GRID_STEPS = 720;
+//Soft cap on points per chart so a sub-second-cadence sensor does not generate a million-node SVG path.
+//Below the cap every raw sample lands on the curve. Above the cap we max-decimate by stride, so the
+//highest spike of every stride window survives the decimation (the alternative, plain stride-pick, would
+//drop peaks that fall on dropped indices).
+const MAX_POINTS_PER_CARD = 1800;
 
 
 export interface DayChartData
 {
-    //Per-source actual production aligned to the common 15-min grid, in W. One entry for the multi-source
-    //today path, one entry for the past-day unified path, empty for future days.
+    //Common timeline for the day, in absolute ms. May be irregular (raw entity timestamps) for today's
+    //live path, regular hourly for past-day LTS, or a hourly fallback when no actual data is available.
+    timesMs:   number[];
+    //Per-source actual production in W, aligned to `timesMs`. Empty for future days where no actual exists.
     sources:   Array<{ id: string; color: string; valuesW: number[] }>;
-    //Forecast power at each grid point, in W. Empty array when no forecast is available (no calibration
-    //configured, no coordinates resolved, or `_chartSeries` not yet loaded).
+    //Forecast power in W, aligned to `timesMs`. Empty when no calibration / coords / chart series is wired.
     forecastW: number[];
+    //Day window the chart frame covers, used by the renderer to compute X positions from absolute
+    //timestamps (so an irregular timeline still spreads correctly across the chart width).
+    dayStartMs: number;
+    dayEndMs:   number;
 }
 
 
@@ -61,7 +67,8 @@ export function buildDashCharts(host: DashboardHost, offsets: number[]): {
         const win = dayWindowFor(offset);
         const data = computeDayChart(host, offset, win.startMs, win.endMs);
         byOffset.set(offset, data);
-        for (let i = 0; i < CHART_GRID_STEPS + 1; i++)
+        const N = data.timesMs.length;
+        for (let i = 0; i < N; i++)
         {
             let stacked = 0;
             for (const src of data.sources)
@@ -73,8 +80,6 @@ export function buildDashCharts(host: DashboardHost, offsets: number[]): {
             if (fc > yMaxW) yMaxW = fc;
         }
     }
-    //Floor to a small positive so an empty-data render still produces a valid coordinate transform (no
-    //division by zero when the user opens the panel before any sample lands).
     if (yMaxW < 1) yMaxW = 1;
     return { byOffset, yMaxW };
 }
@@ -91,6 +96,123 @@ function dayWindowFor(dayOffset: number): { startMs: number; endMs: number }
 }
 
 
+//Convert a raw (times, values) series into an array of in-day {tMs, w} samples. Cumulative-energy
+//entities (Wh / kWh / MWh) are differentiated between consecutive raw samples (delta / dt gives W).
+//Instantaneous-power entities (W / kW / MW) are taken as-is and rescaled to W.
+interface RawSample { tMs: number; w: number; }
+function dayRawSamples(
+    times:      Date[],
+    values:     number[],
+    dayStartMs: number,
+    dayEndMs:   number,
+    isCum:      boolean,
+    energyToWhScale: number,
+    wScale:     number,
+): RawSample[]
+{
+    const out: RawSample[] = [];
+    if (times.length < 2)
+    {
+        return out;
+    }
+    if (isCum)
+    {
+        for (let i = 1; i < times.length; i++)
+        {
+            const tMs    = times[i].getTime();
+            if (tMs < dayStartMs || tMs >= dayEndMs)
+            {
+                continue;
+            }
+            const prevMs = times[i - 1].getTime();
+            const dh     = (tMs - prevMs) / 3_600_000;
+            //Skip silent / stale gaps (no sample for more than an hour) so a stale long-flat segment does
+            //not turn into a tall fake spike on the next sample.
+            if (dh <= 0 || dh > 1)
+            {
+                continue;
+            }
+            const dE = (values[i] - values[i - 1]) * energyToWhScale;
+            out.push({ tMs, w: Math.max(0, dE / dh) });
+        }
+    }
+    else
+    {
+        for (let i = 0; i < times.length; i++)
+        {
+            const tMs = times[i].getTime();
+            if (tMs < dayStartMs || tMs >= dayEndMs)
+            {
+                continue;
+            }
+            const v = values[i];
+            if (!isFinite(v))
+            {
+                continue;
+            }
+            out.push({ tMs, w: Math.max(0, v * wScale) });
+        }
+    }
+    return out;
+}
+
+
+function interpSamplesAtMs(samples: RawSample[], tMs: number): number
+{
+    if (samples.length === 0) return 0;
+    if (tMs <= samples[0].tMs) return samples[0].w;
+    const lastIdx = samples.length - 1;
+    if (tMs >= samples[lastIdx].tMs) return samples[lastIdx].w;
+    let lo = 0;
+    let hi = lastIdx;
+    while (hi - lo > 1)
+    {
+        const m = (lo + hi) >> 1;
+        if (samples[m].tMs <= tMs) lo = m;
+        else hi = m;
+    }
+    const t0 = samples[lo].tMs;
+    const t1 = samples[hi].tMs;
+    if (t1 === t0) return samples[lo].w;
+    const f = (tMs - t0) / (t1 - t0);
+    return samples[lo].w + (samples[hi].w - samples[lo].w) * f;
+}
+
+
+//Max-decimate a sequence of indices: split into `targetCount` evenly-spaced windows, take the index whose
+//STACKED value (sum across all sources at that index) is the highest. Preserves peaks across the day so
+//the curve does not lose its cloud-edge spikes during decimation.
+function maxDecimateIndices(timesMs: number[], sources: Array<{ valuesW: number[] }>, targetCount: number): number[]
+{
+    const n = timesMs.length;
+    if (n <= targetCount) return Array.from({ length: n }, (_, i) => i);
+    const out: number[] = [];
+    const stride = n / targetCount;
+    for (let w = 0; w < targetCount; w++)
+    {
+        const lo = Math.floor(w * stride);
+        const hi = Math.min(n, Math.floor((w + 1) * stride));
+        let peakIdx     = lo;
+        let peakStacked = -Infinity;
+        for (let i = lo; i < hi; i++)
+        {
+            let s = 0;
+            for (const src of sources)
+            {
+                s += src.valuesW[i] ?? 0;
+            }
+            if (s > peakStacked)
+            {
+                peakStacked = s;
+                peakIdx     = i;
+            }
+        }
+        out.push(peakIdx);
+    }
+    return out;
+}
+
+
 function computeDayChart(
     host:       DashboardHost,
     dayOffset:  number,
@@ -98,136 +220,98 @@ function computeDayChart(
     dayEndMs:   number,
 ): DayChartData
 {
-    const timesMs: number[] = [];
-    const stepMs = (dayEndMs - dayStartMs) / CHART_GRID_STEPS;
-    for (let i = 0; i <= CHART_GRID_STEPS; i++)
-    {
-        timesMs.push(dayStartMs + i * stepMs);
-    }
-
     const unit  = (host._pvUnit || '').toLowerCase();
     const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+    const energyToWhScale = unit === 'kwh' ? 1000 : unit === 'mwh' ? 1_000_000 : 1;
+    const wScale          = unit === 'kw'  ? 1000 : unit === 'mw'  ? 1_000_000 : 1;
 
-    const sources: DayChartData['sources'] = [];
+    let timesMs:  number[] = [];
+    let sources:  DayChartData['sources'] = [];
 
     if (dayOffset === 0 && host._pvHistoryPerEntity.size > 0)
     {
         const ids   = Array.from(host._pvHistoryPerEntity.keys()).sort();
         const total = ids.length;
+        const rawPerSource: Array<{ id: string; color: string; samples: RawSample[] }> = [];
         for (let idx = 0; idx < total; idx++)
         {
             const id = ids[idx];
             const ph = host._pvHistoryPerEntity.get(id);
-            if (!ph || ph.times.length < 2)
+            if (!ph) continue;
+            const samples = dayRawSamples(ph.times, ph.values, dayStartMs, dayEndMs, isCum, energyToWhScale, wScale);
+            if (samples.length < 2) continue;
+            rawPerSource.push({ id, color: pvSourceColor(idx, total), samples });
+        }
+        if (rawPerSource.length === 1)
+        {
+            //Single source = use its raw timestamps directly. Every sample becomes a point on the path.
+            const src = rawPerSource[0];
+            timesMs   = src.samples.map(s => s.tMs);
+            sources.push({ id: src.id, color: src.color, valuesW: src.samples.map(s => s.w) });
+        }
+        else if (rawPerSource.length > 1)
+        {
+            //Multi-source = union of every source's raw timestamps so the stacked top reflects per-instant
+            //sums. Each source is then linearly interpolated at the union timeline.
+            const set = new Set<number>();
+            for (const src of rawPerSource)
             {
-                continue;
+                for (const s of src.samples) set.add(s.tMs);
             }
-            const valuesW = resampleToWattsGrid(ph.times, ph.values, timesMs, unit, isCum);
-            sources.push({
-                id,
-                color: pvSourceColor(idx, total),
-                valuesW,
-            });
+            timesMs = Array.from(set).sort((a, b) => a - b);
+            for (const src of rawPerSource)
+            {
+                sources.push({
+                    id:      src.id,
+                    color:   src.color,
+                    valuesW: timesMs.map(t => interpSamplesAtMs(src.samples, t)),
+                });
+            }
         }
     }
     else if (dayOffset < 0 && host._pvCalibStats && host._pvCalibStats.times.length >= 2)
     {
-        const calib   = host._pvCalibStats;
-        const valuesW = resampleToWattsGrid(calib.times, calib.values, timesMs, unit, isCum);
-        sources.push({
-            id:    'lts',
-            color: pvSourceColor(0, 1),
-            valuesW,
-        });
+        const samples = dayRawSamples(host._pvCalibStats.times, host._pvCalibStats.values, dayStartMs, dayEndMs, isCum, energyToWhScale, wScale);
+        if (samples.length >= 2)
+        {
+            timesMs = samples.map(s => s.tMs);
+            sources.push({
+                id:      'lts',
+                color:   pvSourceColor(0, 1),
+                valuesW: samples.map(s => s.w),
+            });
+        }
     }
 
-    const forecastW = computeForecastOnGrid(host, timesMs);
+    //If no actual-production timeline was built, fall back to a 24-hour hourly grid so the forecast line
+    //still has something to render against.
+    if (timesMs.length === 0)
+    {
+        for (let h = 0; h <= 24; h++)
+        {
+            timesMs.push(dayStartMs + h * 3_600_000);
+        }
+    }
 
-    return { sources, forecastW };
+    //Decimate if we exceeded the per-card cap. Skipped for the typical install (most installs land below
+    //the cap, so the raw curve is rendered verbatim).
+    if (timesMs.length > MAX_POINTS_PER_CARD)
+    {
+        const keepIdx = maxDecimateIndices(timesMs, sources, MAX_POINTS_PER_CARD);
+        timesMs = keepIdx.map(i => timesMs[i]);
+        sources = sources.map(s => ({ ...s, valuesW: keepIdx.map(i => s.valuesW[i] ?? 0) }));
+    }
+
+    //Forecast interpolated onto the same timeline.
+    const forecastW = computeForecastOnTimes(host, timesMs, dayStartMs, dayEndMs);
+
+    return { timesMs, sources, forecastW, dayStartMs, dayEndMs };
 }
 
 
-//Resample a (times, values) series onto the chart grid as instantaneous Watts. Cumulative energy entities
-//(Wh / kWh / MWh) are differentiated between consecutive grid samples (interp the cumulative reading at
-//each grid time, take the delta over the 15-min step, divide to get power). Instantaneous power entities
-//(W / kW / MW) are interpolated directly and rescaled to W.
-function resampleToWattsGrid(
-    times:    Date[],
-    values:   number[],
-    gridMs:   number[],
-    unit:     string,
-    isCum:    boolean,
-): number[]
+function computeForecastOnTimes(host: DashboardHost, targetMs: number[], dayStartMs: number, dayEndMs: number): number[]
 {
-    const out = new Array(gridMs.length).fill(0);
-    if (times.length < 2)
-    {
-        return out;
-    }
-    if (isCum)
-    {
-        const energyToWhScale = unit === 'kwh' ? 1000 : unit === 'mwh' ? 1_000_000 : 1;
-        let prevCum = NaN;
-        for (let i = 0; i < gridMs.length; i++)
-        {
-            const cum = interpDateMs(times, values, gridMs[i]);
-            if (i === 0)
-            {
-                prevCum = cum;
-                out[i]  = 0;
-                continue;
-            }
-            const dh = (gridMs[i] - gridMs[i - 1]) / 3_600_000;
-            const dE = (cum - prevCum) * energyToWhScale;
-            out[i]   = dh > 0 ? Math.max(0, dE / dh) : 0;
-            prevCum  = cum;
-        }
-    }
-    else
-    {
-        //Instantaneous-power entities: peak-in-window resampling, NOT linear interp. For each grid bucket
-        //we take the MAX of every source sample falling inside [gridT-step/2, gridT+step/2]. Linear interp
-        //between sparse grid points averages a 30-second cloud-edge spike into nothing; peak-in-window
-        //keeps the spike visible as a 1 grid-bucket tall blip. Falls back to interp when a bucket contains
-        //no source sample at all (sparse entities, day boundaries).
-        const wScale   = unit === 'kw' ? 1000 : unit === 'mw' ? 1_000_000 : 1;
-        const stepMs   = gridMs.length > 1 ? (gridMs[1] - gridMs[0]) : 60_000;
-        const halfStep = stepMs / 2;
-        let srcIdx = 0;
-        const srcMs: number[] = times.map(d => d.getTime());
-        for (let i = 0; i < gridMs.length; i++)
-        {
-            const tCenter = gridMs[i];
-            const tLo = tCenter - halfStep;
-            const tHi = tCenter + halfStep;
-            while (srcIdx < srcMs.length && srcMs[srcIdx] < tLo)
-            {
-                srcIdx++;
-            }
-            let peak = -Infinity;
-            let j = srcIdx;
-            while (j < srcMs.length && srcMs[j] <= tHi)
-            {
-                const v = values[j];
-                if (isFinite(v) && v > peak)
-                {
-                    peak = v;
-                }
-                j++;
-            }
-            const value = peak > -Infinity
-                ? peak
-                : interpDateMs(times, values, tCenter);
-            out[i] = Math.max(0, value * wScale);
-        }
-    }
-    return out;
-}
-
-
-function computeForecastOnGrid(host: DashboardHost, gridMs: number[]): number[]
-{
-    const out = new Array(gridMs.length).fill(0);
+    const out = new Array(targetMs.length).fill(0);
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
     const k      = pvCalibK(host.config);
@@ -242,14 +326,11 @@ function computeForecastOnGrid(host: DashboardHost, gridMs: number[]): number[]
     const calR   = cal?.ratio ?? 1;
     const nowMs  = Date.now();
 
-    const fcTimes: number[] = [];
-    const fcW:     number[] = [];
+    const fcSamples: RawSample[] = [];
     for (let i = 0; i < series.times.length; i++)
     {
         const tMs = series.times[i].getTime();
-        //Keep a 1 h margin either side so the linear interp at the day boundaries finds bracketing samples
-        //instead of clamping to a 0 at the edge of the grid.
-        if (tMs < gridMs[0] - 3_600_000 || tMs > gridMs[gridMs.length - 1] + 3_600_000)
+        if (tMs < dayStartMs - 3_600_000 || tMs > dayEndMs + 3_600_000)
         {
             continue;
         }
@@ -259,72 +340,50 @@ function computeForecastOnGrid(host: DashboardHost, gridMs: number[]): number[]
             windMs:   series.windSpeed[i],
             raster,
         });
-        if (pct < 0)
-        {
-            continue;
-        }
+        if (pct < 0) continue;
         const ratio = effectiveForecastRatio(shMap, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
-        const watts = Math.min(capW, Math.max(0, pct * k * ratio));
-        fcTimes.push(tMs);
-        fcW.push(watts);
+        fcSamples.push({ tMs, w: Math.min(capW, Math.max(0, pct * k * ratio)) });
     }
-    if (fcTimes.length < 2)
+    if (fcSamples.length < 2)
     {
         return out;
     }
-    for (let i = 0; i < gridMs.length; i++)
+    for (let i = 0; i < targetMs.length; i++)
     {
-        out[i] = interpAtMs(fcTimes, fcW, gridMs[i]);
+        out[i] = interpSamplesAtMs(fcSamples, targetMs[i]);
     }
     return out;
 }
 
 
-function interpDateMs(times: Date[], values: number[], tMs: number): number
+//Find the two timeline indices that bracket the cursor time, plus the interpolation fraction within them.
+//Cursor is given as a 0..1 fraction of the chart's day window. The timeline may be irregular so we walk
+//to find the bracket rather than computing `frac * N` (which would land on the wrong sample on dense /
+//sparse regions of the day).
+export function bracketHover(data: DayChartData, frac: number): { i0: number; i1: number; f: number; tMs: number }
 {
-    if (times.length === 0) return 0;
-    if (tMs <= times[0].getTime()) return values[0];
-    const lastIdx = times.length - 1;
-    if (tMs >= times[lastIdx].getTime()) return values[lastIdx];
+    const N = data.timesMs.length;
+    const tMs = data.dayStartMs + Math.max(0, Math.min(1, frac)) * (data.dayEndMs - data.dayStartMs);
+    if (N === 0) return { i0: 0, i1: 0, f: 0, tMs };
+    if (N === 1) return { i0: 0, i1: 0, f: 0, tMs };
+    if (tMs <= data.timesMs[0])     return { i0: 0,     i1: 0,     f: 0, tMs };
+    if (tMs >= data.timesMs[N - 1]) return { i0: N - 1, i1: N - 1, f: 0, tMs };
     let lo = 0;
-    let hi = lastIdx;
+    let hi = N - 1;
     while (hi - lo > 1)
     {
         const m = (lo + hi) >> 1;
-        if (times[m].getTime() <= tMs) lo = m;
+        if (data.timesMs[m] <= tMs) lo = m;
         else hi = m;
     }
-    const t0 = times[lo].getTime();
-    const t1 = times[hi].getTime();
-    if (t1 === t0) return values[lo];
-    const f = (tMs - t0) / (t1 - t0);
-    return values[lo] + (values[hi] - values[lo]) * f;
+    const t0 = data.timesMs[lo];
+    const t1 = data.timesMs[hi];
+    const f  = t1 === t0 ? 0 : (tMs - t0) / (t1 - t0);
+    return { i0: lo, i1: hi, f, tMs };
 }
 
 
-function interpAtMs(timesMs: number[], values: number[], tMs: number): number
-{
-    if (timesMs.length === 0) return 0;
-    if (tMs <= timesMs[0]) return values[0];
-    const lastIdx = timesMs.length - 1;
-    if (tMs >= timesMs[lastIdx]) return values[lastIdx];
-    let lo = 0;
-    let hi = lastIdx;
-    while (hi - lo > 1)
-    {
-        const m = (lo + hi) >> 1;
-        if (timesMs[m] <= tMs) lo = m;
-        else hi = m;
-    }
-    const t0 = timesMs[lo];
-    const t1 = timesMs[hi];
-    if (t1 === t0) return values[lo];
-    const f = (tMs - t0) / (t1 - t0);
-    return values[lo] + (values[hi] - values[lo]) * f;
-}
-
-
-//Total stacked W at the given grid index, summed across all sources. Used by the hover header readout AND
+//Total stacked W at the given index, summed across all sources. Used by the hover header readout AND
 //by the per-source dot positions on hover so both share the exact same arithmetic.
 export function stackedAtIndex(data: DayChartData, i: number): number
 {
@@ -337,12 +396,12 @@ export function stackedAtIndex(data: DayChartData, i: number): number
 }
 
 
-//Peak stacked W across the entire day (max of stacked actual OR forecast at any grid step). Drives the
+//Peak stacked W across the entire day (max of stacked actual OR forecast at any index). Drives the
 //default value shown in the chart header when the user is not hovering the curve.
 export function peakOfDay(data: DayChartData): number
 {
     let peak = 0;
-    const N = data.forecastW.length || (data.sources[0]?.valuesW.length ?? 0);
+    const N = data.timesMs.length;
     for (let i = 0; i < N; i++)
     {
         const stacked = stackedAtIndex(data, i);
@@ -356,9 +415,7 @@ export function peakOfDay(data: DayChartData): number
 
 //Catmull-Rom to cubic-Bezier smoothing for an SVG path string. Each consecutive (Pi, Pi+1) pair becomes a
 //cubic-Bezier with control points derived from the neighbours (Pi-1, Pi+2), so the rendered curve passes
-//through every input point but the joins are tangent-continuous instead of polyline kinks. Tension = 1 is
-//the canonical uniform Catmull-Rom; lowering it tightens the curve toward straight lines but at 1.0 the
-//visual matches the HA frontend chart card the user pointed to as a reference.
+//through every input point but the joins are tangent-continuous instead of polyline kinks.
 function smoothPathD(coords: Array<[number, number]>): string
 {
     const n = coords.length;
@@ -385,36 +442,24 @@ function smoothPathD(coords: Array<[number, number]>): string
 }
 
 
-//Render the SVG for a single CoverFlow card. viewBox is normalised 0 to 100 on both axes so the inner
-//area + line paths express points as percentages and the CSS sizes the SVG to fill its parent (the
-//.dash-cf-card-chart-plot frame). preserveAspectRatio="none" lets the chart stretch to whatever shape the
-//frame ends up at after the container queries swap the card aspect ratio.
-//
-//A bottom padding of ~6 % keeps the W=0 baseline off the chart frame's lower edge so the orange baseline
-//is visibly inset (the HA frontend's native power-curve cards do the same). A top padding of ~4 % stops the
-//peak from kissing the upper edge for the same reason.
 const CHART_BOTTOM_PAD = 6;
 const CHART_TOP_PAD    = 4;
 export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateResult
 {
     const W = 100;
     const H = 100;
-    const N = data.forecastW.length || (data.sources[0]?.valuesW.length ?? 0);
+    const N = data.timesMs.length;
     if (N < 2 || yMaxW <= 0)
     {
         return html``;
     }
-    const plotH  = H - CHART_BOTTOM_PAD - CHART_TOP_PAD;
-    const xPctOf = (i: number) => (i / (N - 1)) * W;
-    const yPctOf = (w: number) => H - CHART_BOTTOM_PAD - Math.max(0, Math.min(1, w / yMaxW)) * plotH;
+    const plotH    = H - CHART_BOTTOM_PAD - CHART_TOP_PAD;
+    //X position is computed from the ABSOLUTE timestamp of each point, not its index, so an irregular
+    //timeline (denser samples around midday than at night) still maps to a chronologically-correct chart.
+    const dayMs    = data.dayEndMs - data.dayStartMs;
+    const xPctOf   = (tMs: number) => ((tMs - data.dayStartMs) / dayMs) * W;
+    const yPctOf   = (w: number)   => H - CHART_BOTTOM_PAD - Math.max(0, Math.min(1, w / yMaxW)) * plotH;
 
-    //Build stacked areas from bottom to top so each layer paints over the previous one with the right
-    //vertical offset. The fill is the per-source color at ~38 % opacity (legible without drowning the
-    //forecast line) plus a thicker stroke on the area's TOP edge (the production curve drawn over the
-    //fill) so the curve has a defined upper border per the HA reference card. The FIRST source's fill
-    //also fills the bottom padding band (the strip below the W=0 baseline that the chart frame insets
-    //for visual breathing room) with the same colour, so the orange baseline reads as the "ground" the
-    //production rises from instead of a hard cut-off edge.
     const areaPaths: TemplateResult[] = [];
     const bottomValues = new Array(N).fill(0);
     for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
@@ -430,18 +475,14 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
         const topCoords: Array<[number, number]> = [];
         for (let i = 0; i < N; i++)
         {
-            topCoords.push([xPctOf(i), yPctOf(topValues[i])]);
+            topCoords.push([xPctOf(data.timesMs[i]), yPctOf(topValues[i])]);
         }
-        //Fill path: cubic-Bezier smoothed top edge + straight L closure along the bottom edge of this
-        //stacked layer (bottom is by definition flat / monotone, no smoothing buys anything there).
         let dFill = smoothPathD(topCoords);
         for (let i = N - 1; i >= 0; i--)
         {
-            dFill += ` L ${xPctOf(i).toFixed(2)} ${bottomYOf(i).toFixed(2)}`;
+            dFill += ` L ${xPctOf(data.timesMs[i]).toFixed(2)} ${bottomYOf(i).toFixed(2)}`;
         }
         dFill += ' Z';
-        //Stroke path: only the TOP edge, same smoothing recipe, drawn as a separate open path so the
-        //bottom + side edges of the fill polygon stay invisible.
         const dStroke = smoothPathD(topCoords);
         areaPaths.push(svg`
             <path d="${dFill}" fill="${src.color}" fill-opacity="0.32" stroke="none"></path>
@@ -467,7 +508,7 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
         const fcCoords: Array<[number, number]> = [];
         for (let i = 0; i < N; i++)
         {
-            fcCoords.push([xPctOf(i), yPctOf(data.forecastW[i])]);
+            fcCoords.push([xPctOf(data.timesMs[i]), yPctOf(data.forecastW[i])]);
         }
         forecastPath = svg`
             <path
