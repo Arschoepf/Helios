@@ -28,7 +28,6 @@ import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
 import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, bracketHover, computeHoverDots, type DayChartData } from './dashboardChart';
-import { fetchKwhChangeForRange } from './energy-prefs';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -188,16 +187,8 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                 <div class="dash-cf-stage ${animClass}">
                     ${DAY_OFFSETS.map(offset =>
                         renderCoverflowCard(host, offset, active, {
-                            production:     charts.productionByOffset.get(offset)!,
-                            battCharge:     charts.battChargeByOffset.get(offset)!,
-                            battDischarge:  charts.battDischargeByOffset.get(offset)!,
-                            gridIn:         charts.gridInByOffset.get(offset)!,
-                            gridOut:        charts.gridOutByOffset.get(offset)!,
-                            yMaxProd:       charts.productionYMaxW,
-                            yMaxBattCharge: charts.battChargeYMaxW,
-                            yMaxBattDis:    charts.battDischargeYMaxW,
-                            yMaxGridIn:     charts.gridInYMaxW,
-                            yMaxGridOut:    charts.gridOutYMaxW,
+                            production: charts.productionByOffset.get(offset)!,
+                            yMaxProd:   charts.productionYMaxW,
                         })
                     )}
                 </div>
@@ -380,16 +371,8 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
 //they read as background context rather than competing for the user's attention.
 interface CardChartBundle
 {
-    production:      DayChartData;
-    battCharge:      DayChartData;
-    battDischarge:   DayChartData;
-    gridIn:          DayChartData;
-    gridOut:         DayChartData;
-    yMaxProd:        number;
-    yMaxBattCharge:  number;
-    yMaxBattDis:     number;
-    yMaxGridIn:      number;
-    yMaxGridOut:     number;
+    production: DayChartData;
+    yMaxProd:   number;
 }
 
 function renderCoverflowCard(
@@ -475,24 +458,6 @@ function renderCoverflowCard(
     const chartData = charts.production;
     const chartYMaxW = charts.yMaxProd;
 
-    //Battery charged / discharged today, from computeBatteryToday for the live day. Past days read from
-    //the historical-totals map populated by fetchDashHistoricalTotals when the dashboard opens.
-    const battery = cardOffset === 0
-        ? computeBatteryToday(host as unknown as BatteryHost)
-        : {
-            socNow:        null,
-            chargedKwh:    host._dashHistoricalTotals?.get(`${cardOffset}|battCharge`)    ?? 0,
-            dischargedKwh: host._dashHistoricalTotals?.get(`${cardOffset}|battDischarge`) ?? 0,
-        };
-    //Grid totals: today from the live HA Energy daily-totals refresh, past from the dashboard's
-    //recorder-backed historical totals fetched on open. Surface them here in renderCoverflowCard scope so
-    //both the mini-tiles AND the chart-header headlineKwh can read the same value (they must match).
-    const gridImportedKwh = cardOffset === 0
-        ? (host._haGridImportTodayKwh ?? 0)
-        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridImport`) ?? 0);
-    const gridExportedKwh = cardOffset === 0
-        ? (host._haGridExportTodayKwh ?? 0)
-        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridExport`) ?? 0);
 
     return html`
         <article
@@ -560,31 +525,6 @@ function renderCoverflowCard(
                         </span>
                     </div>
                 ` : nothing}
-                ${hasBatteryConfigured(host) ? html`
-                    <div class="dash-cf-card-stat dash-cf-card-stat-battery-in">
-                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-in" aria-hidden="true">
-                            <ha-icon icon="mdi:battery-arrow-up"></ha-icon>
-                        </span>
-                        <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileChargeLabel ?? 'Charge'}</span>
-                            <span class="dash-cf-card-stat-value">
-                                ${formatLocalisedNumber(host.hass, battery.chargedKwh, 1)} kWh
-                            </span>
-                        </span>
-                    </div>
-                    <div class="dash-cf-card-stat dash-cf-card-stat-battery-out">
-                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-battery-out" aria-hidden="true">
-                            <ha-icon icon="mdi:battery-arrow-down"></ha-icon>
-                        </span>
-                        <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileDischargeLabel ?? 'Discharge'}</span>
-                            <span class="dash-cf-card-stat-value">
-                                ${formatLocalisedNumber(host.hass, battery.dischargedKwh, 1)} kWh
-                            </span>
-                        </span>
-                    </div>
-                ` : nothing}
-                ${renderGridTiles(host, cardOffset)}
             </section>
 
             <div class="dash-cf-card-charts">
@@ -593,130 +533,20 @@ function renderCoverflowCard(
                     icon:         'mdi:sun-clock-outline',
                     headlineKwh:  stats.producedKwh,
                 })}
-                ${hasBatteryConfigured(host) || hasGridImport(host) || hasGridExport(host) ? html`
-                    <div class="dash-cf-card-charts-row">
-                        ${hasBatteryConfigured(host) ? html`
-                            <div class="dash-cf-card-charts-stacked-pair">
-                                ${renderCardChartBlock(host, cardOffset, activeOffset, charts.battCharge, charts.yMaxBattCharge, 'batt-charge', {
-                                    title:       tLocal.detail.tileChargeLabel ?? 'Charge',
-                                    icon:        'mdi:battery-arrow-up',
-                                    headlineKwh: battery.chargedKwh,
-                                })}
-                                ${renderCardChartBlock(host, cardOffset, activeOffset, charts.battDischarge, charts.yMaxBattDis, 'batt-discharge', {
-                                    title:       tLocal.detail.tileDischargeLabel ?? 'Discharge',
-                                    icon:        'mdi:battery-arrow-down',
-                                    headlineKwh: battery.dischargedKwh,
-                                })}
-                            </div>
-                        ` : nothing}
-                        ${hasGridImport(host) || hasGridExport(host) ? html`
-                            <div class="dash-cf-card-charts-stacked-pair">
-                                ${hasGridImport(host) ? renderCardChartBlock(
-                                    host, cardOffset, activeOffset, charts.gridIn, charts.yMaxGridIn, 'grid-in', {
-                                        title:        tLocal.detail.tileImportLabel ?? 'Import',
-                                        icon:         'mdi:transmission-tower-export',
-                                        headlineKwh:  gridImportedKwh,
-                                    }
-                                ) : nothing}
-                                ${hasGridExport(host) ? renderCardChartBlock(
-                                    host, cardOffset, activeOffset, charts.gridOut, charts.yMaxGridOut, 'grid-out', {
-                                        title:        tLocal.detail.tileExportLabel ?? 'Export',
-                                        icon:         'mdi:transmission-tower-import',
-                                        headlineKwh:  gridExportedKwh,
-                                    }
-                                ) : nothing}
-                            </div>
-                        ` : nothing}
-                    </div>
-                ` : nothing}
             </div>
         </article>
     `;
 }
 
 
-//Whether the HA Energy dashboard declares any solar / battery / grid-import / grid-export source. Drives
-//the conditional rendering of the matching mini-tile pairs on every CoverFlow card so an install without
-//(say) a battery does not show two empty 0.0 kWh tiles cluttering the section.
+//Whether the HA Energy dashboard declares any solar source. Drives the conditional rendering of the
+//Production / Prévision mini-tiles.
 function hasSolarConfigured(host: DashboardHost): boolean
 {
     const def = host._energyDefaults;
     return (def?.solarStatRates?.length ?? 0) > 0
         || (def?.solarStatEnergyFroms?.length ?? 0) > 0;
 }
-
-function hasBatteryConfigured(host: DashboardHost): boolean
-{
-    const def = host._energyDefaults;
-    return (def?.batteryStatRates?.length ?? 0) > 0
-        || (def?.batteryStatEnergyFroms?.length ?? 0) > 0
-        || (def?.batteryStatEnergyTos?.length ?? 0) > 0;
-}
-
-function hasGridImport(host: DashboardHost): boolean
-{
-    return (host._energyDefaults?.gridStatEnergyFroms?.length ?? 0) > 0;
-}
-
-function hasGridExport(host: DashboardHost): boolean
-{
-    return (host._energyDefaults?.gridStatEnergyTos?.length ?? 0) > 0;
-}
-
-
-//Grid import / export tile pair, rendered above the chart and below the battery row. If only one of the
-//two sides is configured in the HA Energy dashboard the surviving tile spans both columns of the 2x2 grid
-//so it reads as a horizontal banner instead of an orphan half-row.
-function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResult | typeof nothing
-{
-    const hasIn  = hasGridImport(host);
-    const hasOut = hasGridExport(host);
-    if (!hasIn && !hasOut)
-    {
-        return nothing;
-    }
-
-    //Today's grid energy from the recorder day-totals refresh that energy-prefs.ts maintains. Past + future
-    //days fall back to 0 the same way the battery tiles do, an LTS-backed historical path will come later.
-    const importedKwh = cardOffset === 0
-        ? (host._haGridImportTodayKwh ?? 0)
-        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridImport`) ?? 0);
-    const exportedKwh = cardOffset === 0
-        ? (host._haGridExportTodayKwh ?? 0)
-        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridExport`) ?? 0);
-
-    const soloClass = (hasIn && !hasOut) || (!hasIn && hasOut) ? ' dash-cf-card-stat-grid-solo' : '';
-
-    return html`
-        ${hasIn ? html`
-            <div class="dash-cf-card-stat dash-cf-card-stat-grid-in${soloClass}">
-                <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-grid-in" aria-hidden="true">
-                    <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
-                </span>
-                <span class="dash-cf-card-stat-body">
-                    <span class="dash-cf-card-stat-label">${pickTranslations(host.hass?.language).detail.tileImportLabel ?? 'Import'}</span>
-                    <span class="dash-cf-card-stat-value">
-                        ${formatLocalisedNumber(host.hass, importedKwh, 1)} kWh
-                    </span>
-                </span>
-            </div>
-        ` : nothing}
-        ${hasOut ? html`
-            <div class="dash-cf-card-stat dash-cf-card-stat-grid-out${soloClass}">
-                <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-grid-out" aria-hidden="true">
-                    <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
-                </span>
-                <span class="dash-cf-card-stat-body">
-                    <span class="dash-cf-card-stat-label">${pickTranslations(host.hass?.language).detail.tileExportLabel ?? 'Export'}</span>
-                    <span class="dash-cf-card-stat-value">
-                        ${formatLocalisedNumber(host.hass, exportedKwh, 1)} kWh
-                    </span>
-                </span>
-            </div>
-        ` : nothing}
-    `;
-}
-
 
 //Bottom block of each CoverFlow card: header (title + live W value + lightning-bolt icon) + plot frame
 //(the rendered SVG + a vertical cursor on hover). The header value follows the cursor on the front card:
@@ -736,7 +566,7 @@ function renderCardChartBlock(
     activeOffset: number,
     data:         DayChartData,
     yMaxW:        number,
-    kind:         'production' | 'batt-charge' | 'batt-discharge' | 'grid-in' | 'grid-out',
+    kind:         'production',
     meta:         ChartBlockMeta,
 ): TemplateResult
 {
@@ -2504,50 +2334,6 @@ export function renderDashBatterySection(
 //click anywhere on the detail panel (on → off). The engine
 //handles the eased camera transition; we just flip the state
 //and let the CSS .detail-active class fade out the overlays.
-//Past-day kWh totals fetch: queries the recorder for each past offset's grid import / grid export /
-//battery charge / battery discharge total, fills `host._dashHistoricalTotals` keyed by
-//`${offset}|${kind}`. Cached server-side via `fetchKwhChangeForRange`, so a remount inside the cache
-//window costs nothing.
-async function fetchDashHistoricalTotals(host: DashboardHost): Promise<void>
-{
-    const defaults = host._energyDefaults;
-    if (!defaults)
-    {
-        return;
-    }
-    const out: Map<string, number> = host._dashHistoricalTotals ?? new Map<string, number>();
-    const tasks: Promise<void>[] = [];
-    for (const offset of [-2, -1])
-    {
-        const startD = new Date();
-        startD.setHours(0, 0, 0, 0);
-        startD.setDate(startD.getDate() + offset);
-        const endD = new Date(startD);
-        endD.setDate(endD.getDate() + 1);
-        const startMs = startD.getTime();
-        const endMs   = endD.getTime();
-        const slots: Array<{ key: string; ids: string[] }> = [
-            { key: 'gridImport',    ids: defaults.gridStatEnergyFroms    },
-            { key: 'gridExport',    ids: defaults.gridStatEnergyTos      },
-            { key: 'battCharge',    ids: defaults.batteryStatEnergyTos   },
-            { key: 'battDischarge', ids: defaults.batteryStatEnergyFroms },
-        ];
-        for (const slot of slots)
-        {
-            tasks.push(
-                fetchKwhChangeForRange(host, slot.ids, startMs, endMs).then(v =>
-                {
-                    if (v !== null) out.set(`${offset}|${slot.key}`, v);
-                })
-            );
-        }
-    }
-    await Promise.all(tasks);
-    host._dashHistoricalTotals = out;
-    (host as unknown as { requestUpdate(): void }).requestUpdate();
-}
-
-
 export function handleHomeClick(host: DashboardHost, e: Event): void
 {
     //Stop propagation so the underlying map doesn't also process the click as a pan / drag start, and so nested overlay layers don't double-handle
@@ -2578,9 +2364,6 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
         host._dashAnimTimer = undefined;
         (host as unknown as { requestUpdate(): void }).requestUpdate();
     }, 1000);
-    //Kick the past-day kWh fetch so the Hier / Avant-hier cards swap their grid + battery 0.0 kWh
-    //placeholders for real recorder totals as soon as the WS round-trip lands.
-    fetchDashHistoricalTotals(host).catch(() => {});
     host._engine?.setDetailMode(true);
     startDashCountUpLoop(host);
 }
