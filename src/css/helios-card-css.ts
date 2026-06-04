@@ -672,18 +672,21 @@ export const heliosCardStyles = css`
         Uses HA theme tokens throughout so the colours follow the active frontend theme. */
     .dash-cf-card-stats
     {
-        /*  Mini-tiles responsive: auto-fit each row with a 140 px tile MINIMUM. When the card width can fit
-            2 tiles per row at >= 140 px each (>= ~296 px card width), the grid renders 2 columns; below
-            that it drops to 1 column so each tile keeps its label readable. With only 2 tiles total
-            (Production + Prévision), this yields 2x1 on wide cards and 1x2 (stacked) on narrow ones. */
+        /*  Mini-tiles: strict 2 columns always via CSS grid. Grid is deterministic regardless of card
+            width / padding rounding, the flex-wrap basis: 50% trick was hitting subpixel cases where 2
+            tiles + gap exceeded the available width by < 1 px and wrapped to 1 per row. */
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
         padding: 0 8px;
     }
     .dash-cf-card-stats > .dash-cf-card-stat
     {
         min-width: 0;
+    }
+    .dash-cf-card-stats > .dash-cf-card-stat-grid-solo
+    {
+        grid-column: 1 / -1;
     }
     /*  HA frontend tile style: rounded-square coloured icon badge on the left, title + value stacked on the
         right. Icon background = colour token at low opacity, icon glyph = the same token at full opacity, so
@@ -741,18 +744,379 @@ export const heliosCardStyles = css`
         background: color-mix(in srgb, var(--info-color, #039be5) 18%, transparent);
         color: var(--info-color, #039be5);
     }
+    /*  Battery in / out tinted with the HA Energy battery palette so the four tiles read as the same family
+        as the matching slots on the native HA Energy dashboard. */
+    /*  HA Energy reads the battery palette tokens from the energy-graph node perspective: battery-in =
+        energy flowing IN to the battery node (= charge, green default) and battery-out = energy flowing
+        OUT of the battery node (= discharge, teal default). The dashboard tile names are user-facing
+        (Charge / Décharge), so the binding matches: Charge tile = --energy-battery-out-color, Décharge
+        tile = --energy-battery-in-color, which is the convention the user pointed to on their HA Energy
+        dashboard reference. */
+    .dash-cf-card-stat-icon-battery-in
+    {
+        background: color-mix(in srgb, var(--energy-battery-out-color, #1b6c75) 18%, transparent);
+        color: var(--energy-battery-out-color, #1b6c75);
+    }
+    .dash-cf-card-stat-icon-battery-out
+    {
+        background: color-mix(in srgb, var(--energy-battery-in-color, #4caf50) 18%, transparent);
+        color: var(--energy-battery-in-color, #4caf50);
+    }
+    /*  Grid import / export, same recipe as battery: HA Energy palette token tinted at 18 %. */
+    .dash-cf-card-stat-icon-grid-in
+    {
+        background: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 18%, transparent);
+        color: var(--energy-grid-consumption-color, #488fc2);
+    }
+    .dash-cf-card-stat-icon-grid-out
+    {
+        background: color-mix(in srgb, var(--energy-grid-return-color, #8353d1) 18%, transparent);
+        color: var(--energy-grid-return-color, #8353d1);
+    }
+    /*  Single-tile grid row (only import OR only export configured) spans both columns of the 2x2 grid so
+        the tile reads as a horizontal banner instead of an orphan half-row. */
+    .dash-cf-card-stat-grid-solo { grid-column: 1 / -1; }
+    .dash-cf-card-stat-body
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        min-width: 0;
+    }
+    .dash-cf-card-stat-label
+    {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--primary-text-color, #ffffff);
+        line-height: 1.2;
+    }
+    .dash-cf-card-stat-value
+    {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .dash-cf-card-stat-refined
+    {
+        font-weight: 500;
+        opacity: 0.75;
+        margin-left: 2px;
+    }
 
-    /*  Empty chart placeholder: takes ALL remaining vertical space inside the card flex column, framed with
-        the same tile recipe as the stat tiles. Body is intentionally empty, the next iteration will fill it
-        with the actual chart. */
-    .dash-cf-card-chart-empty
+    /*  Bottom block: chart placeholder that takes ALL remaining height in the card flex column. The body is
+        intentionally empty for now (chart implementation is the next iteration), the placeholder still
+        renders the framed area with the same tile recipe as the stat tiles so the empty card already reads
+        as "this is where the chart will go". */
+    /*  Charts area: a flex column inside the card holding the production chart (full width) at top and a
+        side-by-side battery + grid chart row below. Both subcharts only render when their entities are
+        configured in the HA Energy dashboard. */
+    .dash-cf-card-charts
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 8px;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    /*  Production chart on top: 50 % of the remaining charts column. Battery + grid row below: the other
+        50 %. flex 1 1 0 with a small min-height makes each side actually share the space equally when
+        there is enough vertical room, and keeps each chart readable when the card scrolls (the front card
+        is scrollable now, so a short stage with all 6 tiles stacked vertically would otherwise crush the
+        charts to invisible heights). */
+    .dash-cf-card-charts > .dash-cf-card-chart
+    {
+        flex: 1 1 0;
+        min-height: 140px;
+    }
+    .dash-cf-card-charts-row
+    {
+        display: flex;
+        gap: 8px;
+        flex: 1 1 0;
+        min-height: 140px;
+    }
+    .dash-cf-card-charts-row > .dash-cf-card-chart
+    {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 140px;
+        margin: 0;
+    }
+    /*  Stacked pair: two charts split vertically inside one half of the row. Used by both the Battery pair
+        (Charge top / Discharge bottom) and the Reseau pair (Import top / Export bottom). Takes 50 % of the
+        row width via flex: 1 1 0; if only one of the four sub-charts in a pair is configured, that single
+        chart fills the pair's full height (other slot collapses). */
+    .dash-cf-card-charts-stacked-pair
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 140px;
+    }
+    .dash-cf-card-charts-stacked-pair > .dash-cf-card-chart
+    {
+        flex: 1 1 0;
+        min-height: 70px;
+        margin: 0;
+    }
+    .dash-cf-card-chart
     {
         flex: 1 1 auto;
         min-height: 0;
-        margin: 8px;
         border-radius: 16px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+    /*  Narrow stage (section view): stack the battery + grid row vertically so each subchart still has a
+        readable width. */
+    @container helios-card (max-width: 1000px)
+    {
+        .dash-cf-card-charts-row { flex-direction: column; }
+    }
+    /*  Chart header: title + live W value on the left, mdi:lightning-bolt badge on the right. Same recipe
+        as the HA tile-card power-curve cards the user referenced. The value below the title swaps between
+        the day's peak W (no hover) and the interpolated stacked W at cursor X (hover on front card). */
+    .dash-cf-card-chart-header
+    {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 8px;
+        padding: 10px 12px 6px;
+        flex-shrink: 0;
+    }
+    .dash-cf-card-chart-meta
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+    .dash-cf-card-chart-title
+    {
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--primary-text-color, #ffffff);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    /*  Big bold value below the title, matches the HA frontend's native power-curve card recipe so the
+        figure reads as the headline of the chart block instead of a quiet caption. */
+    .dash-cf-card-chart-value
+    {
+        font-size: 28px;
+        font-weight: 600;
+        line-height: 1.1;
+        color: var(--primary-text-color, #ffffff);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .dash-cf-card-chart-unit
+    {
+        font-size: 14px;
+        font-weight: 500;
+        margin-left: 3px;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+    }
+    /*  Icon top-right: plain coloured glyph, no chip background. Matches the HA frontend convention where
+        the right-side glyph on a tile-card header is just an oversized inline icon (~24 px) in the
+        secondary text colour. */
+    .dash-cf-card-chart-icon
+    {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        line-height: 0;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+    }
+    .dash-cf-card-chart-icon ha-icon
+    {
+        --mdc-icon-size: 24px;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    /*  Plot frame fills the remaining vertical space, the SVG inside paints absolutely to its edges. The
+        vertical cursor sits absolutely positioned at the hover X percent so it always tracks the user's
+        cursor regardless of the SVG's non-uniform stretch. */
+    .dash-cf-card-chart-plot
+    {
+        position: relative;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    .dash-cf-card-chart-svg
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        display: block;
+    }
+    /*  Vertical guide line at the cursor X. Rendered as a 0 px wide div with a dashed left border so the
+        line itself is a CSS dash pattern (1.5 px wide dashes, 3 px gaps), matching the HA frontend chart
+        card's tooltip cursor style. */
+    .dash-cf-card-chart-cursor
+    {
+        position: absolute;
+        /*  Starts BELOW the time pill so the dashed line never runs through the pill text. The pill is
+            now a SIBLING (not a child) of the cursor, anchored at the same left % via transform centring,
+            so the cursor can start at the bottom edge of the pill without nesting. */
+        top: 32px;
+        bottom: 0;
+        width: 0;
+        background: transparent;
+        border-left: 1.5px dashed color-mix(in srgb, var(--primary-text-color, #ffffff) 55%, transparent);
+        pointer-events: none;
+        transform: translateX(-0.75px);
+    }
+    /*  Hover tooltip with one row per production source (color dot + friendly name + watts at hover) and
+        a final row for the model forecast (dashed dot + Prévision + watts at hover). The tooltip flips
+        side based on the cursor X to stay inside the plot frame: cursor in left half = tooltip to the
+        right of the cursor, cursor in right half = tooltip to the left. Vertical anchor is below the
+        time pill (top: 40 px) so the two never overlap. */
+    .dash-cf-card-chart-tooltip
+    {
+        position: absolute;
+        top: 40px;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+        padding: 6px 8px;
+        min-width: 130px;
+        max-width: 220px;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 11px;
+        pointer-events: none;
+        z-index: 4;
+    }
+    .dash-cf-card-chart-tooltip-row
+    {
+        display: grid;
+        grid-template-columns: 10px 1fr auto;
+        gap: 6px;
+        align-items: center;
+        min-width: 0;
+    }
+    .dash-cf-card-chart-tooltip-dot
+    {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        flex-shrink: 0;
+    }
+    .dash-cf-card-chart-tooltip-dot.is-dashed
+    {
+        background: transparent;
+        border-style: dashed;
+        border-width: 1.5px;
+    }
+    .dash-cf-card-chart-tooltip-label
+    {
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-weight: 500;
+    }
+    .dash-cf-card-chart-tooltip-value
+    {
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+
+    /*  Hover time pill anchored to the top of the cursor line, centred horizontally on it. Same pill recipe
+        as the day chip in the bandeau so the two read as the same family. */
+    /*  Hover dot on each curve: absolute-positioned HTML span (not an SVG circle) so it stays perfectly
+        circular regardless of the chart SVG's non-uniform stretch. One dot per stacked source top in the
+        source colour + one hollow dot on the forecast curve in the dashed-line palette. */
+    .dash-cf-card-chart-dot
+    {
+        position: absolute;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 3;
+        box-shadow: 0 0 0 1px var(--ha-card-background, #1c1c1c);
+    }
+    .dash-cf-card-chart-dot.is-forecast
+    {
+        background: var(--ha-card-background, #1c1c1c);
+        border: 1px solid;
+        box-shadow: none;
+    }
+
+    /*  Hover pill at the cursor X, rendered as a SIBLING of the cursor (not a child) so the cursor's
+        dashed line can start BELOW the pill without overlap. The pill takes its own left percent from
+        the inline style and centres horizontally on that X via translateX(-50%). */
+    .dash-cf-card-chart-cursor-time
+    {
+        position: absolute;
+        top: 6px;
+        transform: translateX(-50%);
+        z-index: 5;
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        padding: 1px 6px;
+        border-radius: 6px;
+        white-space: nowrap;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+        pointer-events: none;
+    }
+    /*  Per-mount grow animation: every time the chart SVG mounts (which now only happens for the FRONT
+        card per the lazy-render path) the curve scales from the bottom upward to full height. Anchors
+        transform-origin to the bottom so the W=0 baseline does not move during the scaleY, only the peaks
+        reach up. Replays every time the user navigates to a different day (the SVG re-mounts on the
+        newly-active card). */
+    @keyframes dash-cf-chart-grow
+    {
+        from { transform: scaleY(0); }
+        to   { transform: scaleY(1); }
+    }
+    .dash-cf-card-chart-svg
+    {
+        transform-origin: bottom;
+        animation: dash-cf-chart-grow 600ms cubic-bezier(0.22, 1, 0.36, 1) 0ms both;
+    }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card-chart-svg
+    {
+        animation-delay: 280ms;
+    }
+    /*  Forecast trace: thin dashed line in the same solar palette as the stacked areas, slightly darker so
+        it reads as a separate trace on top of the fills. The vector-effect non-scaling-stroke attribute is
+        set on the path element so the dashes stay 1.4 px wide regardless of the SVG's non-uniform stretch. */
+    .dash-cf-card-chart-forecast
+    {
+        stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 75%, var(--primary-text-color, #000) 25%);
+        stroke-width: 1.4;
+        stroke-dasharray: 3 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous

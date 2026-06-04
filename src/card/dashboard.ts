@@ -27,6 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
+import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, bracketHover, computeHoverDots, type DayChartData } from './dashboardChart';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -65,6 +66,21 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //phase flips to 'idle' and the cards sit at their inline-style resting transforms.
     _dashAnimPhase:        'idle' | 'entering' | 'exiting';
     _dashAnimTimer?:       number;
+    //Hover fraction over the FRONT card's chart, in [0..1]. Null when the cursor is not on the chart. Drives
+    //the value readout in the chart header + the vertical guide line at the cursor X. Hover is intentionally
+    //limited to the front card so the mid / back cards never compete for the cursor (they sit behind the
+    //front card visually anyway).
+    _dashChartHoverFrac:   number | null;
+    //Per-entity grid sample buffers populated by refreshGrid (in grid.ts) so the dashboard's grid chart
+    //can read raw import / export samples for today's curve. Maps are keyed by HA entity id.
+    readonly _gridImportSamples: Map<string, Array<{ t: number; v: number }>>;
+    readonly _gridExportSamples: Map<string, Array<{ t: number; v: number }>>;
+    readonly _gridImportUnits:   Map<string, string>;
+    readonly _gridExportUnits:   Map<string, string>;
+    //Map of past-day kWh totals, keyed by `${offset}|${kind}` (kind one of solar / gridImport / gridExport
+    /// battCharge / battDischarge). Populated by `fetchDashHistoricalTotals` when the dashboard opens so
+    //the past-day tiles (Hier / Avant-hier) show the real recorder totals instead of a placeholder 0.
+    _dashHistoricalTotals?: Map<string, number>;
 }
 
 
@@ -154,6 +170,11 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                     : host._dashAnimPhase === 'exiting'  ? 'dash-cf-exiting'
                     : '';
 
+    //Pre-compute the per-day chart data + the global Y maximum once per render so every card paints on the
+    //same Y axis (a low-cloud day reads taller than a heavily-overcast one). Built once here and threaded
+    //into each `renderCoverflowCard` call instead of having each card recompute its own chart.
+    const charts = buildDashCharts(host, DAY_OFFSETS);
+
     return html`
         <div class="detail-panel">
             <div class="dash-coverflow"
@@ -165,7 +186,10 @@ export function renderDashboard(host: DashboardHost): TemplateResult
             >
                 <div class="dash-cf-stage ${animClass}">
                     ${DAY_OFFSETS.map(offset =>
-                        renderCoverflowCard(host, offset, active)
+                        renderCoverflowCard(host, offset, active, {
+                            production: charts.productionByOffset.get(offset)!,
+                            yMaxProd:   charts.productionYMaxW,
+                        })
                     )}
                 </div>
             </div>
@@ -345,10 +369,17 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
 //currently active offset: 0 = front, ±1 = mid (rotated 35°), ±2 = back (rotated 50°). Z-index ordering keeps the
 //front card on top of its neighbours regardless of stacking order in the DOM. Opacity fades the back cards so
 //they read as background context rather than competing for the user's attention.
+interface CardChartBundle
+{
+    production: DayChartData;
+    yMaxProd:   number;
+}
+
 function renderCoverflowCard(
     host:         DashboardHost,
     cardOffset:   number,
     activeOffset: number,
+    charts:       CardChartBundle,
 ): TemplateResult
 {
     const delta    = cardOffset - activeOffset;
@@ -496,7 +527,13 @@ function renderCoverflowCard(
                 ` : nothing}
             </section>
 
-            <section class="dash-cf-card-chart-empty" aria-hidden="true"></section>
+            <div class="dash-cf-card-charts">
+                ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW, 'production', {
+                    title:        tLocal.detail.chartProductionTitle ?? 'Daily production',
+                    icon:         'mdi:sun-clock-outline',
+                    headlineKwh:  stats.producedKwh,
+                })}
+            </div>
         </article>
     `;
 }
@@ -509,6 +546,646 @@ function hasSolarConfigured(host: DashboardHost): boolean
     const def = host._energyDefaults;
     return (def?.solarStatRates?.length ?? 0) > 0
         || (def?.solarStatEnergyFroms?.length ?? 0) > 0;
+}
+
+//Bottom block of each CoverFlow card: header (title + live W value + lightning-bolt icon) + plot frame
+//(the rendered SVG + a vertical cursor on hover). The header value follows the cursor on the front card:
+//hover at a given X reads the interpolated stacked W at that X; cursor off-chart reverts to the day's
+//peak. Mid / back cards are static (no hover handlers, just the day's peak value in the header) since the
+//cursor naturally lives on the front card anyway.
+interface ChartBlockMeta
+{
+    title:       string;
+    icon:        string;
+    headlineKwh: number | null;
+}
+
+function renderCardChartBlock(
+    host:         DashboardHost,
+    cardOffset:   number,
+    activeOffset: number,
+    data:         DayChartData,
+    yMaxW:        number,
+    kind:         'production',
+    meta:         ChartBlockMeta,
+): TemplateResult
+{
+    const isFront = cardOffset === activeOffset;
+    const N       = data.timesMs.length;
+
+    //Default headline (no hover) = the day's TOTAL produced kWh, matching the Production tile's value so
+    //the chart header reads as "today's daily total" at rest. Hover on the front card swaps in the
+    //instantaneous stacked W at the cursor X (with the unit dropping from kWh to W / kW).
+    let displayValue: string;
+    let displayUnit:  string;
+    let hoverPct:     number | null = null;
+    let hoverTime:    string | null = null;
+    let tooltipRows:  Array<{ label: string; color: string; valueStr: string; unitStr: string; isDashed: boolean }> = [];
+    if (isFront && host._dashChartHoverFrac !== null && N >= 2)
+    {
+        const frac    = Math.max(0, Math.min(1, host._dashChartHoverFrac));
+        const bracket = bracketHover(data, frac);
+        const i0 = bracket.i0;
+        const i1 = bracket.i1;
+        const f  = bracket.f;
+        const v0    = stackedAtIndex(data, i0) || (data.forecastW[i0] ?? 0);
+        const v1    = stackedAtIndex(data, i1) || (data.forecastW[i1] ?? 0);
+        const hoverW = v0 * (1 - f) + v1 * f;
+        const f1 = formatPowerForChart(host.hass, hoverW);
+        displayValue = f1.value;
+        displayUnit  = f1.unit;
+        hoverPct     = frac * 100;
+        //Cursor chip content:
+        //  - Production chart: HH:MM at the cursor X (the per-source tooltip below carries the values).
+        //  - Battery / grid charts: the instantaneous value directly (no tooltip, no time chip), since
+        //    these charts only carry a single primary curve and a label-less value reads cleaner than a
+        //    standalone time pill with a separate tooltip below.
+        if (kind === 'production')
+        {
+            hoverTime = formatHoverTimeLabel(host.hass, cardOffset, frac);
+        }
+        else
+        {
+            hoverTime = `${f1.value} ${f1.unit}`;
+        }
+
+        //Tooltip rows: PRODUCTION chart only. Per-source breakdown + a Prévision row.
+        if (kind === 'production')
+        {
+            for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
+            {
+                const src = data.sources[srcIdx];
+                const sw  = (src.valuesW[i0] ?? 0) * (1 - f) + (src.valuesW[i1] ?? 0) * f;
+                let name: string;
+                if (src.id === 'lts')
+                {
+                    name = pickTranslations(host.hass?.language).detail.tooltipMeasuredLabel ?? 'Measured production';
+                }
+                else
+                {
+                    name = host.hass?.states?.[src.id]?.attributes?.friendly_name ?? src.id;
+                }
+                const fp = formatPowerForChart(host.hass, sw);
+                tooltipRows.push({ label: name, color: src.color, valueStr: fp.value, unitStr: fp.unit, isDashed: false });
+            }
+            const fcW = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
+            const ffc = formatPowerForChart(host.hass, fcW);
+            const tForecastLabel = pickTranslations(host.hass?.language).detail.tooltipForecastLabel ?? 'Forecast';
+            tooltipRows.push({ label: tForecastLabel, color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
+        }
+    }
+    else if (meta.headlineKwh !== null)
+    {
+        //Default at-rest value (production chart): the day's total produced kWh.
+        displayValue = formatLocalisedNumber(host.hass, meta.headlineKwh, 1);
+        displayUnit  = 'kWh';
+    }
+    else
+    {
+        //Default at-rest value (battery / grid charts): peak power across the day.
+        const fp = formatPowerForChart(host.hass, peakOfDay(data));
+        displayValue = fp.value;
+        displayUnit  = fp.unit;
+    }
+
+    //Tooltip placement: when the cursor is in the left half of the plot the tooltip sits on the RIGHT of
+    //the cursor, when on the right half it flips LEFT, so the tooltip never sits on top of the chart edge
+    //and never covers the curve on the side the cursor is moving toward.
+    const tooltipOnRight = hoverPct !== null && hoverPct < 50;
+
+    //Lazy-render: the SVG is only mounted for the FRONT card. Non-front cards show a header but no curve.
+    //When the user navigates to a different day, that card becomes the front and its SVG mounts, which
+    //fires the dash-cf-chart-grow CSS animation (anchored to mount via animation-fill-mode: both).
+    return html`
+        <section class="dash-cf-card-chart dash-cf-card-chart-${kind}" aria-hidden="${!isFront}">
+            <header class="dash-cf-card-chart-header">
+                <div class="dash-cf-card-chart-meta">
+                    <span class="dash-cf-card-chart-title">${meta.title}</span>
+                    <span class="dash-cf-card-chart-value">
+                        ${displayValue}<span class="dash-cf-card-chart-unit"> ${displayUnit}</span>
+                    </span>
+                </div>
+                <span class="dash-cf-card-chart-icon" aria-hidden="true">
+                    <ha-icon icon="${meta.icon}"></ha-icon>
+                </span>
+            </header>
+            <div
+                class="dash-cf-card-chart-plot"
+                @pointermove="${isFront ? (e: PointerEvent) => handleChartHover(host, e) : null}"
+                @pointerleave="${isFront ? () => handleChartHoverLeave(host) : null}"
+            >
+                ${isFront ? renderDayChartSVG(data, yMaxW) : nothing}
+                ${isFront && host._dashChartHoverFrac !== null
+                    ? computeHoverDots(data, yMaxW, host._dashChartHoverFrac, kind === 'production').map(dot => html`
+                        <span
+                            class="dash-cf-card-chart-dot ${dot.isForecast ? 'is-forecast' : ''}"
+                            style="left: ${dot.leftPct.toFixed(2)}%; top: ${dot.topPct.toFixed(2)}%; ${dot.isForecast ? `border-color: ${dot.color};` : `background: ${dot.color};`}"
+                        ></span>
+                    `)
+                    : nothing
+                }
+                ${hoverPct !== null ? html`
+                    ${hoverTime !== null ? html`
+                        <span class="dash-cf-card-chart-cursor-time" style="left: ${hoverPct.toFixed(2)}%">${hoverTime}</span>
+                    ` : nothing}
+                    <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%"></span>
+                    ${tooltipRows.length > 0 ? html`
+                        <div
+                            class="dash-cf-card-chart-tooltip"
+                            style="${tooltipOnRight
+                                ? `left: calc(${hoverPct.toFixed(2)}% + 10px); right: auto;`
+                                : `right: calc(${(100 - hoverPct).toFixed(2)}% + 10px); left: auto;`
+                            }"
+                        >
+                            ${tooltipRows.map(row => html`
+                                <div class="dash-cf-card-chart-tooltip-row">
+                                    <span
+                                        class="dash-cf-card-chart-tooltip-dot ${row.isDashed ? 'is-dashed' : ''}"
+                                        style="${row.isDashed
+                                            ? `border-color: ${row.color}; background: transparent;`
+                                            : `background: ${row.color};`
+                                        }"
+                                    ></span>
+                                    <span class="dash-cf-card-chart-tooltip-label">${row.label}</span>
+                                    <span class="dash-cf-card-chart-tooltip-value">${row.valueStr} ${row.unitStr}</span>
+                                </div>
+                            `)}
+                        </div>
+                    ` : nothing}
+                ` : nothing}
+            </div>
+        </section>
+    `;
+}
+
+
+//Hover time label: HH:MM at the cursor X position. Computed from the card's day start + (frac x 24 h).
+//Locale is pulled from the host hass so the time format follows the user (24 h in fr-FR, 12 h in en-US).
+function formatHoverTimeLabel(hass: DashboardHost['hass'], dayOffset: number, frac: number): string
+{
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() + dayOffset);
+    const hoverMs = start.getTime() + frac * 86_400_000;
+    try
+    {
+        return new Intl.DateTimeFormat(hass?.language ?? undefined, {
+            hour:   '2-digit',
+            minute: '2-digit',
+        }).format(new Date(hoverMs));
+    }
+    catch (_)
+    {
+        const d = new Date(hoverMs);
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
+}
+
+
+//Power formatting for the chart header. Below 1 kW we show whole W ('342 W'); from 1 kW we switch to one
+//decimal kW ('2,3 kW'). Locale is pulled from the host hass so the decimal separator follows the user.
+function formatPowerForChart(hass: DashboardHost['hass'], watts: number): { value: string; unit: string }
+{
+    if (!isFinite(watts) || watts < 0)
+    {
+        return { value: '0', unit: 'W' };
+    }
+    if (watts >= 1000)
+    {
+        return { value: formatLocalisedNumber(hass, watts / 1000, 1), unit: 'kW' };
+    }
+    return { value: formatLocalisedNumber(hass, Math.round(watts), 0), unit: 'W' };
+}
+
+
+//Pointermove handler on the front card's plot frame. Reads the cursor's X position relative to the frame
+//and stores the [0..1] fraction on the host so the next render computes the interpolated W and positions
+//the vertical guide line. Coalesced via requestAnimationFrame so a fast mouse move does not trigger a
+//re-render per event (the cursor moves at screen refresh rate at most).
+export function handleChartHover(host: DashboardHost, e: PointerEvent): void
+{
+    const target = e.currentTarget as HTMLElement | null;
+    if (!target)
+    {
+        return;
+    }
+    const rect = target.getBoundingClientRect();
+    if (rect.width <= 0)
+    {
+        return;
+    }
+    const frac = (e.clientX - rect.left) / rect.width;
+    const clamped = Math.max(0, Math.min(1, frac));
+    if (host._dashChartHoverFrac !== clamped)
+    {
+        host._dashChartHoverFrac = clamped;
+        host.requestUpdate();
+    }
+}
+
+
+export function handleChartHoverLeave(host: DashboardHost): void
+{
+    if (host._dashChartHoverFrac !== null)
+    {
+        host._dashChartHoverFrac = null;
+        host.requestUpdate();
+    }
+}
+
+
+//Day-offset navigation. Clamps to the [-2..+2] window and triggers a Lit re-render via requestUpdate so the
+//transforms animate from the previous active offset to the new one. Swallowed during the enter / exit
+//animation window so an in-flight fade cannot navigate mid-animation.
+export function navigateDashDay(host: DashboardHost, nextOffset: number): void
+{
+    if (host._dashAnimPhase !== 'idle')
+    {
+        return;
+    }
+    const next = clampDayOffset(nextOffset);
+    if (next === host._dashDayOffset)
+    {
+        return;
+    }
+    host._dashDayOffset = next;
+    (host as unknown as { requestUpdate(): void }).requestUpdate();
+}
+
+
+//Pointer swipe handlers (mobile + trackpad). Capture clientX on pointerdown, compare on pointerup. A horizontal
+//motion > 50 px within 500 ms triggers a day-step in the swipe direction. Vertical swipes are ignored so
+//scrolling the page above the panel still works.
+export function handleDashSwipeStart(host: DashboardHost, e: PointerEvent): void
+{
+    host._dashSwipeStartX    = e.clientX;
+    host._dashSwipeStartTime = performance.now();
+}
+
+
+export function handleDashSwipeEnd(host: DashboardHost, e: PointerEvent): void
+{
+    if (host._dashSwipeStartX === null)
+    {
+        return;
+    }
+    const dx = e.clientX - host._dashSwipeStartX;
+    const dt = performance.now() - host._dashSwipeStartTime;
+    host._dashSwipeStartX = null;
+    if (Math.abs(dx) > 50 && dt < 500)
+    {
+        //Swipe LEFT (dx < 0) = next day; swipe RIGHT (dx > 0) = previous day. Mirrors the natural "drag the
+        //next-day card into view from the right edge" gesture.
+        const active = host._dashDayOffset ?? 0;
+        navigateDashDay(host, active + (dx < 0 ? 1 : -1));
+    }
+}
+
+
+export function handleDashSwipeCancel(host: DashboardHost): void
+{
+    host._dashSwipeStartX = null;
+}
+
+
+//Keyboard navigation as a bonus for desktop users.
+export function handleDashKey(host: DashboardHost, e: KeyboardEvent): void
+{
+    const active = host._dashDayOffset ?? 0;
+    if (e.key === 'ArrowLeft')
+    {
+        e.preventDefault();
+        navigateDashDay(host, active - 1);
+    }
+    else if (e.key === 'ArrowRight')
+    {
+        e.preventDefault();
+        navigateDashDay(host, active + 1);
+    }
+    else if (e.key === 'Escape')
+    {
+        e.preventDefault();
+        handleExitDetail(host, e);
+    }
+}
+
+
+//Global document-level keydown so ESC closes the dashboard regardless of which element currently has
+//focus. Bound in `connectedCallback` on the host card + unbound in `disconnectedCallback`. The handler
+//is a no-op when the dashboard is not open so the listener is cheap to keep around.
+export function handleDashGlobalKey(host: DashboardHost, e: KeyboardEvent): void
+{
+    if (e.key !== 'Escape')
+    {
+        return;
+    }
+    if (!host._detailMode)
+    {
+        return;
+    }
+    e.preventDefault();
+    handleExitDetail(host, e);
+}
+
+
+//Computes hourly production for today, splitting observed (past
+//+ now) from forecast (now → midnight). Returns one bin per hour
+//of the day [0..23], with watts at the hour's midpoint. Bins
+//missing observed data fall back to the forecast value where
+//available; truly empty bins (no kWp configured + before sensor
+//has started) get 0 W.
+export function computeTodayHourly(host: DashboardHost): {
+    bins:        Array<{ hourTs: number; observedW: number | null; forecastW: number | null }>;
+    peakHourTs:  number | null;
+    peakW:       number;
+    peakActualHourTs:    number | null;
+    peakActualW:         number;
+    peakPredictedHourTs: number | null;
+    peakPredictedW:      number;
+    producedKwh: number;
+    forecastKwh: number;
+}
+{
+    const HOUR_MS = 3_600_000;
+    const today0  = new Date();
+    today0.setHours(0, 0, 0, 0);
+    //DST-safe end-of-day: spring-forward (23 h) and fall-back (25 h) days resolve to the correct next local midnight
+    //instead of landing at 01:00 or 23:00.
+    const tomorrow0 = new Date(today0);
+    tomorrow0.setDate(tomorrow0.getDate() + 1);
+    const startMs = today0.getTime();
+    const endMs   = tomorrow0.getTime();
+    const nowMs   = Date.now();
+
+    const bins: Array<{
+        hourTs: number;
+        observedW: number | null;
+        forecastW: number | null;
+    }> = [];
+    for (let h = 0; h < 24; h++)
+    {
+        bins.push({
+            hourTs:    startMs + h * HOUR_MS,
+            observedW: null,
+            forecastW: null
+        });
+    }
+
+    //Pass 1: observed. Aggregate _pvHistory + _pvCalibStats into hourly buckets.
+    //
+    //The raw `_pvHistory` window is capped at the last 6 h of wall-clock time for HA recorder safety on
+    //high-frequency installs, so without the LTS blend the morning hours of a day-end card open would land empty
+    //and the dashboard would report "0 kWh until ~13 h" while the user produced from 6 h. `_pvCalibStats` carries
+    //the 5-day hourly LTS already fetched for the calibration loop, so the morning portion of today is already in
+    //memory; we feed it into the hour-bucket aggregator alongside the raw samples. The raw window still owns the
+    //present tail (it has full sample resolution) so we drop LTS rows once they cross into the raw window.
+    const hist  = host._pvHistory;
+    const calib = host._pvCalibStats;
+    const unit  = (host._pvUnit || '').toLowerCase();
+    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+
+    //Single helper that pushes power samples into the hourly bucket sums. Wraps the differentiation + unit
+    //normalisation logic that used to live inline so both the raw-history and LTS branches funnel through the
+    //same shape.
+    const sums   = new Map<number, number>();
+    const counts = new Map<number, number>();
+    const addPowerSample = (tMs: number, w: number): void =>
+    {
+        if (tMs < startMs || tMs >= endMs)
+        {
+            return;
+        }
+        if (!isFinite(w))
+        {
+            return;
+        }
+        const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+        sums  .set(hourTs, (sums  .get(hourTs) ?? 0) + w);
+        counts.set(hourTs, (counts.get(hourTs) ?? 0) + 1);
+    };
+
+    //LTS calib pass: hourly mean for power entities, neighbour-pair differentiation for cumulative entities. We
+    //skip any LTS row that lands inside the raw window because the raw fetch carries that portion at full
+    //resolution and would already feed the bucket via the loop below.
+    const rawFirstMs = hist && hist.times.length > 0 ? hist.times[0].getTime() : Infinity;
+    if (calib && calib.times.length > 0)
+    {
+        if (isCumulativeEnergy && calib.times.length >= 2)
+        {
+            let prevIdx = 0;
+            for (let i = 1; i < calib.times.length; i++)
+            {
+                const t1   = calib.times[i].getTime();
+                const t0   = calib.times[prevIdx].getTime();
+                const dtH  = (t1 - t0) / 3_600_000;
+                if (dtH <= 0)
+                {
+                    continue;
+                }
+                if (dtH > 6)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                const dv = calib.values[i] - calib.values[prevIdx];
+                if (dv < 0)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                prevIdx = i;
+                if (t1 >= rawFirstMs)
+                {
+                    continue;
+                }
+                addPowerSample(t1, (dv / dtH) * 1000);
+            }
+        }
+        else if (!isCumulativeEnergy)
+        {
+            for (let i = 0; i < calib.times.length; i++)
+            {
+                const tMs = calib.times[i].getTime();
+                if (tMs >= rawFirstMs)
+                {
+                    continue;
+                }
+                const w = pvNormalizeToWatts(calib.values[i], host._pvUnit);
+                addPowerSample(tMs, w);
+            }
+        }
+    }
+
+    if (hist && hist.times.length > 0)
+    {
+        let times:  Date[]   = hist.times;
+        let values: number[] = hist.values;
+        if (isCumulativeEnergy && times.length >= 2)
+        {
+            //Same quantization guard as the chart's differentiation: hold the anchor until 3 min have accumulated so dv / dtH doesn't blow up when
+            //the sensor only reports integer Wh.
+            const MIN_DTH = 0.05;
+            const dT: Date[] = [];
+            const dV: number[] = [];
+            let prevIdx = 0;
+            for (let i = 1; i < times.length; i++)
+            {
+                const dtH = (times[i].getTime() - times[prevIdx].getTime()) / 3_600_000;
+                if (dtH <= 0)
+                {
+                    continue;
+                }
+                if (dtH > 6)  { prevIdx = i; continue; }
+                const dv = values[i] - values[prevIdx];
+                if (dv < 0)   { prevIdx = i; continue; }
+                if (dtH < MIN_DTH)
+                {
+                    continue;
+                }
+                dT.push(times[i]);
+                dV.push(dv / dtH);
+                prevIdx = i;
+            }
+            times = dT;
+            values = dV;
+        }
+        for (let i = 0; i < times.length; i++)
+        {
+            const tMs = times[i].getTime();
+            //After differentiation the values are average power in
+            //kW (kWh/hour), so go straight to watts. The original
+            //unit ('kWh' / 'MWh' / 'Wh') isn't handled by
+            //pvNormalizeToWatts and would silently return 0,
+            //which would zero out producedKwh and over-count
+            //forecastKwh by skipping the observed contribution.
+            const w = isCumulativeEnergy
+                ? values[i] * 1000
+                : pvNormalizeToWatts(values[i], host._pvUnit);
+            addPowerSample(tMs, w);
+        }
+    }
+
+    for (let h = 0; h < 24; h++)
+    {
+        const sum = sums  .get(bins[h].hourTs);
+        const cnt = counts.get(bins[h].hourTs);
+        if (sum !== undefined && cnt && cnt > 0)
+        {
+            bins[h].observedW = sum / cnt;
+        }
+    }
+
+    //Pass 2: forecast. Only when peak power is configured. Fill
+    //in every hour bin (so we can show the full curve), but the
+    //caller will combine observed + forecast for the area split.
+    //RAW model output here (no calibration / shading map blend),
+    //the refined headline computes its own pass via
+    //computeRefinedDailyKwh so the "PRÉVU" figure stays raw and the
+    //arrow figure carries the per-(sun×cloud) auto-learning.
+    const k      = pvCalibK(host.config);
+    const series = host._chartSeries;
+    const coords = getHomeCoords(host.config, host.hass);
+    if (k !== null && k > 0 && series && coords)
+    {
+        const raster = host._engine?.getLidarRaster() ?? null;
+        const capW   = pvInverterMaxW(host.config);
+        for (let i = 0; i < series.times.length; i++)
+        {
+            const tMs = series.times[i].getTime();
+            if (tMs < startMs || tMs >= endMs)
+            {
+                continue;
+            }
+            const cloud = series.cloud[i] ?? 0;
+            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
+                airTempC: series.temperature[i],
+                windMs:   series.windSpeed[i],
+                raster,
+            });
+            if (pct < 0)
+            {
+                continue;
+            }
+            const watts = Math.min(capW, pct * k);
+            const hourTs = Math.floor(tMs / HOUR_MS) * HOUR_MS;
+            const idx = (hourTs - startMs) / HOUR_MS;
+            if (idx >= 0 && idx < 24)
+            {
+                bins[idx].forecastW = watts;
+            }
+        }
+    }
+
+    //Aggregate: peak (across all bins, taking observed > forecast),
+    //produced kWh (sum of observed × 1h), forecast end-of-day
+    //(observed past + forecast future).
+    //
+    //We also track the actual and predicted peaks separately so
+    //the dashboard can show two distinct readouts (real vs model)
+    //side by side. The hybrid `peakW` is kept as a fallback for
+    //consumers that just want "the day's peak, whichever source".
+    let peakW = 0;
+    let peakHourTs: number | null = null;
+    let peakActualW = 0;
+    let peakActualHourTs: number | null = null;
+    let peakPredictedW = 0;
+    let peakPredictedHourTs: number | null = null;
+    let producedKwh = 0;
+    let forecastKwh = 0;
+    for (const b of bins)
+    {
+        const w = b.observedW ?? b.forecastW ?? 0;
+        if (w > peakW) { peakW = w; peakHourTs = b.hourTs; }
+
+        if (b.observedW !== null && b.observedW > peakActualW)
+        {
+            peakActualW = b.observedW;
+            peakActualHourTs = b.hourTs;
+        }
+        if (b.forecastW !== null && b.forecastW > peakPredictedW)
+        {
+            peakPredictedW = b.forecastW;
+            peakPredictedHourTs = b.hourTs;
+        }
+
+        if (b.observedW !== null)
+        {
+            producedKwh += b.observedW / 1000;
+        }
+
+        if (b.hourTs + HOUR_MS <= nowMs)
+        {
+            //Past hour: count observed if available, else nothing
+            //(no forecast for the past).
+            if (b.observedW !== null)
+            {
+                forecastKwh += b.observedW / 1000;
+            }
+        }
+        else if (b.hourTs > nowMs)
+        {
+            //Future hour: count forecast if available.
+            if (b.forecastW !== null)
+            {
+                forecastKwh += b.forecastW / 1000;
+            }
+        }
+        else
+        {
+            //Hour straddling "now": count observed if available,
+            //fall back to forecast (so the running total covers
+            //the whole hour).
+            forecastKwh += (b.observedW ?? b.forecastW ?? 0) / 1000;
+        }
+    }
+
+    return {
+        bins,
+        peakHourTs, peakW,
+        peakActualHourTs, peakActualW,
+        peakPredictedHourTs, peakPredictedW,
+        producedKwh, forecastKwh
+    };
 }
 
 
@@ -1803,44 +2480,4 @@ export function handleDashChartPointerMove(host: DashboardHost, e: PointerEvent)
 export function handleDashChartPointerLeave(host: DashboardHost): void
 {
     host._dashChartHoverTs = null;
-}
-
-
-//Keyboard navigation as a bonus for desktop users.
-export function handleDashKey(host: DashboardHost, e: KeyboardEvent): void
-{
-    const active = host._dashDayOffset ?? 0;
-    if (e.key === 'ArrowLeft')
-    {
-        e.preventDefault();
-        navigateDashDay(host, active - 1);
-    }
-    else if (e.key === 'ArrowRight')
-    {
-        e.preventDefault();
-        navigateDashDay(host, active + 1);
-    }
-    else if (e.key === 'Escape')
-    {
-        e.preventDefault();
-        handleExitDetail(host, e);
-    }
-}
-
-
-//Document-level keydown so ESC closes the dashboard regardless of which element currently has focus.
-//Bound in `connectedCallback` on the host card and unbound in `disconnectedCallback`. The handler is a
-//no-op when the dashboard is not open so the listener is cheap to keep around.
-export function handleDashGlobalKey(host: DashboardHost, e: KeyboardEvent): void
-{
-    if (e.key !== 'Escape')
-    {
-        return;
-    }
-    if (!host._detailMode)
-    {
-        return;
-    }
-    e.preventDefault();
-    handleExitDetail(host, e);
 }

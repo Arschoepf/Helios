@@ -73,12 +73,20 @@ export interface Translations
         forecastRefined:        string;
         forecastCalibrationHint: string;
 
-        //CoverFlow dashboard panel keys. Each is OPTIONAL because the dashboard.ts renderer falls back to
-        //the English text via `??` when the active locale has not been updated yet. The full set of
-        //chart-related keys (chartProductionTitle, tooltipForecastLabel, etc.) was dropped when the
-        //dashboard's chart was removed; only the kept tile + day labels remain typed here.
+        //CoverFlow dashboard panel (alpha.66+). Each key is OPTIONAL because the dashboard.ts renderer
+        //falls back to the English text below via `??` when the active locale has not been updated yet.
+        //All 63 locale files only have to add these keys when ready; until then the English fallback wins.
+        chartProductionTitle?:  string; //'Daily production'
+        chartBatteryTitle?:     string; //'Battery'
+        chartGridTitle?:        string; //'Grid'
         tileProductionLabel?:   string; //'Production'
         tileForecastLabel?:     string; //'Forecast'
+        tileChargeLabel?:       string; //'Charge'
+        tileDischargeLabel?:    string; //'Discharge'
+        tileImportLabel?:       string; //'Import'
+        tileExportLabel?:       string; //'Export'
+        tooltipForecastLabel?:  string; //'Forecast'
+        tooltipMeasuredLabel?:  string; //'Measured production'
         dayLabelToday?:         string; //'Today'
         dayLabelYesterday?:     string; //'Yesterday'
         dayLabelDayBefore?:     string; //'2 days ago'
