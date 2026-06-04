@@ -672,24 +672,21 @@ export const heliosCardStyles = css`
         Uses HA theme tokens throughout so the colours follow the active frontend theme. */
     .dash-cf-card-stats
     {
-        /*  Mini-tiles: flex-wrap layout caps at 2 per row via the basis of calc(50% - 4px) AND wraps to 1
-            per row when each tile cannot fit its 140 px min-width. No container-type opt-in needed, which
-            keeps the dashboard card body free of any compositing-layer hint that could cause blur. */
-        display: flex;
-        flex-wrap: wrap;
+        /*  Mini-tiles: strict 2 columns always via CSS grid. Grid is deterministic regardless of card
+            width / padding rounding, the flex-wrap basis: 50% trick was hitting subpixel cases where 2
+            tiles + gap exceeded the available width by < 1 px and wrapped to 1 per row. */
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
         padding: 0 8px;
     }
     .dash-cf-card-stats > .dash-cf-card-stat
     {
-        /*  flex-grow: 0 so a row with a single tile (odd tile count) does NOT stretch that lone tile to
-            full width. Each tile sticks to 50 % of the row basis = strict 2 per row when both slots fit. */
-        flex: 0 1 calc(50% - 4px);
-        min-width: 140px;
+        min-width: 0;
     }
     .dash-cf-card-stats > .dash-cf-card-stat-grid-solo
     {
-        flex: 0 1 100%;
+        grid-column: 1 / -1;
     }
     /*  HA frontend tile style: rounded-square coloured icon badge on the left, title + value stacked on the
         right. Icon background = colour token at low opacity, icon glyph = the same token at full opacity, so
