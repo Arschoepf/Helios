@@ -492,11 +492,6 @@ export const heliosCardStyles = css`
         max-width: 82%;
         aspect-ratio: 4 / 6;
         border-radius: 18px;
-        /*  Card-level inline-size container so the mini-tile grid can query the CARD width directly and
-            stack to 1 column when the card is narrower than 280 px. inline-size only (not size) keeps the
-            perspective rendering sharp. */
-        container-type: inline-size;
-        container-name: dash-cf-card;
         /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
             darker than --ha-card-background on both default HA themes. The inner bandeau + stat tiles + chart
             placeholder then bind to --ha-card-background and end up LIGHTER than this outer body, matching
@@ -679,16 +674,22 @@ export const heliosCardStyles = css`
         Uses HA theme tokens throughout so the colours follow the active frontend theme. */
     .dash-cf-card-stats
     {
-        /*  Mini-tile grid: 2 columns MAX, never more. When the card width drops below the narrow
-            breakpoint set on .dash-cf-card (container-type: inline-size), the grid stacks to 1 column. */
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+        /*  Mini-tiles: flex-wrap layout caps at 2 per row via the basis of calc(50% - 4px) AND wraps to 1
+            per row when each tile cannot fit its 140 px min-width. No container-type opt-in needed, which
+            keeps the dashboard card body free of any compositing-layer hint that could cause blur. */
+        display: flex;
+        flex-wrap: wrap;
         gap: 8px;
         padding: 0 8px;
     }
-    @container dash-cf-card (max-width: 280px)
+    .dash-cf-card-stats > .dash-cf-card-stat
     {
-        .dash-cf-card-stats { grid-template-columns: 1fr; }
+        flex: 1 1 calc(50% - 4px);
+        min-width: 140px;
+    }
+    .dash-cf-card-stats > .dash-cf-card-stat-grid-solo
+    {
+        flex: 1 1 100%;
     }
     /*  HA frontend tile style: rounded-square coloured icon badge on the left, title + value stacked on the
         right. Icon background = colour token at low opacity, icon glyph = the same token at full opacity, so

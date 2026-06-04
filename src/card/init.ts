@@ -273,12 +273,33 @@ export function initVisibilityObserver(host: InitHost): void
     //engine's own pause flag is updated when it exists (cheap, no
     //teardown).
     let intersecting = true;
+    let wasTabHidden = false;
     const applyState = () =>
     {
         const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
         const paused    = !intersecting || tabHidden;
         setAnimationsPaused(host, paused);
         host._engine?.setPaused(paused);
+        //Tab just became visible after being hidden. While hidden, refreshGrid / refreshPv / refreshBattery
+        //can clear their live values to null if hass momentarily disconnected (HA does this on tab focus
+        //loss in some setups). The reference-equality refresh gate in HeliosCard then short-circuits the
+        //next refresh because hass / config / _energyDefaults pointers are unchanged. Force-invalidating
+        //the cache references here makes the next render call refreshAll, repopulating the chip values.
+        if (wasTabHidden && !tabHidden)
+        {
+            const h = host as unknown as {
+                _lastRefreshHassRef?:           unknown;
+                _lastRefreshConfigRef?:         unknown;
+                _lastRefreshTimeRangeRef?:      unknown;
+                _lastRefreshEnergyDefaultsRef?: unknown;
+            };
+            h._lastRefreshHassRef           = undefined;
+            h._lastRefreshConfigRef         = undefined;
+            h._lastRefreshTimeRangeRef      = undefined;
+            h._lastRefreshEnergyDefaultsRef = undefined;
+            host.requestUpdate();
+        }
+        wasTabHidden = tabHidden;
     };
     host._visibilityObserver = new IntersectionObserver(entries =>
     {

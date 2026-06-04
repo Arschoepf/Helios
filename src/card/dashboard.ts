@@ -448,11 +448,23 @@ function renderCoverflowCard(
                         : cardOffset ===  1 ? (tLocal.detail.dayLabelTomorrow  ?? 'Tomorrow')
                         :                     (tLocal.detail.dayLabelDayAfter  ?? 'In 2 days');
 
-    //Transform order (right-to-left): rotateY first (sets the depth perspective), then scale (shrinks the rotated
-    //plane), then translateX as a percent of the SCALED bounding box, then the centring translate(-50%, -50%) on
-    //the parent. The percent translate is applied AFTER scale, which means a sibling at 105 % sits roughly one
-    //full card width to the side at its rendered (scaled) size, the right behaviour for the fan.
-    const style = `transform: translate(-50%, -50%) translateX(${txPct}%) scale(${scale}) rotateY(${rotY}deg); z-index: ${zIdx}; opacity: ${opacity};`;
+    //Conditional transform: the FRONT card gets ONLY the centring translate, NO translateX / scale (those
+    //would all reduce to identity but the browser still rasterises the transformed layer to a texture,
+    //which on bigger cards reads as blurry text + curves). Side cards keep the full transform chain.
+    const transformParts = ['translate(-50%, -50%)'];
+    if (txPct !== 0)
+    {
+        transformParts.push(`translateX(${txPct}%)`);
+    }
+    if (scale !== 1)
+    {
+        transformParts.push(`scale(${scale})`);
+    }
+    if (rotY !== 0)
+    {
+        transformParts.push(`rotateY(${rotY}deg)`);
+    }
+    const style = `transform: ${transformParts.join(' ')}; z-index: ${zIdx}; opacity: ${opacity};`;
 
     const t = pickTranslations(host.hass?.language);
 
@@ -471,6 +483,15 @@ function renderCoverflowCard(
             chargedKwh:    host._dashHistoricalTotals?.get(`${cardOffset}|battCharge`)    ?? 0,
             dischargedKwh: host._dashHistoricalTotals?.get(`${cardOffset}|battDischarge`) ?? 0,
         };
+    //Grid totals: today from the live HA Energy daily-totals refresh, past from the dashboard's
+    //recorder-backed historical totals fetched on open. Surface them here in renderCoverflowCard scope so
+    //both the mini-tiles AND the chart-header headlineKwh can read the same value (they must match).
+    const gridImportedKwh = cardOffset === 0
+        ? (host._haGridImportTodayKwh ?? 0)
+        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridImport`) ?? 0);
+    const gridExportedKwh = cardOffset === 0
+        ? (host._haGridExportTodayKwh ?? 0)
+        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridExport`) ?? 0);
 
     return html`
         <article
@@ -578,12 +599,12 @@ function renderCoverflowCard(
                                 ${renderCardChartBlock(host, cardOffset, activeOffset, charts.battCharge, charts.yMaxBattCharge, 'batt-charge', {
                                     title:       tLocal.detail.tileChargeLabel ?? 'Charge',
                                     icon:        'mdi:battery-arrow-up',
-                                    headlineKwh: null,
+                                    headlineKwh: battery.chargedKwh,
                                 })}
                                 ${renderCardChartBlock(host, cardOffset, activeOffset, charts.battDischarge, charts.yMaxBattDis, 'batt-discharge', {
                                     title:       tLocal.detail.tileDischargeLabel ?? 'Discharge',
                                     icon:        'mdi:battery-arrow-down',
-                                    headlineKwh: null,
+                                    headlineKwh: battery.dischargedKwh,
                                 })}
                             </div>
                         ` : nothing}
@@ -593,14 +614,14 @@ function renderCoverflowCard(
                                     host, cardOffset, activeOffset, charts.gridIn, charts.yMaxGridIn, 'grid-in', {
                                         title:        tLocal.detail.tileImportLabel ?? 'Import',
                                         icon:         'mdi:transmission-tower-export',
-                                        headlineKwh:  null,
+                                        headlineKwh:  gridImportedKwh,
                                     }
                                 ) : nothing}
                                 ${hasGridExport(host) ? renderCardChartBlock(
                                     host, cardOffset, activeOffset, charts.gridOut, charts.yMaxGridOut, 'grid-out', {
                                         title:        tLocal.detail.tileExportLabel ?? 'Export',
                                         icon:         'mdi:transmission-tower-import',
-                                        headlineKwh:  null,
+                                        headlineKwh:  gridExportedKwh,
                                     }
                                 ) : nothing}
                             </div>
