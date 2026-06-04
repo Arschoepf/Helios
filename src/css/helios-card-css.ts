@@ -801,9 +801,9 @@ export const heliosCardStyles = css`
         min-height: 0;
     }
     /*  Production chart on top: exactly 50 % of the remaining charts column. The row of batt + grid below
-        gets the other 50 %. `flex: 1 1 0` with `min-height: 0` lets each side actually share the space
-        equally instead of being pushed around by content min-height (the production chart used to absorb
-        all available space, squashing the row below). */
+        gets the other 50 %. flex 1 1 0 with min-height 0 lets each side actually share the space equally
+        instead of being pushed around by content min-height (the production chart used to absorb all
+        available space, squashing the row below). */
     .dash-cf-card-charts > .dash-cf-card-chart
     {
         flex: 1 1 0;
