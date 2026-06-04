@@ -433,11 +433,12 @@ function renderCoverflowCard(
         month: 'short',
     }).format(d);
 
-    const friendlyLabel = cardOffset === -2 ? 'Avant-hier'
-                        : cardOffset === -1 ? 'Hier'
-                        : cardOffset ===  0 ? "Aujourd'hui"
-                        : cardOffset ===  1 ? 'Demain'
-                        :                     'Après-demain';
+    const tLocal = pickTranslations(host.hass?.language);
+    const friendlyLabel = cardOffset === -2 ? (tLocal.detail.dayLabelDayBefore ?? '2 days ago')
+                        : cardOffset === -1 ? (tLocal.detail.dayLabelYesterday ?? 'Yesterday')
+                        : cardOffset ===  0 ? (tLocal.detail.dayLabelToday     ?? 'Today')
+                        : cardOffset ===  1 ? (tLocal.detail.dayLabelTomorrow  ?? 'Tomorrow')
+                        :                     (tLocal.detail.dayLabelDayAfter  ?? 'In 2 days');
 
     //Transform order (right-to-left): rotateY first (sets the depth perspective), then scale (shrinks the rotated
     //plane), then translateX as a percent of the SCALED bounding box, then the centring translate(-50%, -50%) on
@@ -501,7 +502,7 @@ function renderCoverflowCard(
                             <ha-icon icon="mdi:solar-power-variant"></ha-icon>
                         </span>
                         <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">Production</span>
+                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileProductionLabel ?? 'Production'}</span>
                             <span class="dash-cf-card-stat-value">
                                 ${formatLocalisedNumber(host.hass, stats.producedKwh, 1)} kWh
                                 ${stats.refinedKwh !== null ? html`
@@ -517,7 +518,7 @@ function renderCoverflowCard(
                             <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
                         </span>
                         <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">Prévision</span>
+                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileForecastLabel ?? 'Forecast'}</span>
                             <span class="dash-cf-card-stat-value">
                                 ${formatLocalisedNumber(host.hass, stats.forecastKwh, 1)} kWh
                                 ${stats.refinedKwh !== null ? html`
@@ -535,7 +536,7 @@ function renderCoverflowCard(
                             <ha-icon icon="mdi:battery-arrow-up"></ha-icon>
                         </span>
                         <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">Charge</span>
+                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileChargeLabel ?? 'Charge'}</span>
                             <span class="dash-cf-card-stat-value">
                                 ${formatLocalisedNumber(host.hass, battery.chargedKwh, 1)} kWh
                             </span>
@@ -546,7 +547,7 @@ function renderCoverflowCard(
                             <ha-icon icon="mdi:battery-arrow-down"></ha-icon>
                         </span>
                         <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">Décharge</span>
+                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileDischargeLabel ?? 'Discharge'}</span>
                             <span class="dash-cf-card-stat-value">
                                 ${formatLocalisedNumber(host.hass, battery.dischargedKwh, 1)} kWh
                             </span>
@@ -558,7 +559,7 @@ function renderCoverflowCard(
 
             <div class="dash-cf-card-charts">
                 ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW, 'production', {
-                    title:        'Production journalière',
+                    title:        tLocal.detail.chartProductionTitle ?? 'Daily production',
                     icon:         'mdi:sun-clock-outline',
                     headlineKwh:  stats.producedKwh,
                 })}
@@ -566,14 +567,14 @@ function renderCoverflowCard(
                     <div class="dash-cf-card-charts-row">
                         ${hasBatteryConfigured(host) ? renderCardChartBlock(
                             host, cardOffset, activeOffset, charts.battery, charts.yMaxBatt, 'battery', {
-                                title:        'Batterie',
+                                title:        tLocal.detail.chartBatteryTitle ?? 'Battery',
                                 icon:         'mdi:home-battery-outline',
                                 headlineKwh:  null,
                             }
                         ) : nothing}
                         ${hasGridImport(host) || hasGridExport(host) ? renderCardChartBlock(
                             host, cardOffset, activeOffset, charts.grid, charts.yMaxGrid, 'grid', {
-                                title:        'Réseau',
+                                title:        tLocal.detail.chartGridTitle ?? 'Grid',
                                 icon:         'mdi:transmission-tower',
                                 headlineKwh:  null,
                             }
@@ -645,7 +646,7 @@ function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResul
                     <ha-icon icon="mdi:transmission-tower-export"></ha-icon>
                 </span>
                 <span class="dash-cf-card-stat-body">
-                    <span class="dash-cf-card-stat-label">Import</span>
+                    <span class="dash-cf-card-stat-label">${pickTranslations(host.hass?.language).detail.tileImportLabel ?? 'Import'}</span>
                     <span class="dash-cf-card-stat-value">
                         ${formatLocalisedNumber(host.hass, importedKwh, 1)} kWh
                     </span>
@@ -658,7 +659,7 @@ function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResul
                     <ha-icon icon="mdi:transmission-tower-import"></ha-icon>
                 </span>
                 <span class="dash-cf-card-stat-body">
-                    <span class="dash-cf-card-stat-label">Export</span>
+                    <span class="dash-cf-card-stat-label">${pickTranslations(host.hass?.language).detail.tileExportLabel ?? 'Export'}</span>
                     <span class="dash-cf-card-stat-value">
                         ${formatLocalisedNumber(host.hass, exportedKwh, 1)} kWh
                     </span>
@@ -728,7 +729,7 @@ function renderCardChartBlock(
             let name: string;
             if (src.id === 'lts')
             {
-                name = 'Production mesurée';
+                name = pickTranslations(host.hass?.language).detail.tooltipMeasuredLabel ?? 'Measured production';
             }
             else
             {
@@ -743,7 +744,8 @@ function renderCardChartBlock(
         {
             const fcW = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
             const ffc = formatPowerForChart(host.hass, fcW);
-            tooltipRows.push({ label: 'Prévision', color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
+            const tForecastLabel = pickTranslations(host.hass?.language).detail.tooltipForecastLabel ?? 'Forecast';
+            tooltipRows.push({ label: tForecastLabel, color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
         }
     }
     else if (meta.headlineKwh !== null)

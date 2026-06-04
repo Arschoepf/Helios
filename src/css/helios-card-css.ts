@@ -492,6 +492,11 @@ export const heliosCardStyles = css`
         max-width: 82%;
         aspect-ratio: 4 / 6;
         border-radius: 18px;
+        /*  Card-level inline-size container so the mini-tile grid can query the CARD width directly and
+            stack to 1 column when the card is narrower than 280 px. inline-size only (not size) keeps the
+            perspective rendering sharp. */
+        container-type: inline-size;
+        container-name: dash-cf-card;
         /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
             darker than --ha-card-background on both default HA themes. The inner bandeau + stat tiles + chart
             placeholder then bind to --ha-card-background and end up LIGHTER than this outer body, matching
@@ -518,20 +523,20 @@ export const heliosCardStyles = css`
         box-shadow:
             0 8px 24px rgba(0, 0, 0, 0.35),
             0 24px 48px rgba(0, 0, 0, 0.22);
-        /*  Front card content scrolls vertically when the bandeau + mini-tiles + 3 charts exceed the card
-            height (typically on short stages where the auto-fit grid stacks 6 tiles in one column). Hidden
-            X overflow prevents the dashed forecast curve from triggering a horizontal scrollbar. */
         overflow-y: auto;
         overflow-x: hidden;
+        /*  Scroll functionality but NO visible scrollbar. Scroll happens on wheel / trackpad / touch. */
+        scrollbar-width: none;
+        /*  Bottom-fade mask so the lower edge of the scrollable area fades visually to indicate that
+            there is more content below. The fade lives in the last ~6 % of the card height. When the
+            content perfectly fits, the fade still appears but reads as a subtle vignette; when content
+            overflows, it doubles as a 'keep scrolling' cue. */
+        -webkit-mask-image: linear-gradient(180deg, #000 0, #000 94%, transparent 100%);
+                mask-image: linear-gradient(180deg, #000 0, #000 94%, transparent 100%);
     }
     .dash-cf-card-front::-webkit-scrollbar
     {
-        width: 4px;
-    }
-    .dash-cf-card-front::-webkit-scrollbar-thumb
-    {
-        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 18%, transparent);
-        border-radius: 2px;
+        display: none;
     }
 
     /*  Top-of-card bandeau styled as a Mushroom-card header strip anchored at the top with a small margin all
@@ -670,14 +675,16 @@ export const heliosCardStyles = css`
         Uses HA theme tokens throughout so the colours follow the active frontend theme. */
     .dash-cf-card-stats
     {
-        /*  Mini-tile grid: auto-fit each row with a 140 px tile MINIMUM. When the card body width can fit
-            2 tiles + gap (>= ~296 px) the grid renders 2 columns; below that it drops to 1 column so each
-            tile still reads at full width with its label intact. No container-query rule needed, the grid
-            self-adjusts to the card width. */
+        /*  Mini-tile grid: 2 columns MAX, never more. When the card width drops below the narrow
+            breakpoint set on .dash-cf-card (container-type: inline-size), the grid stacks to 1 column. */
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
         padding: 0 8px;
+    }
+    @container dash-cf-card (max-width: 280px)
+    {
+        .dash-cf-card-stats { grid-template-columns: 1fr; }
     }
     /*  HA frontend tile style: rounded-square coloured icon badge on the left, title + value stacked on the
         right. Icon background = colour token at low opacity, icon glyph = the same token at full opacity, so

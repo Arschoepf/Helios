@@ -144,25 +144,58 @@ function computeBatteryDayChart(
     {
         return empty;
     }
+    //Detect cumulative-kWh wiring: a battery entity wired as `stat_energy_from/to` (no `stat_rate`) yields
+    //a monotonic non-decreasing series in kWh. A signed-power entity yields a series with negative values
+    //(discharging) and non-monotonic transitions. Heuristic: if every (or almost every) consecutive delta
+    //is non-negative AND no negative value is present, treat as cumulative kWh and differentiate.
+    let cumulative = true;
+    for (let i = 1; i < ph.values.length && cumulative; i++)
+    {
+        if (ph.values[i] < 0)                      { cumulative = false; break; }
+        if (ph.values[i] < ph.values[i - 1] - 0.5) { cumulative = false; break; }
+    }
     const chargeVals:    number[] = [];
     const dischargeVals: number[] = [];
     const timesMs:       number[] = [];
-    for (let i = 0; i < ph.times.length; i++)
+    if (cumulative && ph.values.length >= 2 && ph.values[ph.values.length - 1] > ph.values[0])
     {
-        const tMs = ph.times[i].getTime();
-        if (tMs < dayStartMs || tMs >= dayEndMs) continue;
-        const v = ph.values[i];
-        if (!isFinite(v)) continue;
-        timesMs.push(tMs);
-        if (v >= 0)
+        //Cumulative kWh: differentiate consecutive samples to get instantaneous kW, scale to W. Battery
+        //meters track charge AND discharge as the same monotonic counter when wired as a single stat, so
+        //ALL the resulting positive power goes to the charge series here.
+        for (let i = 1; i < ph.times.length; i++)
         {
-            chargeVals.push(v);
+            const tMs    = ph.times[i].getTime();
+            const prevMs = ph.times[i - 1].getTime();
+            if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+            const dh = (tMs - prevMs) / 3_600_000;
+            if (dh <= 0 || dh > 1) continue;
+            const dE = (ph.values[i] - ph.values[i - 1]) * 1000;
+            if (dE < 0) continue;
+            timesMs.push(tMs);
+            chargeVals.push(dE / dh);
             dischargeVals.push(0);
         }
-        else
+    }
+    else
+    {
+        //Signed power in W (preferred entity wiring): positive = charging, negative = discharging.
+        for (let i = 0; i < ph.times.length; i++)
         {
-            chargeVals.push(0);
-            dischargeVals.push(-v);
+            const tMs = ph.times[i].getTime();
+            if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+            const v = ph.values[i];
+            if (!isFinite(v)) continue;
+            timesMs.push(tMs);
+            if (v >= 0)
+            {
+                chargeVals.push(v);
+                dischargeVals.push(0);
+            }
+            else
+            {
+                chargeVals.push(0);
+                dischargeVals.push(-v);
+            }
         }
     }
     if (timesMs.length < 2)
@@ -230,7 +263,8 @@ function computeGridDayChart(
 
 //Aggregate a per-entity sample map (entity id -> {t,v}[]) into a single chronologically-sorted RawSample
 //array in W. Each entity's samples are filtered to the day window and converted to W via its recorded
-//unit. Multi-entity grids sum the contributions at the union timeline.
+//unit. Cumulative-energy entities (Wh / kWh / MWh) are DIFFERENTIATED between consecutive samples to
+//derive instantaneous power. Multi-entity grids sum the contributions at the union timeline.
 function aggregateGridSamples(
     samplesByEntity: Map<string, Array<{ t: number; v: number }>>,
     unitsByEntity:   Map<string, string>,
@@ -245,14 +279,36 @@ function aggregateGridSamples(
     const perEntity: Array<RawSample[]> = [];
     for (const [entity, samples] of samplesByEntity)
     {
-        const unit = unitsByEntity.get(entity) ?? '';
+        const unit = (unitsByEntity.get(entity) ?? '').toLowerCase();
+        const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+        const energyToWhScale = unit === 'kwh' ? 1000 : unit === 'mwh' ? 1_000_000 : 1;
         const raw: RawSample[] = [];
-        for (const s of samples)
+        if (isCum)
         {
-            if (s.t < dayStartMs || s.t >= dayEndMs) continue;
-            const w = pvNormalizeToWatts(s.v, unit);
-            if (!isFinite(w)) continue;
-            raw.push({ tMs: s.t, w: Math.max(0, w) });
+            //Cumulative meter: delta over delta-time gives instantaneous power. Skip gaps > 1 h (meter
+            //reset, recorder hole) so a stale resume does not show as a fake spike. Skip negative deltas
+            //(meter reset or counter overflow).
+            for (let i = 1; i < samples.length; i++)
+            {
+                const sCur = samples[i];
+                const sPrv = samples[i - 1];
+                if (sCur.t < dayStartMs || sCur.t >= dayEndMs) continue;
+                const dh = (sCur.t - sPrv.t) / 3_600_000;
+                if (dh <= 0 || dh > 1) continue;
+                const dE = (sCur.v - sPrv.v) * energyToWhScale;
+                if (dE < 0) continue;
+                raw.push({ tMs: sCur.t, w: dE / dh });
+            }
+        }
+        else
+        {
+            for (const s of samples)
+            {
+                if (s.t < dayStartMs || s.t >= dayEndMs) continue;
+                const w = pvNormalizeToWatts(s.v, unit);
+                if (!isFinite(w)) continue;
+                raw.push({ tMs: s.t, w: Math.max(0, w) });
+            }
         }
         if (raw.length >= 2)
         {
