@@ -1168,50 +1168,12 @@ export const heliosCardStyles = css`
         transparent on the TOWARDS-centre edge. The overlay therefore blurs only the half of the card that is
         further from the focal centre, giving the depth-of-field cue the user asked for, while the other half
         stays sharp. ±1 cards get a softer blur (3 px), ±2 get a stronger one (6 px). */
-    .dash-cf-card::after
-    {
-        content: '';
-        position: absolute;
-        inset: 0;
-        border-radius: inherit;
-        pointer-events: none;
-    }
-    .dash-cf-card[data-delta="0"]::after { display: none; }
-
-    /*  delta = -1 → card sits to the LEFT of the focal centre. Far side = left, near side = right. Blur fades
-        from blurred on the left to sharp on the right. */
-    .dash-cf-card[data-delta="-1"]::after
-    {
-        backdrop-filter: blur(2px);
-        -webkit-backdrop-filter: blur(2px);
-        mask-image: linear-gradient(to right, black 0%, black 25%, transparent 90%);
-        -webkit-mask-image: linear-gradient(to right, black 0%, black 25%, transparent 90%);
-    }
-    /*  delta = 1 → card sits to the RIGHT. Far side = right, near side = left. */
-    .dash-cf-card[data-delta="1"]::after
-    {
-        backdrop-filter: blur(2px);
-        -webkit-backdrop-filter: blur(2px);
-        mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
-        -webkit-mask-image: linear-gradient(to left, black 0%, black 25%, transparent 90%);
-    }
-    /*  delta = -2 → back left card. Slightly stronger blur than ±1, mask still covers less than half so the
-        card stays clearly visible alongside the depth cue. */
-    .dash-cf-card[data-delta="-2"]::after
-    {
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
-        mask-image: linear-gradient(to right, black 0%, black 35%, transparent 95%);
-        -webkit-mask-image: linear-gradient(to right, black 0%, black 35%, transparent 95%);
-    }
-    /*  delta = 2 → back right card. */
-    .dash-cf-card[data-delta="2"]::after
-    {
-        backdrop-filter: blur(3px);
-        -webkit-backdrop-filter: blur(3px);
-        mask-image: linear-gradient(to left, black 0%, black 35%, transparent 95%);
-        -webkit-mask-image: linear-gradient(to left, black 0%, black 35%, transparent 95%);
-    }
+    /*  Depth cue without backdrop-filter: side cards just get an opacity drop. backdrop-filter created a
+        new stacking context per back card that bled into the front card's compositing, the front-card
+        content read as blurry as a side effect. Replaced with plain opacity, no GPU layer hint, no front
+        card side effect. */
+    .dash-cf-card[data-delta="-1"], .dash-cf-card[data-delta="1"]  { opacity: 0.88; }
+    .dash-cf-card[data-delta="-2"], .dash-cf-card[data-delta="2"]  { opacity: 0.70; }
 
     /*  Enter / exit animation, 1 s total, staged in three phases. The cards translate from BEHIND their forward
         neighbour to their resting transform:
