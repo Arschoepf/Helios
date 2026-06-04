@@ -76,44 +76,52 @@ function dayMaxStacked(data: DayChartData): number
 }
 
 
-//Pre-compute the three per-day charts (production / battery / grid) for every CoverFlow day offset and
-//each chart's GLOBAL Y maximum across all five days. Called once per dashboard re-render so each card
-//paints on the same Y scale per chart type (production peaks of yesterday set the Y axis of today's
-//production chart, battery peaks of yesterday set the Y axis of today's battery chart, etc).
+//Pre-compute the four per-day charts (production / battery / grid-import / grid-export) for every
+//CoverFlow day offset and each chart's GLOBAL Y maximum across all five days. Grid is split into two
+//separate charts (Import + Export) so the user can read each direction without the ambiguity of a stacked
+//area where one direction always wins.
 export function buildDashCharts(host: DashboardHost, offsets: number[]): {
     productionByOffset: Map<number, DayChartData>;
     batteryByOffset:    Map<number, DayChartData>;
-    gridByOffset:       Map<number, DayChartData>;
+    gridInByOffset:     Map<number, DayChartData>;
+    gridOutByOffset:    Map<number, DayChartData>;
     productionYMaxW:    number;
     batteryYMaxW:       number;
-    gridYMaxW:          number;
+    gridInYMaxW:        number;
+    gridOutYMaxW:       number;
 }
 {
     const productionByOffset = new Map<number, DayChartData>();
     const batteryByOffset    = new Map<number, DayChartData>();
-    const gridByOffset       = new Map<number, DayChartData>();
+    const gridInByOffset     = new Map<number, DayChartData>();
+    const gridOutByOffset    = new Map<number, DayChartData>();
     let productionYMaxW = 0;
     let batteryYMaxW    = 0;
-    let gridYMaxW       = 0;
+    let gridInYMaxW     = 0;
+    let gridOutYMaxW    = 0;
     for (const offset of offsets)
     {
         const win = dayWindowFor(offset);
-        const prod = computeDayChart(host, offset, win.startMs, win.endMs);
-        const batt = computeBatteryDayChart(host, offset, win.startMs, win.endMs);
-        const grid = computeGridDayChart(host, offset, win.startMs, win.endMs);
+        const prod   = computeDayChart(host, offset, win.startMs, win.endMs);
+        const batt   = computeBatteryDayChart(host, offset, win.startMs, win.endMs);
+        const gridIn  = computeGridDirectionDayChart(host, win.startMs, win.endMs, 'in');
+        const gridOut = computeGridDirectionDayChart(host, win.startMs, win.endMs, 'out');
         productionByOffset.set(offset, prod);
         batteryByOffset.set(offset, batt);
-        gridByOffset.set(offset, grid);
+        gridInByOffset.set(offset, gridIn);
+        gridOutByOffset.set(offset, gridOut);
         productionYMaxW = Math.max(productionYMaxW, dayMaxStacked(prod));
         batteryYMaxW    = Math.max(batteryYMaxW,    dayMaxStacked(batt));
-        gridYMaxW       = Math.max(gridYMaxW,       dayMaxStacked(grid));
+        gridInYMaxW     = Math.max(gridInYMaxW,     dayMaxStacked(gridIn));
+        gridOutYMaxW    = Math.max(gridOutYMaxW,    dayMaxStacked(gridOut));
     }
     if (productionYMaxW < 1) productionYMaxW = 1;
     if (batteryYMaxW    < 1) batteryYMaxW    = 1;
-    if (gridYMaxW       < 1) gridYMaxW       = 1;
+    if (gridInYMaxW     < 1) gridInYMaxW     = 1;
+    if (gridOutYMaxW    < 1) gridOutYMaxW    = 1;
     return {
-        productionByOffset, batteryByOffset, gridByOffset,
-        productionYMaxW,    batteryYMaxW,    gridYMaxW,
+        productionByOffset, batteryByOffset, gridInByOffset, gridOutByOffset,
+        productionYMaxW,    batteryYMaxW,    gridInYMaxW,    gridOutYMaxW,
     };
 }
 
@@ -213,6 +221,52 @@ function computeBatteryDayChart(
         forecastW: new Array(timesMs.length).fill(0),
         dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
+}
+
+
+//One-direction grid chart (import OR export). Each direction renders as its own chart so the user can
+//read the two flows without the stacked-area ambiguity.
+function computeGridDirectionDayChart(
+    host:       DashboardHost,
+    dayStartMs: number,
+    dayEndMs:   number,
+    side:       'in' | 'out',
+): DayChartData
+{
+    const empty: DayChartData = {
+        timesMs:   [dayStartMs, dayEndMs - 1],
+        sources:   [],
+        forecastW: [0, 0],
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
+    };
+    const samplesMap = side === 'in' ? host._gridImportSamples : host._gridExportSamples;
+    const unitsMap   = side === 'in' ? host._gridImportUnits   : host._gridExportUnits;
+    const color      = side === 'in'
+        ? 'var(--energy-grid-consumption-color, #488fc2)'
+        : 'var(--energy-grid-return-color, #8353d1)';
+    const id         = side === 'in' ? 'import' : 'export';
+    const samples = aggregateGridSamples(samplesMap, unitsMap, dayStartMs, dayEndMs);
+    if (samples.length < 2)
+    {
+        return empty;
+    }
+    const timesMs = samples.map(s => s.tMs);
+    return {
+        timesMs,
+        sources:   [{ id, color, valuesW: samples.map(s => s.w) }],
+        forecastW: new Array(timesMs.length).fill(0),
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
+    };
+}
+
+
+//Grid chart (legacy two-direction stacked variant kept for reference, no longer wired into the
+//dashboard). Use computeGridDirectionDayChart per side instead.
+function _unusedComputeGridDayChart_DEPRECATED(host: DashboardHost, dayStartMs: number, dayEndMs: number): DayChartData
+{
+    //Kept as a comment-style placeholder so the diff stays small; renamed function below preserves the old
+    //implementation in case the future stacked view is needed.
+    return computeGridDirectionDayChart(host, dayStartMs, dayEndMs, 'in');
 }
 
 

@@ -845,6 +845,24 @@ export const heliosCardStyles = css`
         min-height: 140px;
         margin: 0;
     }
+    /*  Grid pair: Import on top, Export on bottom, stacked vertically inside the Réseau half of the row.
+        Takes the same slot the single Réseau chart used to take (50 % of the row when battery is also
+        present, 100 % otherwise). Each side gets equal vertical share of the pair via flex 1 1 0. */
+    .dash-cf-card-charts-grid-pair
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 140px;
+    }
+    .dash-cf-card-charts-grid-pair > .dash-cf-card-chart
+    {
+        flex: 1 1 0;
+        min-height: 70px;
+        margin: 0;
+    }
     .dash-cf-card-chart
     {
         flex: 1 1 auto;

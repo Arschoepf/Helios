@@ -188,12 +188,14 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                 <div class="dash-cf-stage ${animClass}">
                     ${DAY_OFFSETS.map(offset =>
                         renderCoverflowCard(host, offset, active, {
-                            production: charts.productionByOffset.get(offset)!,
-                            battery:    charts.batteryByOffset.get(offset)!,
-                            grid:       charts.gridByOffset.get(offset)!,
-                            yMaxProd:   charts.productionYMaxW,
-                            yMaxBatt:   charts.batteryYMaxW,
-                            yMaxGrid:   charts.gridYMaxW,
+                            production:  charts.productionByOffset.get(offset)!,
+                            battery:     charts.batteryByOffset.get(offset)!,
+                            gridIn:      charts.gridInByOffset.get(offset)!,
+                            gridOut:     charts.gridOutByOffset.get(offset)!,
+                            yMaxProd:    charts.productionYMaxW,
+                            yMaxBatt:    charts.batteryYMaxW,
+                            yMaxGridIn:  charts.gridInYMaxW,
+                            yMaxGridOut: charts.gridOutYMaxW,
                         })
                     )}
                 </div>
@@ -376,12 +378,14 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
 //they read as background context rather than competing for the user's attention.
 interface CardChartBundle
 {
-    production: DayChartData;
-    battery:    DayChartData;
-    grid:       DayChartData;
-    yMaxProd:   number;
-    yMaxBatt:   number;
-    yMaxGrid:   number;
+    production:  DayChartData;
+    battery:     DayChartData;
+    gridIn:      DayChartData;
+    gridOut:     DayChartData;
+    yMaxProd:    number;
+    yMaxBatt:    number;
+    yMaxGridIn:  number;
+    yMaxGridOut: number;
 }
 
 function renderCoverflowCard(
@@ -572,13 +576,24 @@ function renderCoverflowCard(
                                 headlineKwh:  null,
                             }
                         ) : nothing}
-                        ${hasGridImport(host) || hasGridExport(host) ? renderCardChartBlock(
-                            host, cardOffset, activeOffset, charts.grid, charts.yMaxGrid, 'grid', {
-                                title:        tLocal.detail.chartGridTitle ?? 'Grid',
-                                icon:         'mdi:transmission-tower',
-                                headlineKwh:  null,
-                            }
-                        ) : nothing}
+                        ${hasGridImport(host) || hasGridExport(host) ? html`
+                            <div class="dash-cf-card-charts-grid-pair">
+                                ${hasGridImport(host) ? renderCardChartBlock(
+                                    host, cardOffset, activeOffset, charts.gridIn, charts.yMaxGridIn, 'grid-in', {
+                                        title:        tLocal.detail.tileImportLabel ?? 'Import',
+                                        icon:         'mdi:transmission-tower-export',
+                                        headlineKwh:  null,
+                                    }
+                                ) : nothing}
+                                ${hasGridExport(host) ? renderCardChartBlock(
+                                    host, cardOffset, activeOffset, charts.gridOut, charts.yMaxGridOut, 'grid-out', {
+                                        title:        tLocal.detail.tileExportLabel ?? 'Export',
+                                        icon:         'mdi:transmission-tower-import',
+                                        headlineKwh:  null,
+                                    }
+                                ) : nothing}
+                            </div>
+                        ` : nothing}
                     </div>
                 ` : nothing}
             </div>
@@ -688,7 +703,7 @@ function renderCardChartBlock(
     activeOffset: number,
     data:         DayChartData,
     yMaxW:        number,
-    kind:         'production' | 'battery' | 'grid',
+    kind:         'production' | 'battery' | 'grid-in' | 'grid-out',
     meta:         ChartBlockMeta,
 ): TemplateResult
 {
