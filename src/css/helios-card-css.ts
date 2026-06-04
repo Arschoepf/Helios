@@ -470,9 +470,17 @@ export const heliosCardStyles = css`
     {
         position: relative;
         flex: 1;
+        width: 100%;
         height: 100%;
-        max-height: 600px;
+        min-height: 0;
         perspective: 1200px;
+        /*  Stage is the SIZE-typed container query target the CoverFlow cards resolve cqw/cqh against.
+            Without this, cqh inside the cards bound to .ha-card height (the outer helios-card container)
+            instead of the stage, and on a full-page or phone view the cards exceeded the stage by hundreds
+            of pixels. With container-type: size, cqw / cqh on the cards both resolve to the stage's actual
+            inline + block dimensions. */
+        container-type: size;
+        container-name: dash-stage;
         /*  No transform-style: preserve-3d here on purpose: with the default flat value, the children get the
             perspective rendering from their parent but z-index still drives their stacking order, so the front
             card always sits cleanly on top of the rotated siblings. Preserve-3d would override z-index with the
@@ -483,13 +491,13 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 50%;
         left: 50%;
-        /*  Card sized to LEAVE ONLY ~5 % space top + bottom so the front card fills the available vertical
-            stage (was a more conservative 46 cqw fixed width which read as tiny on phone). cqh is the stage
-            height container query unit, so 90 cqh fills 90 % of the vertical space. Width derives from the
-            same 90 cqh via the aspect ratio (90 cqh x 4/6 = 60 cqh on desktop). A second cap at 82 cqw keeps
-            the card from overflowing horizontally on landscape phones / narrow wide containers where the
-            height-derived width would exceed the container width. */
+        /*  Card sized inside the .dash-cf-stage container (container-type: size). cqh = % of stage height,
+            cqw = % of stage width. The card aims for 90 cqh tall (5 % breathing room top + bottom), width
+            derives from the height via the aspect ratio (60 cqh on desktop). The 82 cqw cap kicks in on
+            tall narrow stages (phone portrait) where the height-derived width would otherwise overflow
+            the stage's width. */
         width: min(82cqw, calc(90cqh * 4 / 6));
+        max-height: 90cqh;
         aspect-ratio: 4 / 6;
         border-radius: 18px;
         /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
@@ -1129,22 +1137,22 @@ export const heliosCardStyles = css`
     @keyframes dash-cf-enter-mid-left
     {
         0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-mid-right
     {
         0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-80%) scale(0.70) rotateY(-45deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(80%) scale(0.70) rotateY(45deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
     }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
@@ -1154,22 +1162,22 @@ export const heliosCardStyles = css`
 
     @keyframes dash-cf-exit-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-80%) scale(0.70) rotateY(-45deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(80%) scale(0.70) rotateY(45deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.85) rotateY(-25deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
         100% { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.85) rotateY(25deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
         100% { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
     }
     @keyframes dash-cf-exit-front
