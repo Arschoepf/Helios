@@ -525,12 +525,16 @@ export const heliosCardStyles = css`
             0 24px 48px rgba(0, 0, 0, 0.22);
         overflow-y: auto;
         overflow-x: hidden;
-        /*  Scroll functionality but NO visible scrollbar. Scroll happens on wheel / trackpad / touch. */
+        /*  Scroll stays INSIDE the card, no scroll chaining to the parent window when the user swipes
+            past the boundary. Combined with overflow-y: auto this means: touch / wheel inside the card
+            swipes its content; reaching the top or bottom does NOT trigger a window scroll behind. */
+        overscroll-behavior: contain;
         scrollbar-width: none;
-        /*  Bottom-fade mask so the lower edge of the scrollable area fades visually to indicate that
-            there is more content below. The fade lives in the last ~6 % of the card height. When the
-            content perfectly fits, the fade still appears but reads as a subtle vignette; when content
-            overflows, it doubles as a 'keep scrolling' cue. */
+    }
+    .dash-cf-card-front.is-scrollable
+    {
+        /*  Bottom-fade mask only when the content actually overflows the card. The is-scrollable class is
+            toggled by helios-card.updated() based on scrollHeight > clientHeight. */
         -webkit-mask-image: linear-gradient(180deg, #000 0, #000 94%, transparent 100%);
                 mask-image: linear-gradient(180deg, #000 0, #000 94%, transparent 100%);
     }
@@ -845,10 +849,11 @@ export const heliosCardStyles = css`
         min-height: 140px;
         margin: 0;
     }
-    /*  Grid pair: Import on top, Export on bottom, stacked vertically inside the Réseau half of the row.
-        Takes the same slot the single Réseau chart used to take (50 % of the row when battery is also
-        present, 100 % otherwise). Each side gets equal vertical share of the pair via flex 1 1 0. */
-    .dash-cf-card-charts-grid-pair
+    /*  Stacked pair: two charts split vertically inside one half of the row. Used by both the Battery pair
+        (Charge top / Discharge bottom) and the Reseau pair (Import top / Export bottom). Takes 50 % of the
+        row width via flex: 1 1 0; if only one of the four sub-charts in a pair is configured, that single
+        chart fills the pair's full height (other slot collapses). */
+    .dash-cf-card-charts-stacked-pair
     {
         display: flex;
         flex-direction: column;
@@ -857,7 +862,7 @@ export const heliosCardStyles = css`
         min-width: 0;
         min-height: 140px;
     }
-    .dash-cf-card-charts-grid-pair > .dash-cf-card-chart
+    .dash-cf-card-charts-stacked-pair > .dash-cf-card-chart
     {
         flex: 1 1 0;
         min-height: 70px;
@@ -970,9 +975,10 @@ export const heliosCardStyles = css`
     .dash-cf-card-chart-cursor
     {
         position: absolute;
-        /*  Starts BELOW the time pill (pill sits at top: 4 with ~16 px height, so 22 px clears it) so the
-            dashed line does not run through the pill text. */
-        top: 24px;
+        /*  Starts BELOW the time pill so the dashed line never runs through the pill text. The pill is
+            now a SIBLING (not a child) of the cursor, anchored at the same left % via transform centring,
+            so the cursor can start at the bottom edge of the pill without nesting. */
+        top: 32px;
         bottom: 0;
         width: 0;
         background: transparent;
@@ -983,12 +989,12 @@ export const heliosCardStyles = css`
     /*  Hover tooltip with one row per production source (color dot + friendly name + watts at hover) and
         a final row for the model forecast (dashed dot + Prévision + watts at hover). The tooltip flips
         side based on the cursor X to stay inside the plot frame: cursor in left half = tooltip to the
-        right of the cursor, cursor in right half = tooltip to the left. Vertical anchor is the top of the
-        plot frame with a small offset so the time pill and the tooltip do not overlap. */
+        right of the cursor, cursor in right half = tooltip to the left. Vertical anchor is below the
+        time pill (top: 40 px) so the two never overlap. */
     .dash-cf-card-chart-tooltip
     {
         position: absolute;
-        top: 32px;
+        top: 40px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
@@ -1063,12 +1069,15 @@ export const heliosCardStyles = css`
         box-shadow: none;
     }
 
+    /*  Hover pill at the cursor X, rendered as a SIBLING of the cursor (not a child) so the cursor's
+        dashed line can start BELOW the pill without overlap. The pill takes its own left percent from
+        the inline style and centres horizontally on that X via translateX(-50%). */
     .dash-cf-card-chart-cursor-time
     {
         position: absolute;
-        top: 4px;
-        left: 50%;
+        top: 6px;
         transform: translateX(-50%);
+        z-index: 5;
         font-size: 11px;
         font-weight: 600;
         font-variant-numeric: tabular-nums;

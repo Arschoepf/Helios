@@ -81,47 +81,141 @@ function dayMaxStacked(data: DayChartData): number
 //separate charts (Import + Export) so the user can read each direction without the ambiguity of a stacked
 //area where one direction always wins.
 export function buildDashCharts(host: DashboardHost, offsets: number[]): {
-    productionByOffset: Map<number, DayChartData>;
-    batteryByOffset:    Map<number, DayChartData>;
-    gridInByOffset:     Map<number, DayChartData>;
-    gridOutByOffset:    Map<number, DayChartData>;
-    productionYMaxW:    number;
-    batteryYMaxW:       number;
-    gridInYMaxW:        number;
-    gridOutYMaxW:       number;
+    productionByOffset:    Map<number, DayChartData>;
+    battChargeByOffset:    Map<number, DayChartData>;
+    battDischargeByOffset: Map<number, DayChartData>;
+    gridInByOffset:        Map<number, DayChartData>;
+    gridOutByOffset:       Map<number, DayChartData>;
+    productionYMaxW:       number;
+    battChargeYMaxW:       number;
+    battDischargeYMaxW:    number;
+    gridInYMaxW:           number;
+    gridOutYMaxW:          number;
 }
 {
-    const productionByOffset = new Map<number, DayChartData>();
-    const batteryByOffset    = new Map<number, DayChartData>();
-    const gridInByOffset     = new Map<number, DayChartData>();
-    const gridOutByOffset    = new Map<number, DayChartData>();
-    let productionYMaxW = 0;
-    let batteryYMaxW    = 0;
-    let gridInYMaxW     = 0;
-    let gridOutYMaxW    = 0;
+    const productionByOffset    = new Map<number, DayChartData>();
+    const battChargeByOffset    = new Map<number, DayChartData>();
+    const battDischargeByOffset = new Map<number, DayChartData>();
+    const gridInByOffset        = new Map<number, DayChartData>();
+    const gridOutByOffset       = new Map<number, DayChartData>();
+    let productionYMaxW    = 0;
+    let battChargeYMaxW    = 0;
+    let battDischargeYMaxW = 0;
+    let gridInYMaxW        = 0;
+    let gridOutYMaxW       = 0;
     for (const offset of offsets)
     {
         const win = dayWindowFor(offset);
-        const prod   = computeDayChart(host, offset, win.startMs, win.endMs);
-        const batt   = computeBatteryDayChart(host, offset, win.startMs, win.endMs);
-        const gridIn  = computeGridDirectionDayChart(host, win.startMs, win.endMs, 'in');
-        const gridOut = computeGridDirectionDayChart(host, win.startMs, win.endMs, 'out');
+        const prod         = computeDayChart(host, offset, win.startMs, win.endMs);
+        const battCharge   = computeBatteryDirectionDayChart(host, win.startMs, win.endMs, 'charge');
+        const battDischarge = computeBatteryDirectionDayChart(host, win.startMs, win.endMs, 'discharge');
+        const gridIn       = computeGridDirectionDayChart(host, win.startMs, win.endMs, 'in');
+        const gridOut      = computeGridDirectionDayChart(host, win.startMs, win.endMs, 'out');
         productionByOffset.set(offset, prod);
-        batteryByOffset.set(offset, batt);
+        battChargeByOffset.set(offset, battCharge);
+        battDischargeByOffset.set(offset, battDischarge);
         gridInByOffset.set(offset, gridIn);
         gridOutByOffset.set(offset, gridOut);
-        productionYMaxW = Math.max(productionYMaxW, dayMaxStacked(prod));
-        batteryYMaxW    = Math.max(batteryYMaxW,    dayMaxStacked(batt));
-        gridInYMaxW     = Math.max(gridInYMaxW,     dayMaxStacked(gridIn));
-        gridOutYMaxW    = Math.max(gridOutYMaxW,    dayMaxStacked(gridOut));
+        productionYMaxW    = Math.max(productionYMaxW,    dayMaxStacked(prod));
+        battChargeYMaxW    = Math.max(battChargeYMaxW,    dayMaxStacked(battCharge));
+        battDischargeYMaxW = Math.max(battDischargeYMaxW, dayMaxStacked(battDischarge));
+        gridInYMaxW        = Math.max(gridInYMaxW,        dayMaxStacked(gridIn));
+        gridOutYMaxW       = Math.max(gridOutYMaxW,       dayMaxStacked(gridOut));
     }
-    if (productionYMaxW < 1) productionYMaxW = 1;
-    if (batteryYMaxW    < 1) batteryYMaxW    = 1;
-    if (gridInYMaxW     < 1) gridInYMaxW     = 1;
-    if (gridOutYMaxW    < 1) gridOutYMaxW    = 1;
+    if (productionYMaxW    < 1) productionYMaxW    = 1;
+    if (battChargeYMaxW    < 1) battChargeYMaxW    = 1;
+    if (battDischargeYMaxW < 1) battDischargeYMaxW = 1;
+    if (gridInYMaxW        < 1) gridInYMaxW        = 1;
+    if (gridOutYMaxW       < 1) gridOutYMaxW       = 1;
     return {
-        productionByOffset, batteryByOffset, gridInByOffset, gridOutByOffset,
-        productionYMaxW,    batteryYMaxW,    gridInYMaxW,    gridOutYMaxW,
+        productionByOffset, battChargeByOffset, battDischargeByOffset,
+        gridInByOffset, gridOutByOffset,
+        productionYMaxW, battChargeYMaxW, battDischargeYMaxW,
+        gridInYMaxW, gridOutYMaxW,
+    };
+}
+
+
+//One-direction battery chart (charge OR discharge). Same recipe as the grid split: each side renders on
+//its own chart so the user can read each flow without the stacked-area ambiguity.
+function computeBatteryDirectionDayChart(
+    host:       DashboardHost,
+    dayStartMs: number,
+    dayEndMs:   number,
+    side:       'charge' | 'discharge',
+): DayChartData
+{
+    const empty: DayChartData = {
+        timesMs:   [dayStartMs, dayEndMs - 1],
+        sources:   [],
+        forecastW: [0, 0],
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
+    };
+    if (!host._batteryPowerHistory || host._batteryPowerHistory.times.length < 2)
+    {
+        return empty;
+    }
+    const ph = host._batteryPowerHistory;
+    //Same cumulative-detection heuristic as the full-battery chart. Cumulative wiring (kWh meter without
+    //stat_rate) tracks only the magnitude of the flow, so we cannot split a cumulative series into
+    //charge / discharge without separate per-direction meters. In that case all the differentiated power
+    //flows to the charge side; the discharge sub-chart stays empty.
+    let cumulative = true;
+    for (let i = 1; i < ph.values.length && cumulative; i++)
+    {
+        if (ph.values[i] < 0)                      { cumulative = false; break; }
+        if (ph.values[i] < ph.values[i - 1] - 0.5) { cumulative = false; break; }
+    }
+    const isCumulativeAggregate = cumulative && ph.values.length >= 2 && ph.values[ph.values.length - 1] > ph.values[0];
+
+    const vals:    number[] = [];
+    const timesMs: number[] = [];
+    if (isCumulativeAggregate)
+    {
+        if (side === 'discharge')
+        {
+            return empty;
+        }
+        for (let i = 1; i < ph.times.length; i++)
+        {
+            const tMs    = ph.times[i].getTime();
+            const prevMs = ph.times[i - 1].getTime();
+            if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+            const dh = (tMs - prevMs) / 3_600_000;
+            if (dh <= 0 || dh > 1) continue;
+            const dE = (ph.values[i] - ph.values[i - 1]) * 1000;
+            if (dE < 0) continue;
+            timesMs.push(tMs);
+            vals.push(dE / dh);
+        }
+    }
+    else
+    {
+        for (let i = 0; i < ph.times.length; i++)
+        {
+            const tMs = ph.times[i].getTime();
+            if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+            const v = ph.values[i];
+            if (!isFinite(v)) continue;
+            const value = side === 'charge'
+                ? (v > 0 ? v : 0)
+                : (v < 0 ? -v : 0);
+            timesMs.push(tMs);
+            vals.push(value);
+        }
+    }
+    if (timesMs.length < 2)
+    {
+        return empty;
+    }
+    const color = side === 'charge'
+        ? 'var(--energy-battery-out-color, #1b6c75)'
+        : 'var(--energy-battery-in-color, #4caf50)';
+    return {
+        timesMs,
+        sources: [{ id: side, color, valuesW: vals }],
+        forecastW: new Array(timesMs.length).fill(0),
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
 }
 

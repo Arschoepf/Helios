@@ -1047,6 +1047,20 @@ export class HeliosCard extends LitElement
             refreshHaDailyTotals(this);
         }
 
+        //Toggle the is-scrollable class on the FRONT CoverFlow card after each render so the bottom-fade
+        //mask only shows when the card actually overflows. Done here rather than inside the render
+        //function because Lit's render path runs before layout, scrollHeight/clientHeight are only valid
+        //after the browser has flushed layout.
+        if (this._detailMode)
+        {
+            const front = this.shadowRoot?.querySelector('.dash-cf-card-front') as HTMLElement | null;
+            if (front)
+            {
+                const overflows = front.scrollHeight > front.clientHeight + 1;
+                front.classList.toggle('is-scrollable', overflows);
+            }
+        }
+
         if (!this.hass?.config || !this.config)
         {
             return;

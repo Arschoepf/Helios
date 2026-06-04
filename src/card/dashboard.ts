@@ -188,14 +188,16 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                 <div class="dash-cf-stage ${animClass}">
                     ${DAY_OFFSETS.map(offset =>
                         renderCoverflowCard(host, offset, active, {
-                            production:  charts.productionByOffset.get(offset)!,
-                            battery:     charts.batteryByOffset.get(offset)!,
-                            gridIn:      charts.gridInByOffset.get(offset)!,
-                            gridOut:     charts.gridOutByOffset.get(offset)!,
-                            yMaxProd:    charts.productionYMaxW,
-                            yMaxBatt:    charts.batteryYMaxW,
-                            yMaxGridIn:  charts.gridInYMaxW,
-                            yMaxGridOut: charts.gridOutYMaxW,
+                            production:     charts.productionByOffset.get(offset)!,
+                            battCharge:     charts.battChargeByOffset.get(offset)!,
+                            battDischarge:  charts.battDischargeByOffset.get(offset)!,
+                            gridIn:         charts.gridInByOffset.get(offset)!,
+                            gridOut:        charts.gridOutByOffset.get(offset)!,
+                            yMaxProd:       charts.productionYMaxW,
+                            yMaxBattCharge: charts.battChargeYMaxW,
+                            yMaxBattDis:    charts.battDischargeYMaxW,
+                            yMaxGridIn:     charts.gridInYMaxW,
+                            yMaxGridOut:    charts.gridOutYMaxW,
                         })
                     )}
                 </div>
@@ -378,14 +380,16 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
 //they read as background context rather than competing for the user's attention.
 interface CardChartBundle
 {
-    production:  DayChartData;
-    battery:     DayChartData;
-    gridIn:      DayChartData;
-    gridOut:     DayChartData;
-    yMaxProd:    number;
-    yMaxBatt:    number;
-    yMaxGridIn:  number;
-    yMaxGridOut: number;
+    production:      DayChartData;
+    battCharge:      DayChartData;
+    battDischarge:   DayChartData;
+    gridIn:          DayChartData;
+    gridOut:         DayChartData;
+    yMaxProd:        number;
+    yMaxBattCharge:  number;
+    yMaxBattDis:     number;
+    yMaxGridIn:      number;
+    yMaxGridOut:     number;
 }
 
 function renderCoverflowCard(
@@ -569,15 +573,22 @@ function renderCoverflowCard(
                 })}
                 ${hasBatteryConfigured(host) || hasGridImport(host) || hasGridExport(host) ? html`
                     <div class="dash-cf-card-charts-row">
-                        ${hasBatteryConfigured(host) ? renderCardChartBlock(
-                            host, cardOffset, activeOffset, charts.battery, charts.yMaxBatt, 'battery', {
-                                title:        tLocal.detail.chartBatteryTitle ?? 'Battery',
-                                icon:         'mdi:home-battery-outline',
-                                headlineKwh:  null,
-                            }
-                        ) : nothing}
+                        ${hasBatteryConfigured(host) ? html`
+                            <div class="dash-cf-card-charts-stacked-pair">
+                                ${renderCardChartBlock(host, cardOffset, activeOffset, charts.battCharge, charts.yMaxBattCharge, 'batt-charge', {
+                                    title:       tLocal.detail.tileChargeLabel ?? 'Charge',
+                                    icon:        'mdi:battery-arrow-up',
+                                    headlineKwh: null,
+                                })}
+                                ${renderCardChartBlock(host, cardOffset, activeOffset, charts.battDischarge, charts.yMaxBattDis, 'batt-discharge', {
+                                    title:       tLocal.detail.tileDischargeLabel ?? 'Discharge',
+                                    icon:        'mdi:battery-arrow-down',
+                                    headlineKwh: null,
+                                })}
+                            </div>
+                        ` : nothing}
                         ${hasGridImport(host) || hasGridExport(host) ? html`
-                            <div class="dash-cf-card-charts-grid-pair">
+                            <div class="dash-cf-card-charts-stacked-pair">
                                 ${hasGridImport(host) ? renderCardChartBlock(
                                     host, cardOffset, activeOffset, charts.gridIn, charts.yMaxGridIn, 'grid-in', {
                                         title:        tLocal.detail.tileImportLabel ?? 'Import',
@@ -703,7 +714,7 @@ function renderCardChartBlock(
     activeOffset: number,
     data:         DayChartData,
     yMaxW:        number,
-    kind:         'production' | 'battery' | 'grid-in' | 'grid-out',
+    kind:         'production' | 'batt-charge' | 'batt-discharge' | 'grid-in' | 'grid-out',
     meta:         ChartBlockMeta,
 ): TemplateResult
 {
@@ -822,11 +833,10 @@ function renderCardChartBlock(
                     : nothing
                 }
                 ${hoverPct !== null ? html`
-                    <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%">
-                        ${hoverTime !== null ? html`
-                            <span class="dash-cf-card-chart-cursor-time">${hoverTime}</span>
-                        ` : nothing}
-                    </span>
+                    ${hoverTime !== null ? html`
+                        <span class="dash-cf-card-chart-cursor-time" style="left: ${hoverPct.toFixed(2)}%">${hoverTime}</span>
+                    ` : nothing}
+                    <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%"></span>
                     ${tooltipRows.length > 0 ? html`
                         <div
                             class="dash-cf-card-chart-tooltip"
