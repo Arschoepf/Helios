@@ -393,8 +393,10 @@ export const heliosCardStyles = css`
         position: absolute;
         inset: 0;
         background: rgba(0, 0, 0, 0.35);
-        backdrop-filter: blur(6px);
-        -webkit-backdrop-filter: blur(6px);
+        /*  backdrop-filter blur removed: it forces every descendant element (cards, charts, text) into
+            their own composite layers which were rasterised at fractional resolution, the side effect was
+            a subtle blur on every dashboard chip / text the user clearly saw. The detail panel scrim alone
+            (the rgba background above) is enough to dim the map behind without the GPU layer cost. */
         z-index: 60;
         opacity: 0;
         animation: detail-panel-fade-in 0.25s ease forwards;
@@ -526,13 +528,9 @@ export const heliosCardStyles = css`
         overscroll-behavior: contain;
         scrollbar-width: none;
     }
-    .dash-cf-card-front.is-scrollable
-    {
-        /*  Bottom-fade mask only when the content actually overflows the card. The is-scrollable class is
-            toggled by helios-card.updated() based on scrollHeight > clientHeight. */
-        -webkit-mask-image: linear-gradient(180deg, #000 0, #000 94%, transparent 100%);
-                mask-image: linear-gradient(180deg, #000 0, #000 94%, transparent 100%);
-    }
+    /*  Bottom-fade mask removed. mask-image forces the card into a compositor layer which the browser
+        then rasterises, the side effect was a subtle blur on the card content. The user can still scroll
+        the card via touch / wheel; the hint that there is more content below is now implicit. */
     .dash-cf-card-front::-webkit-scrollbar
     {
         display: none;
@@ -684,12 +682,14 @@ export const heliosCardStyles = css`
     }
     .dash-cf-card-stats > .dash-cf-card-stat
     {
-        flex: 1 1 calc(50% - 4px);
+        /*  flex-grow: 0 so a row with a single tile (odd tile count) does NOT stretch that lone tile to
+            full width. Each tile sticks to 50 % of the row basis = strict 2 per row when both slots fit. */
+        flex: 0 1 calc(50% - 4px);
         min-width: 140px;
     }
     .dash-cf-card-stats > .dash-cf-card-stat-grid-solo
     {
-        flex: 1 1 100%;
+        flex: 0 1 100%;
     }
     /*  HA frontend tile style: rounded-square coloured icon badge on the left, title + value stacked on the
         right. Icon background = colour token at low opacity, icon glyph = the same token at full opacity, so
