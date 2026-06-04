@@ -1657,26 +1657,36 @@ export class HeliosEngine
     //`getTimelineSeries()`, which returns every hourly sample.
     private _getTimeRange(): { start: Date; end: Date } | null
     {
+        const TIMELINE_PAST_DAYS    = 2;
+        const TIMELINE_FORECAST_DAYS = 3;
         const home = this._homeHourlyData;
-        if (!home || !home.times.length)
+
+        //Open-Meteo path: derive the visible window from the live weather samples when they are available.
+        //First sample at or after `today - past_days`, last available sample as the end.
+        if (home && home.times.length)
         {
-            return null;
+            const t = home.times;
+            const last = t[t.length - 1];
+            const today0 = new Date();
+            today0.setHours(0, 0, 0, 0);
+            const visibleStartMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
+            let startIdx = 0;
+            for (let i = 0; i < t.length; i++)
+            {
+                if (t[i].getTime() >= visibleStartMs) { startIdx = i; break; }
+            }
+            return { start: t[startIdx], end: last };
         }
-        const t = home.times;
-        const last = t[t.length - 1];
-        const TIMELINE_PAST_DAYS = 2;
+
+        //Fallback when the Open-Meteo fetch failed (offline, CORS, 502, etc.). The timeline still has to
+        //render so the user can scrub PV history / battery curves and read the live state; we just lose
+        //the cloud / irradiance / forecast traces. Synthetic window: today midnight minus PAST_DAYS to
+        //today midnight plus FORECAST_DAYS.
         const today0 = new Date();
         today0.setHours(0, 0, 0, 0);
-        const visibleStartMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
-        //Snap to the earliest sample at or after the visible start.
-        //If the entire fetched window is shorter (cache truncated,
-        //first boot), fall back to the very first sample we have.
-        let startIdx = 0;
-        for (let i = 0; i < t.length; i++)
-        {
-            if (t[i].getTime() >= visibleStartMs) { startIdx = i; break; }
-        }
-        return { start: t[startIdx], end: last };
+        const startMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
+        const endMs   = today0.getTime() + TIMELINE_FORECAST_DAYS * 24 * 3_600_000;
+        return { start: new Date(startMs), end: new Date(endMs) };
     }
 
     //Resolve the configured cloud colour, falling back to the design
@@ -3462,6 +3472,27 @@ export class HeliosEngine
             {
                 return;
             }
+
+            //Open-Meteo unreachable (network down, CORS, 5xx). Push a fallback WeatherData so the card can
+            //still build its timeline + scrub PV history / battery, just without the cloud / irradiance /
+            //forecast traces. We emit a single update with neutral defaults; the retry below will replace
+            //these fields with real values once the fetch succeeds.
+            this.onWeatherUpdate?.(
+            {
+                cloudCover:       0,
+                cloudLow:         0,
+                cloudMid:         0,
+                cloudHigh:        0,
+                cloudIntensity:   'clear',
+                timeRange:        this._getTimeRange(),
+                isLiveTime:       this._selectedTime === null,
+                pvPower:          0,
+                pvPowerHaurwitz:  0,
+                pvPowerShortwave: -1,
+                irradianceSource: 'haurwitz',
+                temperatureC:     NaN,
+                windMs:           NaN,
+            });
 
             let retryDelay: number;
             if (e.status === 429)
