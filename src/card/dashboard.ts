@@ -27,7 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, bracketHover, computeHoverDots, type DayChartData } from './dashboardChart';
+import { buildLifeline, renderLifelineSVG } from './dashboardLifeline';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -170,11 +170,6 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                     : host._dashAnimPhase === 'exiting'  ? 'dash-cf-exiting'
                     : '';
 
-    //Pre-compute the per-day chart data + the global Y maximum once per render so every card paints on the
-    //same Y axis (a low-cloud day reads taller than a heavily-overcast one). Built once here and threaded
-    //into each `renderCoverflowCard` call instead of having each card recompute its own chart.
-    const charts = buildDashCharts(host, DAY_OFFSETS);
-
     return html`
         <div class="detail-panel">
             <div class="dash-coverflow"
@@ -185,12 +180,7 @@ export function renderDashboard(host: DashboardHost): TemplateResult
                  tabindex="0"
             >
                 <div class="dash-cf-stage ${animClass}">
-                    ${DAY_OFFSETS.map(offset =>
-                        renderCoverflowCard(host, offset, active, {
-                            production: charts.productionByOffset.get(offset)!,
-                            yMaxProd:   charts.productionYMaxW,
-                        })
-                    )}
+                    ${DAY_OFFSETS.map(offset => renderCoverflowCard(host, offset, active))}
                 </div>
             </div>
         </div>
@@ -369,17 +359,10 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
 //currently active offset: 0 = front, ±1 = mid (rotated 35°), ±2 = back (rotated 50°). Z-index ordering keeps the
 //front card on top of its neighbours regardless of stacking order in the DOM. Opacity fades the back cards so
 //they read as background context rather than competing for the user's attention.
-interface CardChartBundle
-{
-    production: DayChartData;
-    yMaxProd:   number;
-}
-
 function renderCoverflowCard(
     host:         DashboardHost,
     cardOffset:   number,
     activeOffset: number,
-    charts:       CardChartBundle,
 ): TemplateResult
 {
     const delta    = cardOffset - activeOffset;
@@ -455,8 +438,6 @@ function renderCoverflowCard(
     //Per-day stats for the production / forecast block.
     const stats = computeDayStats(host, cardOffset);
     const weatherIcon = cloudCoverIcon(stats.avgCloud);
-    const chartData = charts.production;
-    const chartYMaxW = charts.yMaxProd;
 
 
     return html`
@@ -527,12 +508,8 @@ function renderCoverflowCard(
                 ` : nothing}
             </section>
 
-            <div class="dash-cf-card-charts">
-                ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW, 'production', {
-                    title:        tLocal.detail.chartProductionTitle ?? 'Daily production',
-                    icon:         'mdi:sun-clock-outline',
-                    headlineKwh:  stats.producedKwh,
-                })}
+            <div class="dash-cf-card-lifeline">
+                ${renderLifelineSVG(buildLifeline(host, cardOffset), `${cardOffset}-${host._instanceId}`)}
             </div>
         </article>
     `;
@@ -548,250 +525,6 @@ function hasSolarConfigured(host: DashboardHost): boolean
         || (def?.solarStatEnergyFroms?.length ?? 0) > 0;
 }
 
-//Bottom block of each CoverFlow card: header (title + live W value + lightning-bolt icon) + plot frame
-//(the rendered SVG + a vertical cursor on hover). The header value follows the cursor on the front card:
-//hover at a given X reads the interpolated stacked W at that X; cursor off-chart reverts to the day's
-//peak. Mid / back cards are static (no hover handlers, just the day's peak value in the header) since the
-//cursor naturally lives on the front card anyway.
-interface ChartBlockMeta
-{
-    title:       string;
-    icon:        string;
-    headlineKwh: number | null;
-}
-
-function renderCardChartBlock(
-    host:         DashboardHost,
-    cardOffset:   number,
-    activeOffset: number,
-    data:         DayChartData,
-    yMaxW:        number,
-    kind:         'production',
-    meta:         ChartBlockMeta,
-): TemplateResult
-{
-    const isFront = cardOffset === activeOffset;
-    const N       = data.timesMs.length;
-
-    //Default headline (no hover) = the day's TOTAL produced kWh, matching the Production tile's value so
-    //the chart header reads as "today's daily total" at rest. Hover on the front card swaps in the
-    //instantaneous stacked W at the cursor X (with the unit dropping from kWh to W / kW).
-    let displayValue: string;
-    let displayUnit:  string;
-    let hoverPct:     number | null = null;
-    let hoverTime:    string | null = null;
-    let tooltipRows:  Array<{ label: string; color: string; valueStr: string; unitStr: string; isDashed: boolean }> = [];
-    if (isFront && host._dashChartHoverFrac !== null && N >= 2)
-    {
-        const frac    = Math.max(0, Math.min(1, host._dashChartHoverFrac));
-        const bracket = bracketHover(data, frac);
-        const i0 = bracket.i0;
-        const i1 = bracket.i1;
-        const f  = bracket.f;
-        const v0    = stackedAtIndex(data, i0) || (data.forecastW[i0] ?? 0);
-        const v1    = stackedAtIndex(data, i1) || (data.forecastW[i1] ?? 0);
-        const hoverW = v0 * (1 - f) + v1 * f;
-        const f1 = formatPowerForChart(host.hass, hoverW);
-        displayValue = f1.value;
-        displayUnit  = f1.unit;
-        hoverPct     = frac * 100;
-        //Cursor chip content:
-        //  - Production chart: HH:MM at the cursor X (the per-source tooltip below carries the values).
-        //  - Battery / grid charts: the instantaneous value directly (no tooltip, no time chip), since
-        //    these charts only carry a single primary curve and a label-less value reads cleaner than a
-        //    standalone time pill with a separate tooltip below.
-        if (kind === 'production')
-        {
-            hoverTime = formatHoverTimeLabel(host.hass, cardOffset, frac);
-        }
-        else
-        {
-            hoverTime = `${f1.value} ${f1.unit}`;
-        }
-
-        //Tooltip rows: PRODUCTION chart only. Per-source breakdown + a Prévision row.
-        if (kind === 'production')
-        {
-            for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
-            {
-                const src = data.sources[srcIdx];
-                const sw  = (src.valuesW[i0] ?? 0) * (1 - f) + (src.valuesW[i1] ?? 0) * f;
-                let name: string;
-                if (src.id === 'lts')
-                {
-                    name = pickTranslations(host.hass?.language).detail.tooltipMeasuredLabel ?? 'Measured production';
-                }
-                else
-                {
-                    name = host.hass?.states?.[src.id]?.attributes?.friendly_name ?? src.id;
-                }
-                const fp = formatPowerForChart(host.hass, sw);
-                tooltipRows.push({ label: name, color: src.color, valueStr: fp.value, unitStr: fp.unit, isDashed: false });
-            }
-            const fcW = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
-            const ffc = formatPowerForChart(host.hass, fcW);
-            const tForecastLabel = pickTranslations(host.hass?.language).detail.tooltipForecastLabel ?? 'Forecast';
-            tooltipRows.push({ label: tForecastLabel, color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
-        }
-    }
-    else if (meta.headlineKwh !== null)
-    {
-        //Default at-rest value (production chart): the day's total produced kWh.
-        displayValue = formatLocalisedNumber(host.hass, meta.headlineKwh, 1);
-        displayUnit  = 'kWh';
-    }
-    else
-    {
-        //Default at-rest value (battery / grid charts): peak power across the day.
-        const fp = formatPowerForChart(host.hass, peakOfDay(data));
-        displayValue = fp.value;
-        displayUnit  = fp.unit;
-    }
-
-    //Tooltip placement: when the cursor is in the left half of the plot the tooltip sits on the RIGHT of
-    //the cursor, when on the right half it flips LEFT, so the tooltip never sits on top of the chart edge
-    //and never covers the curve on the side the cursor is moving toward.
-    const tooltipOnRight = hoverPct !== null && hoverPct < 50;
-
-    //Lazy-render: the SVG is only mounted for the FRONT card. Non-front cards show a header but no curve.
-    //When the user navigates to a different day, that card becomes the front and its SVG mounts, which
-    //fires the dash-cf-chart-grow CSS animation (anchored to mount via animation-fill-mode: both).
-    return html`
-        <section class="dash-cf-card-chart dash-cf-card-chart-${kind}" aria-hidden="${!isFront}">
-            <header class="dash-cf-card-chart-header">
-                <div class="dash-cf-card-chart-meta">
-                    <span class="dash-cf-card-chart-title">${meta.title}</span>
-                    <span class="dash-cf-card-chart-value">
-                        ${displayValue}<span class="dash-cf-card-chart-unit"> ${displayUnit}</span>
-                    </span>
-                </div>
-                <span class="dash-cf-card-chart-icon" aria-hidden="true">
-                    <ha-icon icon="${meta.icon}"></ha-icon>
-                </span>
-            </header>
-            <div
-                class="dash-cf-card-chart-plot"
-                @pointermove="${isFront ? (e: PointerEvent) => handleChartHover(host, e) : null}"
-                @pointerleave="${isFront ? () => handleChartHoverLeave(host) : null}"
-            >
-                ${isFront ? renderDayChartSVG(data, yMaxW) : nothing}
-                ${isFront && host._dashChartHoverFrac !== null
-                    ? computeHoverDots(data, yMaxW, host._dashChartHoverFrac, kind === 'production').map(dot => html`
-                        <span
-                            class="dash-cf-card-chart-dot ${dot.isForecast ? 'is-forecast' : ''}"
-                            style="left: ${dot.leftPct.toFixed(2)}%; top: ${dot.topPct.toFixed(2)}%; ${dot.isForecast ? `border-color: ${dot.color};` : `background: ${dot.color};`}"
-                        ></span>
-                    `)
-                    : nothing
-                }
-                ${hoverPct !== null ? html`
-                    ${hoverTime !== null ? html`
-                        <span class="dash-cf-card-chart-cursor-time" style="left: ${hoverPct.toFixed(2)}%">${hoverTime}</span>
-                    ` : nothing}
-                    <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%"></span>
-                    ${tooltipRows.length > 0 ? html`
-                        <div
-                            class="dash-cf-card-chart-tooltip"
-                            style="${tooltipOnRight
-                                ? `left: calc(${hoverPct.toFixed(2)}% + 10px); right: auto;`
-                                : `right: calc(${(100 - hoverPct).toFixed(2)}% + 10px); left: auto;`
-                            }"
-                        >
-                            ${tooltipRows.map(row => html`
-                                <div class="dash-cf-card-chart-tooltip-row">
-                                    <span
-                                        class="dash-cf-card-chart-tooltip-dot ${row.isDashed ? 'is-dashed' : ''}"
-                                        style="${row.isDashed
-                                            ? `border-color: ${row.color}; background: transparent;`
-                                            : `background: ${row.color};`
-                                        }"
-                                    ></span>
-                                    <span class="dash-cf-card-chart-tooltip-label">${row.label}</span>
-                                    <span class="dash-cf-card-chart-tooltip-value">${row.valueStr} ${row.unitStr}</span>
-                                </div>
-                            `)}
-                        </div>
-                    ` : nothing}
-                ` : nothing}
-            </div>
-        </section>
-    `;
-}
-
-
-//Hover time label: HH:MM at the cursor X position. Computed from the card's day start + (frac x 24 h).
-//Locale is pulled from the host hass so the time format follows the user (24 h in fr-FR, 12 h in en-US).
-function formatHoverTimeLabel(hass: DashboardHost['hass'], dayOffset: number, frac: number): string
-{
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() + dayOffset);
-    const hoverMs = start.getTime() + frac * 86_400_000;
-    try
-    {
-        return new Intl.DateTimeFormat(hass?.language ?? undefined, {
-            hour:   '2-digit',
-            minute: '2-digit',
-        }).format(new Date(hoverMs));
-    }
-    catch (_)
-    {
-        const d = new Date(hoverMs);
-        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    }
-}
-
-
-//Power formatting for the chart header. Below 1 kW we show whole W ('342 W'); from 1 kW we switch to one
-//decimal kW ('2,3 kW'). Locale is pulled from the host hass so the decimal separator follows the user.
-function formatPowerForChart(hass: DashboardHost['hass'], watts: number): { value: string; unit: string }
-{
-    if (!isFinite(watts) || watts < 0)
-    {
-        return { value: '0', unit: 'W' };
-    }
-    if (watts >= 1000)
-    {
-        return { value: formatLocalisedNumber(hass, watts / 1000, 1), unit: 'kW' };
-    }
-    return { value: formatLocalisedNumber(hass, Math.round(watts), 0), unit: 'W' };
-}
-
-
-//Pointermove handler on the front card's plot frame. Reads the cursor's X position relative to the frame
-//and stores the [0..1] fraction on the host so the next render computes the interpolated W and positions
-//the vertical guide line. Coalesced via requestAnimationFrame so a fast mouse move does not trigger a
-//re-render per event (the cursor moves at screen refresh rate at most).
-export function handleChartHover(host: DashboardHost, e: PointerEvent): void
-{
-    const target = e.currentTarget as HTMLElement | null;
-    if (!target)
-    {
-        return;
-    }
-    const rect = target.getBoundingClientRect();
-    if (rect.width <= 0)
-    {
-        return;
-    }
-    const frac = (e.clientX - rect.left) / rect.width;
-    const clamped = Math.max(0, Math.min(1, frac));
-    if (host._dashChartHoverFrac !== clamped)
-    {
-        host._dashChartHoverFrac = clamped;
-        host.requestUpdate();
-    }
-}
-
-
-export function handleChartHoverLeave(host: DashboardHost): void
-{
-    if (host._dashChartHoverFrac !== null)
-    {
-        host._dashChartHoverFrac = null;
-        host.requestUpdate();
-    }
-}
 
 
 //Day-offset navigation. Clamps to the [-2..+2] window and triggers a Lit re-render via requestUpdate so the
