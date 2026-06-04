@@ -732,31 +732,39 @@ function renderCardChartBlock(
         displayValue = f1.value;
         displayUnit  = f1.unit;
         hoverPct     = frac * 100;
-        hoverTime    = formatHoverTimeLabel(host.hass, cardOffset, frac);
-
-        //Tooltip rows: one per production source (color dot + friendly name + W at hover) + one for the
-        //model forecast (dashed dot + 'Prévision' + W at hover). Friendly names are pulled from
-        //hass.states[id].attributes.friendly_name with a fallback to a short label.
-        for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
-        {
-            const src = data.sources[srcIdx];
-            const sw  = (src.valuesW[i0] ?? 0) * (1 - f) + (src.valuesW[i1] ?? 0) * f;
-            let name: string;
-            if (src.id === 'lts')
-            {
-                name = pickTranslations(host.hass?.language).detail.tooltipMeasuredLabel ?? 'Measured production';
-            }
-            else
-            {
-                name = host.hass?.states?.[src.id]?.attributes?.friendly_name ?? src.id;
-            }
-            const fp = formatPowerForChart(host.hass, sw);
-            tooltipRows.push({ label: name, color: src.color, valueStr: fp.value, unitStr: fp.unit, isDashed: false });
-        }
-        //Prévision row only on the PRODUCTION chart. Battery + grid charts have no forecast (they show
-        //actuals only) so the row would be a fake zero line that adds visual noise.
+        //Cursor chip content:
+        //  - Production chart: HH:MM at the cursor X (the per-source tooltip below carries the values).
+        //  - Battery / grid charts: the instantaneous value directly (no tooltip, no time chip), since
+        //    these charts only carry a single primary curve and a label-less value reads cleaner than a
+        //    standalone time pill with a separate tooltip below.
         if (kind === 'production')
         {
+            hoverTime = formatHoverTimeLabel(host.hass, cardOffset, frac);
+        }
+        else
+        {
+            hoverTime = `${f1.value} ${f1.unit}`;
+        }
+
+        //Tooltip rows: PRODUCTION chart only. Per-source breakdown + a Prévision row.
+        if (kind === 'production')
+        {
+            for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
+            {
+                const src = data.sources[srcIdx];
+                const sw  = (src.valuesW[i0] ?? 0) * (1 - f) + (src.valuesW[i1] ?? 0) * f;
+                let name: string;
+                if (src.id === 'lts')
+                {
+                    name = pickTranslations(host.hass?.language).detail.tooltipMeasuredLabel ?? 'Measured production';
+                }
+                else
+                {
+                    name = host.hass?.states?.[src.id]?.attributes?.friendly_name ?? src.id;
+                }
+                const fp = formatPowerForChart(host.hass, sw);
+                tooltipRows.push({ label: name, color: src.color, valueStr: fp.value, unitStr: fp.unit, isDashed: false });
+            }
             const fcW = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
             const ffc = formatPowerForChart(host.hass, fcW);
             const tForecastLabel = pickTranslations(host.hass?.language).detail.tooltipForecastLabel ?? 'Forecast';

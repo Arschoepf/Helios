@@ -875,10 +875,12 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
     }
 
     //Dashed horizontal line at W=0 over the part of the day that has not happened yet (NOW to dayEnd for
-    //today, the entire day window for future days, nothing for past days). Tells the user "no actual data
-    //here yet". For the production chart the forecast dashed line keeps reading on top of this baseline.
+    //today, the entire day window for future days, nothing for past days). Only drawn on charts that
+    //carry a FORECAST curve (= production), since on battery / grid charts the dashed baseline reads as
+    //a phantom 'forecast' which is misleading (those charts only show actuals).
     let futurePath: TemplateResult | null = null;
-    if (data.liveEndMs < data.dayEndMs)
+    const hasForecast = data.forecastW.some(v => v > 0);
+    if (hasForecast && data.liveEndMs < data.dayEndMs)
     {
         const x1 = xPctOf(data.liveEndMs);
         const x2 = xPctOf(data.dayEndMs - 1);
