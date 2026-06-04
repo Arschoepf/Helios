@@ -672,11 +672,12 @@ export const heliosCardStyles = css`
         Uses HA theme tokens throughout so the colours follow the active frontend theme. */
     .dash-cf-card-stats
     {
-        /*  Mini-tiles: strict 2 columns always via CSS grid. Grid is deterministic regardless of card
-            width / padding rounding, the flex-wrap basis: 50% trick was hitting subpixel cases where 2
-            tiles + gap exceeded the available width by < 1 px and wrapped to 1 per row. */
+        /*  Mini-tiles: max 2 columns when the card is wide enough, drop to 1 column on narrow cards.
+            The minmax max(50% - 4px, 140px) trick caps at 2 cols (any 3rd col would need each tile to be
+            >= 50% - 4px wide, which exceeds 100% of the row) AND forces a wrap to 1 col when the 140 px
+            min cannot fit twice with the 8 px gap (~< 288 px available). */
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(max(calc(50% - 4px), 140px), 1fr));
         gap: 8px;
         padding: 0 8px;
     }
