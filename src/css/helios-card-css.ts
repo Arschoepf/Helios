@@ -796,25 +796,31 @@ export const heliosCardStyles = css`
         display: flex;
         flex-direction: column;
         gap: 8px;
-        /*  8 px margin on every side so the charts block has the same outer gutter as the bandeau + stats
-            section. The top margin closes the gap between the last mini-tile row and the production chart
-            that was missing before (the stats grid had no padding-bottom, so the chart sat flush against
-            the tiles). */
         margin: 8px;
         flex: 1 1 auto;
+        min-height: 0;
+    }
+    /*  Production chart on top: exactly 50 % of the remaining charts column. The row of batt + grid below
+        gets the other 50 %. `flex: 1 1 0` with `min-height: 0` lets each side actually share the space
+        equally instead of being pushed around by content min-height (the production chart used to absorb
+        all available space, squashing the row below). */
+    .dash-cf-card-charts > .dash-cf-card-chart
+    {
+        flex: 1 1 0;
         min-height: 0;
     }
     .dash-cf-card-charts-row
     {
         display: flex;
         gap: 8px;
-        flex: 1 1 auto;
+        flex: 1 1 0;
         min-height: 0;
     }
     .dash-cf-card-charts-row > .dash-cf-card-chart
     {
         flex: 1 1 0;
         min-width: 0;
+        min-height: 0;
         margin: 0;
     }
     .dash-cf-card-chart
@@ -924,7 +930,9 @@ export const heliosCardStyles = css`
     .dash-cf-card-chart-cursor
     {
         position: absolute;
-        top: 0;
+        /*  Starts BELOW the time pill (pill sits at top: 4 with ~16 px height, so 22 px clears it) so the
+            dashed line does not run through the pill text. */
+        top: 24px;
         bottom: 0;
         width: 0;
         background: transparent;
@@ -1000,18 +1008,18 @@ export const heliosCardStyles = css`
     .dash-cf-card-chart-dot
     {
         position: absolute;
-        width: 8px;
-        height: 8px;
+        width: 5px;
+        height: 5px;
         border-radius: 50%;
         transform: translate(-50%, -50%);
         pointer-events: none;
         z-index: 3;
-        box-shadow: 0 0 0 1.5px var(--ha-card-background, #1c1c1c);
+        box-shadow: 0 0 0 1px var(--ha-card-background, #1c1c1c);
     }
     .dash-cf-card-chart-dot.is-forecast
     {
         background: var(--ha-card-background, #1c1c1c);
-        border: 1.5px solid;
+        border: 1px solid;
         box-shadow: none;
     }
 

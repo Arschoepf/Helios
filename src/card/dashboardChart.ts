@@ -119,7 +119,9 @@ export function buildDashCharts(host: DashboardHost, offsets: number[]): {
 
 
 //Battery chart: charge area (positive part of _batteryPowerHistory) + discharge area (|negative part|).
-//Live-only for today; past + future days return an empty timeline with the forecast row zeroed out.
+//`_batteryPowerHistory` covers a multi-day window (LTS-backed, set at boot by fetchBatteryHistory), so the
+//chart works for past days too as long as the user's HA recorder has the history; future days have no
+//samples and fall through to the empty placeholder.
 function computeBatteryDayChart(
     host:       DashboardHost,
     dayOffset:  number,
@@ -133,7 +135,7 @@ function computeBatteryDayChart(
         forecastW: [0, 0],
         dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
-    if (dayOffset !== 0 || !host._batteryPowerHistory)
+    if (!host._batteryPowerHistory)
     {
         return empty;
     }
@@ -197,10 +199,10 @@ function computeGridDayChart(
         forecastW: [0, 0],
         dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
-    if (dayOffset !== 0)
-    {
-        return empty;
-    }
+    //`_gridImportSamples` / `_gridExportSamples` are populated by refreshGrid + ensureHistoryFetched with
+    //a recorder-backed history window per entity, so past days have samples too. Future days return empty
+    //naturally (no samples in that window). The previous `dayOffset !== 0` early-return was wrong: the
+    //user could already see the values on the timeline scrub, so the chart should match.
     const importSamples = aggregateGridSamples(host._gridImportSamples, host._gridImportUnits, dayStartMs, dayEndMs);
     const exportSamples = aggregateGridSamples(host._gridExportSamples, host._gridExportUnits, dayStartMs, dayEndMs);
     if (importSamples.length < 2 && exportSamples.length < 2)
@@ -681,18 +683,39 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
     const xPctOf   = (tMs: number) => ((tMs - data.dayStartMs) / dayMs) * W;
     const yPctOf   = (w: number)   => H - CHART_BOTTOM_PAD - Math.max(0, Math.min(1, w / yMaxW)) * plotH;
 
+    //Baseline band: full-width colored rect from the W=0 baseline down to the chart's bottom edge, in the
+    //FIRST source's color at low opacity. Lets the colored band span the entire day window, including
+    //the future part where no actual sample exists yet. Without this the bottom padding band only got
+    //filled where the first source had samples, leaving the future part visually empty.
+    let baselineBand: TemplateResult | null = null;
+    if (data.sources.length > 0)
+    {
+        const yBase = yPctOf(0);
+        baselineBand = svg`
+            <rect
+                x="0" y="${yBase.toFixed(2)}"
+                width="${W}" height="${(H - yBase).toFixed(2)}"
+                fill="${data.sources[0].color}"
+                fill-opacity="0.32"
+            ></rect>
+        `;
+    }
+
     const areaPaths: TemplateResult[] = [];
     const bottomValues = new Array(N).fill(0);
     for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
     {
-        const src     = data.sources[srcIdx];
-        const isFirst = srcIdx === 0;
+        const src = data.sources[srcIdx];
         const topValues = new Array(N);
         for (let i = 0; i < N; i++)
         {
             topValues[i] = bottomValues[i] + (src.valuesW[i] ?? 0);
         }
-        const bottomYOf = (i: number) => isFirst ? H : yPctOf(bottomValues[i]);
+        //Every source's fill closes back along its natural bottom (W=0 for the first stacked source, the
+        //previous source's top for everything above). The colored band below the W=0 baseline is now drawn
+        //separately as a baseline rect that spans the full day width so the future part of the day also
+        //gets the colored band.
+        const bottomYOf = (i: number) => yPctOf(bottomValues[i]);
         const topCoords: Array<[number, number]> = [];
         for (let i = 0; i < N; i++)
         {
@@ -769,6 +792,7 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
             preserveAspectRatio="none"
             aria-hidden="true"
         >
+            ${baselineBand}
             ${areaPaths}
             ${futurePath}
             ${forecastPath}
