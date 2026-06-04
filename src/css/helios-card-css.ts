@@ -518,6 +518,20 @@ export const heliosCardStyles = css`
         box-shadow:
             0 8px 24px rgba(0, 0, 0, 0.35),
             0 24px 48px rgba(0, 0, 0, 0.22);
+        /*  Front card content scrolls vertically when the bandeau + mini-tiles + 3 charts exceed the card
+            height (typically on short stages where the auto-fit grid stacks 6 tiles in one column). Hidden
+            X overflow prevents the dashed forecast curve from triggering a horizontal scrollbar. */
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+    .dash-cf-card-front::-webkit-scrollbar
+    {
+        width: 4px;
+    }
+    .dash-cf-card-front::-webkit-scrollbar-thumb
+    {
+        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 18%, transparent);
+        border-radius: 2px;
     }
 
     /*  Top-of-card bandeau styled as a Mushroom-card header strip anchored at the top with a small margin all
@@ -638,11 +652,10 @@ export const heliosCardStyles = css`
         bandeau width gets tight. */
     @container helios-card (max-width: 1000px)
     {
-        .dash-cf-card-stats { grid-template-columns: 1fr; }
         /*  Cards get a taller aspect ratio in narrow mode so the stacked tiles + chart slots both fit.
             Mini-tile sizing is intentionally left alone (the user's directive), only the card shape
-            changes. */
-        .dash-cf-card        { aspect-ratio: 4 / 7; }
+            changes. The stats grid auto-fits to the card width via the auto-fit rule above. */
+        .dash-cf-card { aspect-ratio: 4 / 7; }
     }
     @container helios-card (max-width: 600px)
     {
@@ -657,11 +670,12 @@ export const heliosCardStyles = css`
         Uses HA theme tokens throughout so the colours follow the active frontend theme. */
     .dash-cf-card-stats
     {
-        /*  4 tiles in a 2x2 grid: Production / Prévision on the top row, Battery in / out on the bottom row.
-            Equal-fraction columns + rows so every tile takes a quarter of the block, regardless of label
-            length. Stacks to a single column on narrow containers via the @container rule above. */
+        /*  Mini-tile grid: auto-fit each row with a 140 px tile MINIMUM. When the card body width can fit
+            2 tiles + gap (>= ~296 px) the grid renders 2 columns; below that it drops to 1 column so each
+            tile still reads at full width with its label intact. No container-query rule needed, the grid
+            self-adjusts to the card width. */
         display: grid;
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
         gap: 8px;
         padding: 0 8px;
     }
@@ -800,27 +814,28 @@ export const heliosCardStyles = css`
         flex: 1 1 auto;
         min-height: 0;
     }
-    /*  Production chart on top: exactly 50 % of the remaining charts column. The row of batt + grid below
-        gets the other 50 %. flex 1 1 0 with min-height 0 lets each side actually share the space equally
-        instead of being pushed around by content min-height (the production chart used to absorb all
-        available space, squashing the row below). */
+    /*  Production chart on top: 50 % of the remaining charts column. Battery + grid row below: the other
+        50 %. flex 1 1 0 with a small min-height makes each side actually share the space equally when
+        there is enough vertical room, and keeps each chart readable when the card scrolls (the front card
+        is scrollable now, so a short stage with all 6 tiles stacked vertically would otherwise crush the
+        charts to invisible heights). */
     .dash-cf-card-charts > .dash-cf-card-chart
     {
         flex: 1 1 0;
-        min-height: 0;
+        min-height: 140px;
     }
     .dash-cf-card-charts-row
     {
         display: flex;
         gap: 8px;
         flex: 1 1 0;
-        min-height: 0;
+        min-height: 140px;
     }
     .dash-cf-card-charts-row > .dash-cf-card-chart
     {
         flex: 1 1 0;
         min-width: 0;
-        min-height: 0;
+        min-height: 140px;
         margin: 0;
     }
     .dash-cf-card-chart
