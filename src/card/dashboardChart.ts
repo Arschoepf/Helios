@@ -23,6 +23,7 @@ import
     computePvPowerWeighted
 } from './pv';
 import { effectiveForecastRatio, pvSourceColor } from './charts';
+import { pvNormalizeToWatts } from './pv';
 import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import { getHomeCoords } from './init';
@@ -52,36 +53,226 @@ export interface DayChartData
 }
 
 
-//Pre-compute the chart for every CoverFlow day offset and the global Y maximum across all of them. Called
-//once per dashboard re-render in `renderDashboard`, results threaded down to each `renderCoverflowCard`
-//call so they all share the same Y scale.
+function dayMaxStacked(data: DayChartData): number
+{
+    let yMax = 0;
+    const N = data.timesMs.length;
+    for (let i = 0; i < N; i++)
+    {
+        let stacked = 0;
+        for (const src of data.sources)
+        {
+            stacked += src.valuesW[i] ?? 0;
+        }
+        if (stacked > yMax) yMax = stacked;
+        const fc = data.forecastW[i] ?? 0;
+        if (fc > yMax) yMax = fc;
+    }
+    return yMax;
+}
+
+
+//Pre-compute the three per-day charts (production / battery / grid) for every CoverFlow day offset and
+//each chart's GLOBAL Y maximum across all five days. Called once per dashboard re-render so each card
+//paints on the same Y scale per chart type (production peaks of yesterday set the Y axis of today's
+//production chart, battery peaks of yesterday set the Y axis of today's battery chart, etc).
 export function buildDashCharts(host: DashboardHost, offsets: number[]): {
-    byOffset: Map<number, DayChartData>;
-    yMaxW:    number;
+    productionByOffset: Map<number, DayChartData>;
+    batteryByOffset:    Map<number, DayChartData>;
+    gridByOffset:       Map<number, DayChartData>;
+    productionYMaxW:    number;
+    batteryYMaxW:       number;
+    gridYMaxW:          number;
 }
 {
-    const byOffset = new Map<number, DayChartData>();
-    let yMaxW = 0;
+    const productionByOffset = new Map<number, DayChartData>();
+    const batteryByOffset    = new Map<number, DayChartData>();
+    const gridByOffset       = new Map<number, DayChartData>();
+    let productionYMaxW = 0;
+    let batteryYMaxW    = 0;
+    let gridYMaxW       = 0;
     for (const offset of offsets)
     {
         const win = dayWindowFor(offset);
-        const data = computeDayChart(host, offset, win.startMs, win.endMs);
-        byOffset.set(offset, data);
-        const N = data.timesMs.length;
-        for (let i = 0; i < N; i++)
+        const prod = computeDayChart(host, offset, win.startMs, win.endMs);
+        const batt = computeBatteryDayChart(host, offset, win.startMs, win.endMs);
+        const grid = computeGridDayChart(host, offset, win.startMs, win.endMs);
+        productionByOffset.set(offset, prod);
+        batteryByOffset.set(offset, batt);
+        gridByOffset.set(offset, grid);
+        productionYMaxW = Math.max(productionYMaxW, dayMaxStacked(prod));
+        batteryYMaxW    = Math.max(batteryYMaxW,    dayMaxStacked(batt));
+        gridYMaxW       = Math.max(gridYMaxW,       dayMaxStacked(grid));
+    }
+    if (productionYMaxW < 1) productionYMaxW = 1;
+    if (batteryYMaxW    < 1) batteryYMaxW    = 1;
+    if (gridYMaxW       < 1) gridYMaxW       = 1;
+    return {
+        productionByOffset, batteryByOffset, gridByOffset,
+        productionYMaxW,    batteryYMaxW,    gridYMaxW,
+    };
+}
+
+
+//Battery chart: charge area (positive part of _batteryPowerHistory) + discharge area (|negative part|).
+//Live-only for today; past + future days return an empty timeline with the forecast row zeroed out.
+function computeBatteryDayChart(
+    host:       DashboardHost,
+    dayOffset:  number,
+    dayStartMs: number,
+    dayEndMs:   number,
+): DayChartData
+{
+    const empty: DayChartData = {
+        timesMs:   [dayStartMs, dayEndMs - 1],
+        sources:   [],
+        forecastW: [0, 0],
+        dayStartMs, dayEndMs,
+    };
+    if (dayOffset !== 0 || !host._batteryPowerHistory)
+    {
+        return empty;
+    }
+    const ph = host._batteryPowerHistory;
+    if (ph.times.length < 2)
+    {
+        return empty;
+    }
+    const chargeVals:    number[] = [];
+    const dischargeVals: number[] = [];
+    const timesMs:       number[] = [];
+    for (let i = 0; i < ph.times.length; i++)
+    {
+        const tMs = ph.times[i].getTime();
+        if (tMs < dayStartMs || tMs >= dayEndMs) continue;
+        const v = ph.values[i];
+        if (!isFinite(v)) continue;
+        timesMs.push(tMs);
+        if (v >= 0)
         {
-            let stacked = 0;
-            for (const src of data.sources)
-            {
-                stacked += src.valuesW[i] ?? 0;
-            }
-            if (stacked > yMaxW) yMaxW = stacked;
-            const fc = data.forecastW[i] ?? 0;
-            if (fc > yMaxW) yMaxW = fc;
+            chargeVals.push(v);
+            dischargeVals.push(0);
+        }
+        else
+        {
+            chargeVals.push(0);
+            dischargeVals.push(-v);
         }
     }
-    if (yMaxW < 1) yMaxW = 1;
-    return { byOffset, yMaxW };
+    if (timesMs.length < 2)
+    {
+        return empty;
+    }
+    //charge tile uses --energy-battery-OUT-color per the user's alpha.67 swap, discharge tile uses
+    //--energy-battery-IN-color. The chart matches the tiles.
+    return {
+        timesMs,
+        sources: [
+            { id: 'charge',    color: 'var(--energy-battery-out-color, #1b6c75)', valuesW: chargeVals    },
+            { id: 'discharge', color: 'var(--energy-battery-in-color, #4caf50)',  valuesW: dischargeVals },
+        ],
+        forecastW: new Array(timesMs.length).fill(0),
+        dayStartMs, dayEndMs,
+    };
+}
+
+
+//Grid chart: import area + export area, aggregated across every configured grid entity. Each entity's
+//samples are pulled from _gridImportSamples / _gridExportSamples in NATIVE unit, converted to W via the
+//entity's recorded unit, then union-merged + interpolated onto a common timeline. Live-only for today.
+function computeGridDayChart(
+    host:       DashboardHost,
+    dayOffset:  number,
+    dayStartMs: number,
+    dayEndMs:   number,
+): DayChartData
+{
+    const empty: DayChartData = {
+        timesMs:   [dayStartMs, dayEndMs - 1],
+        sources:   [],
+        forecastW: [0, 0],
+        dayStartMs, dayEndMs,
+    };
+    if (dayOffset !== 0)
+    {
+        return empty;
+    }
+    const importSamples = aggregateGridSamples(host._gridImportSamples, host._gridImportUnits, dayStartMs, dayEndMs);
+    const exportSamples = aggregateGridSamples(host._gridExportSamples, host._gridExportUnits, dayStartMs, dayEndMs);
+    if (importSamples.length < 2 && exportSamples.length < 2)
+    {
+        return empty;
+    }
+    //Union timeline across both directions so the stacked top correctly sums them at every instant.
+    const set = new Set<number>();
+    for (const s of importSamples) set.add(s.tMs);
+    for (const s of exportSamples) set.add(s.tMs);
+    const timesMs = Array.from(set).sort((a, b) => a - b);
+    const importInterp = timesMs.map(t => interpSamplesAtMs(importSamples, t));
+    const exportInterp = timesMs.map(t => interpSamplesAtMs(exportSamples, t));
+    return {
+        timesMs,
+        sources: [
+            { id: 'import', color: 'var(--energy-grid-consumption-color, #488fc2)', valuesW: importInterp },
+            { id: 'export', color: 'var(--energy-grid-return-color, #8353d1)',      valuesW: exportInterp },
+        ],
+        forecastW: new Array(timesMs.length).fill(0),
+        dayStartMs, dayEndMs,
+    };
+}
+
+
+//Aggregate a per-entity sample map (entity id -> {t,v}[]) into a single chronologically-sorted RawSample
+//array in W. Each entity's samples are filtered to the day window and converted to W via its recorded
+//unit. Multi-entity grids sum the contributions at the union timeline.
+function aggregateGridSamples(
+    samplesByEntity: Map<string, Array<{ t: number; v: number }>>,
+    unitsByEntity:   Map<string, string>,
+    dayStartMs:      number,
+    dayEndMs:        number,
+): RawSample[]
+{
+    if (samplesByEntity.size === 0)
+    {
+        return [];
+    }
+    const perEntity: Array<RawSample[]> = [];
+    for (const [entity, samples] of samplesByEntity)
+    {
+        const unit = unitsByEntity.get(entity) ?? '';
+        const raw: RawSample[] = [];
+        for (const s of samples)
+        {
+            if (s.t < dayStartMs || s.t >= dayEndMs) continue;
+            const w = pvNormalizeToWatts(s.v, unit);
+            if (!isFinite(w)) continue;
+            raw.push({ tMs: s.t, w: Math.max(0, w) });
+        }
+        if (raw.length >= 2)
+        {
+            perEntity.push(raw);
+        }
+    }
+    if (perEntity.length === 0) return [];
+    if (perEntity.length === 1) return perEntity[0];
+    //Multi-entity: union timestamps + sum interpolated values at each.
+    const set = new Set<number>();
+    for (const series of perEntity)
+    {
+        for (const s of series) set.add(s.tMs);
+    }
+    const times = Array.from(set).sort((a, b) => a - b);
+    const out: RawSample[] = [];
+    for (const t of times)
+    {
+        let sum = 0;
+        for (const series of perEntity)
+        {
+            sum += interpSamplesAtMs(series, t);
+        }
+        out.push({ tMs: t, w: sum });
+    }
+    return out;
 }
 
 
@@ -444,7 +635,7 @@ function smoothPathD(coords: Array<[number, number]>): string
 
 const CHART_BOTTOM_PAD = 6;
 const CHART_TOP_PAD    = 4;
-export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateResult
+export function renderDayChartSVG(data: DayChartData, yMaxW: number, hoverFrac: number | null = null): TemplateResult
 {
     const W = 100;
     const H = 100;
@@ -520,6 +711,53 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
         `;
     }
 
+    //Hover spheres: one dot per stacked-layer top + one for the forecast curve at the cursor X. Each dot
+    //tracks the value at the cursor time so the user can read the per-source breakdown visually too.
+    let hoverDots: TemplateResult | null = null;
+    if (hoverFrac !== null)
+    {
+        const bracket = bracketHover(data, hoverFrac);
+        const tMs     = bracket.tMs;
+        const i0      = bracket.i0;
+        const i1      = bracket.i1;
+        const f       = bracket.f;
+        const cxPct   = xPctOf(tMs);
+        const dots: TemplateResult[] = [];
+        let stacked = 0;
+        for (const src of data.sources)
+        {
+            const v = (src.valuesW[i0] ?? 0) * (1 - f) + (src.valuesW[i1] ?? 0) * f;
+            stacked += v;
+            dots.push(svg`
+                <circle
+                    cx="${cxPct.toFixed(2)}"
+                    cy="${yPctOf(stacked).toFixed(2)}"
+                    r="1.5"
+                    fill="${src.color}"
+                    stroke="var(--ha-card-background, #ffffff)"
+                    stroke-width="0.6"
+                    vector-effect="non-scaling-stroke"
+                ></circle>
+            `);
+        }
+        const fcV = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
+        if (data.forecastW.length >= 2)
+        {
+            dots.push(svg`
+                <circle
+                    cx="${cxPct.toFixed(2)}"
+                    cy="${yPctOf(fcV).toFixed(2)}"
+                    r="1.5"
+                    fill="var(--ha-card-background, #ffffff)"
+                    stroke="color-mix(in srgb, var(--energy-solar-color, #ff9800) 75%, var(--primary-text-color, #000) 25%)"
+                    stroke-width="0.9"
+                    vector-effect="non-scaling-stroke"
+                ></circle>
+            `);
+        }
+        hoverDots = svg`${dots}`;
+    }
+
     return html`
         <svg
             class="dash-cf-card-chart-svg"
@@ -529,6 +767,7 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
         >
             ${areaPaths}
             ${forecastPath}
+            ${hoverDots}
         </svg>
     `;
 }

@@ -473,31 +473,26 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         min-height: 0;
-        perspective: 1200px;
-        /*  Stage is the SIZE-typed container query target the CoverFlow cards resolve cqw/cqh against.
-            Without this, cqh inside the cards bound to .ha-card height (the outer helios-card container)
-            instead of the stage, and on a full-page or phone view the cards exceeded the stage by hundreds
-            of pixels. With container-type: size, cqw / cqh on the cards both resolve to the stage's actual
-            inline + block dimensions. */
-        container-type: size;
-        container-name: dash-stage;
-        /*  No transform-style: preserve-3d here on purpose: with the default flat value, the children get the
-            perspective rendering from their parent but z-index still drives their stacking order, so the front
-            card always sits cleanly on top of the rotated siblings. Preserve-3d would override z-index with the
-            actual 3D position which made the back cards bleed through the centre on narrow viewports. */
+        /*  Perspective bumped to 2400 px so the 3D rotation of the back cards reads as subtle depth instead
+            of an aggressive zoom. At 1200 px the bigger alpha.68 cards were rasterised to a low-resolution
+            3D texture and re-upscaled, the user saw the whole stage as 'blurry'. The container-type: size
+            opt-in alpha.68 added is gone too: it created an extra containment boundary on top of the
+            perspective that compounded the rasterisation hit. Cards now size via plain percentages of the
+            stage (the closest positioned ancestor). */
+        perspective: 2400px;
     }
     .dash-cf-card
     {
         position: absolute;
         top: 50%;
         left: 50%;
-        /*  Card sized inside the .dash-cf-stage container (container-type: size). cqh = % of stage height,
-            cqw = % of stage width. The card aims for 90 cqh tall (5 % breathing room top + bottom), width
-            derives from the height via the aspect ratio (60 cqh on desktop). The 82 cqw cap kicks in on
-            tall narrow stages (phone portrait) where the height-derived width would otherwise overflow
-            the stage's width. */
-        width: min(82cqw, calc(90cqh * 4 / 6));
-        max-height: 90cqh;
+        /*  Card sized via plain percentages of the closest positioned ancestor (.dash-cf-stage). Height
+            anchors at 90 % so 5 % of the stage sits above + below the card, width derives from the height
+            via the aspect ratio, max-width 82 % caps it on tall narrow stages (phone portrait) where the
+            height-derived width would otherwise overflow horizontally. No container-type opt-in needed,
+            which keeps the perspective rasterisation sharp. */
+        height: 90%;
+        max-width: 82%;
         aspect-ratio: 4 / 6;
         border-radius: 18px;
         /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
@@ -649,14 +644,10 @@ export const heliosCardStyles = css`
     @container helios-card (max-width: 1000px)
     {
         .dash-cf-card-stats { grid-template-columns: 1fr; }
-        /*  Cards get taller in narrow mode so the 4 stacked tiles + chart placeholder both fit. The stage is
-            still ~448 px tall (8 rows x 56 px) so 4/7 is the comfortable ceiling. */
+        /*  Cards get a taller aspect ratio in narrow mode so the stacked tiles + chart slots both fit.
+            Mini-tile sizing is intentionally left alone (the user's directive), only the card shape
+            changes. */
         .dash-cf-card        { aspect-ratio: 4 / 7; }
-        /*  Tighter tile padding + smaller icon badge to keep each stacked tile compact so the chart slot
-            below still has visible height. */
-        .dash-cf-card-stat   { padding: 8px 10px; gap: 8px; }
-        .dash-cf-card-stat-icon { width: 28px; height: 28px; }
-        .dash-cf-card-stat-icon ha-icon { --mdc-icon-size: 16px; }
     }
     @container helios-card (max-width: 600px)
     {
@@ -802,17 +793,47 @@ export const heliosCardStyles = css`
         intentionally empty for now (chart implementation is the next iteration), the placeholder still
         renders the framed area with the same tile recipe as the stat tiles so the empty card already reads
         as "this is where the chart will go". */
+    /*  Charts area: a flex column inside the card holding the production chart (full width) at top and a
+        side-by-side battery + grid chart row below. Both subcharts only render when their entities are
+        configured in the HA Energy dashboard. */
+    .dash-cf-card-charts
+    {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 0 8px 8px;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    .dash-cf-card-charts-row
+    {
+        display: flex;
+        gap: 8px;
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+    .dash-cf-card-charts-row > .dash-cf-card-chart
+    {
+        flex: 1 1 0;
+        min-width: 0;
+        margin: 0;
+    }
     .dash-cf-card-chart
     {
         flex: 1 1 auto;
         min-height: 0;
-        margin: 8px;
         border-radius: 16px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
         overflow: hidden;
         display: flex;
         flex-direction: column;
+    }
+    /*  Narrow stage (section view): stack the battery + grid row vertically so each subchart still has a
+        readable width. */
+    @container helios-card (max-width: 1000px)
+    {
+        .dash-cf-card-charts-row { flex-direction: column; }
     }
     /*  Chart header: title + live W value on the left, mdi:lightning-bolt badge on the right. Same recipe
         as the HA tile-card power-curve cards the user referenced. The value below the title swaps between
@@ -992,18 +1013,24 @@ export const heliosCardStyles = css`
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
         pointer-events: none;
     }
-    /*  Open animation: the SVG grows from the bottom edge upward, replaying the entering reveal in sync
-        with the rest of the CoverFlow card. Anchors transform-origin to the bottom so the W=0 baseline
-        does not move during the scaleY, only the peaks reach up. */
+    /*  Per-mount grow animation: every time the chart SVG mounts (which now only happens for the FRONT
+        card per the lazy-render path) the curve scales from the bottom upward to full height. Anchors
+        transform-origin to the bottom so the W=0 baseline does not move during the scaleY, only the peaks
+        reach up. Replays every time the user navigates to a different day (the SVG re-mounts on the
+        newly-active card). */
     @keyframes dash-cf-chart-grow
     {
         from { transform: scaleY(0); }
         to   { transform: scaleY(1); }
     }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card-chart-svg
+    .dash-cf-card-chart-svg
     {
         transform-origin: bottom;
-        animation: dash-cf-chart-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) 280ms both;
+        animation: dash-cf-chart-grow 600ms cubic-bezier(0.22, 1, 0.36, 1) 0ms both;
+    }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card-chart-svg
+    {
+        animation-delay: 280ms;
     }
     /*  Forecast trace: thin dashed line in the same solar palette as the stacked areas, slightly darker so
         it reads as a separate trace on top of the fills. The vector-effect non-scaling-stroke attribute is

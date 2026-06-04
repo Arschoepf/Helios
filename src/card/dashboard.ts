@@ -71,6 +71,12 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //limited to the front card so the mid / back cards never compete for the cursor (they sit behind the
     //front card visually anyway).
     _dashChartHoverFrac:   number | null;
+    //Per-entity grid sample buffers populated by refreshGrid (in grid.ts) so the dashboard's grid chart
+    //can read raw import / export samples for today's curve. Maps are keyed by HA entity id.
+    readonly _gridImportSamples: Map<string, Array<{ t: number; v: number }>>;
+    readonly _gridExportSamples: Map<string, Array<{ t: number; v: number }>>;
+    readonly _gridImportUnits:   Map<string, string>;
+    readonly _gridExportUnits:   Map<string, string>;
 }
 
 
@@ -176,7 +182,14 @@ export function renderDashboard(host: DashboardHost): TemplateResult
             >
                 <div class="dash-cf-stage ${animClass}">
                     ${DAY_OFFSETS.map(offset =>
-                        renderCoverflowCard(host, offset, active, charts.byOffset.get(offset)!, charts.yMaxW)
+                        renderCoverflowCard(host, offset, active, {
+                            production: charts.productionByOffset.get(offset)!,
+                            battery:    charts.batteryByOffset.get(offset)!,
+                            grid:       charts.gridByOffset.get(offset)!,
+                            yMaxProd:   charts.productionYMaxW,
+                            yMaxBatt:   charts.batteryYMaxW,
+                            yMaxGrid:   charts.gridYMaxW,
+                        })
                     )}
                 </div>
             </div>
@@ -356,12 +369,21 @@ function computeDayStats(host: DashboardHost, dayOffset: number): {
 //currently active offset: 0 = front, ±1 = mid (rotated 35°), ±2 = back (rotated 50°). Z-index ordering keeps the
 //front card on top of its neighbours regardless of stacking order in the DOM. Opacity fades the back cards so
 //they read as background context rather than competing for the user's attention.
+interface CardChartBundle
+{
+    production: DayChartData;
+    battery:    DayChartData;
+    grid:       DayChartData;
+    yMaxProd:   number;
+    yMaxBatt:   number;
+    yMaxGrid:   number;
+}
+
 function renderCoverflowCard(
     host:         DashboardHost,
     cardOffset:   number,
     activeOffset: number,
-    chartData:    DayChartData,
-    chartYMaxW:   number,
+    charts:       CardChartBundle,
 ): TemplateResult
 {
     const delta    = cardOffset - activeOffset;
@@ -421,6 +443,8 @@ function renderCoverflowCard(
     //Per-day stats for the production / forecast block.
     const stats = computeDayStats(host, cardOffset);
     const weatherIcon = cloudCoverIcon(stats.avgCloud);
+    const chartData = charts.production;
+    const chartYMaxW = charts.yMaxProd;
 
     //Battery charged / discharged today, from computeBatteryToday for the live day. Past / future cards keep
     //the tiles visible with 0 kWh values until we add an LTS path for historical battery flow, so the four
@@ -522,7 +546,31 @@ function renderCoverflowCard(
                 ${renderGridTiles(host, cardOffset)}
             </section>
 
-            ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW, stats.producedKwh)}
+            <div class="dash-cf-card-charts">
+                ${renderCardChartBlock(host, cardOffset, activeOffset, chartData, chartYMaxW, 'production', {
+                    title:        'Production journalière',
+                    icon:         'mdi:sun-clock-outline',
+                    headlineKwh:  stats.producedKwh,
+                })}
+                ${hasBatteryConfigured(host) || hasGridImport(host) || hasGridExport(host) ? html`
+                    <div class="dash-cf-card-charts-row">
+                        ${hasBatteryConfigured(host) ? renderCardChartBlock(
+                            host, cardOffset, activeOffset, charts.battery, charts.yMaxBatt, 'battery', {
+                                title:        'Batterie',
+                                icon:         'mdi:home-battery-outline',
+                                headlineKwh:  null,
+                            }
+                        ) : nothing}
+                        ${hasGridImport(host) || hasGridExport(host) ? renderCardChartBlock(
+                            host, cardOffset, activeOffset, charts.grid, charts.yMaxGrid, 'grid', {
+                                title:        'Réseau',
+                                icon:         'mdi:transmission-tower',
+                                headlineKwh:  null,
+                            }
+                        ) : nothing}
+                    </div>
+                ` : nothing}
+            </div>
         </article>
     `;
 }
@@ -612,13 +660,21 @@ function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResul
 //hover at a given X reads the interpolated stacked W at that X; cursor off-chart reverts to the day's
 //peak. Mid / back cards are static (no hover handlers, just the day's peak value in the header) since the
 //cursor naturally lives on the front card anyway.
+interface ChartBlockMeta
+{
+    title:       string;
+    icon:        string;
+    headlineKwh: number | null;
+}
+
 function renderCardChartBlock(
     host:         DashboardHost,
     cardOffset:   number,
     activeOffset: number,
     data:         DayChartData,
     yMaxW:        number,
-    producedKwh:  number,
+    kind:         'production' | 'battery' | 'grid',
+    meta:         ChartBlockMeta,
 ): TemplateResult
 {
     const isFront = cardOffset === activeOffset;
@@ -671,12 +727,18 @@ function renderCardChartBlock(
         const ffc = formatPowerForChart(host.hass, fcW);
         tooltipRows.push({ label: 'Prévision', color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
     }
+    else if (meta.headlineKwh !== null)
+    {
+        //Default at-rest value (production chart): the day's total produced kWh.
+        displayValue = formatLocalisedNumber(host.hass, meta.headlineKwh, 1);
+        displayUnit  = 'kWh';
+    }
     else
     {
-        //Default at-rest value: the day's total produced kWh, formatted to one decimal so it matches the
-        //Production tile to the watt-hour.
-        displayValue = formatLocalisedNumber(host.hass, producedKwh, 1);
-        displayUnit  = 'kWh';
+        //Default at-rest value (battery / grid charts): peak power across the day.
+        const fp = formatPowerForChart(host.hass, peakOfDay(data));
+        displayValue = fp.value;
+        displayUnit  = fp.unit;
     }
 
     //Tooltip placement: when the cursor is in the left half of the plot the tooltip sits on the RIGHT of
@@ -684,17 +746,20 @@ function renderCardChartBlock(
     //and never covers the curve on the side the cursor is moving toward.
     const tooltipOnRight = hoverPct !== null && hoverPct < 50;
 
+    //Lazy-render: the SVG is only mounted for the FRONT card. Non-front cards show a header but no curve.
+    //When the user navigates to a different day, that card becomes the front and its SVG mounts, which
+    //fires the dash-cf-chart-grow CSS animation (anchored to mount via animation-fill-mode: both).
     return html`
-        <section class="dash-cf-card-chart" aria-hidden="${!isFront}">
+        <section class="dash-cf-card-chart dash-cf-card-chart-${kind}" aria-hidden="${!isFront}">
             <header class="dash-cf-card-chart-header">
                 <div class="dash-cf-card-chart-meta">
-                    <span class="dash-cf-card-chart-title">Production journalière</span>
+                    <span class="dash-cf-card-chart-title">${meta.title}</span>
                     <span class="dash-cf-card-chart-value">
                         ${displayValue}<span class="dash-cf-card-chart-unit"> ${displayUnit}</span>
                     </span>
                 </div>
                 <span class="dash-cf-card-chart-icon" aria-hidden="true">
-                    <ha-icon icon="mdi:sun-clock-outline"></ha-icon>
+                    <ha-icon icon="${meta.icon}"></ha-icon>
                 </span>
             </header>
             <div
@@ -702,7 +767,7 @@ function renderCardChartBlock(
                 @pointermove="${isFront ? (e: PointerEvent) => handleChartHover(host, e) : null}"
                 @pointerleave="${isFront ? () => handleChartHoverLeave(host) : null}"
             >
-                ${renderDayChartSVG(data, yMaxW)}
+                ${isFront ? renderDayChartSVG(data, yMaxW, host._dashChartHoverFrac) : nothing}
                 ${hoverPct !== null ? html`
                     <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%">
                         ${hoverTime !== null ? html`
