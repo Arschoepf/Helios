@@ -27,7 +27,8 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, bracketHover, type DayChartData } from './dashboardChart';
+import { buildDashCharts, renderDayChartSVG, peakOfDay, stackedAtIndex, bracketHover, computeHoverDots, type DayChartData } from './dashboardChart';
+import { fetchKwhChangeForRange } from './energy-prefs';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -77,6 +78,10 @@ export interface DashboardHost extends ChartHost, BatteryHost
     readonly _gridExportSamples: Map<string, Array<{ t: number; v: number }>>;
     readonly _gridImportUnits:   Map<string, string>;
     readonly _gridExportUnits:   Map<string, string>;
+    //Map of past-day kWh totals, keyed by `${offset}|${kind}` (kind one of solar / gridImport / gridExport
+    /// battCharge / battDischarge). Populated by `fetchDashHistoricalTotals` when the dashboard opens so
+    //the past-day tiles (Hier / Avant-hier) show the real recorder totals instead of a placeholder 0.
+    _dashHistoricalTotals?: Map<string, number>;
 }
 
 
@@ -395,7 +400,9 @@ function renderCoverflowCard(
     //front card layout).
     const txPct    = sign * (absDelta === 1 ? 32 : absDelta === 2 ? 50 : 0);
     const scale    = absDelta === 0 ? 1 : absDelta === 1 ? 0.74 : 0.58;
-    const rotY     = sign * (absDelta === 1 ? 22 : absDelta === 2 ? 38 : 0);
+    //rotateY removed: any 3D rotation triggered the GPU to rasterise the whole CoverFlow stage into a
+    //low-resolution 3D texture (the whole dashboard appeared 'flou' per the user). 2D transforms only.
+    const rotY     = 0;
     const zIdx     = 10 - absDelta;
     const opacity  = 1;
     const isFront  = absDelta === 0;
@@ -446,12 +453,15 @@ function renderCoverflowCard(
     const chartData = charts.production;
     const chartYMaxW = charts.yMaxProd;
 
-    //Battery charged / discharged today, from computeBatteryToday for the live day. Past / future cards keep
-    //the tiles visible with 0 kWh values until we add an LTS path for historical battery flow, so the four
-    //tile slots are always present and the card layout stays constant across day offsets.
+    //Battery charged / discharged today, from computeBatteryToday for the live day. Past days read from
+    //the historical-totals map populated by fetchDashHistoricalTotals when the dashboard opens.
     const battery = cardOffset === 0
         ? computeBatteryToday(host as unknown as BatteryHost)
-        : { socNow: null, chargedKwh: 0, dischargedKwh: 0 };
+        : {
+            socNow:        null,
+            chargedKwh:    host._dashHistoricalTotals?.get(`${cardOffset}|battCharge`)    ?? 0,
+            dischargedKwh: host._dashHistoricalTotals?.get(`${cardOffset}|battDischarge`) ?? 0,
+        };
 
     return html`
         <article
@@ -619,8 +629,12 @@ function renderGridTiles(host: DashboardHost, cardOffset: number): TemplateResul
 
     //Today's grid energy from the recorder day-totals refresh that energy-prefs.ts maintains. Past + future
     //days fall back to 0 the same way the battery tiles do, an LTS-backed historical path will come later.
-    const importedKwh = cardOffset === 0 ? (host._haGridImportTodayKwh ?? 0) : 0;
-    const exportedKwh = cardOffset === 0 ? (host._haGridExportTodayKwh ?? 0) : 0;
+    const importedKwh = cardOffset === 0
+        ? (host._haGridImportTodayKwh ?? 0)
+        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridImport`) ?? 0);
+    const exportedKwh = cardOffset === 0
+        ? (host._haGridExportTodayKwh ?? 0)
+        : (host._dashHistoricalTotals?.get(`${cardOffset}|gridExport`) ?? 0);
 
     const soloClass = (hasIn && !hasOut) || (!hasIn && hasOut) ? ' dash-cf-card-stat-grid-solo' : '';
 
@@ -723,9 +737,14 @@ function renderCardChartBlock(
             const fp = formatPowerForChart(host.hass, sw);
             tooltipRows.push({ label: name, color: src.color, valueStr: fp.value, unitStr: fp.unit, isDashed: false });
         }
-        const fcW = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
-        const ffc = formatPowerForChart(host.hass, fcW);
-        tooltipRows.push({ label: 'Prévision', color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
+        //Prévision row only on the PRODUCTION chart. Battery + grid charts have no forecast (they show
+        //actuals only) so the row would be a fake zero line that adds visual noise.
+        if (kind === 'production')
+        {
+            const fcW = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
+            const ffc = formatPowerForChart(host.hass, fcW);
+            tooltipRows.push({ label: 'Prévision', color: 'var(--energy-solar-color, #ff9800)', valueStr: ffc.value, unitStr: ffc.unit, isDashed: true });
+        }
     }
     else if (meta.headlineKwh !== null)
     {
@@ -767,7 +786,16 @@ function renderCardChartBlock(
                 @pointermove="${isFront ? (e: PointerEvent) => handleChartHover(host, e) : null}"
                 @pointerleave="${isFront ? () => handleChartHoverLeave(host) : null}"
             >
-                ${isFront ? renderDayChartSVG(data, yMaxW, host._dashChartHoverFrac) : nothing}
+                ${isFront ? renderDayChartSVG(data, yMaxW) : nothing}
+                ${isFront && host._dashChartHoverFrac !== null
+                    ? computeHoverDots(data, yMaxW, host._dashChartHoverFrac, kind === 'production').map(dot => html`
+                        <span
+                            class="dash-cf-card-chart-dot ${dot.isForecast ? 'is-forecast' : ''}"
+                            style="left: ${dot.leftPct.toFixed(2)}%; top: ${dot.topPct.toFixed(2)}%; ${dot.isForecast ? `border-color: ${dot.color};` : `background: ${dot.color};`}"
+                        ></span>
+                    `)
+                    : nothing
+                }
                 ${hoverPct !== null ? html`
                     <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%">
                         ${hoverTime !== null ? html`
@@ -2419,6 +2447,50 @@ export function renderDashBatterySection(
 //click anywhere on the detail panel (on → off). The engine
 //handles the eased camera transition; we just flip the state
 //and let the CSS .detail-active class fade out the overlays.
+//Past-day kWh totals fetch: queries the recorder for each past offset's grid import / grid export /
+//battery charge / battery discharge total, fills `host._dashHistoricalTotals` keyed by
+//`${offset}|${kind}`. Cached server-side via `fetchKwhChangeForRange`, so a remount inside the cache
+//window costs nothing.
+async function fetchDashHistoricalTotals(host: DashboardHost): Promise<void>
+{
+    const defaults = host._energyDefaults;
+    if (!defaults)
+    {
+        return;
+    }
+    const out: Map<string, number> = host._dashHistoricalTotals ?? new Map<string, number>();
+    const tasks: Promise<void>[] = [];
+    for (const offset of [-2, -1])
+    {
+        const startD = new Date();
+        startD.setHours(0, 0, 0, 0);
+        startD.setDate(startD.getDate() + offset);
+        const endD = new Date(startD);
+        endD.setDate(endD.getDate() + 1);
+        const startMs = startD.getTime();
+        const endMs   = endD.getTime();
+        const slots: Array<{ key: string; ids: string[] }> = [
+            { key: 'gridImport',    ids: defaults.gridStatEnergyFroms    },
+            { key: 'gridExport',    ids: defaults.gridStatEnergyTos      },
+            { key: 'battCharge',    ids: defaults.batteryStatEnergyTos   },
+            { key: 'battDischarge', ids: defaults.batteryStatEnergyFroms },
+        ];
+        for (const slot of slots)
+        {
+            tasks.push(
+                fetchKwhChangeForRange(host, slot.ids, startMs, endMs).then(v =>
+                {
+                    if (v !== null) out.set(`${offset}|${slot.key}`, v);
+                })
+            );
+        }
+    }
+    await Promise.all(tasks);
+    host._dashHistoricalTotals = out;
+    (host as unknown as { requestUpdate(): void }).requestUpdate();
+}
+
+
 export function handleHomeClick(host: DashboardHost, e: Event): void
 {
     //Stop propagation so the underlying map doesn't also process the click as a pan / drag start, and so nested overlay layers don't double-handle
@@ -2449,6 +2521,9 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
         host._dashAnimTimer = undefined;
         (host as unknown as { requestUpdate(): void }).requestUpdate();
     }, 1000);
+    //Kick the past-day kWh fetch so the Hier / Avant-hier cards swap their grid + battery 0.0 kWh
+    //placeholders for real recorder totals as soon as the WS round-trip lands.
+    fetchDashHistoricalTotals(host).catch(() => {});
     host._engine?.setDetailMode(true);
     startDashCountUpLoop(host);
 }

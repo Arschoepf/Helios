@@ -473,13 +473,10 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         min-height: 0;
-        /*  Perspective bumped to 2400 px so the 3D rotation of the back cards reads as subtle depth instead
-            of an aggressive zoom. At 1200 px the bigger alpha.68 cards were rasterised to a low-resolution
-            3D texture and re-upscaled, the user saw the whole stage as 'blurry'. The container-type: size
-            opt-in alpha.68 added is gone too: it created an extra containment boundary on top of the
-            perspective that compounded the rasterisation hit. Cards now size via plain percentages of the
-            stage (the closest positioned ancestor). */
-        perspective: 2400px;
+        /*  No perspective: the 3D rotateY on the back cards rasterised the whole stage into a low-res 3D
+            texture even at 2400 px perspective. The CoverFlow fan now uses 2D transforms only (translate
+            + scale), no rotateY. Loses the 3D tilt feel on the side cards but every card renders at native
+            pixel resolution. */
     }
     .dash-cf-card
     {
@@ -513,9 +510,7 @@ export const heliosCardStyles = css`
             transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
             opacity   420ms cubic-bezier(0.22, 1, 0.36, 1);
         transform-origin: center center;
-        backface-visibility: hidden;
         overflow: hidden;
-        will-change: transform, opacity;
     }
     .dash-cf-card-front
     {
@@ -801,7 +796,11 @@ export const heliosCardStyles = css`
         display: flex;
         flex-direction: column;
         gap: 8px;
-        margin: 0 8px 8px;
+        /*  8 px margin on every side so the charts block has the same outer gutter as the bandeau + stats
+            section. The top margin closes the gap between the last mini-tile row and the production chart
+            that was missing before (the stats grid had no padding-bottom, so the chart sat flush against
+            the tiles). */
+        margin: 8px;
         flex: 1 1 auto;
         min-height: 0;
     }
@@ -995,6 +994,27 @@ export const heliosCardStyles = css`
 
     /*  Hover time pill anchored to the top of the cursor line, centred horizontally on it. Same pill recipe
         as the day chip in the bandeau so the two read as the same family. */
+    /*  Hover dot on each curve: absolute-positioned HTML span (not an SVG circle) so it stays perfectly
+        circular regardless of the chart SVG's non-uniform stretch. One dot per stacked source top in the
+        source colour + one hollow dot on the forecast curve in the dashed-line palette. */
+    .dash-cf-card-chart-dot
+    {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 3;
+        box-shadow: 0 0 0 1.5px var(--ha-card-background, #1c1c1c);
+    }
+    .dash-cf-card-chart-dot.is-forecast
+    {
+        background: var(--ha-card-background, #1c1c1c);
+        border: 1.5px solid;
+        box-shadow: none;
+    }
+
     .dash-cf-card-chart-cursor-time
     {
         position: absolute;
@@ -1163,23 +1183,23 @@ export const heliosCardStyles = css`
     }
     @keyframes dash-cf-enter-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1);    opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 1; }
     }
     @keyframes dash-cf-enter-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1);    opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.58); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.58); opacity: 1; }
     }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
@@ -1189,23 +1209,23 @@ export const heliosCardStyles = css`
 
     @keyframes dash-cf-exit-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.58); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 0; }
     }
     @keyframes dash-cf-exit-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.58); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1);    opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1);    opacity: 0; }
     }
     @keyframes dash-cf-exit-front
     {

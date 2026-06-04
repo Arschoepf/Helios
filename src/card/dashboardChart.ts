@@ -50,6 +50,10 @@ export interface DayChartData
     //timestamps (so an irregular timeline still spreads correctly across the chart width).
     dayStartMs: number;
     dayEndMs:   number;
+    //Boundary between actuals and the not-yet-happened part of the day. For today this is NOW (the user
+    //sees actuals up to this point + a dashed 0 line beyond), for past days it equals dayEndMs (the whole
+    //day is actuals), for future days it equals dayStartMs (the whole day is future).
+    liveEndMs:  number;
 }
 
 
@@ -127,7 +131,7 @@ function computeBatteryDayChart(
         timesMs:   [dayStartMs, dayEndMs - 1],
         sources:   [],
         forecastW: [0, 0],
-        dayStartMs, dayEndMs,
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
     if (dayOffset !== 0 || !host._batteryPowerHistory)
     {
@@ -172,7 +176,7 @@ function computeBatteryDayChart(
             { id: 'discharge', color: 'var(--energy-battery-in-color, #4caf50)',  valuesW: dischargeVals },
         ],
         forecastW: new Array(timesMs.length).fill(0),
-        dayStartMs, dayEndMs,
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
 }
 
@@ -191,7 +195,7 @@ function computeGridDayChart(
         timesMs:   [dayStartMs, dayEndMs - 1],
         sources:   [],
         forecastW: [0, 0],
-        dayStartMs, dayEndMs,
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
     if (dayOffset !== 0)
     {
@@ -217,7 +221,7 @@ function computeGridDayChart(
             { id: 'export', color: 'var(--energy-grid-return-color, #8353d1)',      valuesW: exportInterp },
         ],
         forecastW: new Array(timesMs.length).fill(0),
-        dayStartMs, dayEndMs,
+        dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs),
     };
 }
 
@@ -493,10 +497,36 @@ function computeDayChart(
         sources = sources.map(s => ({ ...s, valuesW: keepIdx.map(i => s.valuesW[i] ?? 0) }));
     }
 
+    //Pad LEFT so the curve always starts at the dayStart edge of the chart frame (so the area does not
+    //leave a gap between sunrise and the chart's left edge). Pad RIGHT only up to liveEndMs (= NOW for
+    //today), leaving the post-NOW window for the dashed future-baseline line; this stops the area from
+    //extending flat at "last known value" to the right edge on a live install.
+    const liveEnd = liveEndMsFor(dayStartMs, dayEndMs);
+    if (timesMs.length === 0 || timesMs[0] > dayStartMs)
+    {
+        timesMs.unshift(dayStartMs);
+        sources = sources.map(s => ({ ...s, valuesW: [s.valuesW[0] ?? 0, ...s.valuesW] }));
+    }
+    const padEnd = liveEnd - 1;
+    if (timesMs.length > 0 && timesMs[timesMs.length - 1] < padEnd)
+    {
+        timesMs.push(padEnd);
+        sources = sources.map(s => ({ ...s, valuesW: [...s.valuesW, s.valuesW[s.valuesW.length - 1] ?? 0] }));
+    }
+
     //Forecast interpolated onto the same timeline.
     const forecastW = computeForecastOnTimes(host, timesMs, dayStartMs, dayEndMs);
 
-    return { timesMs, sources, forecastW, dayStartMs, dayEndMs };
+    return { timesMs, sources, forecastW, dayStartMs, dayEndMs, liveEndMs: liveEndMsFor(dayStartMs, dayEndMs) };
+}
+
+
+function liveEndMsFor(dayStartMs: number, dayEndMs: number): number
+{
+    const now = Date.now();
+    if (now < dayStartMs) return dayStartMs;
+    if (now >= dayEndMs)  return dayEndMs;
+    return now;
 }
 
 
@@ -635,7 +665,7 @@ function smoothPathD(coords: Array<[number, number]>): string
 
 const CHART_BOTTOM_PAD = 6;
 const CHART_TOP_PAD    = 4;
-export function renderDayChartSVG(data: DayChartData, yMaxW: number, hoverFrac: number | null = null): TemplateResult
+export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateResult
 {
     const W = 100;
     const H = 100;
@@ -711,51 +741,25 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number, hoverFrac: 
         `;
     }
 
-    //Hover spheres: one dot per stacked-layer top + one for the forecast curve at the cursor X. Each dot
-    //tracks the value at the cursor time so the user can read the per-source breakdown visually too.
-    let hoverDots: TemplateResult | null = null;
-    if (hoverFrac !== null)
+    //Dashed horizontal line at W=0 over the part of the day that has not happened yet (NOW to dayEnd for
+    //today, the entire day window for future days, nothing for past days). Tells the user "no actual data
+    //here yet". For the production chart the forecast dashed line keeps reading on top of this baseline.
+    let futurePath: TemplateResult | null = null;
+    if (data.liveEndMs < data.dayEndMs)
     {
-        const bracket = bracketHover(data, hoverFrac);
-        const tMs     = bracket.tMs;
-        const i0      = bracket.i0;
-        const i1      = bracket.i1;
-        const f       = bracket.f;
-        const cxPct   = xPctOf(tMs);
-        const dots: TemplateResult[] = [];
-        let stacked = 0;
-        for (const src of data.sources)
-        {
-            const v = (src.valuesW[i0] ?? 0) * (1 - f) + (src.valuesW[i1] ?? 0) * f;
-            stacked += v;
-            dots.push(svg`
-                <circle
-                    cx="${cxPct.toFixed(2)}"
-                    cy="${yPctOf(stacked).toFixed(2)}"
-                    r="1.5"
-                    fill="${src.color}"
-                    stroke="var(--ha-card-background, #ffffff)"
-                    stroke-width="0.6"
-                    vector-effect="non-scaling-stroke"
-                ></circle>
-            `);
-        }
-        const fcV = (data.forecastW[i0] ?? 0) * (1 - f) + (data.forecastW[i1] ?? 0) * f;
-        if (data.forecastW.length >= 2)
-        {
-            dots.push(svg`
-                <circle
-                    cx="${cxPct.toFixed(2)}"
-                    cy="${yPctOf(fcV).toFixed(2)}"
-                    r="1.5"
-                    fill="var(--ha-card-background, #ffffff)"
-                    stroke="color-mix(in srgb, var(--energy-solar-color, #ff9800) 75%, var(--primary-text-color, #000) 25%)"
-                    stroke-width="0.9"
-                    vector-effect="non-scaling-stroke"
-                ></circle>
-            `);
-        }
-        hoverDots = svg`${dots}`;
+        const x1 = xPctOf(data.liveEndMs);
+        const x2 = xPctOf(data.dayEndMs - 1);
+        const yB = yPctOf(0);
+        futurePath = svg`
+            <line
+                x1="${x1.toFixed(2)}" y1="${yB.toFixed(2)}"
+                x2="${x2.toFixed(2)}" y2="${yB.toFixed(2)}"
+                stroke="color-mix(in srgb, var(--primary-text-color, #ffffff) 38%, transparent)"
+                stroke-width="1.2"
+                stroke-dasharray="2 2"
+                vector-effect="non-scaling-stroke"
+            ></line>
+        `;
     }
 
     return html`
@@ -766,8 +770,43 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number, hoverFrac: 
             aria-hidden="true"
         >
             ${areaPaths}
+            ${futurePath}
             ${forecastPath}
-            ${hoverDots}
         </svg>
     `;
+}
+
+
+//Hover dots rendered as ABSOLUTE-POSITIONED HTML elements outside the SVG so they stay perfectly circular
+//regardless of the SVG's non-uniform stretch. Returns the position in plot-frame percentages, one entry
+//per stacked source top + one entry for the forecast curve (when present + non-zero day).
+export interface HoverDot { leftPct: number; topPct: number; color: string; isForecast: boolean; }
+export function computeHoverDots(data: DayChartData, yMaxW: number, hoverFrac: number, hasForecast: boolean): HoverDot[]
+{
+    const N = data.timesMs.length;
+    if (N < 2 || yMaxW <= 0) return [];
+    const plotH = 100 - CHART_BOTTOM_PAD - CHART_TOP_PAD;
+    const yPctOf = (w: number) => 100 - CHART_BOTTOM_PAD - Math.max(0, Math.min(1, w / yMaxW)) * plotH;
+    const dayMs  = data.dayEndMs - data.dayStartMs;
+    const bracket = bracketHover(data, hoverFrac);
+    const cxPct = ((bracket.tMs - data.dayStartMs) / dayMs) * 100;
+    const dots: HoverDot[] = [];
+    let stacked = 0;
+    for (const src of data.sources)
+    {
+        const v = (src.valuesW[bracket.i0] ?? 0) * (1 - bracket.f) + (src.valuesW[bracket.i1] ?? 0) * bracket.f;
+        stacked += v;
+        dots.push({ leftPct: cxPct, topPct: yPctOf(stacked), color: src.color, isForecast: false });
+    }
+    if (hasForecast && data.forecastW.length >= 2)
+    {
+        const fcV = (data.forecastW[bracket.i0] ?? 0) * (1 - bracket.f) + (data.forecastW[bracket.i1] ?? 0) * bracket.f;
+        dots.push({
+            leftPct:    cxPct,
+            topPct:     yPctOf(fcV),
+            color:      'color-mix(in srgb, var(--energy-solar-color, #ff9800) 75%, var(--primary-text-color, #000) 25%)',
+            isForecast: true,
+        });
+    }
+    return dots;
 }
