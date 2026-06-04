@@ -241,8 +241,8 @@ export const heliosCardStyles = css`
     }
     /*  Timeline slides DOWN out of the card instead of fading, matching the LiDAR View / Shading Dome exit
         choreography the user already knows. The slide rule sits in the slide-out group further below; the
-        opacity rule for `.time-bar` was removed from this block so the two transforms (fade vs slide) do
-        not race during the dashboard open / close window. */
+        opacity rule for time-bar was removed from this block so the two transforms (fade vs slide) do not
+        race during the dashboard open / close window. */
 
     /*  When LiDAR View is active, fade out every overlay layer so
         the dot cloud reads on its own against a quiet basemap. The
@@ -821,45 +821,44 @@ export const heliosCardStyles = css`
     }
     .dash-cf-card-chart-title
     {
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
-        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
+        color: var(--primary-text-color, #ffffff);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        opacity: 0.85;
     }
     .dash-cf-card-chart-value
     {
-        font-size: 22px;
-        font-weight: 600;
-        line-height: 1.1;
-        color: var(--primary-text-color, #ffffff);
+        font-size: 13px;
+        font-weight: 500;
+        line-height: 1.25;
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
         font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
     .dash-cf-card-chart-unit
     {
-        font-size: 12px;
+        font-size: 13px;
         font-weight: 500;
         margin-left: 2px;
         color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
     }
+    /*  Icon top-right: plain coloured glyph, no chip background. Matches the HA frontend convention where
+        the right-side glyph on a tile-card header is just an oversized inline icon (~24 px) in the
+        secondary text colour. */
     .dash-cf-card-chart-icon
     {
-        width: 28px;
-        height: 28px;
-        border-radius: 50%;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         flex-shrink: 0;
         line-height: 0;
-        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 18%, transparent);
-        color: var(--energy-solar-color, #ff9800);
+        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
     }
     .dash-cf-card-chart-icon ha-icon
     {
-        --mdc-icon-size: 16px;
+        --mdc-icon-size: 24px;
         color: inherit;
         display: flex;
         align-items: center;
@@ -892,6 +891,26 @@ export const heliosCardStyles = css`
         background: color-mix(in srgb, var(--primary-text-color, #ffffff) 35%, transparent);
         pointer-events: none;
         transform: translateX(-0.5px);
+    }
+    /*  Hover time pill anchored to the top of the cursor line, centred horizontally on it. Same pill recipe
+        as the day chip in the bandeau so the two read as the same family. */
+    .dash-cf-card-chart-cursor-time
+    {
+        position: absolute;
+        top: 4px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 11px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        padding: 1px 6px;
+        border-radius: 6px;
+        white-space: nowrap;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
+        pointer-events: none;
     }
     /*  Open animation: the SVG grows from the bottom edge upward, replaying the entering reveal in sync
         with the rest of the CoverFlow card. Anchors transform-origin to the bottom so the W=0 baseline

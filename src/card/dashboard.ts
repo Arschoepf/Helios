@@ -625,7 +625,8 @@ function renderCardChartBlock(
     //Default headline = the day's peak stacked W (or peak forecast for future days where no actual exists).
     //Hover on the front card overrides with the interpolated stacked W at the cursor X.
     let displayW = peakOfDay(data);
-    let hoverPct: number | null = null;
+    let hoverPct:  number | null = null;
+    let hoverTime: string | null = null;
     if (isFront && host._dashChartHoverFrac !== null && N >= 2)
     {
         const frac  = Math.max(0, Math.min(1, host._dashChartHoverFrac));
@@ -637,6 +638,7 @@ function renderCardChartBlock(
         const v1    = stackedAtIndex(data, i1) || (data.forecastW[i1] ?? 0);
         displayW    = v0 * (1 - f) + v1 * f;
         hoverPct    = frac * 100;
+        hoverTime   = formatHoverTimeLabel(host.hass, cardOffset, frac);
     }
 
     const formatted = formatPowerForChart(host.hass, displayW);
@@ -645,7 +647,7 @@ function renderCardChartBlock(
         <section class="dash-cf-card-chart" aria-hidden="${!isFront}">
             <header class="dash-cf-card-chart-header">
                 <div class="dash-cf-card-chart-meta">
-                    <span class="dash-cf-card-chart-title">Puissance photovoltaïque</span>
+                    <span class="dash-cf-card-chart-title">Production journalière</span>
                     <span class="dash-cf-card-chart-value">
                         ${formatted.value}<span class="dash-cf-card-chart-unit"> ${formatted.unit}</span>
                     </span>
@@ -661,11 +663,38 @@ function renderCardChartBlock(
             >
                 ${renderDayChartSVG(data, yMaxW)}
                 ${hoverPct !== null ? html`
-                    <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%"></span>
+                    <span class="dash-cf-card-chart-cursor" style="left: ${hoverPct.toFixed(2)}%">
+                        ${hoverTime !== null ? html`
+                            <span class="dash-cf-card-chart-cursor-time">${hoverTime}</span>
+                        ` : nothing}
+                    </span>
                 ` : nothing}
             </div>
         </section>
     `;
+}
+
+
+//Hover time label: HH:MM at the cursor X position. Computed from the card's day start + (frac x 24 h).
+//Locale is pulled from the host hass so the time format follows the user (24 h in fr-FR, 12 h in en-US).
+function formatHoverTimeLabel(hass: DashboardHost['hass'], dayOffset: number, frac: number): string
+{
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() + dayOffset);
+    const hoverMs = start.getTime() + frac * 86_400_000;
+    try
+    {
+        return new Intl.DateTimeFormat(hass?.language ?? undefined, {
+            hour:   '2-digit',
+            minute: '2-digit',
+        }).format(new Date(hoverMs));
+    }
+    catch (_)
+    {
+        const d = new Date(hoverMs);
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    }
 }
 
 

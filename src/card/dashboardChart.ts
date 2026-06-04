@@ -27,11 +27,10 @@ import { getHomeCoords } from './init';
 import type { DashboardHost } from './dashboard';
 
 
-//5-min grid over 24 h (288 steps + 1 end-of-day endpoint). HA's native power-curve cards land in this same
-//ballpark, the chart reads as detailed enough to show the morning ramp-up + every cloud dip without forcing
-//huge SVG path strings. 289 points x 4 sources x 5 cards = ~5780 path nodes worst case, comfortably within
-//the browser path-parser sweet spot.
-const CHART_GRID_STEPS = 288;
+//2-min grid over 24 h (720 steps + 1 end-of-day endpoint). At 1 pixel per grid point on a 720 px chart, the
+//resolution is high enough to keep sharp cloud-edge spikes that 5-min averaging used to round off. 721 x 4
+//sources x 5 cards = ~14 k path nodes worst case, still well within the browser path-parser sweet spot.
+const CHART_GRID_STEPS = 720;
 
 
 export interface DayChartData
@@ -184,11 +183,40 @@ function resampleToWattsGrid(
     }
     else
     {
-        const wScale = unit === 'kw' ? 1000 : unit === 'mw' ? 1_000_000 : 1;
+        //Instantaneous-power entities: peak-in-window resampling, NOT linear interp. For each grid bucket
+        //we take the MAX of every source sample falling inside [gridT-step/2, gridT+step/2]. Linear interp
+        //between sparse grid points averages a 30-second cloud-edge spike into nothing; peak-in-window
+        //keeps the spike visible as a 1 grid-bucket tall blip. Falls back to interp when a bucket contains
+        //no source sample at all (sparse entities, day boundaries).
+        const wScale   = unit === 'kw' ? 1000 : unit === 'mw' ? 1_000_000 : 1;
+        const stepMs   = gridMs.length > 1 ? (gridMs[1] - gridMs[0]) : 60_000;
+        const halfStep = stepMs / 2;
+        let srcIdx = 0;
+        const srcMs: number[] = times.map(d => d.getTime());
         for (let i = 0; i < gridMs.length; i++)
         {
-            const v = interpDateMs(times, values, gridMs[i]);
-            out[i]  = Math.max(0, v * wScale);
+            const tCenter = gridMs[i];
+            const tLo = tCenter - halfStep;
+            const tHi = tCenter + halfStep;
+            while (srcIdx < srcMs.length && srcMs[srcIdx] < tLo)
+            {
+                srcIdx++;
+            }
+            let peak = -Infinity;
+            let j = srcIdx;
+            while (j < srcMs.length && srcMs[j] <= tHi)
+            {
+                const v = values[j];
+                if (isFinite(v) && v > peak)
+                {
+                    peak = v;
+                }
+                j++;
+            }
+            const value = peak > -Infinity
+                ? peak
+                : interpDateMs(times, values, tCenter);
+            out[i] = Math.max(0, value * wScale);
         }
     }
     return out;
@@ -350,25 +378,33 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
     //Build stacked areas from bottom to top so each layer paints over the previous one with the right
     //vertical offset. The fill is the per-source color at ~38 % opacity (legible without drowning the
     //forecast line) plus a thicker stroke on the area's TOP edge (the production curve drawn over the
-    //fill) so the curve has a defined upper border per the HA reference card.
+    //fill) so the curve has a defined upper border per the HA reference card. The FIRST source's fill
+    //also fills the bottom padding band (the strip below the W=0 baseline that the chart frame insets
+    //for visual breathing room) with the same colour, so the orange baseline reads as the "ground" the
+    //production rises from instead of a hard cut-off edge.
     const areaPaths: TemplateResult[] = [];
     const bottomValues = new Array(N).fill(0);
-    for (const src of data.sources)
+    for (let srcIdx = 0; srcIdx < data.sources.length; srcIdx++)
     {
+        const src     = data.sources[srcIdx];
+        const isFirst = srcIdx === 0;
         const topValues = new Array(N);
         for (let i = 0; i < N; i++)
         {
             topValues[i] = bottomValues[i] + (src.valuesW[i] ?? 0);
         }
-        //Fill path: closes back along the bottom edge of this stacked layer.
-        let dFill = `M ${xPctOf(0).toFixed(2)} ${yPctOf(bottomValues[0]).toFixed(2)}`;
+        //Bottom baseline of the fill polygon. The first stacked source closes back along y=H (the chart's
+        //actual lower edge) instead of the W=0 line, so the bottom padding band picks up the same colour
+        //as the bottom area. Subsequent sources keep their natural bottom = the previous stacked top.
+        const bottomYOf = (i: number) => isFirst ? H : yPctOf(bottomValues[i]);
+        let dFill = `M ${xPctOf(0).toFixed(2)} ${bottomYOf(0).toFixed(2)}`;
         for (let i = 0; i < N; i++)
         {
             dFill += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(topValues[i]).toFixed(2)}`;
         }
         for (let i = N - 1; i >= 0; i--)
         {
-            dFill += ` L ${xPctOf(i).toFixed(2)} ${yPctOf(bottomValues[i]).toFixed(2)}`;
+            dFill += ` L ${xPctOf(i).toFixed(2)} ${bottomYOf(i).toFixed(2)}`;
         }
         dFill += ' Z';
         //Stroke path: only the TOP edge (the production curve), drawn as a separate open polyline so the
@@ -385,7 +421,7 @@ export function renderDayChartSVG(data: DayChartData, yMaxW: number): TemplateRe
                 d="${dStroke}"
                 fill="none"
                 stroke="${src.color}"
-                stroke-width="1.6"
+                stroke-width="1.8"
                 stroke-linejoin="round"
                 stroke-linecap="round"
                 vector-effect="non-scaling-stroke"
