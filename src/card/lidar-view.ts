@@ -7,6 +7,7 @@
 import { html, nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
+import type { CardMode } from './card-mode';
 
 
 //Fade durations. Enter is slightly longer than exit so the dot
@@ -16,14 +17,18 @@ const LIDAR_FADE_IN_MS  = 380;
 const LIDAR_FADE_OUT_MS = 280;
 
 
-//Structural surface the host card exposes. Extends OverlaysHost so
-//toggleLidarView can fire refreshOverlays(host) immediately on
-//enter without juggling two host arguments.
+//Structural surface the host card exposes. The mode-transition state machine on the card side reads
+//_cardMode + _overlayMaskActive to drive what the user sees; this module mutates the fade-loop fields
+//(_lidarFadeIn/OutStartMs, _lidarLayerActive) and signals the engine. The picker reads _cardMode
+//directly to compute its .is-active class so the slide-in / slide-out animation fires reliably on the
+//same render as the mode flip.
 export interface LidarViewHost extends OverlaysHost
 {
     readonly _engine?:           HeliosEngine;
 
-    _lidarViewMode:              boolean;
+    _cardMode:                   CardMode;
+    _overlayMaskActive:          boolean;
+    _lidarLayerActive:           boolean;
     _lidarFadeInStartMs:         number | null;
     _lidarFadeOutStartMs:        number | null;
     _lidarFadeRaf?:              number;
@@ -31,54 +36,42 @@ export interface LidarViewHost extends OverlaysHost
 }
 
 
-//Toggle the LiDAR View overlay. Disabled (silently no-op) when
-//the engine reports no provider covers the home, so the user
-//never gets stuck in an empty-canvas view.
+//Start the LiDAR enter animation. Returns true if the engine has a provider and the fade actually
+//kicked, false otherwise (no-op when the engine reports no LiDAR source covers the active home).
+//Called from the card's _handleCardModeChange when _cardMode transitions INTO 'lidar'.
 //
-//Enter: dots fade in over ~380 ms via a uniform alpha ramp on the
-//canvas; the .lidar-view-active class lands at the same instant
-//so the regular HUD fades out via its own CSS transition under
-//the appearing cloud.
-//
-//Exit: two-phase. First the dot cloud fades back out in ~280 ms, THEN .lidar-view-active drops so the regular HUD fades back in via the existing CSS
-//transition. We delay the class flip so the HUD doesn't pop back through the still-visible cloud.
-//
-//We deliberately do NOT clip-mask the dots to a perspective
-//polygon during the fade: that was the single most expensive
-//thing in the draw path (per-frame 64-vertex clip stomped the
-//GPU rasteriser), and at the current frame budget it wasn't
-//worth the visual flourish.
-export function toggleLidarView(host: LidarViewHost): void
+//Dot cloud fades in over LIDAR_FADE_IN_MS via a uniform alpha ramp on the WebGL custom layer. The
+//chip / leader / arc / timeline CSS transitions run independently, driven by _overlayMaskActive
+//flipping ON the moment _cardMode left base.
+export function enterLidarView(host: LidarViewHost): boolean
 {
     if (!host._engine)
     {
-        return;
+        return false;
     }
-    if (!host._lidarViewMode && host._engine.getActiveLidarSourceId() === null)
+    if (host._engine.getActiveLidarSourceId() === null)
     {
-        return;
+        return false;
     }
+    host._lidarFadeOutStartMs = null;
+    host._lidarFadeInStartMs  = performance.now();
+    host._lidarLayerActive    = true;
+    host._engine.setLidarViewActive(true);
+    refreshOverlays(host);
+    startLidarFadeLoop(host);
+    return true;
+}
 
-    if (!host._lidarViewMode)
-    {
-        //Off → on. Engaging immediately.
-        host._lidarFadeOutStartMs = null;
-        host._lidarFadeInStartMs  = performance.now();
-        host._lidarViewMode = true;
-        host._engine.setLidarViewActive(true);
-        refreshOverlays(host);
-        startLidarFadeLoop(host);
-    }
-    else
-    {
-        //On → off. Start the exit fade; the class flip + engine
-        //setLidarViewActive(false) happen at the end of the fade
-        //so the dot cloud doesn't blink off before the HUD eases
-        //back in.
-        host._lidarFadeInStartMs  = null;
-        host._lidarFadeOutStartMs = performance.now();
-        startLidarFadeLoop(host);
-    }
+
+//Start the LiDAR exit animation. The dot cloud fades back out over LIDAR_FADE_OUT_MS, then the fade
+//loop tears the engine layer down (setLidarViewActive(false)) and, if _cardMode landed on base, lifts
+//the overlay mask so the HUD chips fade back in. Holding the mask until WebGL fade-out completes is
+//deliberate, otherwise the HUD would pop back through the still-visible dot cloud.
+export function exitLidarView(host: LidarViewHost): void
+{
+    host._lidarFadeInStartMs  = null;
+    host._lidarFadeOutStartMs = performance.now();
+    startLidarFadeLoop(host);
 }
 
 
@@ -100,18 +93,22 @@ export function startLidarFadeLoop(host: LidarViewHost): void
         const inStart  = host._lidarFadeInStartMs;
         const outStart = host._lidarFadeOutStartMs;
 
-        //Exit fade complete, finalise the mode flip and clamp the layer alpha to 0 in one go.
+        //Exit fade complete, tear down the WebGL layer and lift the overlay mask if the user landed on
+        //base (mask stays on if they navigated to shading-dome instead, so the chips don't flash in
+        //between modes).
         if (outStart !== null && now - outStart >= LIDAR_FADE_OUT_MS)
         {
             host._lidarFadeOutStartMs = null;
-            host._lidarViewMode = false;
+            host._lidarLayerActive    = false;
             host._engine?.setLidarViewFadeAlpha(0);
             host._engine?.setLidarViewActive(false);
-            //onMapTransform gated refreshOverlays() out while LiDAR
-            //was active, so any camera rotation the user performed
-            //inside LiDAR mode left the home silhouette + chip
-            //positions frozen at the bearing they had at toggle-on.
-            //Push a fresh projection pass now so the glow / leaders
+            if (host._cardMode === 'base')
+            {
+                host._overlayMaskActive = false;
+            }
+            //onMapTransform gated refreshOverlays() out while LiDAR was active, so any camera rotation
+            //the user performed inside LiDAR mode left the home silhouette + chip positions frozen at
+            //the bearing they had at toggle-on. Push a fresh projection pass now so the glow + leaders
             //land at the right screen coords when the HUD comes back.
             refreshOverlays(host);
         }
@@ -131,10 +128,9 @@ export function startLidarFadeLoop(host: LidarViewHost): void
         const outT = host._lidarFadeOutStartMs !== null
             ? Math.max(0, Math.min(1, (now - host._lidarFadeOutStartMs) / LIDAR_FADE_OUT_MS))
             : 0;
-        //Enter ramps 0→1, exit brings it back to 0. They're never
-        //both in flight (toggle clears one before starting the
-        //other) so the multiplication is a guard.
-        const alpha = (host._lidarFadeInStartMs  !== null ? inT : (host._lidarViewMode ? 1 : 0))
+        //Enter ramps 0→1, exit brings it back to 0. They're never both in flight (the enter / exit
+        //helpers clear one before setting the other) so the multiplication is a guard.
+        const alpha = (host._lidarFadeInStartMs  !== null ? inT : (host._lidarLayerActive ? 1 : 0))
                     * (host._lidarFadeOutStartMs !== null ? (1 - outT) : 1);
         host._engine?.setLidarViewFadeAlpha(alpha);
 
@@ -163,12 +159,11 @@ export function renderLidarViewOpacityPicker(
 ): TemplateResult | typeof nothing
 {
     const pct        = Math.round(Math.max(0, Math.min(1, host._lidarViewOpacity)) * 100);
-    //Always render the pill so its slide + opacity transitions run in
-    //both directions. .is-active goes ON only when the mode is active
-    //AND no exit fade is in flight, so the pill slides DOWN at the same
-    //instant the dot cloud starts retreating, instead of waiting for
-    //the cloud's own fade-out to complete.
-    const sliderActive = host._lidarViewMode && host._lidarFadeOutStartMs === null;
+    //.is-active is a direct projection of _cardMode (single @state), so the slider's CSS transition
+    //fires reliably on the same render as the mode flip. No coupling to the WebGL fade-out timestamp,
+    //the pill slides down the moment the user clicks away from lidar mode while the dot cloud takes
+    //another LIDAR_FADE_OUT_MS to vanish on its own track.
+    const sliderActive = host._cardMode === 'lidar';
     const activeCls    = sliderActive ? ' is-active' : '';
     return html`
         <div class="lidar-view-opacity-slider${activeCls}" aria-label="LiDAR view opacity" ?aria-hidden="${!sliderActive}">

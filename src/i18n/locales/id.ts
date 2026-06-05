@@ -44,6 +44,7 @@ export const id: Translations = {
         dayLabelDayBefore:    '2 hari lalu',
         dayLabelTomorrow:     'Besok',
         dayLabelDayAfter:     'Dalam 2 hari',
+        shadingDomeHint:      'Kubah peneduh yang dipelajari otomatis. Setiap sel menunjukkan keluaran PV rata-rata pada posisi matahari tersebut, untuk tutupan awan yang dipilih di bawah. Helios menerapkannya pada prakiraan sehingga bayangan nyata (pohon pukul 16, cerobong asap di musim dingin) tertangkap secara otomatis.',
     },
 
     editor:

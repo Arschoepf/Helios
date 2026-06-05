@@ -43,6 +43,7 @@ export const af: Translations = {
         dayLabelDayBefore:    '2 dae gelede',
         dayLabelTomorrow:     'Môre',
         dayLabelDayAfter:     'Oor 2 dae',
+        shadingDomeHint:      'Outomaties geleerde skadu-koepel. Elke sel toon die gemiddelde PV-uitset by daardie sonposisie, vir die wolkbedekking hieronder gekies. Helios pas dit toe op die voorspelling sodat werklike skaduwees (\'n boom om 16:00, \'n skoorsteen in die winter) outomaties opgevang word.',
     },
 
     editor:

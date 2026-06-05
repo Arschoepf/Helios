@@ -283,98 +283,80 @@ export const heliosCardStyles = css`
     {
         transition: opacity 0.35s ease;
     }
-    /*  will-change opt-in: scope the composite-layer promotion to the
-        transition windows only. At rest, 15+ elements declared
-        will-change: opacity unconditionally was pinning that many
-        GPU layers in idle VRAM (~15-30 MB on devices with limited
-        budgets) and forcing the compositor to re-sync them on every
-        Lit re-render. Promote only when a mode actually toggles. */
-    ha-card.lidar-view-active     .overlay-top-left, ha-card.lidar-view-active     .home-glow-svg,
-    ha-card.lidar-view-active     .home-hitbox,      
-    ha-card.lidar-view-active     .home-drop-leader-svg, ha-card.lidar-view-active .solar-svg,
-    ha-card.lidar-view-active     .solar-pct-label,  
-    ha-card.lidar-view-active   .pv-home-leader-svg,
-    ha-card.lidar-view-active     .pv-pct-label,     ha-card.lidar-view-active     .battery-leader-svg,
-    ha-card.lidar-view-active     .battery-pct-label,ha-card.lidar-view-active     .grid-leader-svg,
-    ha-card.lidar-view-active     .grid-import-label,ha-card.lidar-view-active     .grid-export-label,
-    ha-card.lidar-view-active     .home-pill,
-    ha-card.shading-dome-active   .overlay-top-left, ha-card.shading-dome-active   .home-glow-svg,
-    ha-card.shading-dome-active   .home-hitbox,      
-    ha-card.shading-dome-active   .home-drop-leader-svg, ha-card.shading-dome-active .solar-svg,
-    ha-card.shading-dome-active   .solar-pct-label,  
-    ha-card.shading-dome-active .pv-home-leader-svg,
-    ha-card.shading-dome-active   .pv-pct-label,     ha-card.shading-dome-active   .battery-leader-svg,
-    ha-card.shading-dome-active   .battery-pct-label,ha-card.shading-dome-active   .grid-leader-svg,
-    ha-card.shading-dome-active   .grid-import-label,ha-card.shading-dome-active   .grid-export-label,
-    ha-card.shading-dome-active   .home-pill,
-    ha-card.detail-active         .overlay-top-left, ha-card.detail-active         .home-glow-svg,
-    ha-card.detail-active         .home-hitbox,      
-    ha-card.detail-active         .pv-home-leader-svg, ha-card.detail-active       .pv-pct-label,
-    ha-card.detail-active         .battery-leader-svg, ha-card.detail-active       .battery-pct-label,
-    ha-card.detail-active         .solar-svg,        ha-card.detail-active         .solar-pct-label
+    /*  will-change opt-in: scope the composite-layer promotion to the transition windows only. At
+        rest, 15+ elements declared will-change: opacity unconditionally was pinning that many GPU
+        layers in idle VRAM (~15-30 MB on devices with limited budgets) and forcing the compositor to
+        re-sync them on every Lit re-render. Promote only when a mode actually toggles. The trigger
+        class is now ha-card.overlay-masked (set the moment _cardMode leaves base, dropped after the
+        WebGL fade-out on lidar -> base, dropped immediately on shading-dome -> base) plus the
+        independent ha-card.detail-active for the dashboard dive. */
+    ha-card.overlay-masked .overlay-top-left,
+    ha-card.overlay-masked .home-glow-svg,
+    ha-card.overlay-masked .home-hitbox,
+    ha-card.overlay-masked .home-drop-leader-svg,
+    ha-card.overlay-masked .solar-svg,
+    ha-card.overlay-masked .solar-pct-label,
+    ha-card.overlay-masked .pv-home-leader-svg,
+    ha-card.overlay-masked .pv-pct-label,
+    ha-card.overlay-masked .battery-leader-svg,
+    ha-card.overlay-masked .battery-pct-label,
+    ha-card.overlay-masked .grid-leader-svg,
+    ha-card.overlay-masked .grid-import-label,
+    ha-card.overlay-masked .grid-export-label,
+    ha-card.overlay-masked .home-pill,
+    ha-card.detail-active  .overlay-top-left,
+    ha-card.detail-active  .home-glow-svg,
+    ha-card.detail-active  .home-hitbox,
+    ha-card.detail-active  .pv-home-leader-svg,
+    ha-card.detail-active  .pv-pct-label,
+    ha-card.detail-active  .battery-leader-svg,
+    ha-card.detail-active  .battery-pct-label,
+    ha-card.detail-active  .solar-svg,
+    ha-card.detail-active  .solar-pct-label
     {
         will-change: opacity;
     }
 
-    /*  Timeline SLIDES out below the card / slides back in from the
-        bottom edge instead of fading. The X centring (translateX
-        -50%) is kept inside every keyframe so the bar never drifts
-        horizontally during the slide. */
+    /*  Timeline SLIDES out below the card / slides back in from the bottom edge instead of fading.
+        translateX kept inside every keyframe so the bar never drifts horizontally during the slide. */
     .time-bar
     {
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
     }
-    ha-card.lidar-view-active   .home-glow-svg,
-    ha-card.lidar-view-active   .home-hitbox,
-    ha-card.lidar-view-active   .home-drop-leader-svg,
-    ha-card.lidar-view-active   .solar-svg,
-    ha-card.lidar-view-active   .solar-pct-label,
-    ha-card.lidar-view-active   .pv-home-leader-svg,
-    ha-card.lidar-view-active   .pv-pct-label,
-    ha-card.lidar-view-active   .battery-leader-svg,
-    ha-card.lidar-view-active   .battery-pct-label,
-    ha-card.lidar-view-active   .grid-leader-svg,
-    ha-card.lidar-view-active   .grid-import-label,
-    ha-card.lidar-view-active   .grid-export-label,
-    ha-card.lidar-view-active   .home-pill,
-    ha-card.shading-dome-active .home-glow-svg,
-    ha-card.shading-dome-active .home-hitbox,
-    ha-card.shading-dome-active .home-drop-leader-svg,
-    ha-card.shading-dome-active .solar-svg,
-    ha-card.shading-dome-active .solar-pct-label,
-    ha-card.shading-dome-active .pv-home-leader-svg,
-    ha-card.shading-dome-active .pv-pct-label,
-    ha-card.shading-dome-active .battery-leader-svg,
-    ha-card.shading-dome-active .battery-pct-label,
-    ha-card.shading-dome-active .grid-leader-svg,
-    ha-card.shading-dome-active .grid-import-label,
-    ha-card.shading-dome-active .grid-export-label,
-    ha-card.shading-dome-active .home-pill
+    /*  Chips + leaders + arcs fade out behind the LiDAR / ShadingDome overlay. Single rule keyed on
+        the overlay-masked class so the state machine on the card side controls exactly when the fade
+        kicks in either direction. */
+    ha-card.overlay-masked .home-glow-svg,
+    ha-card.overlay-masked .home-hitbox,
+    ha-card.overlay-masked .home-drop-leader-svg,
+    ha-card.overlay-masked .solar-svg,
+    ha-card.overlay-masked .solar-pct-label,
+    ha-card.overlay-masked .pv-home-leader-svg,
+    ha-card.overlay-masked .pv-pct-label,
+    ha-card.overlay-masked .battery-leader-svg,
+    ha-card.overlay-masked .battery-pct-label,
+    ha-card.overlay-masked .grid-leader-svg,
+    ha-card.overlay-masked .grid-import-label,
+    ha-card.overlay-masked .grid-export-label,
+    ha-card.overlay-masked .home-pill
     {
         opacity: 0;
         pointer-events: none;
     }
-    /*  Timeline slides out below the card edge for the two full-screen modes (LiDAR View, Shading Dome). Pointer-events
-        disabled so the drifting element cannot intercept clicks while off-screen. translateX kept so the bar stays
-        centred. */
-    ha-card.lidar-view-active   .time-bar,
-    ha-card.shading-dome-active .time-bar,
-    ha-card.detail-active       .time-bar
+    /*  Timeline slides below the card edge for any non-base mode + the dashboard dive. */
+    ha-card.overlay-masked .time-bar,
+    ha-card.detail-active  .time-bar
     {
-        /*  No translateX(-50%) anymore, the time-bar centres via left/right gutter now. Just slide it
-            down out of the card. */
         transform: translateY(140%);
         pointer-events: none;
     }
-    ha-card.lidar-view-active   .overlay-top-left,
-    ha-card.shading-dome-active .overlay-top-left
+    ha-card.overlay-masked .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
     }
-    ha-card.lidar-view-active   .overlay-top-right,
-    ha-card.shading-dome-active .overlay-top-right
+    ha-card.overlay-masked .overlay-top-right
     {
         opacity: 1;
         pointer-events: auto;
@@ -898,11 +880,23 @@ export const heliosCardStyles = css`
         height: 100%;
         display: block;
     }
-    /*  Night zones: flat opacity overlay (no hatch). Same vocabulary as the dashboard scrim, just on the
-        chart area. */
+    /*  Night zones: diagonal hatch driven by the SVG <pattern> in dashboardCumChart.ts, same vocabulary
+        as the timeline's .hc-night-zone so the two charts read as one visual family. The rect itself
+        gets fill="url(#hatchId)" inline, this class only carries the pointer-events kill so the hatched
+        zone never intercepts hover. */
     .dash-cf-cum-chart-night
     {
-        fill: color-mix(in srgb, var(--primary-text-color, #ffffff) 8%, transparent);
+        pointer-events: none;
+    }
+    /*  Hatch line stroke inside the <pattern>. Same alpha as .hc-night-zone on the timeline (0.12 on
+        light, 0.18 on dark). */
+    .dash-cf-cum-chart-night-hatch
+    {
+        stroke: rgba(0, 0, 0, 0.12);
+    }
+    ha-card.theme-dark .dash-cf-cum-chart-night-hatch
+    {
+        stroke: rgba(255, 255, 255, 0.18);
     }
     /*  Sunrise + sunset vertical dashed markers. Drawn right after the night zones so they sit BEHIND
         the area + curves (later paint = on top in SVG). Same dashed pattern as the cursor line but a bit
@@ -3181,20 +3175,17 @@ export const heliosCardStyles = css`
         transform: translateY(60px);
         pointer-events: none;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-        /*  Transition covers the slide-out (.is-active removed -> base style takes over). Slide-in is
-            handled by a keyframe animation on .is-active so it fires reliably from any prior DOM state
-            (Lit transition vs first-mount). The two never overlap, animation forwards holds the end
-            state while .is-active is present, then transition reads it as the start of the slide-out. */
+        /*  Pure CSS transition on the base rule, the .is-active override below sets the visible target
+            and the transition lerps between the two states in both directions. No keyframe animation,
+            no animation: forwards. The picker is rendered unconditionally so the element exists at the
+            resting style BEFORE the user clicks, every class flip on .is-active triggers a real
+            computed-style change the browser observes and animates over 350 ms. */
         transition: opacity 0.35s ease, transform 0.35s ease;
-    }
-    @keyframes shading-dome-hint-in
-    {
-        from { opacity: 0; transform: translateY(60px); }
-        to   { opacity: 1; transform: translateY(0);    }
     }
     .shading-dome-cloud-hint.is-active
     {
-        animation: shading-dome-hint-in 0.35s ease forwards;
+        opacity: 1;
+        transform: translateY(0);
         pointer-events: auto;
     }
 
@@ -3203,10 +3194,7 @@ export const heliosCardStyles = css`
         position: absolute;
         bottom: 14px;
         left: 50%;
-        /*  Slide-in is a keyframe on .is-active so it fires reliably regardless of Lit's render timing
-            or mount order. Slide-out falls back to the transition on the base rule (computed style
-            reverts to translate(-50%, 60px) + opacity 0 when .is-active is removed, transition handles
-            the lerp). */
+        /*  Pure transition pattern, see .shading-dome-cloud-hint above. */
         transform: translate(-50%, 60px);
         opacity: 0;
         pointer-events: none;
@@ -3222,14 +3210,10 @@ export const heliosCardStyles = css`
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
     }
-    @keyframes shading-dome-slider-in
-    {
-        from { opacity: 0; transform: translate(-50%, 60px); }
-        to   { opacity: 1; transform: translate(-50%, 0);    }
-    }
     .shading-dome-cloud-slider.is-active
     {
-        animation: shading-dome-slider-in 0.35s ease forwards;
+        opacity: 1;
+        transform: translate(-50%, 0);
         pointer-events: auto;
     }
     /*  Tick wrapper: the slider sits in a relative container so
@@ -3348,14 +3332,10 @@ export const heliosCardStyles = css`
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
     }
-    @keyframes lidar-slider-in
-    {
-        from { opacity: 0; transform: translate(-50%, 60px); }
-        to   { opacity: 1; transform: translate(-50%, 0);    }
-    }
     .lidar-view-opacity-slider.is-active
     {
-        animation: lidar-slider-in 0.35s ease forwards;
+        opacity: 1;
+        transform: translate(-50%, 0);
         pointer-events: auto;
     }
     .lidar-view-opacity-icon

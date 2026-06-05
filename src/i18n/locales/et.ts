@@ -45,6 +45,7 @@ export const et: Translations = {
         dayLabelDayBefore:    'Üleeile',
         dayLabelTomorrow:     'Homme',
         dayLabelDayAfter:     'Ülehomme',
+        shadingDomeHint:      'Isemõõtev varjukuppel. Iga lahter näitab keskmist PV-väljundit selles päikese asukohas, allpool valitud pilvkatte jaoks. Helios rakendab seda prognoosile, nii et päris varjud (puu kl 16, korsten talvel) jäädvustatakse automaatselt.',
     },
 
     editor:

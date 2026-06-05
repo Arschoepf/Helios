@@ -44,6 +44,7 @@ export const vi: Translations = {
         dayLabelDayBefore:    '2 ngày trước',
         dayLabelTomorrow:     'Ngày mai',
         dayLabelDayAfter:     '2 ngày nữa',
+        shadingDomeHint:      'Mái vòm che bóng tự học. Mỗi ô hiển thị sản lượng PV trung bình tại vị trí mặt trời đó, cho độ che phủ mây được chọn bên dưới. Helios áp dụng nó cho dự báo để các bóng thực tế (một cây vào lúc 16h, một ống khói vào mùa đông) được ghi lại tự động.',
     },
 
     editor:

@@ -45,6 +45,7 @@ export const enGB: Translations = {
         dayLabelDayBefore:    '2 days ago',
         dayLabelTomorrow:     'Tomorrow',
         dayLabelDayAfter:     'In 2 days',
+        shadingDomeHint:      'Auto-learned shading dome. Each cell shows the average PV output at that sun position, for the cloud cover chosen below. Helios applies it to the forecast so real shadows (a tree at 4 pm, a chimney in winter) are captured automatically.',
     },
 
     editor:

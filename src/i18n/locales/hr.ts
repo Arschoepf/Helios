@@ -45,6 +45,7 @@ export const hr: Translations = {
         dayLabelDayBefore:    'Prekjučer',
         dayLabelTomorrow:     'Sutra',
         dayLabelDayAfter:     'Prekosutra',
+        shadingDomeHint:      'Samonaučena kupola zasjenjenja. Svaka ćelija prikazuje prosječni PV izlaz na toj poziciji sunca, za naoblaku odabranu ispod. Helios je primjenjuje na prognozu kako bi se stvarne sjene (stablo u 16h, dimnjak zimi) automatski uhvatile.',
     },
 
     editor:

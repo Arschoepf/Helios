@@ -40,6 +40,7 @@ export const nl: Translations = {
         dayLabelDayBefore:    '2 dagen geleden',
         dayLabelTomorrow:     'Morgen',
         dayLabelDayAfter:     'Over 2 dagen',
+        shadingDomeHint:      'Zelflerende schaduwkoepel. Elke cel toont de gemiddelde PV-output bij die zonpositie, voor de bewolking die hieronder is gekozen. Helios past het toe op de voorspelling zodat echte schaduwen (een boom om 16 uur, een schoorsteen in de winter) automatisch worden vastgelegd.',
     },
 
     editor:

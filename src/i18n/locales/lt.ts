@@ -45,6 +45,7 @@ export const lt: Translations = {
         dayLabelDayBefore:    'Užvakar',
         dayLabelTomorrow:     'Rytoj',
         dayLabelDayAfter:     'Poryt',
+        shadingDomeHint:      'Savaime išmokstantis šešėliavimo kupolas. Kiekvienas langelis rodo vidutinę PV išvestį toje saulės pozicijoje, pasirinktam debesuotumui apačioje. Helios pritaiko ją prognozei, kad realūs šešėliai (medis 16 val., kaminas žiemą) būtų užfiksuoti automatiškai.',
     },
 
     editor:

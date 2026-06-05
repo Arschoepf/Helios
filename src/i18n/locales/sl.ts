@@ -45,6 +45,7 @@ export const sl: Translations = {
         dayLabelDayBefore:    'Predvčerajšnjim',
         dayLabelTomorrow:     'Jutri',
         dayLabelDayAfter:     'Pojutrišnjem',
+        shadingDomeHint:      'Samoučeča senčna kupola. Vsaka celica prikazuje povprečen izhod PV pri tem položaju sonca, za izbrano oblačnost spodaj. Helios jo uporabi pri napovedi, tako da se resnične sence (drevo ob 16. uri, dimnik pozimi) samodejno ujamejo.',
     },
 
     editor:

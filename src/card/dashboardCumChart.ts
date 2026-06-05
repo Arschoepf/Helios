@@ -606,6 +606,12 @@ function renderCumChartSVG(
 
     const baselineY = yOf(0);
 
+    //Per-instance + per-day hatch id so multiple cards on the same dashboard, and the visible front /
+    //side cards in this same dashboard, all reference their own pattern instead of leaking one shared
+    //pattern across the document. Keyed on the day's local-midnight ms since each cum-chart instance
+    //is rendered for a different day.
+    const hatchId = `dash-cf-cum-chart-night-${host._instanceId}-${data.dayStartMs}`;
+
     return html`
         <svg
             class="dash-cf-cum-chart-svg"
@@ -613,11 +619,21 @@ function renderCumChartSVG(
             preserveAspectRatio="none"
             aria-hidden="true"
         >
+            <defs>
+                <pattern id="${hatchId}"
+                         patternUnits="userSpaceOnUse"
+                         width="6" height="6"
+                         patternTransform="rotate(45)">
+                    <line class="dash-cf-cum-chart-night-hatch"
+                          x1="0" y1="0" x2="0" y2="6"
+                          stroke-width="1.5"/>
+                </pattern>
+            </defs>
             ${nightLeftEnd !== null && nightLeftEnd > 0 ? svg`
-                <rect class="dash-cf-cum-chart-night" x="0" y="0" width="${nightLeftEnd.toFixed(2)}" height="${H}"></rect>
+                <rect class="dash-cf-cum-chart-night" x="0" y="0" width="${nightLeftEnd.toFixed(2)}" height="${H}" fill="url(#${hatchId})"></rect>
             ` : nothing}
             ${nightRightStart !== null && nightRightStart < W ? svg`
-                <rect class="dash-cf-cum-chart-night" x="${nightRightStart.toFixed(2)}" y="0" width="${(W - nightRightStart).toFixed(2)}" height="${H}"></rect>
+                <rect class="dash-cf-cum-chart-night" x="${nightRightStart.toFixed(2)}" y="0" width="${(W - nightRightStart).toFixed(2)}" height="${H}" fill="url(#${hatchId})"></rect>
             ` : nothing}
 
             ${nightLeftEnd !== null && nightLeftEnd > 0 && nightLeftEnd < W ? svg`

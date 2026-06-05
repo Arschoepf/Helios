@@ -566,8 +566,7 @@ function wireEngineCallbacks(host: InitHost): void
     //refresh leaves the stale scene cached (the toggle path
     //re-runs it once on enter so the user sees up-to-date data).
     type ModeAwareHost = InitHost & {
-        readonly _lidarViewMode?:   boolean;
-        readonly _shadingDomeMode?: boolean;
+        readonly _cardMode?: 'base' | 'lidar' | 'shading-dome';
     };
     host._engine.onMapTransform = () =>
     {
@@ -592,11 +591,11 @@ function wireEngineCallbacks(host: InitHost): void
             //the sun arc, silhouettes, label layout, cloud scene.
             //Same gate for both dome scenes when their own mode
             //is OFF.
-            if (!mh._lidarViewMode)
+            if (mh._cardMode !== 'lidar')
             {
                 refreshOverlays(host);
             }
-            if (mh._shadingDomeMode)
+            if (mh._cardMode === 'shading-dome')
             {
                 refreshShadingDomeScene(host as unknown as ShadingDomeHost);
             }

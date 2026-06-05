@@ -70,7 +70,8 @@ import
     onTimelinePointerMove,
     onTimelinePointerUp
 } from './card/timeline';
-import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
+import { enterLidarView, exitLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
+import type { CardMode } from './card/card-mode';
 import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime, clearGridModuleCaches } from './card/grid';
 import {
     subscribeEnergyPrefs,
@@ -82,7 +83,8 @@ import {
 import {
     renderShadingDomeOverlay,
     renderShadingDomeCloudPicker,
-    toggleShadingDome,
+    enterShadingDome,
+    exitShadingDome,
     refreshShadingDomeScene,
 } from './card/shadingDome';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
@@ -557,17 +559,25 @@ export class HeliosCard extends LitElement
     //Hover fraction over the FRONT CoverFlow card's chart, in [0..1]. Null when no cursor is on the chart.
     //Drives the chart header value readout + the vertical guide line at the cursor X.
     @state() _dashChartHoverFrac:   number | null = null;
-    //True while the LiDAR View overlay is showing: the map UI fades
-    //out, the engine's WebGL custom layer paints every loaded LiDAR
-    //cell as a dot, and the same toggle button (top-right) brings the
-    //regular UI back when clicked again. Independent of detail mode;
-    //both can't be on at once (the button is hidden in detail).
-    @state() _lidarViewMode = false;
-    //Fade timestamps. On enter the dot cloud eases in from alpha 0 to
-    //1 over LIDAR_FADE_IN_MS; on exit it eases back out before the
-    //regular HUD fade-in. Null when no fade is in flight; the layer
-    //alpha then stays at its resting value (1 while active, 0 while
-    //inactive).
+    //Single source of truth for which mode the card is in. Drives every transition (slider slide-in
+    /// slide-out, chip + leader + arc fade, timeline slide, WebGL dot-cloud fade-in / out, ShadingDome
+    //SVG fade-in / out). Set imperatively by the mode-bar click handlers, reacted to by
+    //_handleCardModeChange in updated() which kicks the engine fades and toggles the overlay mask.
+    //Modes are mutually exclusive (the mode-bar lets the user pick exactly one).
+    @state() _cardMode: CardMode = 'base';
+    //True while the chips / leaders / arcs / timeline are masked behind a non-base mode. Decoupled
+    //from _cardMode on the EXIT path so the HUD doesn't pop back through still-visible LiDAR dots: on
+    //LiDAR -> base, the mask stays ON until the WebGL fade-out completes (the LiDAR fade loop sets it
+    //to false on completion); on ShadingDome -> base, the mask flips OFF immediately because the
+    //dome SVG is faint enough that the HUD chips reading through it during the fade is fine.
+    @state() _overlayMaskActive = false;
+    //WebGL dot-cloud lifecycle. Set true on lidar enter, the LiDAR fade loop flips it back to false on
+    //fade-out completion. Decoupled from _cardMode so the engine layer keeps drawing dots during the
+    //exit fade after the user already clicked away.
+    _lidarLayerActive:    boolean = false;
+    //Fade timestamps. On enter the dot cloud eases in from alpha 0 to 1 over LIDAR_FADE_IN_MS; on exit
+    //it eases back out over LIDAR_FADE_OUT_MS, then engine.setLidarViewActive(false) tears the layer
+    //down. Null when no fade is in flight.
     _lidarFadeInStartMs:  number | null = null;
     _lidarFadeOutStartMs: number | null = null;
     _lidarFadeRaf?:       number;
@@ -582,16 +592,10 @@ export class HeliosCard extends LitElement
     //the user always lands on a sensible-looking opacity.
     _lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
 
-    //Shading-dome overlay state. Mutually exclusive with the LiDAR
-    //view (the click handlers below close one before opening the
-    //other). _shadingDomeCloudBin persists the user's bin pick
-    //inside the card lifetime so a toggle off/on keeps the slice.
-    @state() _shadingDomeMode = false;
-    //Mirrors _shadingDomeMode at toggle-on time but flips OFF the
-    //instant the user clicks to exit dome mode. Decouples the CSS
-    //chip / timeline hide rule from the dome SVG render gating so
-    //the HUD transitions fire from the same paint as the click.
-    @state() _shadingDomeChipMask = false;
+    //ShadingDome SVG lifecycle, same role as _lidarLayerActive: lets the dome SVG keep painting through
+    //its exit fade after _cardMode already moved off shading-dome. Flipped to false by the ShadingDome
+    //fade loop on fade-out completion.
+    _shadingDomeSvgVisible:     boolean = false;
     _shadingDomeFadeInStartMs:  number | null = null;
     _shadingDomeFadeOutStartMs: number | null = null;
     _shadingDomeFadeRaf?:       number;
@@ -1025,6 +1029,21 @@ export class HeliosCard extends LitElement
     //dashboard editor.
     protected updated(_changedProperties: PropertyValues): void
     {
+        //Mode-transition state machine. When the user clicks a different mode on the mode-bar,
+        //_onModeLayer / _onModeLidar / _onModeShadingDome set _cardMode directly; the click handler
+        //does nothing else. The rest of the transition (engine fade-in / fade-out kick, overlay mask
+        //flip) is centralised here so a single switch on _cardMode drives every side effect, and the
+        //picker .is-active classes are decoupled from the WebGL / SVG fade timestamps so they animate
+        //reliably on the same render as the mode flip.
+        if (_changedProperties.has('_cardMode'))
+        {
+            const prev = (_changedProperties.get('_cardMode') as CardMode | undefined) ?? 'base';
+            if (prev !== this._cardMode)
+            {
+                this._handleCardModeChange(prev, this._cardMode);
+            }
+        }
+
         //Lazy Energy WS subscribe: HA can attach hass AFTER
         //connectedCallback, in which case our connect-time
         //subscribeEnergyPrefs call bailed out without callWS. The
@@ -1133,24 +1152,22 @@ export class HeliosCard extends LitElement
                 }, CONNECT_SETTLE_MS - sinceConnect + 16);
                 return;
             }
-            //Reset mode flags on identity change. Mode state lives on
-            //the card (`_lidarViewMode`, `_shadingDomeMode`, `_detailMode`)
-            //and survives the engine respawn, but the engine's
-            //corresponding active flags reset to false on every fresh
-            //instance. Without this reset, a card that was in
-            //LiDAR-View mode at the previous home would carry the
-            //`is-on` chrome over to the new home while the new engine
-            //quietly skips the LiDAR fetch, the user then clicks the
-            //LiDAR button expecting a refresh and instead toggles the
-            //view off because the card-side flag was already "on".
-            //Resetting to defaults forces a clean re-enter when the
-            //user clicks the mode they want at the new location.
+            //Reset mode flags on identity change. Mode state lives on the card (`_cardMode`,
+            //`_detailMode`) and survives the engine respawn, but the engine's corresponding active
+            //flags reset to false on every fresh instance. Without this reset, a card that was in
+            //LiDAR mode at the previous home would carry the `is-on` chrome over to the new home while
+            //the new engine quietly skips the LiDAR fetch, the user then clicks the LiDAR button
+            //expecting a refresh and instead toggles the view off because the card-side flag was
+            //already "on". Resetting to defaults forces a clean re-enter when the user clicks the mode
+            //they want at the new location.
             if (identityChanged)
             {
-                this._lidarViewMode   = false;
-                this._shadingDomeMode = false;
-                this._cloudMode   = false;
-                this._detailMode      = false;
+                this._cardMode           = 'base';
+                this._overlayMaskActive  = false;
+                this._lidarLayerActive   = false;
+                this._shadingDomeSvgVisible = false;
+                this._cloudMode          = false;
+                this._detailMode         = false;
             }
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
@@ -1898,11 +1915,15 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
+        //ha-card classes: theme + detail (dashboard) + one mode-* class derived directly from _cardMode
+        //+ an overlay-masked class for the chip / leader / arc / timeline hide rules (the mask LAGS the
+        //_cardMode flip on lidar -> base so the HUD does not pop back through the still-visible dot
+        //cloud, see _handleCardModeChange + the LiDAR fade loop completion handler for the timing).
         const cardClasses = [
             cardThemeClass,
-            this._detailMode      ? 'detail-active'        : '',
-            this._lidarViewMode   ? 'lidar-view-active'    : '',
-            this._shadingDomeChipMask ? 'shading-dome-active'  : '',
+            this._detailMode               ? 'detail-active'     : '',
+            `mode-${this._cardMode}`,
+            this._overlayMaskActive        ? 'overlay-masked'    : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -2018,7 +2039,7 @@ export class HeliosCard extends LitElement
                     //busy). Either keeps the spinner up.
                     const lidarLoading = hasProvider
                                        && ((!isLocal && this._shadowBusy)
-                                           || (this._lidarViewMode && this._lidarExposureBusy));
+                                           || (this._cardMode === 'lidar' && this._lidarExposureBusy));
                     const lidarReady   = hasProvider && (isLocal || !this._shadowBusy);
                     const lidarIcon   = !hasProvider ? 'mdi:cloud-off-outline'
                                        : lidarLoading ? 'mdi:loading'
@@ -2031,14 +2052,12 @@ export class HeliosCard extends LitElement
                     //Cloud mode is a soft per-layer reveal, not a mutually-exclusive view mode: it does NOT replace the
                     //default Layer UI, the user can keep the layer on AND inspect the cloud breakdown. So the Layer
                     //button stays lit while the cloud chips are revealed.
-                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode;
-                    //Lock mode-switching while the exposure sweep is in
-                    //flight: the user cannot exit / re-enter / swap
-                    //modes until the LiDAR view has finished computing.
-                    //Same guard applied to all 3 mode-bar buttons so a
-                    //race between "user clicks home" and "sweep midway"
-                    //can't leave the layer in a half-built state.
-                    const modeLocked = this._lidarViewMode && this._lidarExposureBusy;
+                    const isLayer    = this._cardMode === 'base';
+                    const isLidar    = this._cardMode === 'lidar';
+                    const isShading  = this._cardMode === 'shading-dome';
+                    //Lock mode-switching while the LiDAR exposure sweep is in flight: the user cannot
+                    //exit / re-enter / swap modes until the LiDAR view has finished computing.
+                    const modeLocked = isLidar && this._lidarExposureBusy;
                     //Mode-bar click handlers bound once as class fields
                     //(see _onModeLayer etc.) so Lit does not see a fresh
                     //closure identity on every render and re-attach the
@@ -2082,9 +2101,9 @@ export class HeliosCard extends LitElement
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${this._lidarViewMode ? 'is-on' : ''} ${(!lidarReady || modeLocked) ? 'is-disabled' : ''} ${lidarLoading ? 'is-loading' : ''}"
+                                    class="mode-bar-seg ${isLidar ? 'is-on' : ''} ${(!lidarReady || modeLocked) ? 'is-disabled' : ''} ${lidarLoading ? 'is-loading' : ''}"
                                     role="radio"
-                                    aria-checked="${this._lidarViewMode ? 'true' : 'false'}"
+                                    aria-checked="${isLidar ? 'true' : 'false'}"
                                     ?disabled="${!lidarReady || modeLocked}"
                                     aria-label="${lidarTitle}"
                                     @click="${onLidar}"
@@ -2093,9 +2112,9 @@ export class HeliosCard extends LitElement
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${this._shadingDomeMode ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
+                                    class="mode-bar-seg ${isShading ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
                                     role="radio"
-                                    aria-checked="${this._shadingDomeMode ? 'true' : 'false'}"
+                                    aria-checked="${isShading ? 'true' : 'false'}"
                                     ?disabled="${modeLocked}"
                                     aria-label="Adaptive shading dome"
                                     @click="${onShading}"
@@ -2768,18 +2787,11 @@ export class HeliosCard extends LitElement
     private _onModeLayer = (): void =>
     {
         this._exitScrubMode();
-        if (this._lidarViewMode)
-        {
-            toggleLidarView(this);
-        }
-        if (this._shadingDomeMode)
-        {
-            toggleShadingDome(this);
-        }
-        //Restore the user's cloud-mode preference when returning to the Layer view. _onModeLidar and _onModeShadingDome
-        //force _cloudMode = false to keep the full-screen modes visually clean, but do NOT write to localStorage so the
-        //user's underlying preference survives. Re-read it here so the per-layer chips come back automatically when
-        //the user lands on Layer.
+        this._cardMode = 'base';
+        //Restore the user's cloud-mode preference when returning to the Layer view. _onModeLidar and
+        //_onModeShadingDome force _cloudMode = false to keep the full-screen modes visually clean,
+        //but do NOT write to localStorage so the user's underlying preference survives. Re-read it
+        //here so the per-layer chips come back automatically when the user lands on Layer.
         this._cloudMode = HeliosCard._readCloudModePref();
     };
     //Cloud cover detail toggle. ON reveals 3 chips (low / mid /
@@ -2818,32 +2830,82 @@ export class HeliosCard extends LitElement
     private _onModeLidar = (): void =>
     {
         this._exitScrubMode();
-        if (this._shadingDomeMode)
-        {
-            toggleShadingDome(this);
-        }
-        //LiDAR and Shading replace the whole HUD; force the cloud mode OFF so the per-layer chips don't leak through.
-        //Mode-bar handlers do NOT write to localStorage so the user's underlying cloud-mode preference survives, see
-        //_onModeLayer for the restore.
+        //LiDAR + ShadingDome replace the whole HUD: force the cloud mode OFF so the per-layer chips do
+        //not leak through. Mode-bar handlers do NOT write to localStorage so the user's underlying
+        //cloud-mode preference survives, see _onModeLayer for the restore.
         this._cloudMode = false;
-        if (!this._lidarViewMode)
-        {
-            toggleLidarView(this);
-        }
+        this._cardMode  = 'lidar';
     };
     private _onModeShadingDome = (): void =>
     {
         this._exitScrubMode();
-        if (this._lidarViewMode)
-        {
-            toggleLidarView(this);
-        }
         this._cloudMode = false;
-        if (!this._shadingDomeMode)
-        {
-            toggleShadingDome(this);
-        }
+        this._cardMode  = 'shading-dome';
     };
+    //Mode-transition state machine. Called from updated() when _cardMode changed. Single switch on
+    //the (prev, next) pair drives:
+    //  1. _overlayMaskActive: ON the moment we leave base. OFF on shading-dome -> base immediately
+    //     (the dome SVG is faint, the HUD can fade in through it). OFF on lidar -> base only AFTER
+    //     the WebGL dot-cloud fade-out completes (see the LiDAR fade loop completion handler) so the
+    //     HUD chips do not pop back through the still-visible cloud.
+    //  2. LiDAR enter / exit: enterLidarView() activates the engine layer + kicks the alpha ramp;
+    //     exitLidarView() starts the fade-out, the engine layer is torn down at end-of-fade.
+    //  3. ShadingDome enter / exit: enterShadingDome() rebuilds the scene + kicks the fade-in;
+    //     exitShadingDome() starts the fade-out, the SVG is dropped at end-of-fade.
+    //
+    //CSS animations (slider slide-in / slide-out, chip + leader + arc fade, timeline slide) run on
+    //their own classes (.is-active on the sliders, .overlay-masked on ha-card) which derive directly
+    //from _cardMode / _overlayMaskActive in the render output. No keyframes, no animation: forwards,
+    //no rAF defers, just transitions on the CSS rule's base style that fire on class change.
+    private _handleCardModeChange(prev: CardMode, next: CardMode): void
+    {
+        if (next !== 'base')
+        {
+            this._overlayMaskActive = true;
+        }
+
+        if (prev === 'lidar' && next !== 'lidar')
+        {
+            //Only kick the WebGL exit fade if the layer was actually activated. If a previous enter
+            //bailed (no provider), _lidarLayerActive stays false and the exit would only schedule a
+            //wasted fade loop with no visible effect.
+            if (this._lidarLayerActive)
+            {
+                exitLidarView(this);
+            }
+        }
+        else if (prev !== 'lidar' && next === 'lidar')
+        {
+            const entered = enterLidarView(this);
+            if (!entered)
+            {
+                //Engine reports no LiDAR provider covers the active home, bail back to base so the
+                //mode-bar chrome does not stay lit on a mode the user cannot actually be in. Reset
+                //the overlay mask too so the chips do not flash hidden for one render frame.
+                this._overlayMaskActive = false;
+                this._cardMode          = 'base';
+                return;
+            }
+        }
+
+        if (prev === 'shading-dome' && next !== 'shading-dome')
+        {
+            if (this._shadingDomeSvgVisible)
+            {
+                exitShadingDome(this);
+            }
+            if (next === 'base')
+            {
+                //Dome SVG is faint, lift the overlay mask immediately so the chips + timeline slide
+                //back in while the dome fades out underneath. Symmetric to the historical behaviour.
+                this._overlayMaskActive = false;
+            }
+        }
+        else if (prev !== 'shading-dome' && next === 'shading-dome')
+        {
+            enterShadingDome(this);
+        }
+    }
     //Reset the timeline scrub state so the absolutely-positioned
     //scrub tooltip element disappears in the next render. Called
     //from the mode-bar handlers because a mode swap shifts the

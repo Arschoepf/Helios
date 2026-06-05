@@ -43,6 +43,7 @@ export const nn: Translations = {
         dayLabelDayBefore:    'For 2 dagar sidan',
         dayLabelTomorrow:     'I morgon',
         dayLabelDayAfter:     'Om 2 dagar',
+        shadingDomeHint:      'Sjølvlært skuggekuppel. Kvar celle viser gjennomsnittleg PV-effekt i den solposisjonen, for skydekket valt under. Helios bruker den på prognosen slik at faktiske skuggar (eit tre kl. 16, ein pipe om vinteren) fangast opp automatisk.',
     },
 
     editor:

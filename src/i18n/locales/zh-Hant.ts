@@ -44,6 +44,7 @@ export const zhHant: Translations = {
         dayLabelDayBefore:    '2 天前',
         dayLabelTomorrow:     '明天',
         dayLabelDayAfter:     '2 天後',
+        shadingDomeHint:      '自學習遮陽穹頂。每個單元格顯示該太陽位置上的平均光伏輸出，對應下方選擇的雲量。Helios將其應用於預報，因此真實陰影（下午4點的樹木、冬季的煙囪）會自動被捕獲。',
     },
 
     editor:

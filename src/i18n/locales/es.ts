@@ -40,6 +40,7 @@ export const es: Translations = {
         dayLabelDayBefore:    'Hace 2 días',
         dayLabelTomorrow:     'Mañana',
         dayLabelDayAfter:     'En 2 días',
+        shadingDomeHint:      'Cúpula de sombreado autoaprendida. Cada celda muestra la salida fotovoltaica media en esa posición del sol, para la cobertura nubosa elegida abajo. Helios la aplica a la previsión para que las sombras reales (un árbol a las 16 h, una chimenea en invierno) se capturen automáticamente.',
     },
 
     editor:

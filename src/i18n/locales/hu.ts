@@ -45,6 +45,7 @@ export const hu: Translations = {
         dayLabelDayBefore:    'Tegnapelőtt',
         dayLabelTomorrow:     'Holnap',
         dayLabelDayAfter:     'Holnapután',
+        shadingDomeHint:      'Önállóan tanult árnyékoló kupola. Minden cella az átlagos PV-kimenetet mutatja az adott napállásban, az alábbi felhőborításra. A Helios alkalmazza ezt az előrejelzésre, így a valódi árnyékok (egy fa délután 4-kor, egy kémény télen) automatikusan rögzítésre kerülnek.',
     },
 
     editor:

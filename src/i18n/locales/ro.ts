@@ -45,6 +45,7 @@ export const ro: Translations = {
         dayLabelDayBefore:    'Acum 2 zile',
         dayLabelTomorrow:     'Mâine',
         dayLabelDayAfter:     'Peste 2 zile',
+        shadingDomeHint:      'Cupolă de umbrire auto-învățată. Fiecare celulă arată producția medie PV în acea poziție a soarelui, pentru acoperirea de nori aleasă mai jos. Helios o aplică prognozei astfel încât umbrele reale (un copac la ora 16, un coș de fum iarna) sunt capturate automat.',
     },
 
     editor:

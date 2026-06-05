@@ -28,6 +28,7 @@ import {
     type ShadingMap,
 } from '../engine/shadingMap';
 import type { HeliosEngine } from '../helios-engine';
+import type { CardMode } from './card-mode';
 
 
 //1 s for both directions: enter wipes the dome into view top-down, exit wipes it out bottom-up. Long enough that the reveal reads as a deliberate
@@ -43,15 +44,11 @@ const DOME_FADE_OUT_MS = 280;
 export interface ShadingDomeHost extends OverlaysHost
 {
     readonly _engine?: HeliosEngine;
-    _shadingDomeMode:           boolean;
-    //Independent CSS-mask flag for the shading-dome-active body class.
-    //Decouples the HUD hide rule from the dome's own render gating so
-    //a toggle-off can lift the chip + timeline transitions IMMEDIATELY
-    //(at click time) while the dome SVG keeps fading out via the rAF
-    //loop. Without this decoupling, the chip transitions chased the
-    //class flip happening at end-of-fade and Lit's batched paint
-    //collapsed the lift to an instant, which read as "no animation".
-    _shadingDomeChipMask:       boolean;
+    _cardMode:                  CardMode;
+    _overlayMaskActive:         boolean;
+    //SVG visibility flag, lets the dome SVG keep rendering through its exit fade after _cardMode
+    //already moved off shading-dome. Flipped to false by the fade loop on fade-out completion.
+    _shadingDomeSvgVisible:     boolean;
     _shadingDomeFadeInStartMs:  number | null;
     _shadingDomeFadeOutStartMs: number | null;
     _shadingDomeFadeRaf?:       number;
@@ -78,47 +75,36 @@ export interface ShadingDomeScene
 }
 
 
-//Toggle entry point. Mutually exclusive with the LiDAR view; the
-//caller (helios-card click handler) is responsible for closing
-//LiDAR-view first if needed.
-export function toggleShadingDome(host: ShadingDomeHost): void
+//Start the ShadingDome enter animation. The dome SVG fades in over DOME_FADE_IN_MS via inline opacity
+//driven by the fade loop's per-frame requestUpdate. The slider + hint slide-in CSS transitions run
+//independently, driven by the picker's .is-active class which derives from _cardMode === 'shading-dome'.
+//Called from the card's _handleCardModeChange when _cardMode transitions INTO 'shading-dome'.
+export function enterShadingDome(host: ShadingDomeHost): boolean
 {
     if (!host._engine)
     {
-        return;
+        return false;
     }
-    if (!host._shadingDomeMode)
-    {
-        host._shadingDomeFadeOutStartMs = null;
-        host._shadingDomeFadeInStartMs  = performance.now();
-        host._shadingDomeMode           = true;
-        refreshShadingDomeScene(host);
-        refreshOverlays(host);
-        //Chip mask flip deferred by one frame so the dome SVG commits its opacity-0 first frame BEFORE
-        //the shading-dome-active class hits ha-card (without the gap the chip transitions collapsed into
-        //the same paint as the class flip and the chips popped instantly). Symmetric to the exit path.
-        requestAnimationFrame(() =>
-        {
-            host._shadingDomeChipMask = true;
-            host.requestUpdate();
-        });
-        startShadingDomeFadeLoop(host);
-    }
-    else
-    {
-        //Toggle off: lift the chip mask IMMEDIATELY so the
-        //shading-dome-active class drops off ha-card on the same
-        //paint as the click. The chip + timeline transitions fire
-        //right away from a clean reflow point, while the dome SVG
-        //keeps rendering via _shadingDomeMode = true + the fade-out
-        //marker. The rAF tick at end-of-fade flips _shadingDomeMode
-        //off to retire the dome render gate.
-        host._shadingDomeFadeInStartMs  = null;
-        host._shadingDomeFadeOutStartMs = performance.now();
-        host._shadingDomeChipMask       = false;
-        refreshOverlays(host);
-        startShadingDomeFadeLoop(host);
-    }
+    host._shadingDomeFadeOutStartMs = null;
+    host._shadingDomeFadeInStartMs  = performance.now();
+    host._shadingDomeSvgVisible     = true;
+    refreshShadingDomeScene(host);
+    refreshOverlays(host);
+    startShadingDomeFadeLoop(host);
+    return true;
+}
+
+
+//Start the ShadingDome exit animation. The dome SVG fades back out over DOME_FADE_OUT_MS, then the
+//fade loop tears the SVG down (sets _shadingDomeSvgVisible = false). Unlike the LiDAR exit, the
+//overlay mask drops IMMEDIATELY in the state machine if _cardMode === 'base', because the dome SVG is
+//faint enough that the HUD chips reading through it during the fade looks fine. So the only thing
+//this function does is kick the fade loop.
+export function exitShadingDome(host: ShadingDomeHost): void
+{
+    host._shadingDomeFadeInStartMs  = null;
+    host._shadingDomeFadeOutStartMs = performance.now();
+    startShadingDomeFadeLoop(host);
 }
 
 
@@ -139,8 +125,7 @@ export function startShadingDomeFadeLoop(host: ShadingDomeHost): void
         if (outStart !== null && now - outStart >= DOME_FADE_OUT_MS)
         {
             host._shadingDomeFadeOutStartMs = null;
-            host._shadingDomeMode           = false;
-            host._shadingDomeChipMask       = false;
+            host._shadingDomeSvgVisible     = false;
             host._shadingDomeScene          = null;
             refreshOverlays(host);
         }
@@ -196,7 +181,7 @@ const _DECODE_REFRESH_MS = 5 * 60_000;
 
 export function refreshShadingDomeScene(host: ShadingDomeHost): void
 {
-    if (!host._shadingDomeMode || !host._engine)
+    if (!host._shadingDomeSvgVisible || !host._engine)
     {
         host._shadingDomeScene = null;
         return;
@@ -293,7 +278,7 @@ export function shadingDomeFadeAlpha(host: ShadingDomeHost): number
     {
         return 1 - Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS));
     }
-    return host._shadingDomeMode ? 1 : 0;
+    return host._shadingDomeSvgVisible ? 1 : 0;
 }
 
 
@@ -331,7 +316,7 @@ export function shadingDomeWipeThreshold(host: ShadingDomeHost): number
         const t = easeOutQuad(Math.max(0, Math.min(1, (now - host._shadingDomeFadeOutStartMs) / DOME_FADE_OUT_MS)));
         return (1 - t) * DOME_WIPE_MAX_DEG;
     }
-    return host._shadingDomeMode ? DOME_WIPE_MAX_DEG : 0;
+    return host._shadingDomeSvgVisible ? DOME_WIPE_MAX_DEG : 0;
 }
 
 
@@ -356,7 +341,7 @@ function wipeAlphaForAltitude(cellAltitudeDeg: number, threshold: number): numbe
 //between transitions when the dome is fully hidden, both to save a Lit pass and to make sure pointer-events don't sit on an invisible overlay.
 function shouldRenderShadingDome(host: ShadingDomeHost): boolean
 {
-    return host._shadingDomeMode
+    return host._shadingDomeSvgVisible
         || host._shadingDomeFadeInStartMs !== null
         || host._shadingDomeFadeOutStartMs !== null;
 }
@@ -531,7 +516,9 @@ export function renderShadingDomeCloudPicker(
     //with opacity 0. The exit fade marker drops the class straight
     //away on toggle-off so the pill slides DOWN in parallel with the
     //dome's own fade-out instead of waiting for it to complete.
-    const sliderActive = host._shadingDomeMode && host._shadingDomeFadeOutStartMs === null;
+    //.is-active is a direct projection of _cardMode (single @state). Slide-in / slide-out fire on the
+    //same render as the mode flip, no coupling to the SVG fade-out timestamp.
+    const sliderActive = host._cardMode === 'shading-dome';
     const activeCls    = sliderActive ? ' is-active' : '';
     const tr = pickTranslations((host as unknown as { hass?: { language?: string } }).hass?.language);
     const hint = tr.detail.shadingDomeHint

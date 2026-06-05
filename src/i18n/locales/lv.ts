@@ -45,6 +45,7 @@ export const lv: Translations = {
         dayLabelDayBefore:    'Aizvakar',
         dayLabelTomorrow:     'Rīt',
         dayLabelDayAfter:     'Parīt',
+        shadingDomeHint:      'Pašmācīts ēnu kupols. Katra šūna parāda vidējo PV izvadi šajā saules pozīcijā, atbilstoši apakšā izvēlētajam mākoņu segumam. Helios to izmanto prognozē, lai reālas ēnas (koks pulksten 16, dūmenis ziemā) tiktu uztvertas automātiski.',
     },
 
     editor:

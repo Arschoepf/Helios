@@ -44,6 +44,7 @@ export const is_: Translations = {
         dayLabelDayBefore:    'Fyrir 2 dögum',
         dayLabelTomorrow:     'Á morgun',
         dayLabelDayAfter:     'Eftir 2 daga',
+        shadingDomeHint:      'Sjálflærður skyggjakúpur. Hver hólf sýnir meðalstilling PV í þeirri sólstöðu, fyrir skýjahuluna sem valin er hér að neðan. Helios beitir henni á spána þannig að raunverulegir skuggar (tré klukkan 16, reykháfur á veturna) fangast sjálfkrafa.',
     },
 
     editor:

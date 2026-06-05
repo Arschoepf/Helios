@@ -44,6 +44,7 @@ export const ko: Translations = {
         dayLabelDayBefore:    '2일 전',
         dayLabelTomorrow:     '내일',
         dayLabelDayAfter:     '2일 후',
+        shadingDomeHint:      '자가 학습 차양 돔. 각 셀은 해당 태양 위치에서의 평균 PV 출력을, 아래에서 선택한 운량에 대해 보여줍니다. Helios는 이를 예보에 적용하여 실제 그림자(오후 4시의 나무, 겨울철 굴뚝)가 자동으로 캡처됩니다.',
     },
 
     editor:

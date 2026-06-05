@@ -42,6 +42,7 @@ export const sv: Translations = {
         dayLabelDayBefore:    'För 2 dagar sedan',
         dayLabelTomorrow:     'Imorgon',
         dayLabelDayAfter:     'Om 2 dagar',
+        shadingDomeHint:      'Självlärt skuggkupol. Varje cell visar genomsnittlig PV-effekt i den solpositionen, för det molntäcke som valts nedan. Helios applicerar den på prognosen så att verkliga skuggor (ett träd kl. 16, en skorsten på vintern) fångas automatiskt.',
     },
 
     editor:

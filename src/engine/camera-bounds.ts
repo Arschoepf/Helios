@@ -9,6 +9,6 @@
 //without introducing a circular import (detail-mode lives under src/engine/ and is imported by the
 //engine itself).
 
-export const CAMERA_PITCH_MIN_DEG  = 30;
-export const CAMERA_PITCH_MAX_DEG  = 75;
-export const CAMERA_PITCH_REST_DEG = 55;
+export const CAMERA_PITCH_MIN_DEG  = 15;
+export const CAMERA_PITCH_MAX_DEG  = 60;
+export const CAMERA_PITCH_REST_DEG = 37;

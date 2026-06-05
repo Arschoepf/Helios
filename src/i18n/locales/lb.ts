@@ -43,6 +43,7 @@ export const lb: Translations = {
         dayLabelDayBefore:    'Virun 2 Deeg',
         dayLabelTomorrow:     'Muer',
         dayLabelDayAfter:     'An 2 Deeg',
+        shadingDomeHint:      'Selbstgeléiert Schiedekuppel. All Zell weist den duerchschnëttleche PV-Output op där Sonnepositioun, fir d\'Wollekendecke ënnert gewielt. Helios benotzt et op d\'Prognose, sou dass reell Schiet (e Bam ëm 16 Auer, en Kamäin am Wanter) automatesch erfaasst ginn.',
     },
 
     editor:
