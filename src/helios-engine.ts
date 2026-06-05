@@ -10,6 +10,7 @@ import { LidarViewLayer } from './engine/lidar-view-layer';
 import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
+import { CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG } from './engine/camera-bounds';
 import
 {
     shadowRasterSizeFor,
@@ -719,12 +720,9 @@ export class HeliosEngine
         const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
         if (Number.isFinite(raw))
         {
-            //Clamped to the same 30..85 range as the drag-rotate handler + setCameraPitch so a stored or
-            //YAML-configured pose cannot bypass the floor. The user reported the pitch could still dip
-            //below 30 = this was the entry point (initial map() pitch + every easeTo back to home).
-            return Math.max(30, Math.min(85, raw));
+            return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw));
         }
-        return 55;
+        return CAMERA_PITCH_REST_DEG;
     }
     //True when manual drag-rotate / drag-pitch + the idle auto-orbit
     //should all be suppressed because the user opted into a locked
@@ -758,7 +756,7 @@ export class HeliosEngine
         {
             return;
         }
-        const clamped = Math.max(30, Math.min(85, deg));
+        const clamped = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, deg));
         this.map.setPitch(clamped);
     }
     //Toggle the lock at runtime so the lock chip applies immediately
@@ -1058,11 +1056,11 @@ export class HeliosEngine
             zoom:            18,
             pitch:           this._initialPitch(),
             bearing:         this._initialBearing(),
-            //MapLibre default maxPitch is 60, default minPitch is 0. Match the in-card 30 / 85 clamp so
-            //MapLibre's own internals (animation easing, pinch-zoom-rotate, programmatic jumpTo / easeTo
-            //fallbacks) can never drop below 30 or rise above 85 even when callers forget to clamp first.
-            minPitch:        30,
-            maxPitch:        85,
+            //MapLibre default maxPitch is 60, default minPitch is 0. Push our own bounds in so the
+            //library's internals (animation easing, pinch-zoom-rotate, programmatic jumpTo / easeTo
+            //fallbacks) can never bypass the floor / ceiling even when callers forget to clamp first.
+            minPitch:        CAMERA_PITCH_MIN_DEG,
+            maxPitch:        CAMERA_PITCH_MAX_DEG,
             //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
             //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
             //its dive animation and resets it on exit.
@@ -1309,18 +1307,12 @@ export class HeliosEngine
         canvas.style.touchAction = 'none';
 
         const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
-        //Vertical drag controls camera pitch. dy positive (drag down)
-        //tilts the camera flatter (less top-down, more horizon-on);
-        //dy negative (drag up) tilts it back toward the bird's-eye.
-        //Bounds: [15°, 85°]. The wider span lets the user dive
-        //almost top-down (15°) for a "map view" feel or peek almost
-        //flat against the ground (85°) for a "ground-level" feel,
-        //without ever allowing the camera to dip below the ground
-        //plane (90° would reveal the missing under-side of the
-        //basemap mesh).
+        //Vertical drag controls camera pitch. dy positive (drag down) tilts the camera flatter (less
+        //top-down, more horizon-on), dy negative (drag up) tilts it back toward the bird's-eye. Bounds
+        //pulled from the module-level CAMERA_PITCH_MIN_DEG / MAX so this handler stays in sync with
+        //every other pitch entry point (MapLibre constructor, setCameraPitch, _initialPitch,
+        //detail-mode dive target).
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
-        const PITCH_MIN_DEG = 30;
-        const PITCH_MAX_DEG = 85;
         let dragRotating  = false;
         let lastPointerX  = 0;
         let lastPointerY  = 0;
@@ -1384,7 +1376,7 @@ export class HeliosEngine
             //the horizon up toward the bird's-eye. Clamp at the
             //session bounds so the camera can never look past the
             //ground.
-            const nextPitch = Math.max(PITCH_MIN_DEG, Math.min(PITCH_MAX_DEG,
+            const nextPitch = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG,
                 this.map.getPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
             this.map.setPitch(nextPitch);
         };

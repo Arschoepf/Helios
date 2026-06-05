@@ -16,12 +16,13 @@
 //it back to 18 once the exit transition lands.
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import { CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_REST_DEG } from './camera-bounds';
 
 
 const DETAIL_MODE_ZOOM_TARGET     = 19.5;
-//Detail-mode dive ends at the in-card pitch min (30 deg = mostly top-down). At 80 deg the ground was
-//nearly edge-on and the house read as a flat smudge per the user's call.
-const DETAIL_MODE_PITCH_TARGET    = 30;
+//Detail-mode dive ends at the in-card pitch min so the house reads as a mostly top-down 3D model. At
+//80 deg (an earlier value) the ground was nearly edge-on and the house read as a flat smudge.
+const DETAIL_MODE_PITCH_TARGET    = CAMERA_PITCH_MIN_DEG;
 const DETAIL_MODE_TRANSITION_MS   = 800;
 //Window during which fresh user gestures are swallowed after a
 //detail-mode exit. The exit click that dismisses the dashboard
@@ -96,7 +97,7 @@ export function setDetailMode(host: DetailModeHost, on: boolean): void
         diveCamera(
             host,
             18,
-            55,
+            CAMERA_PITCH_REST_DEG,
             -DETAIL_MODE_BEARING_SWEEP,
             false,
             () =>
