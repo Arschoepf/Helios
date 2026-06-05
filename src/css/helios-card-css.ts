@@ -623,9 +623,10 @@ export const heliosCardStyles = css`
     }
     .dash-radial-svg
     {
-        /*  Cap at 72 % of the card width on wide cards so the dial reads as a focal disc rather than
-            a stage-spanning donut, with a vh ceiling so portrait phones stay below the card height. */
-        width:      min(100%, 72%);
+        /*  Width caps at 92 % of the available card column so the dial reads as the focal element
+            without crowding the side gutters. Height caps at the available space, the aspect ratio
+            stays 1 / 1 so the dial is always a true circle. */
+        width:      min(100%, 92%);
         height:     auto;
         max-height: 100%;
         aspect-ratio: 1 / 1;
@@ -669,8 +670,10 @@ export const heliosCardStyles = css`
     .dash-radial-corner-clock { color: var(--primary-color, #03a9f4); }
 
 
-    /*  Ring tracks (background of each data ring). Same vocabulary across the three rings, only the
-        token differs so each ring picks up the right energy-palette colour. */
+    /*  Ring tracks (background of each ring). Same vocabulary across the three data rings, only the
+        token differs so each ring picks up the right energy-palette colour. The dial track is
+        slightly stronger so it reads as a structural anchor for the hour labels + ticks living
+        inside it. */
     .dash-radial-cloud-track
     {
         stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 12%, transparent);
@@ -682,6 +685,10 @@ export const heliosCardStyles = css`
     .dash-radial-cons-track
     {
         stroke: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 14%, transparent);
+    }
+    .dash-radial-dial-track
+    {
+        stroke: color-mix(in srgb, var(--divider-color, rgba(255, 255, 255, 0.12)) 70%, transparent);
     }
 
     /*  Ring fills + future outlines. Past portions render as filled polygons (solid area below the

@@ -35,16 +35,24 @@ import { pickTranslations } from '../i18n';
 //room. ViewBox stays at 400 so external aspect ratios + max-width caps still apply consistently.
 const VIEWBOX                  = 400;
 const CENTER                   = 200;
-const R_SUN_REF                = 48;   //reference rim circle (no background fill), also max disc radius
-const R_CLOUD_INNER            = 56;
-const R_CLOUD_OUTER            = 80;
-const R_PROD_INNER             = 82;
-const R_PROD_OUTER             = 110;
-const R_CONS_INNER             = 112;
-const R_CONS_OUTER             = 140;
-const R_DIAL_INNER             = 145;
-const R_DIAL_OUTER             = 162;
-const R_HOUR_LABEL             = R_DIAL_OUTER + 11;  //label baseline radius
+//Concentric ANNULI with breathing gaps between them. Each data ring has an explicit inner edge,
+//outer edge and a 4 unit gap before the next ring. The dial ring is wide enough to host its hour
+//labels INSIDE it (at R_HOUR_LABEL = mid annulus) plus the quarter / half ticks against its outer
+//edge. Outer dial 188, up from the previous 162, restores the visual weight after the over-
+//tightening in v2.
+const R_SUN_REF                = 52;   //reference rim circle, also irradiance max disc radius
+const R_CLOUD_INNER            = 60;
+const R_CLOUD_OUTER            = 86;
+const R_PROD_INNER             = 92;
+const R_PROD_OUTER             = 118;
+const R_CONS_INNER             = 124;
+const R_CONS_OUTER             = 150;
+const R_DIAL_INNER             = 156;
+const R_DIAL_OUTER             = 188;
+const R_HOUR_LABEL             = R_DIAL_INNER + (R_DIAL_OUTER - R_DIAL_INNER) * 0.42;  //labels inside the dial annulus
+const R_TICK_OUTER             = R_DIAL_OUTER - 2;
+const R_TICK_INNER_HALF        = R_DIAL_OUTER - 9;
+const R_TICK_INNER_QUARTER     = R_DIAL_OUTER - 5;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
@@ -58,12 +66,15 @@ function polarPt(hour: number, radius: number, cx: number = CENTER, cy: number =
 }
 
 
-//Closed radial fill path along the supplied per-hour radii. Sub-hour interpolation (3 vertices per
-//hour gap) keeps the polygon visually smooth without paying for a true spline.
-function buildRadialFillPath(
+//Annulus fill path bounded between the inner edge (fixed at innerRadius) and a variable outer
+//curve that traces the per-hour data values. Emits two subpaths so SVG fill-rule="evenodd" carves
+//out the area between them; the inner circle alone would have made the fill spill all the way to
+//the centre, the earlier "closed polygon from the centre" recipe likewise. Sub-hour interpolation
+//(3 vertices per hour gap) keeps the variable curve visually smooth without paying for a true spline.
+function buildRadialAnnulusPath(
     perHourValues: ReadonlyArray<number | null>,
     scaleMax:      number,
-    baseRadius:    number,
+    innerRadius:   number,
     outerRadius:   number,
 ): string
 {
@@ -72,12 +83,13 @@ function buildRadialFillPath(
         return '';
     }
     let d = '';
+    //Outer curve, variable per hour.
     for (let h = 0; h < 24; h++)
     {
         const v     = perHourValues[h];
-        const r     = v === null ? baseRadius : baseRadius + Math.max(0, Math.min(1, v / scaleMax)) * (outerRadius - baseRadius);
+        const r     = v === null ? innerRadius : innerRadius + Math.max(0, Math.min(1, v / scaleMax)) * (outerRadius - innerRadius);
         const next  = perHourValues[(h + 1) % 24];
-        const rNext = next === null ? baseRadius : baseRadius + Math.max(0, Math.min(1, next / scaleMax)) * (outerRadius - baseRadius);
+        const rNext = next === null ? innerRadius : innerRadius + Math.max(0, Math.min(1, next / scaleMax)) * (outerRadius - innerRadius);
         for (const f of [0, 1/3, 2/3])
         {
             const hour = h + f;
@@ -87,6 +99,17 @@ function buildRadialFillPath(
         }
     }
     d += ' Z';
+    //Inner edge: fixed circle at innerRadius. 48 vertices for a visually smooth fill boundary.
+    {
+        const [x0, y0] = polarPt(0, innerRadius);
+        d += ' M ' + x0.toFixed(2) + ' ' + y0.toFixed(2);
+        for (let i = 1; i <= 48; i++)
+        {
+            const [x, y] = polarPt((i / 48) * 24, innerRadius);
+            d += ' L ' + x.toFixed(2) + ' ' + y.toFixed(2);
+        }
+        d += ' Z';
+    }
     return d;
 }
 
@@ -462,18 +485,23 @@ function currentHourFraction(): number
 
 //Pointer -> hour conversion. Reads the SVG's bounding box, computes the angle of (clientX, clientY)
 //relative to the centre and maps it into the [0, 24) hour range using the same noon-on-top clockwise
-//convention as the rest of the file.
+//convention as the rest of the file. The v2 implementation mapped angle 0 to hour 0, which mirrored
+//the dial: the pointer sitting at 2 a.m. resolved to 14:00 and vice versa. The dial places 12:00 at
+//angle 0 (top), so the inverse must add 12 before wrapping back into [0, 24).
 function pointerToHourFraction(svgEl: SVGSVGElement, clientX: number, clientY: number): number
 {
     const rect = svgEl.getBoundingClientRect();
     const dx   = clientX - (rect.left + rect.width  / 2);
     const dy   = clientY - (rect.top  + rect.height / 2);
-    if (dx === 0 && dy === 0) { return 0; }
+    if (dx === 0 && dy === 0) { return 12; }
     //atan2(dx, -dy) yields 0 at top, +pi/2 at right, +/-pi at bottom, -pi/2 at left. Add 2*pi to
-    //wrap the lower half into positive, then scale.
+    //wrap the lower half into positive.
     let a = Math.atan2(dx, -dy);
     if (a < 0) { a += 2 * Math.PI; }
-    return (a / (2 * Math.PI)) * 24;
+    //angle 0 -> hour 12 (top of dial), angle pi -> hour 0 (bottom), wrap into [0, 24).
+    let hour = 12 + (a / (2 * Math.PI)) * 24;
+    if (hour >= 24) { hour -= 24; }
+    return hour;
 }
 
 
@@ -507,16 +535,16 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const ceilPastH = Math.ceil(pastEndHour);
     const floorPastH = Math.floor(pastEndHour);
     const prodPastPath = pastEndHour > 0
-        ? buildRadialFillPath(hourlyProd.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
+        ? buildRadialAnnulusPath(hourlyProd.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
         : '';
     const prodFuturePath = pastEndHour < 24
         ? buildRadialOutlinePath(hourlyProd, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, floorPastH, 24)
         : '';
     const consPastPath = pastEndHour > 0
-        ? buildRadialFillPath(hourlyCons.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), consScaleMax, R_CONS_INNER, R_CONS_OUTER)
+        ? buildRadialAnnulusPath(hourlyCons.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), consScaleMax, R_CONS_INNER, R_CONS_OUTER)
         : '';
     const cloudPastPath = pastEndHour > 0
-        ? buildRadialFillPath(hourlyCloud.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
+        ? buildRadialAnnulusPath(hourlyCloud.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
         : '';
     const cloudFuturePath = pastEndHour < 24
         ? buildRadialOutlinePath(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
@@ -583,19 +611,18 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         cornerClock      = null;
     }
 
-    //Quarter-hour ticks: 24 hours * 4 = 96 ticks. The hour ticks (every 4 ticks) are NOT painted
-    //here because the hour labels themselves anchor the eye on the cardinals; the user only asked
-    //for the smaller quarter-hour marks.
+    //Quarter-hour ticks live INSIDE the dial annulus, anchored at its outer edge (R_TICK_OUTER) and
+    //extending inward toward the labels. Three sub-hour ticks per hour (15 / 30 / 45 minutes), the
+    //half-hour mark slightly longer + more opaque so the eye still snaps to it.
     const quarterTicks: TemplateResult[] = [];
     for (let q = 0; q < 96; q++)
     {
-        if (q % 4 === 0) { continue; }  //hour positions: the label takes its place
+        if (q % 4 === 0) { continue; }  //hour positions are anchored by the label, no tick
         const hour     = q / 4;
         const isHalf   = q % 2 === 0;
-        const innerR   = R_DIAL_INNER;
-        const outerR   = R_DIAL_INNER + (isHalf ? 5 : 3);
+        const innerR   = isHalf ? R_TICK_INNER_HALF : R_TICK_INNER_QUARTER;
         const [x1, y1] = polarPt(hour, innerR);
-        const [x2, y2] = polarPt(hour, outerR);
+        const [x2, y2] = polarPt(hour, R_TICK_OUTER);
         const cls      = isHalf ? 'dash-radial-tick-half' : 'dash-radial-tick-quarter';
         quarterTicks.push(svg`<line class="${cls}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"/>`);
     }
@@ -668,20 +695,29 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                     </radialGradient>
                 </defs>
 
-                <!-- Ring tracks, lowest layer of the rings so the data curves paint cleanly on top. -->
+                <!-- Ring tracks. Each track is a circle with stroke-width = annulus thickness, so
+                     the visual is a real ring with breathing room between it and its neighbours.
+                     The dial track is drawn here too because the hour labels + sub-hour ticks live
+                     INSIDE the dial annulus and need its background to anchor them. -->
                 <circle class="dash-radial-cloud-track" cx="${CENTER}" cy="${CENTER}" r="${(R_CLOUD_INNER + R_CLOUD_OUTER) / 2}"
                         fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>
                 <circle class="dash-radial-prod-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_PROD_INNER  + R_PROD_OUTER)  / 2}"
                         fill="none" stroke-width="${R_PROD_OUTER - R_PROD_INNER}"/>
                 <circle class="dash-radial-cons-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_CONS_INNER  + R_CONS_OUTER)  / 2}"
                         fill="none" stroke-width="${R_CONS_OUTER - R_CONS_INNER}"/>
+                <circle class="dash-radial-dial-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_DIAL_INNER  + R_DIAL_OUTER)  / 2}"
+                        fill="none" stroke-width="${R_DIAL_OUTER - R_DIAL_INNER}"/>
 
-                <!-- Past + future curves, painted inside out so the outer rings stay on top. -->
-                ${cloudPastPath   ? svg`<path class="dash-radial-cloud-fill"   d="${cloudPastPath}"/>`   : nothing}
+                <!-- Past fills (annulus shapes between the ring's inner edge and the per-hour data
+                     curve) painted via the evenodd fill rule so the inner subpath carves the centre
+                     of the donut shape cleanly. Future outlines are a simple polyline along the data
+                     curve at the variable outer radius, no fill needed. Painted inside out so the
+                     outer rings stay on top. -->
+                ${cloudPastPath   ? svg`<path class="dash-radial-cloud-fill"   fill-rule="evenodd" d="${cloudPastPath}"/>`   : nothing}
                 ${cloudFuturePath ? svg`<path class="dash-radial-cloud-future" d="${cloudFuturePath}"/>` : nothing}
-                ${prodPastPath    ? svg`<path class="dash-radial-prod-fill"    d="${prodPastPath}"/>`    : nothing}
+                ${prodPastPath    ? svg`<path class="dash-radial-prod-fill"    fill-rule="evenodd" d="${prodPastPath}"/>`    : nothing}
                 ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
-                ${consPastPath    ? svg`<path class="dash-radial-cons-fill"    d="${consPastPath}"/>`    : nothing}
+                ${consPastPath    ? svg`<path class="dash-radial-cons-fill"    fill-rule="evenodd" d="${consPastPath}"/>`    : nothing}
 
                 <!-- Sun: halo (radial gradient), scaled inner fill, reference rim. No tinted bg disc:
                      the user asked for a single rim + a single inner fill matching the 3D card sun. -->
