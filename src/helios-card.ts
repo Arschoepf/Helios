@@ -1915,15 +1915,18 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
-        //ha-card classes: theme + detail (dashboard) + one mode-* class derived directly from _cardMode
-        //+ an overlay-masked class for the chip / leader / arc / timeline hide rules (the mask LAGS the
-        //_cardMode flip on lidar -> base so the HUD does not pop back through the still-visible dot
-        //cloud, see _handleCardModeChange + the LiDAR fade loop completion handler for the timing).
+        //ha-card classes: theme + detail (dashboard dive) + one mode-* class derived directly from
+        //_cardMode + an overlay-masked class for the chip / leader / arc / timeline hide rules. The
+        //mask LAGS the _cardMode flip on lidar -> base so the HUD does not pop back through the still-
+        //visible dot cloud (see _handleCardModeChange + the LiDAR fade loop completion handler), AND
+        //is unconditionally ON while detail mode is on so the same chip + timeline transitions fire
+        //when the user opens / closes the dashboard via a home click.
+        const overlayMasked = this._overlayMaskActive || this._detailMode;
         const cardClasses = [
             cardThemeClass,
-            this._detailMode               ? 'detail-active'     : '',
+            this._detailMode  ? 'detail-active'  : '',
             `mode-${this._cardMode}`,
-            this._overlayMaskActive        ? 'overlay-masked'    : '',
+            overlayMasked     ? 'overlay-masked' : '',
         ].filter(Boolean).join(' ');
 
         return html`

@@ -195,54 +195,12 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Detail mode, while ha-card carries .detail-active every
-        pre-existing overlay fades out and stops intercepting
-        pointer events. The transition rides at 0.35 s ease so the
-        fade matches the eye-pleasing pacing of the camera ease in
-        the engine (0.8 s total, but the fade should land before the
-        camera settles so the panel can come in clean on top).
-
-        IMPORTANT: the transition declaration sits on the BASE
-        selector, not inside the .detail-active rule. CSS only
-        animates between two states when both states share the
-        transition property, declaring it inside .detail-active
-        only would mean removing the class snaps opacity back to 1
-        with no fade-in. */
-.solar-svg,
-    .solar-pct-label,
-    .pv-home-leader-svg,
-    .pv-pct-label,
-    .battery-leader-svg,
-    .battery-pct-label,
-    .home-hitbox,
-    .home-glow-svg,
-    .home-drop-leader-svg,
-    .time-bar
-    {
-        transition: opacity 0.35s ease;
-    }
-    ha-card.detail-active .solar-svg,
-    ha-card.detail-active .solar-pct-label,
-    ha-card.detail-active .pv-home-leader-svg,
-    ha-card.detail-active .pv-pct-label,
-    ha-card.detail-active .battery-leader-svg,
-    ha-card.detail-active .battery-pct-label,
-    ha-card.detail-active .grid-leader-svg,
-    ha-card.detail-active .grid-import-label,
-    ha-card.detail-active .grid-export-label,
-    ha-card.detail-active .home-hitbox,
-    ha-card.detail-active .home-glow-svg,
-    ha-card.detail-active .home-drop-leader-svg,
-    ha-card.detail-active .home-pill,
-    ha-card.detail-active .overlay-top-left
-    {
-        opacity: 0;
-        pointer-events: none;
-    }
-    /*  Timeline slides DOWN out of the card instead of fading, matching the LiDAR View / Shading Dome exit
-        choreography the user already knows. The slide rule sits in the slide-out group further below; the
-        opacity rule for time-bar was removed from this block so the two transforms (fade vs slide) do not
-        race during the dashboard open / close window. */
+    /*  Detail mode (dashboard dive) reuses the same chip / leader / arc / timeline hide rules as the
+        LiDAR + ShadingDome modes via the shared .overlay-masked class. The card-side render sets
+        overlay-masked whenever _overlayMaskActive OR _detailMode is true, so a home click triggers the
+        same eye-pleasing 0.35 s fade + 0.45 s timeline slide as a mode-bar click. Time-bar slide-out
+        transitions live alongside the chip fade rules further down so the two transforms (fade vs
+        slide) do not race during the dashboard open / close window. */
 
     /*  When LiDAR View is active, fade out every overlay layer so
         the dot cloud reads on its own against a quiet basemap. The
@@ -287,9 +245,9 @@ export const heliosCardStyles = css`
         rest, 15+ elements declared will-change: opacity unconditionally was pinning that many GPU
         layers in idle VRAM (~15-30 MB on devices with limited budgets) and forcing the compositor to
         re-sync them on every Lit re-render. Promote only when a mode actually toggles. The trigger
-        class is now ha-card.overlay-masked (set the moment _cardMode leaves base, dropped after the
-        WebGL fade-out on lidar -> base, dropped immediately on shading-dome -> base) plus the
-        independent ha-card.detail-active for the dashboard dive. */
+        class is ha-card.overlay-masked, set on every non-base _cardMode (LiDAR + ShadingDome) AND
+        whenever _detailMode is true (dashboard dive), so a single rule promotes the GPU layers for
+        the entire union of transition windows. */
     ha-card.overlay-masked .overlay-top-left,
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
@@ -303,16 +261,7 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .grid-leader-svg,
     ha-card.overlay-masked .grid-import-label,
     ha-card.overlay-masked .grid-export-label,
-    ha-card.overlay-masked .home-pill,
-    ha-card.detail-active  .overlay-top-left,
-    ha-card.detail-active  .home-glow-svg,
-    ha-card.detail-active  .home-hitbox,
-    ha-card.detail-active  .pv-home-leader-svg,
-    ha-card.detail-active  .pv-pct-label,
-    ha-card.detail-active  .battery-leader-svg,
-    ha-card.detail-active  .battery-pct-label,
-    ha-card.detail-active  .solar-svg,
-    ha-card.detail-active  .solar-pct-label
+    ha-card.overlay-masked .home-pill
     {
         will-change: opacity;
     }
@@ -344,9 +293,9 @@ export const heliosCardStyles = css`
         opacity: 0;
         pointer-events: none;
     }
-    /*  Timeline slides below the card edge for any non-base mode + the dashboard dive. */
-    ha-card.overlay-masked .time-bar,
-    ha-card.detail-active  .time-bar
+    /*  Timeline slides below the card edge for any non-base mode + the dashboard dive (overlay-masked
+        is set for both, see the card-side render comment). */
+    ha-card.overlay-masked .time-bar
     {
         transform: translateY(140%);
         pointer-events: none;
@@ -2702,67 +2651,6 @@ export const heliosCardStyles = css`
         to { transform: rotate(360deg); }
     }
 
-
-    /*  When LiDAR View is active, fade out every overlay layer so
-        the dot cloud reads on its own against a quiet basemap. The
-        toggle button itself is opted back in (selector below) so
-        the user can always exit. The map container stays visible
-        so the dots are projected onto a real basemap.
-
-        Selector list mirrors what .detail-active fades earlier in
-        this file, plus the corners (top-left clock + top-right rail
-        minus the LiDAR button itself), the home hitbox / glow, and
-        the timeline. */
-    /*  Base transition + composite-layer hint kept on the unprefixed
-        selectors so the fade runs in BOTH directions across every
-        browser. The will-change: opacity hint promotes each element
-        to its own composite layer so the GPU drives the alpha sweep
-        instead of asking the painter to redo layout per frame,
-        which used to drop frames on the chips that sit inside
-        transform-less wrappers (time-bar, solar-svg).               */
-    .overlay-top-left,
-    .home-glow-svg,
-    .home-hitbox,
-    .home-drop-leader-svg,
-    .solar-svg,
-    .solar-pct-label,
-    .pv-home-leader-svg,
-    .pv-pct-label,
-    .battery-leader-svg,
-    .battery-pct-label,
-    .grid-leader-svg,
-    .grid-import-label,
-    .grid-export-label,
-    .home-pill
-    {
-        transition: opacity 0.35s ease;
-    }
-    /*  will-change opt-in: scope the composite-layer promotion to the
-        transition windows only. At rest, 15+ elements declared
-        will-change: opacity unconditionally was pinning that many
-        GPU layers in idle VRAM (~15-30 MB on devices with limited
-        budgets) and forcing the compositor to re-sync them on every
-        Lit re-render. Promote only when a mode actually toggles. */
-    ha-card.detail-active         .overlay-top-left, ha-card.detail-active         .home-glow-svg,
-    ha-card.detail-active         .home-hitbox,
-    ha-card.detail-active         .pv-home-leader-svg,
-    ha-card.detail-active         .pv-pct-label,
-    ha-card.detail-active         .battery-leader-svg,
-    ha-card.detail-active         .battery-pct-label,
-    ha-card.detail-active         .solar-svg,
-    ha-card.detail-active         .solar-pct-label,
-    ha-card.detail-active
-    {
-        will-change: opacity;
-    }
-
-    /*  Timeline slides out below the card / slides back in from the bottom edge instead of fading. The X centring is
-        kept inside every keyframe so the bar never drifts horizontally during the slide. */
-    .time-bar
-    {
-        transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
-        will-change: transform;
-    }
 
     /*  Cloud-cover toggle button. iOS-friendly 40 px touch target,
         icon-only with a title tooltip; the on state takes the brand
