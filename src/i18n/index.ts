@@ -104,9 +104,13 @@ export interface Translations
         //it" sense, so the translation is the conversational noun for clock time, not the literal
         //"hour" unit ("Time" in EN, "Heure" in FR).
         radialProductionLabel?: string; //'Production'
-        radialImportLabel?:     string; //'Import'
+        radialBatteryLabel?:    string; //'Battery'
         radialCloudLabel?:      string; //'Cloud'
         radialHourLabel?:       string; //'Time'
+        //Kept for backward compatibility, the corner pill was renamed from Import (grid net) to
+        //Battery (charge / discharge) during the v1.8.3 beta cycle. Reserved for a future revival
+        //of a dedicated grid-import ring.
+        radialImportLabel?:     string; //'Import'
     };
 
     editor:

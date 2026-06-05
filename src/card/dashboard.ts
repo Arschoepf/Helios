@@ -56,6 +56,10 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //handleHomeClick. Mutable, not @state, because every wheel event would otherwise trigger a Lit
     //re-render.
     _dashRadialWheelAcc?:  number;
+    //setInterval id for the midnight watcher started in handleHomeClick. Polls every 30 s and
+    //triggers a re-render the moment the calendar day rolls over so the J-2 / J+2 cards shift to
+    //the new "today" without forcing the user to refresh. Cleared in handleExitDetail.
+    _dashMidnightTimer?:   number;
     //Timestamp the detail panel opened at. Drives the headline count-up animation on the produced-kWh + forecast-kWh figures so the
     //numbers tick from 0 up to the real value over ~700 ms whenever the user enters detail mode. Reset to null on exit so a subsequent
     //re-open replays the animation. Null while the panel is closed.
@@ -2080,6 +2084,25 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
     h._lastRefreshEnergyDefaultsRef = undefined;
     (host as unknown as { requestUpdate(): void }).requestUpdate();
     startDashCountUpLoop(host);
+    //Midnight watcher: if the day rolls over while the dashboard is open, regenerate the five
+    //CoverFlow cards so the J-2 .. J+2 dates shift to the new "today" without forcing the user to
+    //refresh. Polls every 30 s, compares the day-start ms snapshot we captured here against the
+    //live "now"; on a mismatch we trigger a Lit re-render and the date helpers inside
+    //renderCoverflowCard pick up the new calendar day naturally. Cleared on handleExitDetail.
+    if (host._dashMidnightTimer !== undefined)
+    {
+        window.clearInterval(host._dashMidnightTimer);
+    }
+    let lastDayStartMs = new Date().setHours(0, 0, 0, 0);
+    host._dashMidnightTimer = window.setInterval(() =>
+    {
+        const todayStartMs = new Date().setHours(0, 0, 0, 0);
+        if (todayStartMs !== lastDayStartMs)
+        {
+            lastDayStartMs = todayStartMs;
+            (host as unknown as { requestUpdate(): void }).requestUpdate();
+        }
+    }, 30_000);
 }
 
 
@@ -2105,6 +2128,11 @@ export function handleExitDetail(host: DashboardHost, e: Event): void
     if (host._dashAnimTimer !== undefined)
     {
         window.clearTimeout(host._dashAnimTimer);
+    }
+    if (host._dashMidnightTimer !== undefined)
+    {
+        window.clearInterval(host._dashMidnightTimer);
+        host._dashMidnightTimer = undefined;
     }
     host._dashAnimTimer = window.setTimeout(() =>
     {

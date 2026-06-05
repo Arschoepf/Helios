@@ -26,7 +26,6 @@ import { navigateDashDay } from './dashboard';
 import { getSunPosition } from '../engine/sun';
 import { pvInverterMaxW, pvNormalizeToWatts, computePvPowerWeighted } from './pv';
 import { getHomeCoords } from './init';
-import { gridWattsAtTime } from './grid';
 import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
 
@@ -46,8 +45,8 @@ const R_CLOUD_INNER            = 63;
 const R_CLOUD_OUTER            = 91;
 const R_PROD_INNER             = 97;
 const R_PROD_OUTER             = 125;
-const R_CONS_INNER             = 131;
-const R_CONS_OUTER             = 159;
+const R_BATT_INNER             = 131;
+const R_BATT_OUTER             = 159;
 const R_DIAL_INNER             = 165;
 const R_DIAL_OUTER             = 197;
 const R_HOUR_LABEL             = R_DIAL_INNER + (R_DIAL_OUTER - R_DIAL_INNER) * 0.5;  //labels centred inside the dial annulus
@@ -270,31 +269,32 @@ function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (numb
 }
 
 
-//Hourly home consumption (W) reconstructed from grid net + PV history. Past only, future hours stay
-//null (we have no consumption forecast). Cleanly nulls the hours past "now" so the ring fills only
-//the realised portion of the day.
-function computeHourlyConsumption(host: DashboardHost, dayStartMs: number): (number | null)[]
+//Hourly battery power (W), signed positive while the battery is charging and negative while it is
+//discharging. Aggregates the BatteryHost power history into 24 hourly buckets using a per-bucket
+//mean of the in-range samples. Past only; future hours stay null because the battery has no
+//forecast model. Sign convention matches computeBatteryToday in battery.ts (kwh > 0 ⇒ charging).
+function computeHourlyBattery(host: DashboardHost, dayStartMs: number): (number | null)[]
 {
     const values: (number | null)[] = new Array(24).fill(null);
+    const hist                      = host._batteryPowerHistory;
+    if (!hist || hist.times.length === 0) { return values; }
     const nowMs                     = Date.now();
-    const sumGridAt = (tMs: number): number | null =>
+    const sums   = new Array(24).fill(0) as number[];
+    const counts = new Array(24).fill(0) as number[];
+    for (let i = 0; i < hist.times.length; i++)
     {
-        const imp = gridWattsAtTime(host._gridImportSamples, host._gridImportUnits, tMs);
-        const exp = gridWattsAtTime(host._gridExportSamples, host._gridExportUnits, tMs);
-        if (imp === null && exp === null) { return null; }
-        return (imp ?? 0) - (exp ?? 0);
-    };
+        const tMs = hist.times[i].getTime();
+        if (tMs < dayStartMs || tMs >= dayStartMs + DAY_MS) { continue; }
+        if (tMs > nowMs) { break; }
+        const w = pvNormalizeToWatts(hist.values[i], host._batteryPowerUnit);
+        if (!Number.isFinite(w)) { continue; }
+        const h = Math.floor((tMs - dayStartMs) / HOUR_MS);
+        sums[h]   += w;
+        counts[h] += 1;
+    }
     for (let h = 0; h < 24; h++)
     {
-        const hourMidMs = dayStartMs + h * HOUR_MS + HOUR_MS / 2;
-        if (hourMidMs > nowMs) { break; }
-        const gridNet = sumGridAt(hourMidMs);
-        if (gridNet === null) { continue; }
-        const pvSample = host._pvHistory && host._pvHistory.times.length > 0
-            ? interpolatePvAt(host._pvHistory.times, host._pvHistory.values, hourMidMs, host._pvUnit)
-            : 0;
-        const w = Math.max(0, pvSample + gridNet);
-        values[h] = w;
+        if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
     return values;
 }
@@ -324,25 +324,6 @@ function computeHourlyCloud(host: DashboardHost, dayStartMs: number): (number | 
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
     return values;
-}
-
-
-function interpolatePvAt(times: ReadonlyArray<Date>, values: ReadonlyArray<number>, tMs: number, unit: string): number
-{
-    if (times.length === 0) { return 0; }
-    if (tMs <= times[0].getTime())                  { return pvNormalizeToWatts(values[0], unit); }
-    if (tMs >= times[times.length - 1].getTime())   { return pvNormalizeToWatts(values[values.length - 1], unit); }
-    for (let i = 1; i < times.length; i++)
-    {
-        const t1 = times[i].getTime();
-        if (t1 < tMs) { continue; }
-        const t0 = times[i - 1].getTime();
-        if (t1 === t0) { return pvNormalizeToWatts(values[i], unit); }
-        const f  = (tMs - t0) / (t1 - t0);
-        const v  = values[i - 1] + (values[i] - values[i - 1]) * f;
-        return pvNormalizeToWatts(v, unit);
-    }
-    return 0;
 }
 
 
@@ -592,8 +573,13 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     else                          { pastEndHour = (nowMs - dayStartMs) / HOUR_MS; }
 
     const hourlyProd  = computeHourlyProduction(host, dayStartMs);
-    const hourlyCons  = computeHourlyConsumption(host, dayStartMs);
+    const hourlyBatt  = computeHourlyBattery(host, dayStartMs);
     const hourlyCloud = computeHourlyCloud(host, dayStartMs);
+
+    //Split the signed battery curve into charge (positive) and discharge (positive absolute) per-
+    //hour arrays so two annulus paths can paint inside the same ring with their own colours.
+    const hourlyBattCharge:    (number | null)[] = hourlyBatt.map(v => (v === null ? null : v > 0 ?  v : 0));
+    const hourlyBattDischarge: (number | null)[] = hourlyBatt.map(v => (v === null ? null : v < 0 ? -v : 0));
 
     //Scales are RELATIVE to the day's own max so the visual variation of each ring reads cleanly.
     //Anchoring on the inverter cap (5+ kW) used to make the production ring sit at 30 to 50 % of
@@ -603,9 +589,11 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     let prodMax = 0;
     for (const v of hourlyProd) { if (v !== null && v > prodMax) { prodMax = v; } }
     const prodScaleMax  = Math.max(1, prodMax * 1.25, 500);
-    let   consMax       = 0;
-    for (const v of hourlyCons) { if (v !== null && v > consMax) { consMax = v; } }
-    const consScaleMax  = Math.max(1, consMax * 1.25, 2000);
+    //Battery share-the-scale: charge + discharge get the same maximum so a 1 kW charge looks the
+    //same height as a 1 kW discharge from the inner-edge baseline.
+    let battMax = 0;
+    for (const v of hourlyBatt) { if (v !== null && Math.abs(v) > battMax) { battMax = Math.abs(v); } }
+    const battScaleMax  = Math.max(1, battMax * 1.25, 500);
     const cloudScaleMax = 100;
 
     //Slice the arrays by the past / future boundary. Past hours feed the solid fills, future hours
@@ -618,8 +606,11 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const prodFuturePath = pastEndHour < 24
         ? buildRadialOutlinePath(hourlyProd, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, floorPastH, 24)
         : '';
-    const consPastPath = pastEndHour > 0
-        ? buildRadialAnnulusPath(hourlyCons.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), consScaleMax, R_CONS_INNER, R_CONS_OUTER)
+    const battChargePath = pastEndHour > 0
+        ? buildRadialAnnulusPath(hourlyBattCharge.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
+        : '';
+    const battDischargePath = pastEndHour > 0
+        ? buildRadialAnnulusPath(hourlyBattDischarge.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
         : '';
     const cloudPastPath = pastEndHour > 0
         ? buildRadialAnnulusPath(hourlyCloud.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
@@ -668,21 +659,25 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         const rNext  = next === null ? innerR : innerR + Math.max(0, Math.min(1, next / scaleMax)) * (outerR - innerR);
         return r + (rNext - r) * f;
     };
-    let hoverProdSphere:  { x: number; y: number } | null = null;
-    let hoverConsSphere:  { x: number; y: number } | null = null;
-    let hoverCloudSphere: { x: number; y: number } | null = null;
+    let hoverProdDot:  { x: number; y: number } | null = null;
+    let hoverBattDot:  { x: number; y: number; charging: boolean } | null = null;
+    let hoverCloudDot: { x: number; y: number } | null = null;
     if (hoverActive)
     {
         const hf  = hoverHour as number;
         const idx = Math.max(0, Math.min(23, Math.floor(hf)));
-        //Only paint a sphere when the curve actually has a value at that hour, otherwise the
-        //sphere would slam into the inner edge and read as a stuck dot.
         const prodVal  = hourlyProd[idx];
-        const consVal  = hourlyCons[idx];
+        const battVal  = hourlyBatt[idx];
         const cloudVal = hourlyCloud[idx];
-        if (prodVal  !== null) { const r = interpRadius(hourlyProd,  prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER,  hf); const [x, y] = polarPt(hf, r); hoverProdSphere  = { x, y }; }
-        if (consVal  !== null) { const r = interpRadius(hourlyCons,  consScaleMax,  R_CONS_INNER,  R_CONS_OUTER,  hf); const [x, y] = polarPt(hf, r); hoverConsSphere  = { x, y }; }
-        if (cloudVal !== null) { const r = interpRadius(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverCloudSphere = { x, y }; }
+        if (prodVal  !== null) { const r = interpRadius(hourlyProd,  prodScaleMax,  R_PROD_INNER, R_PROD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverProdDot  = { x, y }; }
+        if (cloudVal !== null) { const r = interpRadius(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverCloudDot = { x, y }; }
+        if (battVal  !== null && battVal !== 0)
+        {
+            const absSeries: ReadonlyArray<number | null> = hourlyBatt.map(v => (v === null ? null : Math.abs(v)));
+            const r = interpRadius(absSeries, battScaleMax, R_BATT_INNER, R_BATT_OUTER, hf);
+            const [x, y] = polarPt(hf, r);
+            hoverBattDot = { x, y, charging: battVal > 0 };
+        }
     }
 
     //Corner read-outs. When hovering, every corner snaps to the hover hour. Otherwise the production
@@ -698,7 +693,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const hourIdxFor = (hf: number): number => Math.max(0, Math.min(23, Math.floor(hf)));
 
     let cornerProdW:    number | null = null;
-    let cornerConsW:    number | null = null;
+    let cornerBattW:    number | null = null;
     let cornerCloudPct: number | null = null;
     let cornerClock:    string | null = null;
 
@@ -706,7 +701,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     {
         const idx        = hourIdxFor(hoverHour);
         cornerProdW      = hourlyProd[idx];
-        cornerConsW      = hourlyCons[idx];
+        cornerBattW      = hourlyBatt[idx];
         cornerCloudPct   = hourlyCloud[idx];
         cornerClock      = formatHoverClock(hoverHour, host.hass);
     }
@@ -714,14 +709,14 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     {
         const idx        = hourIdxFor(nowHour);
         cornerProdW      = hourlyProd[idx];
-        cornerConsW      = hourlyCons[idx];
+        cornerBattW      = hourlyBatt[idx];
         cornerCloudPct   = hourlyCloud[idx];
         cornerClock      = formatHoverClock(nowHour, host.hass);
     }
     else
     {
         cornerProdW      = meanOf(hourlyProd);
-        cornerConsW      = meanOf(hourlyCons);
+        cornerBattW      = meanOf(hourlyBatt);
         cornerCloudPct   = meanOf(hourlyCloud);
         cornerClock      = null;
     }
@@ -812,8 +807,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <span class="dash-radial-corner-value dash-radial-corner-prod">${formatW(host.hass, cornerProdW)}</span>
             </div>
             <div class="dash-radial-corner dash-radial-corner-tr">
-                <span class="dash-radial-corner-label">${t.detail.radialImportLabel ?? t.detail.tileImportLabel ?? 'Import'}</span>
-                <span class="dash-radial-corner-value dash-radial-corner-cons">${formatW(host.hass, cornerConsW)}</span>
+                <span class="dash-radial-corner-label">${t.detail.radialBatteryLabel ?? 'Battery'}</span>
+                <span class="dash-radial-corner-value ${(cornerBattW ?? 0) >= 0 ? 'dash-radial-corner-batt-charge' : 'dash-radial-corner-batt-discharge'}">${cornerBattW === null ? '—' : `${(cornerBattW >= 0 ? '+' : '−')} ${formatW(host.hass, Math.abs(cornerBattW))}`}</span>
             </div>
             <div class="dash-radial-corner dash-radial-corner-bl">
                 <span class="dash-radial-corner-label">${t.detail.radialCloudLabel ?? 'Cloud'}</span>
@@ -839,8 +834,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                         fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>
                 <circle class="dash-radial-prod-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_PROD_INNER  + R_PROD_OUTER)  / 2}"
                         fill="none" stroke-width="${R_PROD_OUTER - R_PROD_INNER}"/>
-                <circle class="dash-radial-cons-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_CONS_INNER  + R_CONS_OUTER)  / 2}"
-                        fill="none" stroke-width="${R_CONS_OUTER - R_CONS_INNER}"/>
+                <circle class="dash-radial-batt-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_BATT_INNER  + R_BATT_OUTER)  / 2}"
+                        fill="none" stroke-width="${R_BATT_OUTER - R_BATT_INNER}"/>
                 <circle class="dash-radial-dial-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_DIAL_INNER  + R_DIAL_OUTER)  / 2}"
                         fill="none" stroke-width="${R_DIAL_OUTER - R_DIAL_INNER}"/>
 
@@ -849,6 +844,27 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      on top of the dial track. Drawn here (above the track, before the ticks +
                      labels) so the ticks + labels read on top of the night zone. -->
                 ${nightPath ? svg`<path class="dash-radial-night" d="${nightPath}"/>` : nothing}
+
+                <!-- Sunset + sunrise marker icons inside the dial annulus, exactly at the two
+                     horizon-crossing hour fractions. Rendered as foreignObject so the ha-icon custom
+                     element works inside the SVG, kept upright (no radial rotation) for legibility.
+                     Visible only when sunrise + sunset are both resolved (skipped on polar days). -->
+                ${sunRiseSet.sunrise !== null ? (() => {
+                    const [x, y] = polarPt(sunRiseSet.sunrise, R_HOUR_LABEL);
+                    return svg`<foreignObject x="${(x - 6.5).toFixed(2)}" y="${(y - 6.5).toFixed(2)}" width="13" height="13">
+                        <div xmlns="http://www.w3.org/1999/xhtml" class="dash-radial-sun-icon">
+                            <ha-icon icon="mdi:weather-sunset-up"></ha-icon>
+                        </div>
+                    </foreignObject>`;
+                })() : nothing}
+                ${sunRiseSet.sunset !== null ? (() => {
+                    const [x, y] = polarPt(sunRiseSet.sunset, R_HOUR_LABEL);
+                    return svg`<foreignObject x="${(x - 6.5).toFixed(2)}" y="${(y - 6.5).toFixed(2)}" width="13" height="13">
+                        <div xmlns="http://www.w3.org/1999/xhtml" class="dash-radial-sun-icon">
+                            <ha-icon icon="mdi:weather-sunset-down"></ha-icon>
+                        </div>
+                    </foreignObject>`;
+                })() : nothing}
 
                 <!-- Past fills (annulus shapes between the ring's inner edge and the per-hour data
                      curve) painted via the evenodd fill rule so the inner subpath carves the centre
@@ -859,7 +875,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${cloudFuturePath ? svg`<path class="dash-radial-cloud-future" d="${cloudFuturePath}"/>` : nothing}
                 ${prodPastPath    ? svg`<path class="dash-radial-prod-fill"    fill-rule="evenodd" d="${prodPastPath}"/>`    : nothing}
                 ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
-                ${consPastPath    ? svg`<path class="dash-radial-cons-fill"    fill-rule="evenodd" d="${consPastPath}"/>`    : nothing}
+                ${battChargePath    ? svg`<path class="dash-radial-batt-charge"    fill-rule="evenodd" d="${battChargePath}"/>`    : nothing}
+                ${battDischargePath ? svg`<path class="dash-radial-batt-discharge" fill-rule="evenodd" d="${battDischargePath}"/>` : nothing}
 
                 <!-- Sun: three layers. Background fill at R_SUN_REF in the theme-contrasting text
                      colour (white on dark themes, black on light themes) so the reference disc has
@@ -879,8 +896,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CLOUD_OUTER}" fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_PROD_INNER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_PROD_OUTER}"  fill="none"/>
-                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CONS_INNER}"  fill="none"/>
-                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CONS_OUTER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_BATT_INNER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_BATT_OUTER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_INNER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_OUTER}"  fill="none"/>
 
@@ -898,9 +915,9 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <!-- Hover dots: one per data ring at the hover-hour value. Top layer so they are
                      always visible above the curves. Plain colored disc with a thin contrast stroke,
                      no gradient, just slightly thicker than the timeline hover dots. -->
-                ${hoverCloudSphere ? svg`<circle class="dash-radial-dot dash-radial-dot-cloud" cx="${hoverCloudSphere.x.toFixed(2)}" cy="${hoverCloudSphere.y.toFixed(2)}" r="3"/>` : nothing}
-                ${hoverProdSphere  ? svg`<circle class="dash-radial-dot dash-radial-dot-prod"  cx="${hoverProdSphere.x.toFixed(2)}"  cy="${hoverProdSphere.y.toFixed(2)}"  r="3"/>` : nothing}
-                ${hoverConsSphere  ? svg`<circle class="dash-radial-dot dash-radial-dot-cons"  cx="${hoverConsSphere.x.toFixed(2)}"  cy="${hoverConsSphere.y.toFixed(2)}"  r="3"/>` : nothing}
+                ${hoverCloudDot ? svg`<circle class="dash-radial-dot dash-radial-dot-cloud" cx="${hoverCloudDot.x.toFixed(2)}" cy="${hoverCloudDot.y.toFixed(2)}" r="3"/>` : nothing}
+                ${hoverProdDot  ? svg`<circle class="dash-radial-dot dash-radial-dot-prod"  cx="${hoverProdDot.x.toFixed(2)}"  cy="${hoverProdDot.y.toFixed(2)}"  r="3"/>` : nothing}
+                ${hoverBattDot  ? svg`<circle class="dash-radial-dot ${hoverBattDot.charging ? 'dash-radial-dot-batt-charge' : 'dash-radial-dot-batt-discharge'}" cx="${hoverBattDot.x.toFixed(2)}" cy="${hoverBattDot.y.toFixed(2)}" r="3"/>` : nothing}
             </svg>
         </div>
     `;

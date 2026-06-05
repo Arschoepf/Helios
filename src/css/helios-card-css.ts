@@ -644,9 +644,10 @@ export const heliosCardStyles = css`
         stroke: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         stroke-width: 0.6;
     }
-    .dash-radial-dot-cloud { fill: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.75)) 95%, transparent); }
-    .dash-radial-dot-prod  { fill: var(--energy-solar-color, #ff9800); }
-    .dash-radial-dot-cons  { fill: var(--energy-grid-consumption-color, #488fc2); }
+    .dash-radial-dot-cloud         { fill: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.75)) 95%, transparent); }
+    .dash-radial-dot-prod          { fill: var(--energy-solar-color, #ff9800); }
+    .dash-radial-dot-batt-charge   { fill: var(--energy-battery-in-color,  #5cba47); }
+    .dash-radial-dot-batt-discharge{ fill: var(--energy-battery-out-color, #d8a657); }
 
     /*  Corner pills, absolutely positioned so they float over the SVG without nudging its layout.
         TL production, TR import, BL cloud, BR clock (the four together form a fixed-width matched
@@ -682,10 +683,11 @@ export const heliosCardStyles = css`
         font-weight: 600;
         font-variant-numeric: tabular-nums;
     }
-    .dash-radial-corner-prod  { color: var(--energy-solar-color, #ff9800); }
-    .dash-radial-corner-cons  { color: var(--energy-grid-consumption-color, #488fc2); }
-    .dash-radial-corner-cloud { color: var(--primary-text-color, #ffffff); }
-    .dash-radial-corner-clock { color: var(--primary-color, #03a9f4); }
+    .dash-radial-corner-prod              { color: var(--energy-solar-color, #ff9800); }
+    .dash-radial-corner-batt-charge       { color: var(--energy-battery-in-color,  #5cba47); }
+    .dash-radial-corner-batt-discharge    { color: var(--energy-battery-out-color, #d8a657); }
+    .dash-radial-corner-cloud             { color: var(--primary-text-color, #ffffff); }
+    .dash-radial-corner-clock             { color: var(--primary-color, #03a9f4); }
 
 
     /*  Ring tracks (background of each ring). Same vocabulary across the three data rings, only the
@@ -700,9 +702,9 @@ export const heliosCardStyles = css`
     {
         stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 14%, transparent);
     }
-    .dash-radial-cons-track
+    .dash-radial-batt-track
     {
-        stroke: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 14%, transparent);
+        stroke: color-mix(in srgb, var(--energy-battery-in-color, #5cba47) 10%, transparent);
     }
     .dash-radial-dial-track
     {
@@ -745,10 +747,20 @@ export const heliosCardStyles = css`
         stroke-linejoin: round;
         stroke-linecap: round;
     }
-    .dash-radial-cons-fill
+    /*  Battery ring fills. Two annulus paths share the ring, charge (positive battery flow) in
+        the HA Energy charge-in colour and discharge (negative) in the discharge-out colour. The
+        ring's two halves overlap at the inner edge baseline where the battery is at rest. */
+    .dash-radial-batt-charge
     {
-        fill:   color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 45%, transparent);
-        stroke: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 80%, transparent);
+        fill:   color-mix(in srgb, var(--energy-battery-in-color, #5cba47) 55%, transparent);
+        stroke: color-mix(in srgb, var(--energy-battery-in-color, #5cba47) 85%, transparent);
+        stroke-width: 1.2;
+        stroke-linejoin: round;
+    }
+    .dash-radial-batt-discharge
+    {
+        fill:   color-mix(in srgb, var(--energy-battery-out-color, #d8a657) 55%, transparent);
+        stroke: color-mix(in srgb, var(--energy-battery-out-color, #d8a657) 85%, transparent);
         stroke-width: 1.2;
         stroke-linejoin: round;
     }
@@ -789,15 +801,18 @@ export const heliosCardStyles = css`
         clean disc growing inside a circle. */
     .dash-radial-sun-bg
     {
-        /*  Theme-contrasting background plate. --primary-text-color resolves to white on dark
-            themes and to black on light themes, so the "empty disc" reads as an opposite-of-card
-            surface regardless of the active HA theme. */
-        fill: var(--primary-text-color, #ffffff);
-        fill-opacity: 0.85;
+        /*  Background plate in the sun colour itself at low opacity, so the "empty disc" reads as
+            a faint coloured wash inside the reference rim. */
+        fill: var(--helios-sun-color, var(--amber-color, #f59e0b));
+        fill-opacity: 0.18;
     }
     .dash-radial-sun-fill
     {
         fill: var(--helios-sun-color, var(--amber-color, #f59e0b));
+        /*  Thin contrasting stroke around the irradiance disc itself so the orange fill always has
+            a visible edge against the faint background wash behind it, even at small disc sizes. */
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 45%, transparent);
+        stroke-width: 0.5;
     }
     .dash-radial-sun-rim
     {
@@ -824,6 +839,20 @@ export const heliosCardStyles = css`
     {
         fill: color-mix(in srgb, var(--primary-text-color, #ffffff) 12%, transparent);
         stroke: none;
+        pointer-events: none;
+    }
+    /*  Sunset / sunrise MDI icons inside the dial annulus, kept upright (no radial rotation) and
+        tinted with the sun colour so the user reads them as horizon-crossing markers, not as
+        generic chrome. */
+    .dash-radial-sun-icon
+    {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--helios-sun-color, var(--amber-color, #f59e0b));
+        --mdc-icon-size: 13px;
         pointer-events: none;
     }
     /*  Two cursors. The "now" cursor stays on today only and uses the primary accent colour. The
