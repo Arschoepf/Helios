@@ -119,16 +119,30 @@ declare global
 //Card name and description in the HA card picker, shown before any hass instance is available, so we read the language from navigator.
 const _bootI18n = pickTranslations(typeof navigator !== 'undefined' ? navigator.language : 'en');
 
+//OVERWRITE rather than insert-if-missing. The previous insert-if-missing pattern protected against a
+//double registration in the same page lifetime but also meant that a stale entry already pushed by
+//some other code (HACS placeholder, dev-tools mock, an older Helios bundle on the same page) would
+//keep the catalog showing whatever name + flags it had set. Overwriting lets the freshly-loaded
+//bundle's metadata always win, so 'Helios' + preview: true land regardless of what was there
+//before.
 window.customCards = window.customCards || [];
-if (!window.customCards.some(c => c.type === 'helios-card'))
 {
-    window.customCards.push(
+    const heliosEntry =
     {
         type:        'helios-card',
         name:        _bootI18n.cardName,
         description: _bootI18n.cardDescription,
-        preview:     true
-    });
+        preview:     true,
+    };
+    const existingIdx = window.customCards.findIndex(c => c.type === 'helios-card');
+    if (existingIdx >= 0)
+    {
+        window.customCards[existingIdx] = heliosEntry;
+    }
+    else
+    {
+        window.customCards.push(heliosEntry);
+    }
 }
 
 //Install banner. Same shape as the styled "X-CARD vY.Z IS INSTALLED"
@@ -1391,13 +1405,10 @@ export class HeliosCard extends LitElement
 
     protected render(): TemplateResult
     {
-        //Precondition for rendering the live card chrome: home
-        //coordinates resolved (HA config or the lat/lon override).
-        //The basemap itself is OpenFreeMap and needs no credentials.
-        //Variable name kept as `hasApiKey` because every conditional
-        //branch below already keys off it; only the meaning is "we
-        //have what we need to project the home onto the map".
-        const hasApiKey = getHomeCoords(this.config, this.hass) !== null;
+        //Precondition for rendering the live card chrome: home coordinates resolved (HA config or the
+        //card-level lat / lon override). The basemap itself is OpenFreeMap and needs no credentials,
+        //so this flag is purely about "do we have what we need to project the home onto the map".
+        const hasHomeCoords = getHomeCoords(this.config, this.hass) !== null;
 
 
         //Always-visible cloud-cover percentage label, overlaid in HTML
@@ -1491,7 +1502,7 @@ export class HeliosCard extends LitElement
         const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
         const pvActiveRate  = isPvPredicted ? pvPredictedRate : pvRate;
 
-        const showPvLabel = hasApiKey
+        const showPvLabel = hasHomeCoords
             && layout !== null
             && pvEntityId !== ''
             && pvActiveRate !== null
@@ -1611,11 +1622,11 @@ export class HeliosCard extends LitElement
         //from the live state cache regardless of mode.
         const activeBatteryUnit = this._batteryPowerUnit;
 
-        const showSocChip = (hasApiKey && layout !== null)
+        const showSocChip = (hasHomeCoords && layout !== null)
             && !batteryScrubFuture
             && hasAnyBankSoc
             && activeBatterySoc !== null;
-        const showPowerChip = (hasApiKey && layout !== null)
+        const showPowerChip = (hasHomeCoords && layout !== null)
             && !batteryScrubFuture
             && hasAnyBankPower
             && activeBatteryPower !== null;
@@ -1783,7 +1794,7 @@ export class HeliosCard extends LitElement
         //pre-projected to screen space by the engine via
         //projectSunScene(). Hidden until the engine is ready.
         const sunScene  = this._sunScene;
-        const showSun   = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
+        const showSun   = hasHomeCoords && sunScene !== null && sunScene.arc.length >= 2;
 
         //Fixed colour design system. The configured sun
         //colour paints the arc, the outer rim of the sun disc,
@@ -1949,7 +1960,7 @@ export class HeliosCard extends LitElement
 
                 ${renderLoadingBanner(this)}
 
-                ${hasApiKey && this._timeRange ? html`
+                ${hasHomeCoords && this._timeRange ? html`
                     <div
                         class="time-bar"
                         @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
@@ -2015,7 +2026,7 @@ export class HeliosCard extends LitElement
                       scrub-blue plate the clock chip uses while
                       scrubbing, for visual consistency with the
                       other mode-indicating chips.                   -->
-                ${hasApiKey ? (() => {
+                ${hasHomeCoords ? (() => {
                     const isLocal     = lidarSourceId === 'local-ndsm';
                     const hasProvider = lidarSourceId !== null;
                     //LiDAR readiness: an online provider needs its
@@ -2153,7 +2164,7 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                ${hasApiKey && this._cloudCover >= 0 ? html`
+                ${hasHomeCoords && this._cloudCover >= 0 ? html`
                     <div class="overlay-top-left overlay-top-left--cloud">
                         <button
                             type="button"
@@ -2326,7 +2337,7 @@ export class HeliosCard extends LitElement
                       column on the right. Renders only when the
                       matching entity is configured AND has a finite
                       reading.                                       -->
-                ${hasApiKey && layout !== null && gridImportDisplayWatts !== null && !batteryScrubFuture ? html`
+                ${hasHomeCoords && layout !== null && gridImportDisplayWatts !== null && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-import-leader-line" d="${gridImportLeaderPath}" />
                         <!--  Moving bead, same vocabulary as the PV
@@ -2351,7 +2362,7 @@ export class HeliosCard extends LitElement
                         <span>${formatGridValue(gridImportDisplayWatts, gridImportDisplayUnit)}</span>
                     </div>
                 ` : nothing}
-                ${hasApiKey && layout !== null && gridExportDisplayWatts !== null && !batteryScrubFuture ? html`
+                ${hasHomeCoords && layout !== null && gridExportDisplayWatts !== null && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-export-leader-line" d="${gridExportLeaderPath}" />
                         <!--  Export bead: travels FROM the home OUT to
@@ -2616,7 +2627,7 @@ export class HeliosCard extends LitElement
                       shadow filter for the bloom. The opacity is
                       flipped via a class so the appearance / fade is
                       a pure CSS transition, no per-frame work.  -->
-                ${hasApiKey && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
+                ${hasHomeCoords && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
                     const sunColor = DEFAULT_SUN_COLOR_HEX;
                     const silhouettePts = this._getSilhouettePoints();
                     //Static hover-only halo. The earlier pulse-on-bead-
@@ -2651,7 +2662,7 @@ export class HeliosCard extends LitElement
                       ready AND we're not already in detail mode.
                       Clicking it eases the camera into the detail
                       pose and triggers the dashboard overlay.  -->
-                ${hasApiKey && layout !== null && !this._detailMode ? html`
+                ${hasHomeCoords && layout !== null && !this._detailMode ? html`
                     <div
                         class="home-hitbox"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
@@ -2667,7 +2678,7 @@ export class HeliosCard extends LitElement
                       a single energy hub, the same vocabulary HA's
                       Energy distribution card uses for its central
                       home node.                                       -->
-                ${hasApiKey && layout !== null && !this._detailMode ? html`
+                ${hasHomeCoords && layout !== null && !this._detailMode ? html`
                     <!--  Solid drop-leader from the home pill DOWN to
                           the projected ground at the home (lat, lon).
                           Same vocabulary as the other home-anchored

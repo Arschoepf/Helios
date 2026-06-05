@@ -373,10 +373,21 @@ export const DEFAULT_GRID_IMPORT_COLOR_HEX: string = '#488fc2';  //--energy-grid
 export const DEFAULT_GRID_EXPORT_COLOR_HEX: string = '#8353d1';  //--energy-grid-return-color
 
 
-//Display radius is locked at 300 m: past that the basemap + LiDAR fetch and the per-frame projection start to chug on mid-range
-//phones, and the home cluster stops reading as "near home" anyway. The constant stays exported so any leftover legacy reader sees
-//the new value; the editor radius slider is gone (the user no longer chooses).
-export const DEFAULT_BUILDING_RADIUS_M         = 300;
+//Single source of truth for the on-screen display radius across the three rendering layers:
+//buildings, LiDAR raster cells, and the raster shadow polygons. Earlier betas had two independent
+//constants (300 m for buildings + shadows, 150 m for the LiDAR overlay) which made it impossible to
+//reason about what the user actually saw when comparing layers, and changes in one drifted out of
+//sync with the other. Now everything reads from DEFAULT_DISPLAY_RADIUS_M.
+//
+//200 m is tuned so the home cluster reads as "the buildings around my house" without dragging the
+//basemap + per-frame projection on mid-range phones. The LiDAR overlay fades to zero opacity at the
+//outer boundary, see DISPLAY_FADE_DELTA_M below.
+export const DEFAULT_DISPLAY_RADIUS_M = 200;
+//Width of the LiDAR fade band, measured INWARD from DEFAULT_DISPLAY_RADIUS_M. Cells whose distance
+//is in [DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M, DEFAULT_DISPLAY_RADIUS_M] smoothstep-fade
+//from full opacity down to zero. Buildings + raster shadows are binary at the display radius (no
+//fade) because their footprints are clamped server-side at the tile boundary.
+export const DISPLAY_FADE_DELTA_M = 50;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
@@ -413,24 +424,16 @@ export const DEFAULT_SHADOW_OPACITY = 0.32;
 export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
 
-//LiDAR View overlay defaults. The disc radius is taken from the
-//shared `building-radius` (the "Display radius" knob) so the View
-//and the rest of the card stay in sync. Colours are fixed to white
-//inside the layer; overall opacity is runtime state driven by the
-//in-card bottom slider (DEFAULT_LIDAR_VIEW_OPACITY is the value the
-//slider lands on the first time the user opens the view).
+//LiDAR View overlay defaults. The disc radius is now derived from DEFAULT_DISPLAY_RADIUS_M above
+//(single source of truth across buildings, LiDAR + shadows). Colours are fixed to white inside the
+//layer; overall opacity is runtime state driven by the in-card bottom slider
+//(DEFAULT_LIDAR_VIEW_OPACITY is the value the slider lands on the first time the user opens the view).
 export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.25;
-//Distance from the home at which the LiDAR view is at full opacity.
-//Beyond this, alpha smoothstep-fades down to 0 at the display
-//radius below, so the cloud reads as anchored on the home and
-//dissolves into the basemap as you look further out. Decoupled from
-//building-radius on purpose: the building-radius controls the data
-//fetch (shadows, vegetation extent) and the LiDAR overlay shouldn't
-//inherit that bound, mixing the two knobs felt opaque in the editor.
-export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
-//Outer radius where the LiDAR view alpha hits zero. Fixed regardless of the configured fetch radius. Past this distance the shader fades cells to
-//zero, so we never paint a million dots for cells the user can barely see anyway, which keeps frame times stable on fullscreen layouts.
-export const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
+//Distance from the home where the LiDAR overlay alpha starts ramping down. Inside this radius the
+//cloud is at full opacity; in [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M] it
+//smoothstep-fades to zero. Derived from DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M so a single
+//edit at the top of this file rescales every layer consistently.
+export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M;
 
 
 //Timeline defaults. Exposed so the editor placeholders + sliders land on the same values the runtime falls back to when the config key is absent.
