@@ -475,17 +475,20 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         min-height: 0;
-        /*  NO perspective on the stage. Setting perspective on a parent forces every child (even those
-            without 3D transforms) into a 3D rendering context, which Safari rasterises at fractional
-            resolution and the front card kept reading as blurry. The 3D rotateY is now applied per-card
-            via the transform perspective(2400px) rotateY(...) FUNCTION (not the property) on the side
-            cards only, so the front card is rendered in a truly 2D context and stays sharp. */
+        /*  CSS grid stack: all 5 cards live in the same 1 x 1 grid cell, place-items centres each in the
+            cell, z-index drives the visual stacking. The front card (transform: none) is centred by the
+            grid alone, no translate(-50%, -50%) needed = no compositor layer promotion = sharp on every
+            browser including Safari. Side cards centre too, then their inline transform translates +
+            scales + rotateY from that centre to fan them out. */
+        display: grid;
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr;
+        place-items: center;
     }
     .dash-cf-card
     {
-        position: absolute;
-        top: 50%;
-        left: 50%;
+        position: relative;
+        grid-area: 1 / 1;
         /*  Card sized via plain percentages of the closest positioned ancestor (.dash-cf-stage). Height
             at 96 % leaves a 2 % gutter top + bottom so the card uses the visible space the panel offers,
             width derives from the height via the aspect ratio, max-width 82 % caps it on tall narrow
@@ -527,16 +530,9 @@ export const heliosCardStyles = css`
         overflow-x: hidden;
         overscroll-behavior: contain;
         scrollbar-width: none;
-        /*  Front card centred WITHOUT any transform: top/right/bottom/left set to 0 + margin auto +
-            explicit width / height (from the base rule). Removes every transform from the front card so
-            the browser does not promote it to a compositor layer and the content renders at native pixel
-            resolution. The !important overrides override the inline top/left/transform from the base
-            rule + the JS-set inline transform, which still apply to the side cards. */
-        top:    0 !important;
-        left:   0 !important;
-        right:  0;
-        bottom: 0;
-        margin: auto;
+        /*  Front card: NO transform of any kind. Centred by the parent grid (place-items: center) on the
+            stage. The !important on transform shadows the inline transform that dashboard.ts still emits
+            (which still applies to the side cards). */
         transform: none !important;
     }
     /*  Bottom-fade mask removed. mask-image forces the card into a compositor layer which the browser
@@ -1019,7 +1015,7 @@ export const heliosCardStyles = css`
     {
         transform-origin: bottom;
         transform: scaleY(0);
-        transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+        transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
     }
     .dash-cf-card-front .dash-cf-cum-chart-curves
     {
@@ -1106,28 +1102,28 @@ export const heliosCardStyles = css`
         /*  Scale + opacity so the entrance is visible even while the parent .detail-panel runs its own 250 ms
             opacity fade-in (the two overlap during 0-250 ms; the parent fade alone would mask a pure opacity
             change on the card). Drop opacity to 0 too so the card properly fades in once the panel settles. */
-        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
-        100% { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
+        0%   { opacity: 0; transform: scale(0.92); }
+        100% { opacity: 1; transform: scale(1);    }
     }
     @keyframes dash-cf-enter-mid-left
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        100% { transform: perspective(2400px) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-mid-right
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        100% { transform: perspective(2400px) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-left
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        100% { transform: perspective(2400px) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-right
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        100% { transform: perspective(2400px) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
     }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
@@ -1137,30 +1133,30 @@ export const heliosCardStyles = css`
 
     @keyframes dash-cf-exit-back-left
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        0%   { transform: perspective(2400px) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        100% { transform: perspective(2400px) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-back-right
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        0%   { transform: perspective(2400px) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        100% { transform: perspective(2400px) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-left
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        0%   { transform: perspective(2400px) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        100% { transform: perspective(2400px) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-right
     {
-        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
-        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        0%   { transform: perspective(2400px) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        100% { transform: perspective(2400px) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
     }
     @keyframes dash-cf-exit-front
     {
         /*  Symmetric exit: scale down + fade out. The parent .detail-panel does NOT fade out (it just unmounts
             at t=1 s), so this is the only motion on the front card during exit. */
-        0%   { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+        0%   { opacity: 1; transform: scale(1);    }
+        100% { opacity: 0; transform: scale(0.92); }
     }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-exit-back-left  350ms ease-in 0ms   both; }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-exit-back-right 350ms ease-in 0ms   both; }

@@ -415,17 +415,14 @@ function renderCoverflowCard(
                         : cardOffset ===  1 ? (tLocal.detail.dayLabelTomorrow  ?? 'Tomorrow')
                         :                     (tLocal.detail.dayLabelDayAfter  ?? 'In 2 days');
 
-    //The FRONT card gets ONLY the centring translate(-50%, -50%), no 3D anything, so it renders in a
-    //plain 2D context = sharp on every browser including Safari. The side cards get the perspective()
-    //transform FUNCTION (not the CSS property) so the rotateY reads as 3D depth WITHOUT pulling the
-    //front card into a global 3D rendering context. Per-card perspective vs parent perspective is the
-    //key Safari fix: only the side cards live in their own 3D scope.
+    //Centring is handled by the parent CSS grid (place-items: center on .dash-cf-stage). The front card
+    //needs NO transform at all = sharp on every browser including Safari. The side cards add perspective
+    //+ translateX + scale + rotateY to fan them out from the centre.
     const transformParts: string[] = [];
     if (rotY !== 0)
     {
         transformParts.push('perspective(2400px)');
     }
-    transformParts.push('translate(-50%, -50%)');
     if (txPct !== 0)
     {
         transformParts.push(`translateX(${txPct}%)`);
@@ -437,6 +434,10 @@ function renderCoverflowCard(
     if (rotY !== 0)
     {
         transformParts.push(`rotateY(${rotY}deg)`);
+    }
+    if (transformParts.length === 0)
+    {
+        transformParts.push('none');
     }
     const style = `transform: ${transformParts.join(' ')}; z-index: ${zIdx}; opacity: ${opacity};`;
 
