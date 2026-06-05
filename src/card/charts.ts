@@ -1345,7 +1345,9 @@ export function renderPvChart(host: ChartHost): TemplateResult
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs = series.times[i].getTime();
-            if (tMs <  nowMs)   continue;             //future only
+            //Predicted curve drawn across the ENTIRE visible window (past + future). The earlier
+            //future-only gate was removed: the past portion shows what the model predicted at the time so
+            //the user can compare predicted vs observed visually.
             if (tMs <  startMs)
             {
                 continue;

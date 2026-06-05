@@ -251,6 +251,44 @@ const IS_MOBILE = (() =>
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
 
 
+//Parse a CSS colour string ("#rrggbb", "rgb(r, g, b)", "rgba(r, g, b, a)", "var(...)" already resolved
+//by getComputedStyle) into a 0..1 RGB triplet for WebGL uniforms. Returns [1, 1, 1] (white) on parse
+//failure so the LiDAR view falls back to the pre-theme behaviour on weird inputs.
+function parseCssColorToUnitRgb(raw: string): [number, number, number]
+{
+    const s = (raw || '').trim().toLowerCase();
+    if (!s) return [1, 1, 1];
+    if (s.startsWith('#'))
+    {
+        const hex = s.slice(1);
+        if (hex.length === 3 || hex.length === 4)
+        {
+            const r = parseInt(hex[0] + hex[0], 16);
+            const g = parseInt(hex[1] + hex[1], 16);
+            const b = parseInt(hex[2] + hex[2], 16);
+            if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
+        }
+        else if (hex.length === 6 || hex.length === 8)
+        {
+            const r = parseInt(hex.slice(0, 2), 16);
+            const g = parseInt(hex.slice(2, 4), 16);
+            const b = parseInt(hex.slice(4, 6), 16);
+            if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
+        }
+        return [1, 1, 1];
+    }
+    const m = s.match(/^rgba?\s*\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+    if (m)
+    {
+        const r = parseFloat(m[1]);
+        const g = parseFloat(m[2]);
+        const b = parseFloat(m[3]);
+        if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
+    }
+    return [1, 1, 1];
+}
+
+
 
 //Haversine distance, used to compare two lat/lon pairs in metres.
 
@@ -717,7 +755,7 @@ export class HeliosEngine
         {
             return;
         }
-        const clamped = Math.max(0, Math.min(89, deg));
+        const clamped = Math.max(0, Math.min(85, deg));
         this.map.setPitch(clamped);
     }
     //Toggle the lock at runtime so the lock chip applies immediately
@@ -1017,6 +1055,10 @@ export class HeliosEngine
             zoom:            18,
             pitch:           this._initialPitch(),
             bearing:         this._initialBearing(),
+            //MapLibre default maxPitch is 60. Raise it to 85 so the drag-rotate handler's PITCH_MAX_DEG
+            //(89) can actually take effect. Without this the map silently clamps to 60 and the user
+            //cannot get close to ground-level perspective.
+            maxPitch:        85,
             //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
             //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
             //its dive animation and resets it on exit.
@@ -1274,7 +1316,7 @@ export class HeliosEngine
         //basemap mesh).
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
         const PITCH_MIN_DEG = 0;
-        const PITCH_MAX_DEG = 89;
+        const PITCH_MAX_DEG = 85;
         let dragRotating  = false;
         let lastPointerX  = 0;
         let lastPointerY  = 0;
@@ -2510,6 +2552,28 @@ export class HeliosEngine
         }
         this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
         this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
+        this._pushLidarViewColor();
+    }
+
+    //Push the active theme's text colour into the LiDAR View layer so the points + wireframe render in
+    //black on a light theme and white on a dark theme (or whatever the user themed their HA frontend
+    //--primary-text-color to). Reads the computed CSS variable off the map container (which inherits the
+    //ha-card theme) and parses the result into a 0..1 RGB triplet for the WebGL uniform.
+    private _pushLidarViewColor(): void
+    {
+        if (!this._lidarViewLayer)
+        {
+            return;
+        }
+        const host = this.map?.getContainer() ?? document.body;
+        let raw = getComputedStyle(host).getPropertyValue('--primary-text-color').trim();
+        if (!raw)
+        {
+            //Fallback: walk up to ha-card / document to grab the variable from a higher scope.
+            raw = getComputedStyle(document.documentElement).getPropertyValue('--primary-text-color').trim();
+        }
+        const rgb = parseCssColorToUnitRgb(raw);
+        this._lidarViewLayer.setViewColor(rgb[0], rgb[1], rgb[2]);
     }
 
     //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / LIDAR_VIEW_DISPLAY_RADIUS_M, both compile-time constants), no reason to

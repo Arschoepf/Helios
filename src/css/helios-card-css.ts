@@ -1015,7 +1015,10 @@ export const heliosCardStyles = css`
         ways. */
     .dash-cf-cum-chart-curves
     {
-        transform-origin: bottom;
+        /*  Origin at the W=0 baseline in SVG user space (viewBox 500 x 200, PAD_B = 12, baseline = 188).
+            Curves grow from the baseline UPWARD, not from the bottom of the chart, so the coloured band
+            below the baseline stays visible throughout the animation. */
+        transform-origin: 250px 188px;
         transform: scaleY(0);
         transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
     }

@@ -246,6 +246,22 @@ export class LidarViewLayer implements CustomLayerInterface
         this._map?.triggerRepaint();
     }
 
+    //Point + wireframe colour, theme-aware. Caller pushes the resolved HA frontend primary-text-color as a
+    //0..1 RGB triplet (black ~ 0,0,0 on light theme, white ~ 1,1,1 on dark theme). The fill-by-exposure
+    //pass is unaffected (it always paints in the irradiance palette); only the points + wireframe + the
+    //flat-pre-exposure fill pull this colour.
+    private _viewColorR = 1;
+    private _viewColorG = 1;
+    private _viewColorB = 1;
+    public setViewColor(r: number, g: number, b: number): void
+    {
+        if (r === this._viewColorR && g === this._viewColorG && b === this._viewColorB) return;
+        this._viewColorR = r;
+        this._viewColorG = g;
+        this._viewColorB = b;
+        this._map?.triggerRepaint();
+    }
+
     public setPointSizePx(px: number): void
     {
         if (px === this._pointSizePx)
@@ -793,7 +809,7 @@ export class LidarViewLayer implements CustomLayerInterface
             {
                 gl.uniform3f(this._uExposureWarmTint, U_WARM_R, U_WARM_G, U_WARM_B);
             }
-            gl.uniform4f(this._uColor, 1, 1, 1, fillA);
+            gl.uniform4f(this._uColor, this._viewColorR, this._viewColorG, this._viewColorB, fillA);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._triIndexBuffer);
             gl.drawElements(gl.TRIANGLES, this._triIdxCount, this._indexType, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
@@ -822,7 +838,7 @@ export class LidarViewLayer implements CustomLayerInterface
         //(typical wireframe-only setup).
         if (this._uColor && this._pointSizePx > 0)
         {
-            gl.uniform4f(this._uColor, 1, 1, 1, fillA);
+            gl.uniform4f(this._uColor, this._viewColorR, this._viewColorG, this._viewColorB, fillA);
             gl.drawArrays(gl.POINTS, 0, this._vertexCount);
         }
 
@@ -833,7 +849,7 @@ export class LidarViewLayer implements CustomLayerInterface
          && this._lineIdxCount > 0
          && this._uColor)
         {
-            gl.uniform4f(this._uColor, 1, 1, 1, wireA);
+            gl.uniform4f(this._uColor, this._viewColorR, this._viewColorG, this._viewColorB, wireA);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this._indexBuffer);
             gl.drawElements(gl.LINES, this._lineIdxCount, this._indexType, 0);
             gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
