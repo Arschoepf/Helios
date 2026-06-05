@@ -511,6 +511,9 @@ export class HeliosCard extends LitElement
     //epoch of the cursor position on the X axis; null when the pointer
     //is outside the chart or the chart isn't shown.
     @state() _dashChartHoverTs: number | null = null;
+    //Hover state for the radial dial in the dashboard. Hour fraction in [0..24) when the cursor sits
+    //over the SVG, null otherwise. Front card only, the rear cards never wire pointer handlers.
+    @state() _dashRadialHoverHour: number | null = null;
     //Hover position on the timeline chart cards, expressed as a
     //percent of the visible time range. Null when the pointer is
     //outside the cards; drives the hover guide line, the per-curve

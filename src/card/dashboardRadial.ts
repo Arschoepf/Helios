@@ -1,51 +1,50 @@
-//Helios radial sundial: a single SVG component that lives at the centre of each CoverFlow day card.
-//Replaces the cumulative chart + production / forecast mini-tiles introduced in the alpha cycle. The
-//design is a 24-hour polar clock around a central sun disc whose radius scales with the day's
-//irradiance ratio against the local summer-solstice clear-sky reference:
+//Helios radial sundial: the single SVG component at the centre of each CoverFlow day card.
 //
-//  - Centre: sun disc + reference circle. Disc radius = irradiance ratio, percentage shown as a
-//    numeric label centred on the disc.
-//  - Inner ring: radial production curve, hour theta vs power radius. Past hours render as a solid
-//    fill below the curve, future hours as a dashed outline only (same vocabulary as the timeline
-//    forecast curve so the past / future split reads consistently across the card).
-//  - Outer ring: radial consumption curve, same shape semantics as the production curve.
-//  - Sundial perimeter: 24 hour ticks, longer ticks at 0 / 6 / 12 / 18, current-hour cursor anchored
-//    at the outside of the irradiance reference circle and ending at the outer dial edge.
+//Concentric layout, inside -> outside:
+//  - Centre: sun disc (irradiance % of summer-solstice clear-sky) + reference rim.
+//  - Cloud ring: hourly cloud cover (% from the weather model series), past solid / future dashed.
+//  - Production ring: hourly PV power, past solid / future dashed.
+//  - Consumption ring: hourly home consumption from the grid net + PV reconstruction, past only.
+//  - Sundial: 24 hour labels + 96 sub-hour ticks (4 per hour).
+//
+//Two cursors:
+//  - Permanent "now" cursor on today's card, anchored at the outer edge of the irradiance reference
+//    rim and ending at the outer dial edge.
+//  - On-hover cursor, mirror of the now cursor in secondary text colour. Drives the corner labels
+//    (top-left production, top-right consumption, bottom-left cloud, bottom-right hour).
 //
 //Angle convention (clockwise, noon at top):
-//
 //  hour 12 -> top              (0, -r)
 //  hour 18 -> right            (+r, 0)
 //  hour  0 -> bottom           (0, +r)
 //  hour  6 -> left             (-r, 0)
-//
-//Implemented as alpha = (hour - 12) * pi / 12 then x = r * sin(alpha), y = -r * cos(alpha).
+//Implemented as alpha = (hour - 12) * pi / 12, then x = r * sin(alpha), y = -r * cos(alpha).
 
 import { html, svg, nothing, type TemplateResult } from 'lit';
 import type { DashboardHost } from './dashboard';
 import { getSunPosition } from '../engine/sun';
 import { pvInverterMaxW, pvNormalizeToWatts, computePvPowerWeighted } from './pv';
 import { getHomeCoords } from './init';
-import { gridWattsAtTime, isGridCombined } from './grid';
+import { gridWattsAtTime } from './grid';
 import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
 
 
-//Geometry constants. SVG viewBox is square so the dial reads as a true circle at any aspect ratio
-//and CSS preserveAspectRatio="xMidYMid meet" keeps it centred in the parent slot.
+//Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
+//narrower visually), reference disc shrunk from 60 to 48 so the four rings have meaningful breathing
+//room. ViewBox stays at 400 so external aspect ratios + max-width caps still apply consistently.
 const VIEWBOX                  = 400;
 const CENTER                   = 200;
-const R_IRRAD_REF              = 60;   //irradiance reference circle radius, also max sun disc radius
-const R_PROD_INNER             = 70;   //inner edge of the production ring track
-const R_PROD_OUTER             = 115;  //outer edge of the production ring track
-const R_CONS_INNER             = 125;  //inner edge of the consumption ring track
-const R_CONS_OUTER             = 165;  //outer edge of the consumption ring track
-const R_DIAL_INNER             = 174;  //inner edge of the sundial perimeter
-const R_DIAL_OUTER             = 195;  //outer edge of the sundial perimeter
-
-const HOUR_TICK_INNER          = R_DIAL_INNER;
-const HOUR_TICK_OUTER          = R_DIAL_OUTER;
-const HOUR_TICK_OUTER_BIG      = R_DIAL_OUTER + 6;  //big ticks at 0 / 6 / 12 / 18 extend slightly outside
+const R_SUN_REF                = 48;   //reference rim circle (no background fill), also max disc radius
+const R_CLOUD_INNER            = 56;
+const R_CLOUD_OUTER            = 80;
+const R_PROD_INNER             = 82;
+const R_PROD_OUTER             = 110;
+const R_CONS_INNER             = 112;
+const R_CONS_OUTER             = 140;
+const R_DIAL_INNER             = 145;
+const R_DIAL_OUTER             = 162;
+const R_HOUR_LABEL             = R_DIAL_OUTER + 11;  //label baseline radius
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
@@ -59,10 +58,8 @@ function polarPt(hour: number, radius: number, cx: number = CENTER, cy: number =
 }
 
 
-//Build a closed radial polygon path along the supplied per-hour radii. Each hour gets a vertex at
-//polarPt(hour, baseRadius + (perHourRadii[h] / scaleMax) * (outerRadius - baseRadius)). Hours with
-//a null radius collapse to baseRadius so a missing-data hour reads as "zero". The path closes back
-//to its first point so SVG fill applies cleanly.
+//Closed radial fill path along the supplied per-hour radii. Sub-hour interpolation (3 vertices per
+//hour gap) keeps the polygon visually smooth without paying for a true spline.
 function buildRadialFillPath(
     perHourValues: ReadonlyArray<number | null>,
     scaleMax:      number,
@@ -77,23 +74,14 @@ function buildRadialFillPath(
     let d = '';
     for (let h = 0; h < 24; h++)
     {
-        const v = perHourValues[h];
-        const r = v === null
-            ? baseRadius
-            : baseRadius + Math.max(0, Math.min(1, v / scaleMax)) * (outerRadius - baseRadius);
-        //Sample sub-hour to keep the polygon curved between integer hours instead of polygonal. Two
-        //extra vertices per hour gap (at h + 1/3 and h + 2/3) read as a smooth ribbon at 24 hours
-        //per turn without paying for a true spline.
-        const subs = [0, 1/3, 2/3];
-        for (const f of subs)
+        const v     = perHourValues[h];
+        const r     = v === null ? baseRadius : baseRadius + Math.max(0, Math.min(1, v / scaleMax)) * (outerRadius - baseRadius);
+        const next  = perHourValues[(h + 1) % 24];
+        const rNext = next === null ? baseRadius : baseRadius + Math.max(0, Math.min(1, next / scaleMax)) * (outerRadius - baseRadius);
+        for (const f of [0, 1/3, 2/3])
         {
             const hour = h + f;
-            //Linearly interpolate radius between consecutive hour values for the sub-hour samples.
-            const next  = perHourValues[(h + 1) % 24];
-            const rNext = next === null
-                ? baseRadius
-                : baseRadius + Math.max(0, Math.min(1, next / scaleMax)) * (outerRadius - baseRadius);
-            const ri = r + (rNext - r) * f;
+            const ri   = r + (rNext - r) * f;
             const [x, y] = polarPt(hour, ri);
             d += (d === '' ? 'M ' : ' L ') + x.toFixed(2) + ' ' + y.toFixed(2);
         }
@@ -103,9 +91,7 @@ function buildRadialFillPath(
 }
 
 
-//Build an OPEN radial polyline path (no Z close), used for the forecast / future portion that
-//renders as a dashed outline without fill. Same vertex recipe as buildRadialFillPath but starts and
-//ends at the first / last in-range hour rather than wrapping the whole day.
+//Open radial outline path (no Z close). Used for the past portion when slicing by current hour.
 function buildRadialOutlinePath(
     perHourValues: ReadonlyArray<number | null>,
     scaleMax:      number,
@@ -120,7 +106,6 @@ function buildRadialOutlinePath(
         return '';
     }
     let d = '';
-    //Slice the supplied range with a step of 1/3 hour so the curve reads as smooth.
     const stepHours = 1 / 3;
     for (let hour = fromHour; hour <= toHour + 1e-6; hour += stepHours)
     {
@@ -138,11 +123,10 @@ function buildRadialOutlinePath(
 }
 
 
-//Compute the day's hourly PV production in watts. Past hours pull from the LTS / history merge the
-//timeline already uses, future hours from the weather-model forecast through computePvPowerWeighted
-//(same path the line chart's predicted curve consumes, so the radial reading lines up with the rest
-//of the card).
-function computeHourlyProduction(host: DashboardHost, dayOffset: number, dayStartMs: number): (number | null)[] {
+//Hourly PV production (W). Past hours from the LTS / history merge, future hours from the
+//weather-model forecast through computePvPowerWeighted (same path the timeline forecast curve uses).
+function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (number | null)[]
+{
     const values: (number | null)[] = new Array(24).fill(null);
     const nowMs                     = Date.now();
 
@@ -151,8 +135,6 @@ function computeHourlyProduction(host: DashboardHost, dayOffset: number, dayStar
     const unit  = (host._pvUnit || '').toLowerCase();
     const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
 
-    //Past pass: aggregate samples that fall inside each hour bin into a mean watts value. Same
-    //differentiation rules as the timeline (cumulative -> neighbour-pair slope, power -> direct).
     const sums   = new Array(24).fill(0) as number[];
     const counts = new Array(24).fill(0) as number[];
     const ingestPower = (tMs: number, w: number): void =>
@@ -178,9 +160,6 @@ function computeHourlyProduction(host: DashboardHost, dayOffset: number, dayStar
                 const dv = calib.values[i] - calib.values[prevIdx];
                 prevIdx = i;
                 if (dv < 0) { continue; }
-                //kWh / h -> W. Cumulative entities report in Wh / kWh / MWh; multiply by 1000 only
-                //when the unit is kWh (the default Helios assumption), other unit paths normalise
-                //via pvNormalizeToWatts inside the timeline already.
                 const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
                 ingestPower(t1, (dv / dtH) * factor);
             }
@@ -202,15 +181,12 @@ function computeHourlyProduction(host: DashboardHost, dayOffset: number, dayStar
     }
     for (let h = 0; h < 24; h++)
     {
-        if (counts[h] > 0)
-        {
-            values[h] = sums[h] / counts[h];
-        }
+        if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
 
-    //Future pass: walk the weather-model series, model the panel output via the same call the
-    //timeline forecast curve uses. Capped by the inverter max so a clear-sky midday for an
-    //oversized array reads at the real inverter ceiling, not at the theoretical panel output.
+    //Forecast pass: walk the weather-model series, model panel output via the same call the timeline
+    //forecast curve uses. Inverter cap clips the radius so an oversized array reads at the real
+    //inverter ceiling, not at the theoretical panel output.
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
     const cap    = pvInverterMaxW(host.config);
@@ -220,9 +196,7 @@ function computeHourlyProduction(host: DashboardHost, dayOffset: number, dayStar
         {
             const hourMs    = dayStartMs + h * HOUR_MS;
             const hourMidMs = hourMs + HOUR_MS / 2;
-            //Only fill future / forecast positions, the past pass owns the realised history.
             if (hourMidMs < nowMs && values[h] !== null) { continue; }
-            //Find the nearest series sample to this hour.
             let bestIdx = -1;
             let bestDt  = Infinity;
             for (let i = 0; i < series.times.length; i++)
@@ -250,8 +224,6 @@ function computeHourlyProduction(host: DashboardHost, dayOffset: number, dayStar
             }
         }
     }
-    //Forward-fill production gaps in the past with 0 (no production observed = night), so the curve
-    //reads as a continuous ribbon rather than a series of disconnected daytime arcs.
     for (let h = 0; h < 24; h++)
     {
         const hourMs = dayStartMs + h * HOUR_MS;
@@ -260,30 +232,17 @@ function computeHourlyProduction(host: DashboardHost, dayOffset: number, dayStar
             values[h] = 0;
         }
     }
-
-    //Touch dayOffset for completeness: the upstream caller resolves dayStartMs from dayOffset, the
-    //branch above only needs dayStartMs and the offset is unused inside the body. Kept in the
-    //signature so a future refinement (e.g. tomorrow's overnight forecast pulling from a different
-    //series) can plug in without re-threading the call site.
-    void dayOffset;
-
     return values;
 }
 
 
-//Hourly grid + battery samples folded into a per-hour home consumption series (W). Computed from
-//the same buffers the timeline + dashboard cumulative chart already consume so the radial reading
-//lines up with whatever the rest of the card surfaces.
-function computeHourlyConsumption(host: DashboardHost, _dayOffset: number, dayStartMs: number): (number | null)[]
+//Hourly home consumption (W) reconstructed from grid net + PV history. Past only, future hours stay
+//null (we have no consumption forecast). Cleanly nulls the hours past "now" so the ring fills only
+//the realised portion of the day.
+function computeHourlyConsumption(host: DashboardHost, dayStartMs: number): (number | null)[]
 {
     const values: (number | null)[] = new Array(24).fill(null);
     const nowMs                     = Date.now();
-
-    //Sum of per-entity grid net = import - export, signed positive when the home pulls from the
-    //grid. The combined-meter case (one signed sensor) collapses to the same number via the import
-    //buffer alone, which is how readCombined wires it in grid.ts. So we always read import - export,
-    //the combined path just happens to push everything into the import buffer with the right sign.
-    void isGridCombined;
     const sumGridAt = (tMs: number): number | null =>
     {
         const imp = gridWattsAtTime(host._gridImportSamples, host._gridImportUnits, tMs);
@@ -291,32 +250,49 @@ function computeHourlyConsumption(host: DashboardHost, _dayOffset: number, daySt
         if (imp === null && exp === null) { return null; }
         return (imp ?? 0) - (exp ?? 0);
     };
-
     for (let h = 0; h < 24; h++)
     {
         const hourMidMs = dayStartMs + h * HOUR_MS + HOUR_MS / 2;
         if (hourMidMs > nowMs) { break; }
         const gridNet = sumGridAt(hourMidMs);
-        //Approximate consumption = PV production + grid net (net positive = importing, negative = exporting).
-        //Battery is ignored at this pass, a small under-read on battery-charging hours and over-read on
-        //discharging hours is acceptable for a visual indicator at 24 hour resolution.
         if (gridNet === null) { continue; }
-        //Production already computed externally would be cleaner but the radial passes it through a
-        //separate axis here on purpose, the consumption ring is meant to read independently.
         const pvSample = host._pvHistory && host._pvHistory.times.length > 0
             ? interpolatePvAt(host._pvHistory.times, host._pvHistory.values, hourMidMs, host._pvUnit)
             : 0;
         const w = Math.max(0, pvSample + gridNet);
         values[h] = w;
     }
-
     return values;
 }
 
 
-//Linear interpolation through a (sorted) times[] / values[] pair, returning the watts reading at
-//tMs. Used by the consumption deriver above to align PV history sampling with the per-hour grid
-//net. Outside the bracketed range returns 0.
+//Hourly cloud cover (%) over the day window. Pulled from the weather-model series which covers
+//past 30 d + forecast 2 d, so cloud is uniformly available for past + future. Returns 0..100.
+function computeHourlyCloud(host: DashboardHost, dayStartMs: number): (number | null)[]
+{
+    const values: (number | null)[] = new Array(24).fill(null);
+    const series = host._chartSeries;
+    if (!series || series.times.length === 0) { return values; }
+    const sums   = new Array(24).fill(0) as number[];
+    const counts = new Array(24).fill(0) as number[];
+    for (let i = 0; i < series.times.length; i++)
+    {
+        const t = series.times[i].getTime();
+        if (t < dayStartMs || t >= dayStartMs + DAY_MS) { continue; }
+        const v = series.cloud[i];
+        if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
+        const h = Math.floor((t - dayStartMs) / HOUR_MS);
+        sums[h]   += Math.max(0, Math.min(100, v));
+        counts[h] += 1;
+    }
+    for (let h = 0; h < 24; h++)
+    {
+        if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
+    }
+    return values;
+}
+
+
 function interpolatePvAt(times: ReadonlyArray<Date>, values: ReadonlyArray<number>, tMs: number, unit: string): number
 {
     if (times.length === 0) { return 0; }
@@ -336,18 +312,10 @@ function interpolatePvAt(times: ReadonlyArray<Date>, values: ReadonlyArray<numbe
 }
 
 
-//Mean shortwave irradiance over the day (W / m2). Past hours pull from the weather model's
-//shortwave samples; future hours from the same series since it covers past 30 d + forecast 2 d. The
-//mean is divided by the summer-solstice clear-sky reference for the home latitude to land the
-//irradiance ratio that drives the central sun disc radius.
 function computeDailyIrradianceRatio(host: DashboardHost, dayStartMs: number): { ratioPct: number; meanWm2: number }
 {
     const series = host._chartSeries;
-    if (!series || series.times.length === 0)
-    {
-        return { ratioPct: 0, meanWm2: 0 };
-    }
-    //Collect shortwave samples that fall inside the day window.
+    if (!series || series.times.length === 0) { return { ratioPct: 0, meanWm2: 0 }; }
     const dayEndMs = dayStartMs + DAY_MS;
     let sum   = 0;
     let count = 0;
@@ -362,62 +330,103 @@ function computeDailyIrradianceRatio(host: DashboardHost, dayStartMs: number): {
     }
     if (count === 0) { return { ratioPct: 0, meanWm2: 0 }; }
     const meanWm2 = sum / count;
-
-    //Reference: theoretical clear-sky shortwave at the home's latitude on the summer solstice. We
-    //approximate it via the Haurwitz model integrated across the daylight hours of June 21. The
-    //expensive parts (sun position lookup, cosine zenith integration) only depend on latitude so we
-    //memoise per latitude bucket.
     const coords = getHomeCoords(host.config, host.hass);
     const lat    = coords?.lat ?? 0;
     const refWm2 = summerSolsticeReferenceWm2(lat);
     if (refWm2 <= 0) { return { ratioPct: 0, meanWm2 }; }
-    const ratio    = Math.max(0, Math.min(1, meanWm2 / refWm2));
+    const ratio  = Math.max(0, Math.min(1, meanWm2 / refWm2));
     return { ratioPct: ratio * 100, meanWm2 };
 }
 
 
-//Memoised summer-solstice reference, keyed on rounded latitude. Computes the integrated mean
-//shortwave (W / m2) over a clear-sky June 21 at the user's latitude. Northern hemisphere homes get
-//the June 21 reference, southern hemisphere homes the December 21 reference so the visualisation
-//reads consistently for the user's actual peak-sun day.
 const _refMeanWm2Cache = new Map<number, number>();
 function summerSolsticeReferenceWm2(lat: number): number
 {
     const key = Math.round(lat);
     const cached = _refMeanWm2Cache.get(key);
     if (cached !== undefined) { return cached; }
-    //Build a reference date at the solar peak day (June 21 for NH, Dec 21 for SH).
     const year = new Date().getFullYear();
     const refDate = lat >= 0
         ? new Date(year, 5, 21, 0, 0, 0)
         : new Date(year, 11, 21, 0, 0, 0);
     let sum   = 0;
-    let count = 0;
     for (let h = 0; h < 24; h += 0.5)
     {
         const t = new Date(refDate.getTime() + h * 3_600_000);
         const sun = getSunPosition(t, lat, 0);
-        //getSunPosition returns degrees per the function's contract.
         const altRad = sun.altitude * Math.PI / 180;
         if (altRad <= 0) { continue; }
-        //Haurwitz clear-sky shortwave at the surface: 1098 * cos(zenith) * exp(-0.057 / cos(zenith))
         const cosZ = Math.sin(altRad);
         if (cosZ <= 0) { continue; }
         const ghi = 1098 * cosZ * Math.exp(-0.057 / cosZ);
         sum += ghi;
-        count++;
     }
-    //Average across the whole 24 h window so the ratio compares "mean over the day" to the same
-    //"mean over the day" reference, otherwise a winter day would never exceed ~10 % even at clear sky.
-    const total = (count > 0 ? sum : 0) / 48;
+    const total = sum / 48;
     _refMeanWm2Cache.set(key, total);
     return total;
 }
 
 
-//Format a watts reading for the corner tooltips. kW with one decimal once the value crosses 1000 W,
-//W with no decimal below.
-function formatW(hass: { language?: string } | undefined | { language?: string }, w: number | null): string
+//Resolve the HA-configured time format (12h vs 24h). 'language' / 'system' / unset all fall back to
+//the language's Intl default so a fr-FR user lands on 24h, an en-US user on 12h, without us having
+//to maintain a per-locale table.
+function uses12HourFormat(hass: { locale?: { time_format?: string; language?: string }; language?: string } | undefined): boolean
+{
+    const tf = hass?.locale?.time_format;
+    if (tf === '12') { return true; }
+    if (tf === '24') { return false; }
+    const lang = hass?.locale?.language || hass?.language || (typeof navigator !== 'undefined' ? navigator.language : 'en');
+    try
+    {
+        const cycle = new Intl.DateTimeFormat(lang, { hour: 'numeric' }).resolvedOptions().hourCycle;
+        return cycle === 'h11' || cycle === 'h12';
+    }
+    catch (_)
+    {
+        return false;
+    }
+}
+
+
+//Convert a 0..23 integer hour into the label string for the dial face, respecting HA's 12 / 24
+//format. The 12-hour layout maps 0 + 12 to "12", everything else to its 1..11 modulo so the dial
+//reads like a classic analog clock face with AM hours on the morning quadrant and PM hours on the
+//afternoon quadrant.
+function formatDialHourLabel(hour: number, hass: { locale?: { time_format?: string; language?: string }; language?: string } | undefined): string
+{
+    if (uses12HourFormat(hass))
+    {
+        const h12 = hour % 12;
+        return h12 === 0 ? '12' : String(h12);
+    }
+    return String(hour);
+}
+
+
+//Format a clock time for the corner pill, full locale + time format. "14:30" on fr-FR / 24 h,
+//"2:30 PM" on en-US / 12 h.
+function formatHoverClock(hourFraction: number, hass: { locale?: { time_format?: string; language?: string }; language?: string } | undefined): string
+{
+    const h = Math.floor(hourFraction);
+    const m = Math.floor((hourFraction - h) * 60);
+    const d = new Date(2000, 0, 1, h, m);
+    const lang = hass?.locale?.language || hass?.language || 'en';
+    try
+    {
+        return new Intl.DateTimeFormat(lang, {
+            hour:     'numeric',
+            minute:   '2-digit',
+            hourCycle: uses12HourFormat(hass) ? 'h12' : 'h23',
+        }).format(d);
+    }
+    catch (_)
+    {
+        return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+    }
+}
+
+
+function formatW(hass: { language?: string } | undefined, w: number | null): string
 {
     if (w === null || !Number.isFinite(w)) { return '—'; }
     if (Math.abs(w) >= 1000)
@@ -428,7 +437,13 @@ function formatW(hass: { language?: string } | undefined | { language?: string }
 }
 
 
-//Day-start ms helper, matches the calendar-day start the rest of the dashboard uses.
+function formatPct(hass: { language?: string } | undefined, pct: number | null): string
+{
+    if (pct === null || !Number.isFinite(pct)) { return '—'; }
+    return `${formatLocalisedNumber(hass as any, Math.round(pct), 0)} %`;
+}
+
+
 function dayStartMsFor(offset: number): number
 {
     const d = new Date();
@@ -438,8 +453,6 @@ function dayStartMsFor(offset: number): number
 }
 
 
-//Current-hour fraction inside the [0, 24) range, used to position the cursor at sub-hour
-//resolution so the trail follows the wall clock rather than jumping at every full hour.
 function currentHourFraction(): number
 {
     const now = new Date();
@@ -447,8 +460,25 @@ function currentHourFraction(): number
 }
 
 
-//Render the radial dial for one CoverFlow card. Called from renderCoverflowCard in dashboard.ts;
-//returns a single <div> wrapper containing the SVG dial and the two corner labels.
+//Pointer -> hour conversion. Reads the SVG's bounding box, computes the angle of (clientX, clientY)
+//relative to the centre and maps it into the [0, 24) hour range using the same noon-on-top clockwise
+//convention as the rest of the file.
+function pointerToHourFraction(svgEl: SVGSVGElement, clientX: number, clientY: number): number
+{
+    const rect = svgEl.getBoundingClientRect();
+    const dx   = clientX - (rect.left + rect.width  / 2);
+    const dy   = clientY - (rect.top  + rect.height / 2);
+    if (dx === 0 && dy === 0) { return 0; }
+    //atan2(dx, -dy) yields 0 at top, +pi/2 at right, +/-pi at bottom, -pi/2 at left. Add 2*pi to
+    //wrap the lower half into positive, then scale.
+    let a = Math.atan2(dx, -dy);
+    if (a < 0) { a += 2 * Math.PI; }
+    return (a / (2 * Math.PI)) * 24;
+}
+
+
+//Render the radial dial for one CoverFlow card. Front card is the only one that wires hover
+//handlers, so a quiet rear card never costs a pointermove dispatch.
 export function renderRadialDial(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult
 {
     const isFront    = cardOffset === activeOffset;
@@ -457,102 +487,151 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const nowMs      = Date.now();
     const t          = pickTranslations(host.hass?.language);
 
-    //Decide where the past / future boundary sits inside this day's 24 h window. Past-only days
-    //fill the full ring as a solid area, future-only days as a dashed outline, today straddles the
-    //two with the boundary at the current hour fraction.
     let pastEndHour: number;
     if (dayEndMs <= nowMs)        { pastEndHour = 24; }
     else if (dayStartMs >= nowMs) { pastEndHour = 0;  }
     else                          { pastEndHour = (nowMs - dayStartMs) / HOUR_MS; }
 
-    const hourlyProd = computeHourlyProduction(host, cardOffset, dayStartMs);
-    const hourlyCons = computeHourlyConsumption(host, cardOffset, dayStartMs);
+    const hourlyProd  = computeHourlyProduction(host, dayStartMs);
+    const hourlyCons  = computeHourlyConsumption(host, dayStartMs);
+    const hourlyCloud = computeHourlyCloud(host, dayStartMs);
 
-    //Scale floors. Production uses the configured inverter cap (or 5 kW as a safe default) so the
-    //ring reads consistently across days. Consumption uses the max observed in the day plus a 25 %
-    //headroom so a quiet day still shows visible variation.
-    const prodScaleMax = Math.max(1, pvInverterMaxW(host.config) || 5000);
-    let   consMax      = 0;
+    const prodScaleMax  = Math.max(1, pvInverterMaxW(host.config) || 5000);
+    let   consMax       = 0;
     for (const v of hourlyCons) { if (v !== null && v > consMax) { consMax = v; } }
-    const consScaleMax = Math.max(1, consMax * 1.25, 2000);
+    const consScaleMax  = Math.max(1, consMax * 1.25, 2000);
+    const cloudScaleMax = 100;
 
-    //Past + future paths for each ring.
+    //Slice the arrays by the past / future boundary. Past hours feed the solid fills, future hours
+    //feed the dashed outlines. Consumption has no future data so its future portion is always empty.
+    const ceilPastH = Math.ceil(pastEndHour);
+    const floorPastH = Math.floor(pastEndHour);
     const prodPastPath = pastEndHour > 0
-        ? buildRadialFillPath(hourlyProd.slice(0, Math.ceil(pastEndHour)).concat(new Array(24 - Math.ceil(pastEndHour)).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
+        ? buildRadialFillPath(hourlyProd.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
         : '';
     const prodFuturePath = pastEndHour < 24
-        ? buildRadialOutlinePath(hourlyProd, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, Math.floor(pastEndHour), 24)
+        ? buildRadialOutlinePath(hourlyProd, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, floorPastH, 24)
         : '';
     const consPastPath = pastEndHour > 0
-        ? buildRadialFillPath(hourlyCons.slice(0, Math.ceil(pastEndHour)).concat(new Array(24 - Math.ceil(pastEndHour)).fill(null)), consScaleMax, R_CONS_INNER, R_CONS_OUTER)
+        ? buildRadialFillPath(hourlyCons.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), consScaleMax, R_CONS_INNER, R_CONS_OUTER)
+        : '';
+    const cloudPastPath = pastEndHour > 0
+        ? buildRadialFillPath(hourlyCloud.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
+        : '';
+    const cloudFuturePath = pastEndHour < 24
+        ? buildRadialOutlinePath(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
         : '';
 
-    //Irradiance ratio for the central sun disc.
     const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
-    const sunFillR     = R_IRRAD_REF * (ratioPct / 100);
-    const haloR        = R_IRRAD_REF * 2.2;
+    const sunFillR     = R_SUN_REF * (ratioPct / 100);
+    const haloR        = R_SUN_REF * 2.2;
     const haloAlpha    = Math.max(0.05, Math.min(0.55, ratioPct / 100 * 0.55));
 
-    //Cursor: only when this card represents the current calendar day. The cursor sits between the
-    //irradiance reference circle and the outer sundial edge, at the current hour fraction.
-    const showCursor   = isFront && nowMs >= dayStartMs && nowMs < dayEndMs;
-    const cursorHour   = showCursor ? currentHourFraction() : -1;
-    let cursorPath = '';
-    if (showCursor)
-    {
-        const [x1, y1] = polarPt(cursorHour, R_IRRAD_REF);
-        const [x2, y2] = polarPt(cursorHour, R_DIAL_OUTER);
-        cursorPath = `M ${x1.toFixed(2)} ${y1.toFixed(2)} L ${x2.toFixed(2)} ${y2.toFixed(2)}`;
-    }
+    //Now cursor: only on the current day.
+    const showNowCursor = isFront && nowMs >= dayStartMs && nowMs < dayEndMs;
+    const nowHour       = showNowCursor ? currentHourFraction() : -1;
+    const nowCursor = showNowCursor
+        ? `M ${polarPt(nowHour, R_SUN_REF)[0].toFixed(2)} ${polarPt(nowHour, R_SUN_REF)[1].toFixed(2)} L ${polarPt(nowHour, R_DIAL_OUTER)[0].toFixed(2)} ${polarPt(nowHour, R_DIAL_OUTER)[1].toFixed(2)}`
+        : '';
 
-    //Default corner values: at the cursor for today, mean for the day on past / future cards.
-    let cornerProdW: number | null = null;
-    let cornerConsW: number | null = null;
-    if (showCursor)
+    //Hover cursor: only on the front card AND only when the host carries a hover hour set by the
+    //pointermove handler below. Same shape as the now cursor but in secondary text colour so the
+    //two read as a layered pair when the user hovers over the live day.
+    const hoverHour = isFront ? host._dashRadialHoverHour : null;
+    const hoverCursor = (hoverHour !== null && hoverHour !== undefined)
+        ? `M ${polarPt(hoverHour, R_SUN_REF)[0].toFixed(2)} ${polarPt(hoverHour, R_SUN_REF)[1].toFixed(2)} L ${polarPt(hoverHour, R_DIAL_OUTER)[0].toFixed(2)} ${polarPt(hoverHour, R_DIAL_OUTER)[1].toFixed(2)}`
+        : '';
+
+    //Corner read-outs. When hovering, every corner snaps to the hover hour. Otherwise the production
+    //and consumption corners show the "now" reading (today) or the daily mean (past / forecast), the
+    //cloud corner shows the day's mean cloud cover, and the clock corner shows "now" or the day's
+    //friendly label.
+    const meanOf = (arr: ReadonlyArray<number | null>): number | null =>
     {
-        const hIdx = Math.min(23, Math.floor(cursorHour));
-        cornerProdW = hourlyProd[hIdx];
-        cornerConsW = hourlyCons[hIdx];
+        let s = 0, c = 0;
+        for (const v of arr) { if (v !== null) { s += v; c++; } }
+        return c > 0 ? s / c : null;
+    };
+    const hourIdxFor = (hf: number): number => Math.max(0, Math.min(23, Math.floor(hf)));
+
+    let cornerProdW:    number | null = null;
+    let cornerConsW:    number | null = null;
+    let cornerCloudPct: number | null = null;
+    let cornerClock:    string | null = null;
+
+    if (hoverHour !== null && hoverHour !== undefined)
+    {
+        const idx        = hourIdxFor(hoverHour);
+        cornerProdW      = hourlyProd[idx];
+        cornerConsW      = hourlyCons[idx];
+        cornerCloudPct   = hourlyCloud[idx];
+        cornerClock      = formatHoverClock(hoverHour, host.hass);
+    }
+    else if (showNowCursor)
+    {
+        const idx        = hourIdxFor(nowHour);
+        cornerProdW      = hourlyProd[idx];
+        cornerConsW      = hourlyCons[idx];
+        cornerCloudPct   = hourlyCloud[idx];
+        cornerClock      = formatHoverClock(nowHour, host.hass);
     }
     else
     {
-        //Mean of the non-null bins.
-        const mean = (arr: ReadonlyArray<number | null>): number | null =>
-        {
-            let s = 0, c = 0;
-            for (const v of arr) { if (v !== null) { s += v; c++; } }
-            return c > 0 ? s / c : null;
-        };
-        cornerProdW = mean(hourlyProd);
-        cornerConsW = mean(hourlyCons);
+        cornerProdW      = meanOf(hourlyProd);
+        cornerConsW      = meanOf(hourlyCons);
+        cornerCloudPct   = meanOf(hourlyCloud);
+        cornerClock      = null;
     }
 
-    //Hour ticks: 24 ticks around the perimeter, longer at 0 / 6 / 12 / 18 (cardinal hours).
-    const tickElements: TemplateResult[] = [];
+    //Quarter-hour ticks: 24 hours * 4 = 96 ticks. The hour ticks (every 4 ticks) are NOT painted
+    //here because the hour labels themselves anchor the eye on the cardinals; the user only asked
+    //for the smaller quarter-hour marks.
+    const quarterTicks: TemplateResult[] = [];
+    for (let q = 0; q < 96; q++)
+    {
+        if (q % 4 === 0) { continue; }  //hour positions: the label takes its place
+        const hour     = q / 4;
+        const isHalf   = q % 2 === 0;
+        const innerR   = R_DIAL_INNER;
+        const outerR   = R_DIAL_INNER + (isHalf ? 5 : 3);
+        const [x1, y1] = polarPt(hour, innerR);
+        const [x2, y2] = polarPt(hour, outerR);
+        const cls      = isHalf ? 'dash-radial-tick-half' : 'dash-radial-tick-quarter';
+        quarterTicks.push(svg`<line class="${cls}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"/>`);
+    }
+
+    //Hour labels: 24 around the perimeter. Format respects HA's 12 / 24 setting. Skip 13..23 when
+    //the dial is in 12-hour mode AND the layout already shows their 1..11 counterparts on the
+    //afternoon quadrant. We DO render the duplicate label so the clock reads like a real analog face
+    //(both 1 AM and 1 PM share the same digit, the position carries the meaning).
+    const hourLabels: TemplateResult[] = [];
     for (let h = 0; h < 24; h++)
     {
-        const isBig    = h === 0 || h === 6 || h === 12 || h === 18;
-        const innerR   = HOUR_TICK_INNER;
-        const outerR   = isBig ? HOUR_TICK_OUTER_BIG : HOUR_TICK_OUTER;
-        const [x1, y1] = polarPt(h, innerR);
-        const [x2, y2] = polarPt(h, outerR);
-        const cls = isBig ? 'dash-radial-tick dash-radial-tick-big' : 'dash-radial-tick';
-        tickElements.push(svg`<line class="${cls}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"/>`);
+        const [x, y] = polarPt(h, R_HOUR_LABEL);
+        const lbl    = formatDialHourLabel(h, host.hass);
+        hourLabels.push(svg`<text class="dash-radial-hour-label" x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${lbl}</text>`);
     }
 
-    //Hour labels at the 4 cardinal positions. Positioned slightly outside the big tick ends so
-    //they don't overlap the tick stroke.
-    const labels = [
-        { hour: 12, text: '12', rOffset: 14 },
-        { hour: 18, text: '18', rOffset: 14 },
-        { hour: 0,  text: '0',  rOffset: 14 },
-        { hour: 6,  text: '6',  rOffset: 14 },
-    ];
-    const labelElements: TemplateResult[] = labels.map(l =>
+    //Pointer handlers (front card only). Imperative because every pointermove on a multi-second
+    //hover would otherwise rebuild the whole template; here we set the host's hover hour and call
+    //requestUpdate so Lit batches the render at the next microtask, which is fast enough at the
+    //single-svg granularity to feel live.
+    const onPointerMove = isFront ? (e: PointerEvent) =>
     {
-        const [x, y] = polarPt(l.hour, R_DIAL_OUTER + l.rOffset);
-        return svg`<text class="dash-radial-hour-label" x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${l.text}</text>`;
-    });
+        const svgEl = (e.currentTarget as SVGSVGElement | null);
+        if (!svgEl) { return; }
+        const hf = pointerToHourFraction(svgEl, e.clientX, e.clientY);
+        host._dashRadialHoverHour = hf;
+        host.requestUpdate();
+    } : undefined;
+    const onPointerLeave = isFront ? () =>
+    {
+        host._dashRadialHoverHour = null;
+        host.requestUpdate();
+    } : undefined;
+
+    const t12 = uses12HourFormat(host.hass);
+    void t12;
 
     return html`
         <div class="dash-radial-wrap">
@@ -564,11 +643,23 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <span class="dash-radial-corner-label">${t.detail.tileImportLabel ?? 'Consumption'}</span>
                 <span class="dash-radial-corner-value dash-radial-corner-cons">${formatW(host.hass, cornerConsW)}</span>
             </div>
+            <div class="dash-radial-corner dash-radial-corner-bl">
+                <span class="dash-radial-corner-label">${t.detail.todayPeak ? 'Cloud' : 'Cloud'}</span>
+                <span class="dash-radial-corner-value dash-radial-corner-cloud">${formatPct(host.hass, cornerCloudPct)}</span>
+            </div>
+            ${cornerClock !== null ? html`
+                <div class="dash-radial-corner dash-radial-corner-br">
+                    <span class="dash-radial-corner-label">${t.detail.todayLabel ?? 'Time'}</span>
+                    <span class="dash-radial-corner-value dash-radial-corner-clock">${cornerClock}</span>
+                </div>
+            ` : nothing}
+
             <svg
                 class="dash-radial-svg"
                 viewBox="0 0 ${VIEWBOX} ${VIEWBOX}"
                 preserveAspectRatio="xMidYMid meet"
-                aria-hidden="true"
+                @pointermove="${onPointerMove}"
+                @pointerleave="${onPointerLeave}"
             >
                 <defs>
                     <radialGradient id="dash-radial-sun-halo-${cardOffset}">
@@ -577,46 +668,44 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                     </radialGradient>
                 </defs>
 
-                <!-- sundial perimeter, the outermost ring with hour ticks -->
-                <circle class="dash-radial-dial-ring" cx="${CENTER}" cy="${CENTER}" r="${(R_DIAL_INNER + R_DIAL_OUTER) / 2}"
-                        fill="none" stroke-width="${R_DIAL_OUTER - R_DIAL_INNER}"/>
-
-                <!-- consumption ring track -->
-                <circle class="dash-radial-cons-track" cx="${CENTER}" cy="${CENTER}" r="${(R_CONS_INNER + R_CONS_OUTER) / 2}"
+                <!-- Ring tracks, lowest layer of the rings so the data curves paint cleanly on top. -->
+                <circle class="dash-radial-cloud-track" cx="${CENTER}" cy="${CENTER}" r="${(R_CLOUD_INNER + R_CLOUD_OUTER) / 2}"
+                        fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>
+                <circle class="dash-radial-prod-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_PROD_INNER  + R_PROD_OUTER)  / 2}"
+                        fill="none" stroke-width="${R_PROD_OUTER - R_PROD_INNER}"/>
+                <circle class="dash-radial-cons-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_CONS_INNER  + R_CONS_OUTER)  / 2}"
                         fill="none" stroke-width="${R_CONS_OUTER - R_CONS_INNER}"/>
 
-                <!-- production ring track -->
-                <circle class="dash-radial-prod-track" cx="${CENTER}" cy="${CENTER}" r="${(R_PROD_INNER + R_PROD_OUTER) / 2}"
-                        fill="none" stroke-width="${R_PROD_OUTER - R_PROD_INNER}"/>
+                <!-- Past + future curves, painted inside out so the outer rings stay on top. -->
+                ${cloudPastPath   ? svg`<path class="dash-radial-cloud-fill"   d="${cloudPastPath}"/>`   : nothing}
+                ${cloudFuturePath ? svg`<path class="dash-radial-cloud-future" d="${cloudFuturePath}"/>` : nothing}
+                ${prodPastPath    ? svg`<path class="dash-radial-prod-fill"    d="${prodPastPath}"/>`    : nothing}
+                ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
+                ${consPastPath    ? svg`<path class="dash-radial-cons-fill"    d="${consPastPath}"/>`    : nothing}
 
-                <!-- consumption past polygon -->
-                ${consPastPath ? svg`<path class="dash-radial-cons-fill" d="${consPastPath}"/>` : nothing}
-
-                <!-- production past polygon -->
-                ${prodPastPath ? svg`<path class="dash-radial-prod-fill" d="${prodPastPath}"/>` : nothing}
-
-                <!-- production future outline -->
-                ${prodFuturePath ? svg`<path class="dash-radial-prod-future" d="${prodFuturePath}"/>` : nothing}
-
-                <!-- sun halo + background fill + scaled inner disc + reference rim, same recipe as the 3D sun on the map -->
+                <!-- Sun: halo (radial gradient), scaled inner fill, reference rim. No tinted bg disc:
+                     the user asked for a single rim + a single inner fill matching the 3D card sun. -->
                 <circle class="dash-radial-sun-halo" cx="${CENTER}" cy="${CENTER}" r="${haloR}"
                         fill="url(#dash-radial-sun-halo-${cardOffset})"/>
-                <circle class="dash-radial-sun-bg" cx="${CENTER}" cy="${CENTER}" r="${R_IRRAD_REF}"/>
                 <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}"/>
-                <circle class="dash-radial-sun-rim" cx="${CENTER}" cy="${CENTER}" r="${R_IRRAD_REF}"
+                <circle class="dash-radial-sun-rim"  cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"
                         fill="none"/>
 
-                <!-- centre irradiance percentage -->
+                <!-- Irradiance percentage centred on the disc, permanent. -->
                 <text class="dash-radial-irrad-label" x="${CENTER}" y="${CENTER}" text-anchor="middle" dominant-baseline="central">
                     ${Math.round(ratioPct)}%
                 </text>
 
-                <!-- hour ticks and labels -->
-                ${tickElements}
-                ${labelElements}
+                <!-- Sundial perimeter: quarter-hour ticks then hour labels. The labels themselves
+                     anchor the hour positions, no separate full-tick is drawn. -->
+                ${quarterTicks}
+                ${hourLabels}
 
-                <!-- cursor, only on the current day -->
-                ${cursorPath ? svg`<path class="dash-radial-cursor" d="${cursorPath}"/>` : nothing}
+                <!-- Now cursor (today only). -->
+                ${nowCursor   ? svg`<path class="dash-radial-cursor-now"   d="${nowCursor}"/>`   : nothing}
+
+                <!-- Hover cursor (any front card with an active hover hour). -->
+                ${hoverCursor ? svg`<path class="dash-radial-cursor-hover" d="${hoverCursor}"/>` : nothing}
             </svg>
         </div>
     `;

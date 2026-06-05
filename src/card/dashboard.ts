@@ -47,6 +47,9 @@ export interface DashboardHost extends ChartHost, BatteryHost
     _detailMode:           boolean;
     _homeHover:            boolean;
     _dashChartHoverTs:     number | null;
+    //Radial dial hover hour, [0..24) when the cursor sits over the SVG, null otherwise. Front card
+    //only, the rear cards never wire their pointer handlers.
+    _dashRadialHoverHour:  number | null;
     //Timestamp the detail panel opened at. Drives the headline count-up animation on the produced-kWh + forecast-kWh figures so the
     //numbers tick from 0 up to the real value over ~700 ms whenever the user enters detail mode. Reset to null on exit so a subsequent
     //re-open replays the animation. Null while the panel is closed.

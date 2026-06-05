@@ -606,11 +606,11 @@ export const heliosCardStyles = css`
         .dash-cf-card-day-chip   { display: none;   }
     }
 
-    /*  Radial sundial: the single visual element replacing the production / forecast mini-tiles +
-        cumulative chart in the CoverFlow day cards. Lives between the bandeau (top) and the bottom
-        of the card, centred horizontally, square aspect to keep the dial as a true circle. The two
-        corner pills carry the production / consumption read at the cursor (or the daily mean when
-        no cursor is shown) and float over the SVG without affecting its layout. */
+    /*  Helios radial sundial.
+        Concentric rings, inside -> outside: cloud, production, consumption, sundial. Two cursors
+        layer over the rings: "now" in primary colour, "hover" in secondary text colour. Four corner
+        pills float over the SVG: TL production, TR consumption, BL cloud, BR clock. The SVG is
+        capped at a tighter max-width so the dial does not eat the whole card horizontally. */
     .dash-radial-wrap
     {
         position: relative;
@@ -623,23 +623,22 @@ export const heliosCardStyles = css`
     }
     .dash-radial-svg
     {
-        width:  100%;
-        height: 100%;
-        max-width:  min(100%, 80vh);
+        /*  Cap at 72 % of the card width on wide cards so the dial reads as a focal disc rather than
+            a stage-spanning donut, with a vh ceiling so portrait phones stay below the card height. */
+        width:      min(100%, 72%);
+        height:     auto;
         max-height: 100%;
+        aspect-ratio: 1 / 1;
         display: block;
     }
 
-    /*  Corner labels, absolutely positioned so they sit above the SVG without nudging its layout.
-        Top-left = production, top-right = consumption. Same compact pill recipe so the two read as
-        a matched pair regardless of the dial state behind them. */
+    /*  Corner pills, absolutely positioned so they float over the SVG without nudging its layout.
+        TL production, TR consumption, BL cloud, BR clock (clock only when a cursor is active). */
     .dash-radial-corner
     {
         position: absolute;
-        top: 6px;
         display: flex;
         flex-direction: column;
-        font-size: 11px;
         line-height: 1.2;
         pointer-events: none;
         padding: 4px 8px;
@@ -647,8 +646,10 @@ export const heliosCardStyles = css`
         border-radius: 8px;
         backdrop-filter: blur(2px);
     }
-    .dash-radial-corner-tl { left:  8px; text-align: left;  }
-    .dash-radial-corner-tr { right: 8px; text-align: right; }
+    .dash-radial-corner-tl { top:    6px;  left:  8px; text-align: left;  }
+    .dash-radial-corner-tr { top:    6px;  right: 8px; text-align: right; }
+    .dash-radial-corner-bl { bottom: 6px;  left:  8px; text-align: left;  }
+    .dash-radial-corner-br { bottom: 6px;  right: 8px; text-align: right; }
     .dash-radial-corner-label
     {
         color: var(--secondary-text-color, rgba(255, 255, 255, 0.65));
@@ -662,34 +663,17 @@ export const heliosCardStyles = css`
         font-weight: 600;
         font-variant-numeric: tabular-nums;
     }
-    .dash-radial-corner-prod { color: var(--energy-solar-color, #ff9800); }
-    .dash-radial-corner-cons { color: var(--energy-grid-consumption-color, #488fc2); }
+    .dash-radial-corner-prod  { color: var(--energy-solar-color, #ff9800); }
+    .dash-radial-corner-cons  { color: var(--energy-grid-consumption-color, #488fc2); }
+    .dash-radial-corner-cloud { color: var(--primary-text-color, #ffffff); }
+    .dash-radial-corner-clock { color: var(--primary-color, #03a9f4); }
 
 
-    /*  SVG primitives. Stroke colours bind to HA theme tokens so the dial follows the active
-        frontend palette. The sun disc + reference rim hard-code the helios-sun-color token so the
-        centre always reads as the same sun the 3D card paints over the home on the map. */
-    .dash-radial-dial-ring
+    /*  Ring tracks (background of each data ring). Same vocabulary across the three rings, only the
+        token differs so each ring picks up the right energy-palette colour. */
+    .dash-radial-cloud-track
     {
-        stroke: color-mix(in srgb, var(--divider-color, rgba(255, 255, 255, 0.12)) 80%, transparent);
-    }
-    .dash-radial-tick
-    {
-        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 70%, transparent);
-        stroke-width: 1;
-        stroke-linecap: round;
-    }
-    .dash-radial-tick-big
-    {
-        stroke: var(--primary-text-color, #ffffff);
-        stroke-width: 1.6;
-    }
-    .dash-radial-hour-label
-    {
-        font-size: 13px;
-        font-weight: 500;
-        fill: var(--primary-text-color, #ffffff);
-        font-variant-numeric: tabular-nums;
+        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 12%, transparent);
     }
     .dash-radial-prod-track
     {
@@ -698,6 +682,27 @@ export const heliosCardStyles = css`
     .dash-radial-cons-track
     {
         stroke: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 14%, transparent);
+    }
+
+    /*  Ring fills + future outlines. Past portions render as filled polygons (solid area below the
+        curve), future portions as dashed outlines without fill. Same vocabulary on cloud /
+        production rings (both have a forecast). Consumption is past only so no future class is
+        needed. */
+    .dash-radial-cloud-fill
+    {
+        fill:   color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.65)) 35%, transparent);
+        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.65)) 70%, transparent);
+        stroke-width: 1.1;
+        stroke-linejoin: round;
+    }
+    .dash-radial-cloud-future
+    {
+        fill: none;
+        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.65)) 60%, transparent);
+        stroke-width: 1.2;
+        stroke-dasharray: 4 3;
+        stroke-linejoin: round;
+        stroke-linecap: round;
     }
     .dash-radial-prod-fill
     {
@@ -723,17 +728,36 @@ export const heliosCardStyles = css`
         stroke-linejoin: round;
     }
 
-    /*  Sun layers: halo, background tinted disc, irradiance fill that scales with the daily ratio,
-        and a reference-circle rim sitting at the irradiance max. Same recipe as the projected sun
-        on the 3D card (helios-card.ts solar-svg-sun block) so the two surfaces read as one. */
+    /*  Sundial perimeter. Quarter-hour ticks (3 between each hour) at half + quarter strength so
+        the hour positions still read as the dominant cardinals. Hour labels in HA's accent colour
+        with the frontend font family. */
+    .dash-radial-tick-half
+    {
+        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 60%, transparent);
+        stroke-width: 0.9;
+        stroke-linecap: round;
+    }
+    .dash-radial-tick-quarter
+    {
+        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 35%, transparent);
+        stroke-width: 0.6;
+        stroke-linecap: round;
+    }
+    .dash-radial-hour-label
+    {
+        font-family: inherit;
+        font-size: 9px;
+        font-weight: 500;
+        fill: var(--primary-color, #03a9f4);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Sun layers, same recipe as the 3D card sun. NO background tinted disc this revision: the
+        user asked for just a reference rim + an irradiance fill so the centre reads as a single
+        clean disc growing inside a circle. */
     .dash-radial-sun-halo
     {
         pointer-events: none;
-    }
-    .dash-radial-sun-bg
-    {
-        fill: var(--helios-sun-color, var(--amber-color, #f59e0b));
-        fill-opacity: 0.18;
     }
     .dash-radial-sun-fill
     {
@@ -746,7 +770,8 @@ export const heliosCardStyles = css`
     }
     .dash-radial-irrad-label
     {
-        font-size: 22px;
+        font-family: inherit;
+        font-size: 18px;
         font-weight: 600;
         fill: var(--primary-text-color, #ffffff);
         paint-order: stroke;
@@ -755,16 +780,26 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
     }
 
-    /*  Cursor: a single radial line anchored at the outer edge of the irradiance reference circle
-        and ending at the outer edge of the sundial perimeter. Only rendered for the current day,
-        see renderRadialDial in dashboardRadial.ts for the gate. */
-    .dash-radial-cursor
+    /*  Two cursors. The "now" cursor stays on today only and uses the primary accent colour. The
+        "hover" cursor follows the pointer on any front card and uses the secondary text colour so
+        the two read as a layered pair when the user hovers over today. Both anchor at the outer
+        edge of the irradiance reference circle and end at the outer edge of the sundial. */
+    .dash-radial-cursor-now
     {
         stroke: var(--primary-color, #03a9f4);
         stroke-width: 2;
         stroke-linecap: round;
         fill: none;
         filter: drop-shadow(0 0 4px color-mix(in srgb, var(--primary-color, #03a9f4) 60%, transparent));
+    }
+    .dash-radial-cursor-hover
+    {
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 80%, transparent);
+        stroke-width: 1.4;
+        stroke-dasharray: 2 2;
+        stroke-linecap: round;
+        fill: none;
+        pointer-events: none;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
