@@ -89,21 +89,17 @@ export function toggleShadingDome(host: ShadingDomeHost): void
     }
     if (!host._shadingDomeMode)
     {
-        //Mark fade-in start so the fade-loop kicks immediately, but DEFER flipping _shadingDomeMode +
-        //_shadingDomeChipMask to the next animation frame. The defer ensures Lit renders the cloud picker
-        //once with sliderActive=false (resting state, parked below the card) BEFORE the next render flips
-        //sliderActive=true and the CSS transition fires. Without the defer, the picker mounted with
-        //is-active on the first paint after toggle and the slide-in animation was skipped entirely on
-        //default-UI -> ShadingDome (it worked LiDAR -> ShadingDome only because the LiDAR slider's
-        //resting state in that path happens to give Lit a paint frame to settle).
         host._shadingDomeFadeOutStartMs = null;
         host._shadingDomeFadeInStartMs  = performance.now();
+        host._shadingDomeMode           = true;
+        refreshShadingDomeScene(host);
         refreshOverlays(host);
+        //Chip mask flip deferred by one frame so the dome SVG commits its opacity-0 first frame BEFORE
+        //the shading-dome-active class hits ha-card (without the gap the chip transitions collapsed into
+        //the same paint as the class flip and the chips popped instantly). Symmetric to the exit path.
         requestAnimationFrame(() =>
         {
-            host._shadingDomeMode      = true;
-            host._shadingDomeChipMask  = true;
-            refreshShadingDomeScene(host);
+            host._shadingDomeChipMask = true;
             host.requestUpdate();
         });
         startShadingDomeFadeLoop(host);

@@ -719,7 +719,10 @@ export class HeliosEngine
         const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
         if (Number.isFinite(raw))
         {
-            return Math.max(15, Math.min(85, raw));
+            //Clamped to the same 30..85 range as the drag-rotate handler + setCameraPitch so a stored or
+            //YAML-configured pose cannot bypass the floor. The user reported the pitch could still dip
+            //below 30 = this was the entry point (initial map() pitch + every easeTo back to home).
+            return Math.max(30, Math.min(85, raw));
         }
         return 55;
     }
@@ -1055,9 +1058,10 @@ export class HeliosEngine
             zoom:            18,
             pitch:           this._initialPitch(),
             bearing:         this._initialBearing(),
-            //MapLibre default maxPitch is 60. Raise it to 85 so the drag-rotate handler's PITCH_MAX_DEG
-            //(89) can actually take effect. Without this the map silently clamps to 60 and the user
-            //cannot get close to ground-level perspective.
+            //MapLibre default maxPitch is 60, default minPitch is 0. Match the in-card 30 / 85 clamp so
+            //MapLibre's own internals (animation easing, pinch-zoom-rotate, programmatic jumpTo / easeTo
+            //fallbacks) can never drop below 30 or rise above 85 even when callers forget to clamp first.
+            minPitch:        30,
             maxPitch:        85,
             //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
             //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for

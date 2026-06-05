@@ -3173,9 +3173,6 @@ export const heliosCardStyles = css`
         background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
-        /*  Hard 16 px instead of var(--ha-card-border-radius) because some themes set the variable to 0 in
-            panel view and the hint card rendered with square corners. Section view kept the right radius
-            because ha-card scopes its own radius variable. */
         border-radius: 16px;
         font-size: 12px;
         line-height: 1.45;
@@ -3183,13 +3180,21 @@ export const heliosCardStyles = css`
         opacity: 0;
         transform: translateY(60px);
         pointer-events: none;
-        transition: transform 0.35s ease, opacity 0.35s ease;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+        /*  Transition covers the slide-out (.is-active removed -> base style takes over). Slide-in is
+            handled by a keyframe animation on .is-active so it fires reliably from any prior DOM state
+            (Lit transition vs first-mount). The two never overlap, animation forwards holds the end
+            state while .is-active is present, then transition reads it as the start of the slide-out. */
+        transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    @keyframes shading-dome-hint-in
+    {
+        from { opacity: 0; transform: translateY(60px); }
+        to   { opacity: 1; transform: translateY(0);    }
     }
     .shading-dome-cloud-hint.is-active
     {
-        opacity: 1;
-        transform: translateY(0);
+        animation: shading-dome-hint-in 0.35s ease forwards;
         pointer-events: auto;
     }
 
@@ -3198,15 +3203,14 @@ export const heliosCardStyles = css`
         position: absolute;
         bottom: 14px;
         left: 50%;
-        /*  translateY(60px) parks the pill below the card so the
-            slide-in animation can lift it back into view when the
-            mode becomes active. The .is-active class below resets
-            translateY to 0; the transition on transform + opacity
-            runs in both directions. */
+        /*  Slide-in is a keyframe on .is-active so it fires reliably regardless of Lit's render timing
+            or mount order. Slide-out falls back to the transition on the base rule (computed style
+            reverts to translate(-50%, 60px) + opacity 0 when .is-active is removed, transition handles
+            the lerp). */
         transform: translate(-50%, 60px);
         opacity: 0;
         pointer-events: none;
-        transition: transform 0.35s ease, opacity 0.35s ease;
+        transition: opacity 0.35s ease, transform 0.35s ease;
         z-index: 50;
         display: inline-flex;
         align-items: center;
@@ -3218,10 +3222,14 @@ export const heliosCardStyles = css`
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
     }
+    @keyframes shading-dome-slider-in
+    {
+        from { opacity: 0; transform: translate(-50%, 60px); }
+        to   { opacity: 1; transform: translate(-50%, 0);    }
+    }
     .shading-dome-cloud-slider.is-active
     {
-        transform: translate(-50%, 0);
-        opacity: 1;
+        animation: shading-dome-slider-in 0.35s ease forwards;
         pointer-events: auto;
     }
     /*  Tick wrapper: the slider sits in a relative container so
@@ -3323,12 +3331,12 @@ export const heliosCardStyles = css`
         position: absolute;
         bottom: 14px;
         left: 50%;
-        /*  Same parked-below-the-card resting state as the dome
-            slider so the two modes share one slide-in animation. */
+        /*  Same animation-IN + transition-OUT pattern as the shading-dome slider, see the comment on
+            .shading-dome-cloud-slider for the rationale. */
         transform: translate(-50%, 60px);
         opacity: 0;
         pointer-events: none;
-        transition: transform 0.35s ease, opacity 0.35s ease;
+        transition: opacity 0.35s ease, transform 0.35s ease;
         z-index: 50;
         display: inline-flex;
         align-items: center;
@@ -3340,10 +3348,14 @@ export const heliosCardStyles = css`
         border: 1px solid rgba(255, 255, 255, 0.2);
         border-radius: 999px;
     }
+    @keyframes lidar-slider-in
+    {
+        from { opacity: 0; transform: translate(-50%, 60px); }
+        to   { opacity: 1; transform: translate(-50%, 0);    }
+    }
     .lidar-view-opacity-slider.is-active
     {
-        transform: translate(-50%, 0);
-        opacity: 1;
+        animation: lidar-slider-in 0.35s ease forwards;
         pointer-events: auto;
     }
     .lidar-view-opacity-icon
