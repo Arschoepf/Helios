@@ -606,379 +606,165 @@ export const heliosCardStyles = css`
         .dash-cf-card-day-chip   { display: none;   }
     }
 
-    /*  First content block under the bandeau: Production on the left, Prévision on the right. Mushroom-card
-        styling so the block reads as a native HA section: padded gutters, soft secondary-background tile per
-        stat, label uppercase + tracked, headline value big + bold, refined value below in a quieter shade.
-        Uses HA theme tokens throughout so the colours follow the active frontend theme. */
-    .dash-cf-card-stats
-    {
-        /*  Mini-tiles: max 2 columns when the card is wide enough, drop to 1 column on narrow cards.
-            The minmax max(50% - 4px, 140px) trick caps at 2 cols (any 3rd col would need each tile to be
-            >= 50% - 4px wide, which exceeds 100% of the row) AND forces a wrap to 1 col when the 140 px
-            min cannot fit twice with the 8 px gap (~< 288 px available). */
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(max(calc(50% - 4px), 140px), 1fr));
-        gap: 8px;
-        padding: 0 8px;
-    }
-    .dash-cf-card-stats > .dash-cf-card-stat
-    {
-        min-width: 0;
-    }
-    .dash-cf-card-stats > .dash-cf-card-stat-grid-solo
-    {
-        grid-column: 1 / -1;
-    }
-    /*  HA frontend tile style: rounded-square coloured icon badge on the left, title + value stacked on the
-        right. Icon background = colour token at low opacity, icon glyph = the same token at full opacity, so
-        the badge follows the active theme automatically and reads like every other tile in the HA dashboard.
-        Card itself stays neutral (--secondary-background-color), the colour comes from the icon badge only. */
-    .dash-cf-card-stat
-    {
-        flex: 1;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        padding: 10px 12px;
-        /*  Hard-coded 16 px, matches the bandeau radius. Same reasoning: some themes set
-            --ha-card-border-radius low and the tiles read as near-square in those themes. */
-        border-radius: 16px;
-        /*  Tile background = --ha-card-background (the card colour), so each mini-tile reads LIGHTER than
-            the outer card body (which now uses --primary-background-color, the dashboard "page" colour).
-            Matches the HA frontend convention that "the card body is lighter than its surrounding". */
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        color: var(--primary-text-color, #ffffff);
-        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
-        min-width: 0;
-    }
-    .dash-cf-card-stat-icon
-    {
-        width: 32px;
-        height: 32px;
-        /*  Fully circular badge per the latest user feedback (the rounded-square shape read as too "card-y"
-            against the surrounding rounded-square tile body). */
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        line-height: 0;
-    }
-    .dash-cf-card-stat-icon ha-icon
-    {
-        --mdc-icon-size: 18px;
-        color: inherit;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 0;
-    }
-    /*  Production = solar colour palette (HA Energy --energy-solar-color), Prévision = HA info / accent so
-        the two tiles read as "actual" vs "predicted" through colour alone. */
-    .dash-cf-card-stat-icon-solar
-    {
-        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 18%, transparent);
-        color: var(--energy-solar-color, #ff9800);
-    }
-    .dash-cf-card-stat-icon-forecast
-    {
-        background: color-mix(in srgb, var(--info-color, #039be5) 18%, transparent);
-        color: var(--info-color, #039be5);
-    }
-    /*  Battery in / out tinted with the HA Energy battery palette so the four tiles read as the same family
-        as the matching slots on the native HA Energy dashboard. */
-    /*  HA Energy reads the battery palette tokens from the energy-graph node perspective: battery-in =
-        energy flowing IN to the battery node (= charge, green default) and battery-out = energy flowing
-        OUT of the battery node (= discharge, teal default). The dashboard tile names are user-facing
-        (Charge / Décharge), so the binding matches: Charge tile = --energy-battery-out-color, Décharge
-        tile = --energy-battery-in-color, which is the convention the user pointed to on their HA Energy
-        dashboard reference. */
-    .dash-cf-card-stat-icon-battery-in
-    {
-        background: color-mix(in srgb, var(--energy-battery-out-color, #1b6c75) 18%, transparent);
-        color: var(--energy-battery-out-color, #1b6c75);
-    }
-    .dash-cf-card-stat-icon-battery-out
-    {
-        background: color-mix(in srgb, var(--energy-battery-in-color, #4caf50) 18%, transparent);
-        color: var(--energy-battery-in-color, #4caf50);
-    }
-    /*  Grid import / export, same recipe as battery: HA Energy palette token tinted at 18 %. */
-    .dash-cf-card-stat-icon-grid-in
-    {
-        background: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 18%, transparent);
-        color: var(--energy-grid-consumption-color, #488fc2);
-    }
-    .dash-cf-card-stat-icon-grid-out
-    {
-        background: color-mix(in srgb, var(--energy-grid-return-color, #8353d1) 18%, transparent);
-        color: var(--energy-grid-return-color, #8353d1);
-    }
-    /*  Single-tile grid row (only import OR only export configured) spans both columns of the 2x2 grid so
-        the tile reads as a horizontal banner instead of an orphan half-row. */
-    .dash-cf-card-stat-grid-solo { grid-column: 1 / -1; }
-    .dash-cf-card-stat-body
-    {
-        display: flex;
-        flex-direction: column;
-        gap: 1px;
-        min-width: 0;
-    }
-    .dash-cf-card-stat-label
-    {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--primary-text-color, #ffffff);
-        line-height: 1.2;
-    }
-    .dash-cf-card-stat-value
-    {
-        font-size: 13px;
-        font-weight: 500;
-        color: var(--secondary-text-color, var(--primary-text-color, #ffffff));
-        line-height: 1.25;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-    .dash-cf-card-stat-refined
-    {
-        font-weight: 500;
-        opacity: 0.75;
-        margin-left: 2px;
-    }
-
-    /*  Bottom block: chart placeholder that takes ALL remaining height in the card flex column. The body is
-        intentionally empty for now (chart implementation is the next iteration), the placeholder still
-        renders the framed area with the same tile recipe as the stat tiles so the empty card already reads
-        as "this is where the chart will go". */
-    /*  Cumulative-production chart frame: takes all remaining vertical space in the card, framed with the
-        same tile recipe as the stat tiles. Header on top (Production left + Forecast right) with a value
-        below each title, the SVG curves fill the rest. */
-    .dash-cf-cum-chart
-    {
-        flex: 1 1 auto;
-        min-height: 0;
-        margin: 8px;
-        border-radius: 16px;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.08));
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-    }
-    .dash-cf-cum-chart-header
-    {
-        display: flex;
-        justify-content: space-between;
-        gap: 8px;
-        padding: 10px 14px 6px;
-        flex-shrink: 0;
-    }
-    .dash-cf-cum-chart-meta
-    {
-        display: flex;
-        flex-direction: column;
-        gap: 2px;
-        min-width: 0;
-    }
-    .dash-cf-cum-chart-meta-predicted { align-items: flex-end; text-align: right; }
-    /*  Centred Import / Export meta blocks inserted between Production (left) and Prevision (right). With
-        justify-content: space-between on the header, 4 items distribute as left / centre-left / centre-
-        right / right. The centre two get a smaller value font size since they share the row with the two
-        wider headline blocks. */
-    .dash-cf-cum-chart-meta-grid
-    {
-        align-items: center;
-        text-align: center;
-    }
-    .dash-cf-cum-chart-meta-grid .dash-cf-cum-chart-value { font-size: 16px; }
-    .dash-cf-cum-chart-meta-grid .dash-cf-cum-chart-title { font-size: 11px; }
-    .dash-cf-cum-chart-title
-    {
-        font-size: 12px;
-        font-weight: 500;
-        opacity: 0.85;
-        white-space: nowrap;
-    }
-    .dash-cf-cum-chart-value
-    {
-        font-size: 22px;
-        font-weight: 600;
-        line-height: 1.1;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-    .dash-cf-cum-chart-unit
-    {
-        font-size: 12px;
-        font-weight: 500;
-        opacity: 0.75;
-    }
-    .dash-cf-cum-chart-plot
+    /*  Radial sundial: the single visual element replacing the production / forecast mini-tiles +
+        cumulative chart in the CoverFlow day cards. Lives between the bandeau (top) and the bottom
+        of the card, centred horizontally, square aspect to keep the dial as a true circle. The two
+        corner pills carry the production / consumption read at the cursor (or the daily mean when
+        no cursor is shown) and float over the SVG without affecting its layout. */
+    .dash-radial-wrap
     {
         position: relative;
         flex: 1 1 auto;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 8px 12px;
         min-height: 0;
     }
-    .dash-cf-cum-chart-svg
+    .dash-radial-svg
     {
-        position: absolute;
-        inset: 0;
-        width: 100%;
+        width:  100%;
         height: 100%;
+        max-width:  min(100%, 80vh);
+        max-height: 100%;
         display: block;
     }
-    /*  Night zones: diagonal hatch driven by the SVG <pattern> in dashboardCumChart.ts, same vocabulary
-        as the timeline's .hc-night-zone so the two charts read as one visual family. The rect itself
-        gets fill="url(#hatchId)" inline, this class only carries the pointer-events kill so the hatched
-        zone never intercepts hover. */
-    .dash-cf-cum-chart-night
-    {
-        pointer-events: none;
-    }
-    /*  Hatch line stroke inside the <pattern>. Same alpha as .hc-night-zone on the timeline (0.12 on
-        light, 0.18 on dark). */
-    .dash-cf-cum-chart-night-hatch
-    {
-        stroke: rgba(0, 0, 0, 0.12);
-    }
-    ha-card.theme-dark .dash-cf-cum-chart-night-hatch
-    {
-        stroke: rgba(255, 255, 255, 0.18);
-    }
-    /*  Sunrise + sunset vertical dashed markers. Drawn right after the night zones so they sit BEHIND
-        the area + curves (later paint = on top in SVG). Same dashed pattern as the cursor line but a bit
-        more transparent so they read as a static day-boundary cue rather than the live hover indicator. */
-    .dash-cf-cum-chart-sun-marker
-    {
-        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 40%, transparent);
-        stroke-width: 1;
-        stroke-dasharray: 3 3;
-        vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
-    /*  Y=0 baseline band, in the solar palette at the SAME opacity as the production area above so the
-        baseline reads as a continuous extension of the area (not a paler hint of it). */
-    .dash-cf-cum-chart-baseline-band
-    {
-        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 30%, transparent);
-    }
-    .dash-cf-cum-chart-actual-area
-    {
-        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 30%, transparent);
-    }
-    .dash-cf-cum-chart-actual-line
-    {
-        fill: none;
-        stroke: var(--energy-solar-color, #ff9800);
-        stroke-width: 2;
-        stroke-linejoin: round;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-    }
-    .dash-cf-cum-chart-predicted
-    {
-        fill: none;
-        stroke-width: 1.6;
-        stroke-dasharray: 4 3;
-        stroke-linejoin: round;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-    }
-    /*  Cumulative grid import + export curves: same dashed recipe as the forecast curve, in the HA Energy
-        grid palette so the user can read each direction against the production area at a glance. The exact
-        daily totals come straight from the per-entity recorder samples buffer (the timeline scrub uses the
-        same data path, so the dashboard chart and HA Energy stay in sync). */
-    .dash-cf-cum-chart-grid-import
-    {
-        fill: none;
-        stroke: var(--energy-grid-consumption-color, #488fc2);
-        stroke-width: 1.6;
-        stroke-dasharray: 4 3;
-        stroke-linejoin: round;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-    }
-    .dash-cf-cum-chart-grid-export
-    {
-        fill: none;
-        stroke: var(--energy-grid-return-color, #8353d1);
-        stroke-width: 1.6;
-        stroke-dasharray: 4 3;
-        stroke-linejoin: round;
-        stroke-linecap: round;
-        vector-effect: non-scaling-stroke;
-    }
-    .dash-cf-cum-chart-cursor
-    {
-        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 60%, transparent);
-        stroke-width: 1;
-        stroke-dasharray: 3 2;
-        vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
-    /*  Hover dots are absolute-positioned HTML spans (not SVG circles) so they stay perfectly round
-        regardless of the SVG's non-uniform stretch (preserveAspectRatio="none"). 6 px diameter with a
-        1.5 px halo of the card background for contrast against the curve. */
-    .dash-cf-cum-chart-dot
+
+    /*  Corner labels, absolutely positioned so they sit above the SVG without nudging its layout.
+        Top-left = production, top-right = consumption. Same compact pill recipe so the two read as
+        a matched pair regardless of the dial state behind them. */
+    .dash-radial-corner
     {
         position: absolute;
-        width: 6px;
-        height: 6px;
-        border-radius: 50%;
-        transform: translate(-50%, -50%);
+        top: 6px;
+        display: flex;
+        flex-direction: column;
+        font-size: 11px;
+        line-height: 1.2;
         pointer-events: none;
-        box-shadow: 0 0 0 1.5px var(--ha-card-background, #1c1c1c);
-        z-index: 3;
+        padding: 4px 8px;
+        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) 80%, transparent);
+        border-radius: 8px;
+        backdrop-filter: blur(2px);
     }
-    .dash-cf-cum-chart-dot-actual
+    .dash-radial-corner-tl { left:  8px; text-align: left;  }
+    .dash-radial-corner-tr { right: 8px; text-align: right; }
+    .dash-radial-corner-label
     {
-        background: var(--energy-solar-color, #ff9800);
+        color: var(--secondary-text-color, rgba(255, 255, 255, 0.65));
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
     }
-    .dash-cf-cum-chart-dot-predicted
+    .dash-radial-corner-value
     {
-        background: var(--ha-card-background, #1c1c1c);
-        border: 1.5px solid;
-        box-shadow: none;
+        font-size: 14px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
     }
-    .dash-cf-cum-chart-dot-grid-import
+    .dash-radial-corner-prod { color: var(--energy-solar-color, #ff9800); }
+    .dash-radial-corner-cons { color: var(--energy-grid-consumption-color, #488fc2); }
+
+
+    /*  SVG primitives. Stroke colours bind to HA theme tokens so the dial follows the active
+        frontend palette. The sun disc + reference rim hard-code the helios-sun-color token so the
+        centre always reads as the same sun the 3D card paints over the home on the map. */
+    .dash-radial-dial-ring
     {
-        background: var(--energy-grid-consumption-color, #488fc2);
+        stroke: color-mix(in srgb, var(--divider-color, rgba(255, 255, 255, 0.12)) 80%, transparent);
     }
-    .dash-cf-cum-chart-dot-grid-export
+    .dash-radial-tick
     {
-        background: var(--energy-grid-return-color, #8353d1);
+        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 70%, transparent);
+        stroke-width: 1;
+        stroke-linecap: round;
+    }
+    .dash-radial-tick-big
+    {
+        stroke: var(--primary-text-color, #ffffff);
+        stroke-width: 1.6;
+    }
+    .dash-radial-hour-label
+    {
+        font-size: 13px;
+        font-weight: 500;
+        fill: var(--primary-text-color, #ffffff);
+        font-variant-numeric: tabular-nums;
+    }
+    .dash-radial-prod-track
+    {
+        stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 14%, transparent);
+    }
+    .dash-radial-cons-track
+    {
+        stroke: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 14%, transparent);
+    }
+    .dash-radial-prod-fill
+    {
+        fill:   color-mix(in srgb, var(--energy-solar-color, #ff9800) 55%, transparent);
+        stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 85%, transparent);
+        stroke-width: 1.2;
+        stroke-linejoin: round;
+    }
+    .dash-radial-prod-future
+    {
+        fill: none;
+        stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 75%, transparent);
+        stroke-width: 1.4;
+        stroke-dasharray: 4 3;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+    }
+    .dash-radial-cons-fill
+    {
+        fill:   color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 45%, transparent);
+        stroke: color-mix(in srgb, var(--energy-grid-consumption-color, #488fc2) 80%, transparent);
+        stroke-width: 1.2;
+        stroke-linejoin: round;
     }
 
-    /*  Chart curves grow / collapse on day navigation: only the CURVES (.dash-cf-cum-chart-curves <g>)
-        scale, the night zones + baseline band + sunrise/sunset markers stay visible at full size. The
-        active card sits at scaleY(1) (curves full height), every other card at scaleY(0) (curves
-        collapsed at the baseline). Asymmetric transition: 1100 ms slow grow when a card BECOMES front
-        (eye-pleasing polish, declared inside the .dash-cf-card-front rule), 350 ms fast collapse when
-        a card LEAVES front (declared on the base selector so the leaving card's curves are gone by
-        the time its CoverFlow slide settles 420 ms later). A symmetric 1100 ms transition let the
-        side-card's curves linger at mid scaleY for ~680 ms after the card was already parked at its
-        side position, which read as a curve ghost stacked on top of the new front card's grow.
-        Rapid swipes used to compound the ghost because every in-flight collapse was still mid-way
-        when the next swap kicked another one. */
-    .dash-cf-cum-chart-curves
+    /*  Sun layers: halo, background tinted disc, irradiance fill that scales with the daily ratio,
+        and a reference-circle rim sitting at the irradiance max. Same recipe as the projected sun
+        on the 3D card (helios-card.ts solar-svg-sun block) so the two surfaces read as one. */
+    .dash-radial-sun-halo
     {
-        /*  Origin at the W=0 baseline in SVG user space (viewBox 500 x 200, PAD_B = 12, baseline = 188).
-            Curves grow from the baseline UPWARD, not from the bottom of the chart, so the coloured band
-            below the baseline stays visible throughout the animation. */
-        transform-origin: 250px 188px;
-        transform: scaleY(0);
-        transition: transform 350ms cubic-bezier(0.4, 0, 0.6, 1);
+        pointer-events: none;
     }
-    .dash-cf-card-front .dash-cf-cum-chart-curves
+    .dash-radial-sun-bg
     {
-        transform: scaleY(1);
-        transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+        fill: var(--helios-sun-color, var(--amber-color, #f59e0b));
+        fill-opacity: 0.18;
     }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card-front .dash-cf-cum-chart-curves
+    .dash-radial-sun-fill
     {
-        transition-delay: 280ms;
+        fill: var(--helios-sun-color, var(--amber-color, #f59e0b));
+    }
+    .dash-radial-sun-rim
+    {
+        stroke: color-mix(in srgb, var(--helios-sun-color, #f59e0b) 70%, #000000 30%);
+        stroke-width: 1.4;
+    }
+    .dash-radial-irrad-label
+    {
+        font-size: 22px;
+        font-weight: 600;
+        fill: var(--primary-text-color, #ffffff);
+        paint-order: stroke;
+        stroke: color-mix(in srgb, var(--ha-card-background, #1c1c1c) 70%, transparent);
+        stroke-width: 2;
+        font-variant-numeric: tabular-nums;
+    }
+
+    /*  Cursor: a single radial line anchored at the outer edge of the irradiance reference circle
+        and ending at the outer edge of the sundial perimeter. Only rendered for the current day,
+        see renderRadialDial in dashboardRadial.ts for the gate. */
+    .dash-radial-cursor
+    {
+        stroke: var(--primary-color, #03a9f4);
+        stroke-width: 2;
+        stroke-linecap: round;
+        fill: none;
+        filter: drop-shadow(0 0 4px color-mix(in srgb, var(--primary-color, #03a9f4) 60%, transparent));
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous

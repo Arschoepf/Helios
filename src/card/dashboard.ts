@@ -27,7 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { computeDayCumulative, renderCumChart } from './dashboardCumChart';
+import { renderRadialDial } from './dashboardRadial';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -479,58 +479,10 @@ function renderCoverflowCard(
                 `}
             </header>
 
-            <section class="dash-cf-card-stats">
-                ${hasSolarConfigured(host) ? html`
-                    <div class="dash-cf-card-stat dash-cf-card-stat-produced">
-                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-solar" aria-hidden="true">
-                            <ha-icon icon="mdi:solar-power-variant"></ha-icon>
-                        </span>
-                        <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileProductionLabel ?? 'Production'}</span>
-                            <span class="dash-cf-card-stat-value">
-                                ${formatLocalisedNumber(host.hass, stats.producedKwh, 1)} kWh
-                                ${stats.refinedKwh !== null ? html`
-                                    <span class="dash-cf-card-stat-refined">
-                                        (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
-                                    </span>
-                                ` : nothing}
-                            </span>
-                        </span>
-                    </div>
-                    <div class="dash-cf-card-stat dash-cf-card-stat-forecast">
-                        <span class="dash-cf-card-stat-icon dash-cf-card-stat-icon-forecast" aria-hidden="true">
-                            <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
-                        </span>
-                        <span class="dash-cf-card-stat-body">
-                            <span class="dash-cf-card-stat-label">${tLocal.detail.tileForecastLabel ?? 'Forecast'}</span>
-                            <span class="dash-cf-card-stat-value">
-                                ${formatLocalisedNumber(host.hass, stats.forecastKwh, 1)} kWh
-                                ${stats.refinedKwh !== null ? html`
-                                    <span class="dash-cf-card-stat-refined">
-                                        (≈ ${formatLocalisedNumber(host.hass, stats.refinedKwh, 1)})
-                                    </span>
-                                ` : nothing}
-                            </span>
-                        </span>
-                    </div>
-                ` : nothing}
-            </section>
-
-            ${renderCumChart(host, cardOffset, activeOffset, computeDayCumulative(host, cardOffset))}
+            ${renderRadialDial(host, cardOffset, activeOffset)}
         </article>
     `;
 }
-
-
-//Whether the HA Energy dashboard declares any solar source. Drives the conditional rendering of the
-//Production / Prévision mini-tiles.
-function hasSolarConfigured(host: DashboardHost): boolean
-{
-    const def = host._energyDefaults;
-    return (def?.solarStatRates?.length ?? 0) > 0
-        || (def?.solarStatEnergyFroms?.length ?? 0) > 0;
-}
-
 
 
 //Day-offset navigation. Clamps to the [-2..+2] window and triggers a Lit re-render via requestUpdate so the
