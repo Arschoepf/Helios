@@ -35,24 +35,34 @@ import { pickTranslations } from '../i18n';
 //room. ViewBox stays at 400 so external aspect ratios + max-width caps still apply consistently.
 const VIEWBOX                  = 400;
 const CENTER                   = 200;
-//Concentric ANNULI with breathing gaps between them. Each data ring has an explicit inner edge,
-//outer edge and a 4 unit gap before the next ring. The dial ring is wide enough to host its hour
-//labels INSIDE it (at R_HOUR_LABEL = mid annulus) plus the quarter / half ticks against its outer
-//edge. Outer dial 188, up from the previous 162, restores the visual weight after the over-
-//tightening in v2.
-const R_SUN_REF                = 52;   //reference rim circle, also irradiance max disc radius
-const R_CLOUD_INNER            = 60;
-const R_CLOUD_OUTER            = 86;
-const R_PROD_INNER             = 92;
-const R_PROD_OUTER             = 118;
-const R_CONS_INNER             = 124;
-const R_CONS_OUTER             = 150;
-const R_DIAL_INNER             = 156;
-const R_DIAL_OUTER             = 188;
-const R_HOUR_LABEL             = R_DIAL_INNER + (R_DIAL_OUTER - R_DIAL_INNER) * 0.42;  //labels inside the dial annulus
-const R_TICK_OUTER             = R_DIAL_OUTER - 2;
-const R_TICK_INNER_HALF        = R_DIAL_OUTER - 9;
-const R_TICK_INNER_QUARTER     = R_DIAL_OUTER - 5;
+//Concentric ANNULI with breathing gaps between them. The whole layout was rescaled +6 % vs v3 now
+//that the CoverFlow cards are wider (5 / 7 aspect ratio instead of 4 / 7). Each data ring has an
+//explicit inner edge, outer edge and a 4 unit gap before the next ring. The dial ring is wide enough
+//to host its hour labels INSIDE it at the mid-annulus, plus the hour / half / quarter ticks against
+//BOTH its outer and inner edges (mirrored).
+const R_SUN_REF                = 55;   //reference rim circle, also irradiance max disc radius
+const R_CLOUD_INNER            = 63;
+const R_CLOUD_OUTER            = 91;
+const R_PROD_INNER             = 97;
+const R_PROD_OUTER             = 125;
+const R_CONS_INNER             = 131;
+const R_CONS_OUTER             = 159;
+const R_DIAL_INNER             = 165;
+const R_DIAL_OUTER             = 197;
+const R_HOUR_LABEL             = R_DIAL_INNER + (R_DIAL_OUTER - R_DIAL_INNER) * 0.5;  //labels centred inside the dial annulus
+//Tick layout. Each tick has two endpoints inside the dial annulus, one on the OUTER side (close to
+//R_DIAL_OUTER) and one on the INNER side (close to R_DIAL_INNER). The hour / half / quarter triplet
+//uses different lengths so the eye still snaps to the hour cardinals.
+//Outer side endpoints, anchored at the outer edge of the dial:
+const R_TICK_OUTER_END         = R_DIAL_OUTER - 1;
+const R_TICK_OUTER_HOUR        = R_DIAL_OUTER - 8;
+const R_TICK_OUTER_HALF        = R_DIAL_OUTER - 6;
+const R_TICK_OUTER_QUARTER     = R_DIAL_OUTER - 3;
+//Inner side endpoints, anchored at the inner edge of the dial (mirror of the outer side):
+const R_TICK_INNER_END         = R_DIAL_INNER + 1;
+const R_TICK_INNER_HOUR        = R_DIAL_INNER + 8;
+const R_TICK_INNER_HALF        = R_DIAL_INNER + 6;
+const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 3;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
@@ -524,7 +534,14 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const hourlyCons  = computeHourlyConsumption(host, dayStartMs);
     const hourlyCloud = computeHourlyCloud(host, dayStartMs);
 
-    const prodScaleMax  = Math.max(1, pvInverterMaxW(host.config) || 5000);
+    //Scales are RELATIVE to the day's own max so the visual variation of each ring reads cleanly.
+    //Anchoring on the inverter cap (5+ kW) used to make the production ring sit at 30 to 50 % of
+    //the available height for the whole sunlight window, so the bell-shape of the day flattened
+    //into a thin uniform band. With a day-relative scale plus a 25 % headroom, peak hours fill the
+    //ring and dip hours read as a clear narrowing.
+    let prodMax = 0;
+    for (const v of hourlyProd) { if (v !== null && v > prodMax) { prodMax = v; } }
+    const prodScaleMax  = Math.max(1, prodMax * 1.25, 500);
     let   consMax       = 0;
     for (const v of hourlyCons) { if (v !== null && v > consMax) { consMax = v; } }
     const consScaleMax  = Math.max(1, consMax * 1.25, 2000);
@@ -552,8 +569,6 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 
     const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
     const sunFillR     = R_SUN_REF * (ratioPct / 100);
-    const haloR        = R_SUN_REF * 2.2;
-    const haloAlpha    = Math.max(0.05, Math.min(0.55, ratioPct / 100 * 0.55));
 
     //Now cursor: only on the current day.
     const showNowCursor = isFront && nowMs >= dayStartMs && nowMs < dayEndMs;
@@ -611,20 +626,30 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         cornerClock      = null;
     }
 
-    //Quarter-hour ticks live INSIDE the dial annulus, anchored at its outer edge (R_TICK_OUTER) and
-    //extending inward toward the labels. Three sub-hour ticks per hour (15 / 30 / 45 minutes), the
-    //half-hour mark slightly longer + more opaque so the eye still snaps to it.
-    const quarterTicks: TemplateResult[] = [];
+    //Sub-hour + hour ticks. 96 positions around the dial (15 min step). Each tick paints TWO line
+    //segments, one on the outer side of the dial annulus and one mirrored on the inner side (close
+    //to the centre of the SVG), so the user sees the markers no matter which edge of the dial they
+    //look at. The hour, half and quarter triplet uses three different lengths + opacities so the
+    //eye still snaps to the hour cardinals first, then the halves, then the quarters.
+    const tickLines: TemplateResult[] = [];
     for (let q = 0; q < 96; q++)
     {
-        if (q % 4 === 0) { continue; }  //hour positions are anchored by the label, no tick
-        const hour     = q / 4;
-        const isHalf   = q % 2 === 0;
-        const innerR   = isHalf ? R_TICK_INNER_HALF : R_TICK_INNER_QUARTER;
-        const [x1, y1] = polarPt(hour, innerR);
-        const [x2, y2] = polarPt(hour, R_TICK_OUTER);
-        const cls      = isHalf ? 'dash-radial-tick-half' : 'dash-radial-tick-quarter';
-        quarterTicks.push(svg`<line class="${cls}" x1="${x1.toFixed(2)}" y1="${y1.toFixed(2)}" x2="${x2.toFixed(2)}" y2="${y2.toFixed(2)}"/>`);
+        const hour    = q / 4;
+        const isHour  = q % 4 === 0;
+        const isHalf  = !isHour && q % 2 === 0;
+        const innerInnerR = isHour ? R_TICK_INNER_HOUR : isHalf ? R_TICK_INNER_HALF : R_TICK_INNER_QUARTER;
+        const outerInnerR = isHour ? R_TICK_OUTER_HOUR : isHalf ? R_TICK_OUTER_HALF : R_TICK_OUTER_QUARTER;
+        const cls = isHour ? 'dash-radial-tick-hour'
+                  : isHalf ? 'dash-radial-tick-half'
+                  :          'dash-radial-tick-quarter';
+        //Outer side: anchored at R_TICK_OUTER_END (just inside the dial outer edge), extends inward.
+        const [ox1, oy1] = polarPt(hour, R_TICK_OUTER_END);
+        const [ox2, oy2] = polarPt(hour, outerInnerR);
+        tickLines.push(svg`<line class="${cls}" x1="${ox1.toFixed(2)}" y1="${oy1.toFixed(2)}" x2="${ox2.toFixed(2)}" y2="${oy2.toFixed(2)}"/>`);
+        //Inner side: anchored at R_TICK_INNER_END (just outside the dial inner edge), extends outward.
+        const [ix1, iy1] = polarPt(hour, R_TICK_INNER_END);
+        const [ix2, iy2] = polarPt(hour, innerInnerR);
+        tickLines.push(svg`<line class="${cls}" x1="${ix1.toFixed(2)}" y1="${iy1.toFixed(2)}" x2="${ix2.toFixed(2)}" y2="${iy2.toFixed(2)}"/>`);
     }
 
     //Hour labels: 24 around the perimeter. Format respects HA's 12 / 24 setting. Skip 13..23 when
@@ -688,13 +713,6 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 @pointermove="${onPointerMove}"
                 @pointerleave="${onPointerLeave}"
             >
-                <defs>
-                    <radialGradient id="dash-radial-sun-halo-${cardOffset}">
-                        <stop offset="0%"   stop-color="var(--helios-sun-color, #f59e0b)" stop-opacity="${haloAlpha}"/>
-                        <stop offset="100%" stop-color="var(--helios-sun-color, #f59e0b)" stop-opacity="0"/>
-                    </radialGradient>
-                </defs>
-
                 <!-- Ring tracks. Each track is a circle with stroke-width = annulus thickness, so
                      the visual is a real ring with breathing room between it and its neighbours.
                      The dial track is drawn here too because the hour labels + sub-hour ticks live
@@ -719,10 +737,9 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
                 ${consPastPath    ? svg`<path class="dash-radial-cons-fill"    fill-rule="evenodd" d="${consPastPath}"/>`    : nothing}
 
-                <!-- Sun: halo (radial gradient), scaled inner fill, reference rim. No tinted bg disc:
-                     the user asked for a single rim + a single inner fill matching the 3D card sun. -->
-                <circle class="dash-radial-sun-halo" cx="${CENTER}" cy="${CENTER}" r="${haloR}"
-                        fill="url(#dash-radial-sun-halo-${cardOffset})"/>
+                <!-- Sun: just a reference rim + a scaled inner fill. No halo and no tinted bg disc,
+                     either of which would fight the reference rim and skew the visual reading of
+                     the irradiance ratio. -->
                 <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}"/>
                 <circle class="dash-radial-sun-rim"  cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"
                         fill="none"/>
@@ -734,7 +751,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 
                 <!-- Sundial perimeter: quarter-hour ticks then hour labels. The labels themselves
                      anchor the hour positions, no separate full-tick is drawn. -->
-                ${quarterTicks}
+                ${tickLines}
                 ${hourLabels}
 
                 <!-- Now cursor (today only). -->

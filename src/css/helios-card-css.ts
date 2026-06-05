@@ -427,11 +427,12 @@ export const heliosCardStyles = css`
             width derives from the height via the aspect ratio, max-width 82 % caps it on tall narrow
             stages (phone portrait) where the height-derived width would otherwise overflow horizontally. */
         height: 96%;
-        max-width: 82%;
-        /*  Narrower aspect than the previous 4/6 so the front card no longer covers the J-1 / J+1 cards
-            behind it. With height 96 % and aspect 4/7, card width is 96 % x 4/7 = ~55 % of the stage
-            height, leaving the side cards visible + clickable at their txPct +/- 32 / 50 % offsets. */
-        aspect-ratio: 4 / 7;
+        max-width: 88%;
+        /*  Wider aspect than the previous 4 / 7 so the radial dial reads as the focal element of the
+            card without leaving a wide blank gutter on either side. Height 96 % and aspect 5 / 7 give
+            a card width of ~69 % of the stage height; the side cards keep their txPct +/- 32 / 50 %
+            offsets so they still peek out from behind the front card and stay clickable. */
+        aspect-ratio: 5 / 7;
         border-radius: 18px;
         /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
             darker than --ha-card-background on both default HA themes. The inner bandeau + stat tiles + chart
@@ -594,10 +595,10 @@ export const heliosCardStyles = css`
         bandeau width gets tight. */
     @container helios-card (max-width: 1000px)
     {
-        /*  Cards get a taller aspect ratio in narrow mode so the stacked tiles + chart slots both fit.
-            Mini-tile sizing is intentionally left alone (the user's directive), only the card shape
-            changes. The stats grid auto-fits to the card width via the auto-fit rule above. */
-        .dash-cf-card { aspect-ratio: 4 / 7; }
+        /*  On narrow stages the radial dial still wants the card slightly taller than wide so the
+            sundial does not crash into the bandeau. Aspect-ratio 5 / 7 keeps the dial focal without
+            making the card so wide that the side neighbours get covered. */
+        .dash-cf-card { aspect-ratio: 5 / 7; }
     }
     @container helios-card (max-width: 600px)
     {
@@ -735,37 +736,40 @@ export const heliosCardStyles = css`
         stroke-linejoin: round;
     }
 
-    /*  Sundial perimeter. Quarter-hour ticks (3 between each hour) at half + quarter strength so
-        the hour positions still read as the dominant cardinals. Hour labels in HA's accent colour
-        with the frontend font family. */
+    /*  Sundial perimeter. Three tick weights (hour > half > quarter), each drawn on BOTH the outer
+        and inner edges of the dial annulus so the user sees the markers regardless of which side
+        of the labels they look at. Hour labels use the HA primary TEXT colour so they read as
+        white on dark themes and black on light themes, matching the rest of the HA frontend. */
+    .dash-radial-tick-hour
+    {
+        stroke: var(--primary-text-color, #ffffff);
+        stroke-width: 1.4;
+        stroke-linecap: round;
+    }
     .dash-radial-tick-half
     {
-        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 60%, transparent);
-        stroke-width: 0.9;
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 65%, transparent);
+        stroke-width: 1;
         stroke-linecap: round;
     }
     .dash-radial-tick-quarter
     {
-        stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 35%, transparent);
-        stroke-width: 0.6;
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 35%, transparent);
+        stroke-width: 0.7;
         stroke-linecap: round;
     }
     .dash-radial-hour-label
     {
         font-family: inherit;
-        font-size: 9px;
+        font-size: 10px;
         font-weight: 500;
-        fill: var(--primary-color, #03a9f4);
+        fill: var(--primary-text-color, #ffffff);
         font-variant-numeric: tabular-nums;
     }
 
     /*  Sun layers, same recipe as the 3D card sun. NO background tinted disc this revision: the
         user asked for just a reference rim + an irradiance fill so the centre reads as a single
         clean disc growing inside a circle. */
-    .dash-radial-sun-halo
-    {
-        pointer-events: none;
-    }
     .dash-radial-sun-fill
     {
         fill: var(--helios-sun-color, var(--amber-color, #f59e0b));
