@@ -362,7 +362,9 @@ export const heliosCardStyles = css`
     ha-card.shading-dome-active .time-bar,
     ha-card.detail-active       .time-bar
     {
-        transform: translateX(-50%) translateY(140%);
+        /*  No translateX(-50%) anymore, the time-bar centres via left/right gutter now. Just slide it
+            down out of the card. */
+        transform: translateY(140%);
         pointer-events: none;
     }
     ha-card.lidar-view-active   .overlay-top-left,
@@ -2017,9 +2019,13 @@ export const heliosCardStyles = css`
             the band between the chart card's bottom edge and the
             card's bottom edge.                                       */
         bottom: 6px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: calc(100% - 16px);
+        /*  Centred via left + right gutter instead of transform: translateX(-50%) because the transform
+            promoted the time-bar into a compositor layer that rasterised the inner SVG charts + tooltips
+            at fractional resolution = blur. With left: 8 px + right: 8 px + width: auto the timeline is
+            still 100 % - 16 px wide but renders at native pixel resolution. */
+        left: 8px;
+        right: 8px;
+        width: auto;
         /*  Timeline owns its own stacking layer at the very top of
             the card so the sun arc, the home glow and any overlay
             chip never crosses over it during auto-rotate.            */
