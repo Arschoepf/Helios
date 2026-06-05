@@ -489,10 +489,9 @@ export const heliosCardStyles = css`
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        /*  Hard-coded 16 px because some installed themes set --ha-card-border-radius low (4-6 px) which made
-            the strip read as near-square. 16 px matches the rounded corners on the HA tile-card reference
-            the user shared. */
-        border-radius: 16px;
+        /*  Bind to the HA frontend's card-corner token (default 12 px) so every mini-card on the
+            CoverFlow front face shares the same corner radius as the surrounding HA dashboard. */
+        border-radius: var(--ha-card-border-radius, 12px);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         display: grid;
         grid-template-columns: auto 1fr auto;
@@ -612,6 +611,10 @@ export const heliosCardStyles = css`
         layer over the rings: "now" in primary colour, "hover" in secondary text colour. Four corner
         pills float over the SVG: TL production, TR consumption, BL cloud, BR clock. The SVG is
         capped at a tighter max-width so the dial does not eat the whole card horizontally. */
+    /*  Radial card. Mirrors a Mushroom-style HA card around the SVG dial so the dial reads as one
+        of the stacked mini-cards on the CoverFlow front face. Flex: 1 1 0 so it absorbs whatever
+        height is left between the bandeau / badge strip on top and the clock strip on the bottom,
+        with a small inner padding that keeps the SVG breathing inside the rounded border. */
     .dash-radial-wrap
     {
         position: relative;
@@ -619,90 +622,42 @@ export const heliosCardStyles = css`
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 6px 10px;
+        margin: 0 8px;
+        padding: 6px;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: var(--ha-card-border-radius, 12px);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         min-height: 0;
+        overflow: hidden;
     }
-    /*  Top chip strip rendered right below the bandeau and footer clock strip rendered at the
-        bottom of the card. Both mirror the bandeau geometry (same margin, padding, radius,
-        background, border) so the front face of the card reads as three matching strips with the
-        radial dial occupying the slack space between them. */
-    .dash-radial-chip-strip,
+    /*  Badge strip: a transparent flex row containing three HA-frontend-style badges (one per
+        data ring). The badges themselves are the cards, so the strip itself adds no chrome. */
+    .dash-radial-chip-strip
+    {
+        margin: 8px 8px 0;
+        display: flex;
+        align-items: stretch;
+        gap: 8px;
+        flex-shrink: 0;
+    }
+    /*  Footer clock card. Mirrors the bandeau geometry so the front face stays visually balanced
+        top-to-bottom. Rendered conditionally by the helper (skipped when there is no clock to
+        show on past / future cards with no active hover). */
     .dash-radial-clock-strip
     {
-        margin: 0 8px;
+        margin: 8px 8px;
         padding: 6px 10px;
         background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        border-radius: 16px;
+        border-radius: var(--ha-card-border-radius, 12px);
         box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 36px;
-    }
-    .dash-radial-clock-strip { margin-bottom: 8px; }
-    .dash-radial-chip-strip  { gap: 14px; }
-    /*  Mushroom-style chip: a circular tinted disc + the entity icon, swapping to the entity
-        text value when the user hovers the radial dial. Width auto-grows when a text value
-        replaces the icon so the chip stays legible. */
-    .dash-radial-chip
-    {
-        min-width: 28px;
-        height: 28px;
-        padding: 0 8px;
-        border-radius: 14px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 0;
-        font-size: 12px;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-    .dash-radial-chip ha-icon
-    {
-        --mdc-icon-size: 18px;
-        color: inherit;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        line-height: 0;
-    }
-    .dash-radial-chip-value
-    {
-        line-height: 1.2;
-    }
-    /*  Per-chip tint. Production / battery follow the HA energy palette tokens so the chip lines
-        up with the matching ring in the radial dial below. Cloud uses the Helios card primary
-        accent because cloud cover is not an HA entity in the user's setup, it is a derived value
-        from our weather model. */
-    .dash-radial-chip-prod
-    {
-        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 22%, transparent);
-        color: var(--energy-solar-color, #ff9800);
-    }
-    .dash-radial-chip-batt
-    {
-        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 14%, transparent);
-        color: var(--primary-text-color, #ffffff);
-    }
-    .dash-radial-chip-batt-charge
-    {
-        background: color-mix(in srgb, var(--energy-battery-in-color, #5cba47) 22%, transparent);
-        color: var(--energy-battery-in-color, #5cba47);
-    }
-    .dash-radial-chip-batt-discharge
-    {
-        background: color-mix(in srgb, var(--energy-battery-out-color, #d8a657) 22%, transparent);
-        color: var(--energy-battery-out-color, #d8a657);
-    }
-    .dash-radial-chip-cloud
-    {
-        background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
-        color: var(--primary-color, #03a9f4);
+        min-height: 32px;
     }
     .dash-radial-clock-value
     {
@@ -711,6 +666,84 @@ export const heliosCardStyles = css`
         letter-spacing: 0.4px;
         font-variant-numeric: tabular-nums;
         color: var(--primary-text-color, #ffffff);
+    }
+    /*  HA-frontend-style badge: a small card with a circular tinted icon chip on the left and the
+        entity label on the right (swapped for the live value during a radial hover). Flex: 1 1 0
+        + min-width: 0 + ellipsis on the text lets the three badges share the strip width evenly
+        and always stay on the same line, regardless of how narrow the CoverFlow card is. */
+    .dash-radial-badge
+    {
+        flex: 1 1 0;
+        min-width: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px 4px 4px;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: var(--ha-card-border-radius, 12px);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    }
+    .dash-radial-badge-chip
+    {
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+        flex-shrink: 0;
+    }
+    .dash-radial-badge-chip ha-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    .dash-radial-badge-text
+    {
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.2;
+        font-variant-numeric: tabular-nums;
+        color: var(--primary-text-color, #ffffff);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+    /*  Per-badge accent: the icon chip background + glyph use the HA energy palette tokens for
+        production / battery, and the Helios card primary accent for cloud (cloud is a model-
+        derived value, not an HA entity). The badge body itself stays neutral so the strip reads
+        cohesively, the colour lives in the chip on the left. */
+    .dash-radial-badge-prod .dash-radial-badge-chip
+    {
+        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 22%, transparent);
+        color: var(--energy-solar-color, #ff9800);
+    }
+    .dash-radial-badge-batt .dash-radial-badge-chip
+    {
+        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 14%, transparent);
+        color: var(--primary-text-color, #ffffff);
+    }
+    .dash-radial-badge-batt-charge .dash-radial-badge-chip
+    {
+        background: color-mix(in srgb, var(--energy-battery-in-color, #5cba47) 22%, transparent);
+        color: var(--energy-battery-in-color, #5cba47);
+    }
+    .dash-radial-badge-batt-discharge .dash-radial-badge-chip
+    {
+        background: color-mix(in srgb, var(--energy-battery-out-color, #d8a657) 22%, transparent);
+        color: var(--energy-battery-out-color, #d8a657);
+    }
+    .dash-radial-badge-cloud .dash-radial-badge-chip
+    {
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
+        color: var(--primary-color, #03a9f4);
     }
     .dash-radial-svg
     {

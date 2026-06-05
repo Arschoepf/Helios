@@ -27,6 +27,7 @@ import { getSunPosition } from '../engine/sun';
 import { pvInverterMaxW, pvNormalizeToWatts, computePvPowerWeighted } from './pv';
 import { getHomeCoords } from './init';
 import { formatLocalisedNumber } from './format';
+import { pickTranslations } from '../i18n';
 
 
 //Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
@@ -864,11 +865,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 }
 
 
-//Top chip strip rendered right below the card bandeau. Three mushroom-style chips, one per data
-//ring (production / battery / cloud). The chip body is a coloured pill, the inner glyph is the
-//entity icon by default. While the user hovers the radial dial, the icon is replaced by the live
-//value at the hovered hour. When the chip has no value for the hovered hour (e.g. a forecast hour
-//for the battery curve), the icon is kept so the chip never collapses to a "—".
+//Top chip strip rendered right below the card bandeau. Three HA-badge-style chips, one per data
+//ring (production / battery / cloud). Each badge is its own small card with a circular icon
+//chip + a label underneath, matching the HA frontend badge visual the user shared. While the
+//user hovers the radial dial, the label is replaced by the live value at the hovered hour for
+//each badge whose ring has a value at that hour. Badges with a null hover value keep their label
+//so the strip never falls back to a "—".
 export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number, activeOffset: number, data: RadialDayData): TemplateResult
 {
     const isFront     = cardOffset === activeOffset;
@@ -878,43 +880,50 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
     const prodW       = idx >= 0 ? data.hourlyProd[idx]  : null;
     const battW       = idx >= 0 ? data.hourlyBatt[idx]  : null;
     const cloudP      = idx >= 0 ? data.hourlyCloud[idx] : null;
+    const t           = pickTranslations(host.hass?.language);
 
-    const battCls = battW !== null && battW > 0 ? 'dash-radial-chip-batt-charge'
-                  : battW !== null && battW < 0 ? 'dash-radial-chip-batt-discharge'
-                  :                                'dash-radial-chip-batt';
+    const battCls = battW !== null && battW > 0 ? 'dash-radial-badge-batt-charge'
+                  : battW !== null && battW < 0 ? 'dash-radial-badge-batt-discharge'
+                  :                                'dash-radial-badge-batt';
     const battText = battW === null ? null
                    : battW === 0    ? formatW(host.hass, 0)
                    : `${battW > 0 ? '+' : '−'} ${formatW(host.hass, Math.abs(battW))}`;
 
+    const prodLabel  = t.detail.radialProductionLabel ?? 'Production';
+    const battLabel  = t.detail.radialBatteryLabel    ?? 'Battery';
+    const cloudLabel = t.detail.radialCloudLabel      ?? 'Cloud';
+
     return html`
         <div class="dash-radial-chip-strip">
-            <div class="dash-radial-chip dash-radial-chip-prod">
-                ${hoverActive && prodW !== null
-                    ? html`<span class="dash-radial-chip-value">${formatW(host.hass, prodW)}</span>`
-                    : html`<ha-icon icon="mdi:solar-power-variant"></ha-icon>`}
+            <div class="dash-radial-badge dash-radial-badge-prod">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:solar-power-variant"></ha-icon></span>
+                <span class="dash-radial-badge-text">${hoverActive && prodW !== null ? formatW(host.hass, prodW) : prodLabel}</span>
             </div>
-            <div class="dash-radial-chip ${battCls}">
-                ${hoverActive && battText !== null
-                    ? html`<span class="dash-radial-chip-value">${battText}</span>`
-                    : html`<ha-icon icon="mdi:home-battery"></ha-icon>`}
+            <div class="dash-radial-badge ${battCls}">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:home-battery"></ha-icon></span>
+                <span class="dash-radial-badge-text">${hoverActive && battText !== null ? battText : battLabel}</span>
             </div>
-            <div class="dash-radial-chip dash-radial-chip-cloud">
-                ${hoverActive && cloudP !== null
-                    ? html`<span class="dash-radial-chip-value">${formatPct(host.hass, cloudP)}</span>`
-                    : html`<ha-icon icon="mdi:weather-cloudy"></ha-icon>`}
+            <div class="dash-radial-badge dash-radial-badge-cloud">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:weather-cloudy"></ha-icon></span>
+                <span class="dash-radial-badge-text">${hoverActive && cloudP !== null ? formatPct(host.hass, cloudP) : cloudLabel}</span>
             </div>
         </div>
     `;
 }
 
 
-//Footer clock strip mirrors the bandeau geometry at the bottom of the card. Centred clock readout:
-//live wall-clock by default, hovered hour while the user hovers the radial dial.
-export function renderDashCardClockStrip(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult
+//Footer clock strip mirrors the bandeau geometry at the bottom of the card. Live wall-clock by
+//default on today's card, hovered hour while the user hovers the radial dial. Hidden entirely
+//when there is nothing to show (past / future card with no active hover), so the bottom of the
+//card collapses to the radial card's bottom edge.
+export function renderDashCardClockStrip(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult | typeof nothing
 {
     const isFront     = cardOffset === activeOffset;
     const hoverHour   = isFront ? host._dashRadialHoverHour : null;
     const hoverActive = hoverHour !== null && hoverHour !== undefined;
+    const isToday     = cardOffset === 0;
+    if (!isFront || (!hoverActive && !isToday)) { return nothing; }
+
     const text = hoverActive
         ? formatHoverClock(hoverHour as number, host.hass)
         : formatHoverClock(currentHourFraction(), host.hass);
