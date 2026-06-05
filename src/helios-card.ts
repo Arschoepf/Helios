@@ -769,8 +769,40 @@ export class HeliosCard extends LitElement
         return document.createElement('helios-card-editor');
     }
 
-    static getStubConfig(): HeliosConfig
+    //Signature documented by HA's <hui-card-picker>: (hass, entities, entitiesFallback). HA calls this
+    //in two situations:
+    //  - 'All cards' / 'Toutes les cartes' tab: entities is empty, we return an empty stub config and
+    //    the card falls back to hass.config.latitude / longitude at runtime (zone.home implicitly).
+    //  - 'By entity' / 'Par entité' tab: HA passes the entity the user clicked. If a zone entity is in
+    //    the list, we lift its latitude + longitude attributes into the card config as
+    //    home-latitude / home-longitude so the catalog shows Helios as a card that can be created
+    //    for that zone, with the lat / lon pre-filled. The card already supports the two override
+    //    keys at runtime so no schema change is needed.
+    //hass is loosely typed because the rest of the codebase types it as any (HA has no public types
+    //package for this surface).
+    static getStubConfig(hass?: { states?: Record<string, { attributes?: Record<string, unknown> }> }, entities?: string[]): HeliosConfig
     {
+        if (hass && Array.isArray(entities) && entities.length > 0)
+        {
+            for (const entityId of entities)
+            {
+                if (typeof entityId !== 'string' || !entityId.startsWith('zone.'))
+                {
+                    continue;
+                }
+                const state = hass.states?.[entityId];
+                const lat   = state?.attributes?.latitude;
+                const lon   = state?.attributes?.longitude;
+                if (typeof lat === 'number' && Number.isFinite(lat)
+                 && typeof lon === 'number' && Number.isFinite(lon))
+                {
+                    return {
+                        'home-latitude':  lat,
+                        'home-longitude': lon,
+                    };
+                }
+            }
+        }
         return {};
     }
 
