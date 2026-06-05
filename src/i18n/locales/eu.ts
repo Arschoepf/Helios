@@ -123,7 +123,7 @@ export const eu: Translations = {
         resetSection:          'Berrezarri',
         resetSectionHint:      'Txartelak lokalean cachean gordetako datuak garbitzeko mantentze-tresnak.',
         resetCacheButton:      'Berrezarri datuen cachea',
-        resetCacheWarning:     'Kontuz: honek cachean dagoen Open-Meteo eguraldia eta memorian dagoen FV historiala garbitzen ditu orri honetan irekita dauden HELIOS txartel GUZTIETARAKO. Aurreikuspen doituak bere 5 eguneko kalibrazioa galduko du berriro lortu arte (minutu gutxi batzuk zure HA zerbitzariaren arabera). Home Assistant-eko zure datuak inoiz ez dira ukitzen.',
+        resetCacheWarning:     'Kontuz: honek cachean dagoen Open-Meteo eguraldia eta memorian dagoen FV historiala garbitzen ditu orri honetan irekita dauden Helios txartel GUZTIETARAKO. Aurreikuspen doituak bere 5 eguneko kalibrazioa galduko du berriro lortu arte (minutu gutxi batzuk zure HA zerbitzariaren arabera). Home Assistant-eko zure datuak inoiz ez dira ukitzen.',
         resetCacheDone:        'Cachea garbituta ✓',
         aboutSection:          'Honi buruz',
         aboutVersionLabel:     'Bertsioa',

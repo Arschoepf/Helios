@@ -226,7 +226,6 @@ export interface InitHost extends OverlaysHost, LoadingTrackerHost
     readonly hass:   any;
 
     _engine?:            HeliosEngine;
-    _fetching:           boolean;
     _cloudCover:         number;
     _timeRange:          { start: Date; end: Date } | null;
     _isLiveMode:         boolean;
@@ -526,12 +525,10 @@ function wireEngineCallbacks(host: InitHost): void
 
     host._engine.onFetchStart = () =>
     {
-        host._fetching = true;
         beginLoadingPhase(host, 'weather-forecast');
     };
     host._engine.onFetchEnd = () =>
     {
-        host._fetching = false;
         endLoadingPhase(host, 'weather-forecast');
     };
     host._engine.onBuildingsFetchStart = () =>

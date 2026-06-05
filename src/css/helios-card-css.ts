@@ -2615,50 +2615,6 @@ export const heliosCardStyles = css`
     }
 
 
-    /*  Spinner, centred on the map while a fetch is in flight. */
-
-    .spinner-center
-    {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        z-index: 50;
-        width: 40px;
-        height: 40px;
-        opacity: 0;
-        transition: opacity 0.15s ease;
-        pointer-events: none;
-    }
-
-    .spinner-center.spinning
-    {
-        opacity: 1;
-    }
-
-    /*  Helios brand spinner: the SVG sun, no border, no background,
-        no shadow. Only the ray bundle rotates; the inner disc stays
-        still so the brand colour reads as a steady centre while the
-        rays sweep around it. */
-    .spinner-sun
-    {
-        width:  100%;
-        height: 100%;
-        display: block;
-    }
-    .spinner-sun-rays
-    {
-        transform-origin: 32px 32px;
-        transform-box: view-box;
-        animation: helios-spin 1.6s linear infinite;
-    }
-
-    @keyframes helios-spin
-    {
-        to { transform: rotate(360deg); }
-    }
-
-
     /*  Cloud-cover toggle button. iOS-friendly 40 px touch target,
         icon-only with a title tooltip; the on state takes the brand
         primary plate so the user has one consistent

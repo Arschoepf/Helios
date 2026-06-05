@@ -511,7 +511,6 @@ export class HeliosCard extends LitElement
         temperature:  number[];
         windSpeed:    number[];
     } | null = null;
-    @state() _fetching        = false;
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
@@ -2002,34 +2001,7 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                ${hasApiKey ? html`
-                    <div class="spinner-center ${this._fetching ? 'spinning' : ''}">
-                        <svg class="spinner-sun" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <!--  Rotating ray bundle, 12 spokes around the disc.
-                                  Painted in the configured sun colour via the
-                                  CSS variable so the spinner stays on-brand
-                                  even when the user themes the sun. -->
-                            <g class="spinner-sun-rays">
-                                ${[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(deg => svg`
-                                    <line
-                                        x1="32" y1="6"
-                                        x2="32" y2="14"
-                                        stroke="var(--helios-sun-color, #f59e0b)"
-                                        stroke-width="3"
-                                        stroke-linecap="round"
-                                        transform="rotate(${deg} 32 32)"
-                                    />
-                                `)}
-                            </g>
-                            <!--  Steady inner disc, doesn't spin (otherwise the
-                                  rotation reads "the sun is wobbly", not
-                                  "we're loading"). -->
-                            <circle cx="32" cy="32" r="10" fill="var(--helios-sun-color, #f59e0b)" />
-                        </svg>
-                    </div>
-                ` : nothing}
-
-                <!--  Top-right mode bar: three glued segments picking
+<!--  Top-right mode bar: three glued segments picking
                       which canvas state the card is in. The default
                       Layer UI is the regular HUD (sun arc, clouds,
                       leader lines, chips), LiDAR View paints the
