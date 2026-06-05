@@ -476,13 +476,23 @@ export function renderCumChart(
     //Hover values: read the cumulative kWh at the cursor X if the user is hovering THIS card (front).
     let actualKwhAtCursor:    number | null = null;
     let predictedKwhAtCursor: number | null = null;
+    let gridImportKwhAtCursor: number | null = null;
+    let gridExportKwhAtCursor: number | null = null;
     if (isFront && host._dashChartHoverTs !== null)
     {
-        actualKwhAtCursor    = interpolateKwhAt(data.actualSamples,    host._dashChartHoverTs);
-        predictedKwhAtCursor = interpolateKwhAt(data.predictedSamples, host._dashChartHoverTs);
+        actualKwhAtCursor     = interpolateKwhAt(data.actualSamples,     host._dashChartHoverTs);
+        predictedKwhAtCursor  = interpolateKwhAt(data.predictedSamples,  host._dashChartHoverTs);
+        gridImportKwhAtCursor = interpolateKwhAt(data.gridImportSamples, host._dashChartHoverTs);
+        gridExportKwhAtCursor = interpolateKwhAt(data.gridExportSamples, host._dashChartHoverTs);
     }
-    const actualDisplay    = actualKwhAtCursor    ?? data.totalActualKwh;
-    const predictedDisplay = predictedKwhAtCursor ?? data.totalPredictedKwh;
+    const actualDisplay     = actualKwhAtCursor     ?? data.totalActualKwh;
+    const predictedDisplay  = predictedKwhAtCursor  ?? data.totalPredictedKwh;
+    const gridImportDisplay = gridImportKwhAtCursor ?? data.totalGridImportKwh;
+    const gridExportDisplay = gridExportKwhAtCursor ?? data.totalGridExportKwh;
+    const hasImport = data.gridImportSamples.length >= 2;
+    const hasExport = data.gridExportSamples.length >= 2;
+    const gridImportColor = 'var(--energy-grid-consumption-color, #488fc2)';
+    const gridExportColor = 'var(--energy-grid-return-color, #8353d1)';
 
     return html`
         <div class="dash-cf-cum-chart">
@@ -491,6 +501,18 @@ export function renderCumChart(
                     <span class="dash-cf-cum-chart-title">${t.detail.tileProductionLabel ?? 'Production'}</span>
                     <span class="dash-cf-cum-chart-value">${actualDisplay.toFixed(1)} <span class="dash-cf-cum-chart-unit">kWh</span></span>
                 </div>
+                ${hasImport ? html`
+                    <div class="dash-cf-cum-chart-meta dash-cf-cum-chart-meta-grid" style="color: ${gridImportColor};">
+                        <span class="dash-cf-cum-chart-title">${t.detail.tileImportLabel ?? 'Import'}</span>
+                        <span class="dash-cf-cum-chart-value">${gridImportDisplay.toFixed(1)} <span class="dash-cf-cum-chart-unit">kWh</span></span>
+                    </div>
+                ` : nothing}
+                ${hasExport ? html`
+                    <div class="dash-cf-cum-chart-meta dash-cf-cum-chart-meta-grid" style="color: ${gridExportColor};">
+                        <span class="dash-cf-cum-chart-title">${t.detail.tileExportLabel ?? 'Export'}</span>
+                        <span class="dash-cf-cum-chart-value">${gridExportDisplay.toFixed(1)} <span class="dash-cf-cum-chart-unit">kWh</span></span>
+                    </div>
+                ` : nothing}
                 <div class="dash-cf-cum-chart-meta dash-cf-cum-chart-meta-predicted" style="color: ${predictedSolid};">
                     <span class="dash-cf-cum-chart-title">${t.detail.tileForecastLabel ?? 'Forecast'}</span>
                     <span class="dash-cf-cum-chart-value">${predictedDisplay.toFixed(1)} <span class="dash-cf-cum-chart-unit">kWh</span></span>
@@ -571,6 +593,16 @@ function renderCumChartSVG(
         if (a !== null) actualDotY    = yOf(a);
         if (p !== null) predictedDotY = yOf(p);
     }
+    //Grid hover dots, same recipe as the actual + predicted dots above but on the import / export curves.
+    let gridImportDotY: number | null = null;
+    let gridExportDotY: number | null = null;
+    if (hoverTs !== null && hoverTs >= data.dayStartMs && hoverTs < data.dayEndMs)
+    {
+        const gi = interpolateKwhAt(data.gridImportSamples, hoverTs);
+        const ge = interpolateKwhAt(data.gridExportSamples, hoverTs);
+        if (gi !== null) gridImportDotY = yOf(gi);
+        if (ge !== null) gridExportDotY = yOf(ge);
+    }
 
     const baselineY = yOf(0);
 
@@ -627,6 +659,18 @@ function renderCumChartSVG(
             <span
                 class="dash-cf-cum-chart-dot dash-cf-cum-chart-dot-predicted"
                 style="left: ${((cursorX / W) * 100).toFixed(2)}%; top: ${((predictedDotY / H) * 100).toFixed(2)}%; border-color: ${predictedColor};"
+            ></span>
+        ` : nothing}
+        ${cursorX !== null && gridImportDotY !== null ? html`
+            <span
+                class="dash-cf-cum-chart-dot dash-cf-cum-chart-dot-grid-import"
+                style="left: ${((cursorX / W) * 100).toFixed(2)}%; top: ${((gridImportDotY / H) * 100).toFixed(2)}%;"
+            ></span>
+        ` : nothing}
+        ${cursorX !== null && gridExportDotY !== null ? html`
+            <span
+                class="dash-cf-cum-chart-dot dash-cf-cum-chart-dot-grid-export"
+                style="left: ${((cursorX / W) * 100).toFixed(2)}%; top: ${((gridExportDotY / H) * 100).toFixed(2)}%;"
             ></span>
         ` : nothing}
     `;

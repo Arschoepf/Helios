@@ -843,6 +843,17 @@ export const heliosCardStyles = css`
         min-width: 0;
     }
     .dash-cf-cum-chart-meta-predicted { align-items: flex-end; text-align: right; }
+    /*  Centred Import / Export meta blocks inserted between Production (left) and Prevision (right). With
+        justify-content: space-between on the header, 4 items distribute as left / centre-left / centre-
+        right / right. The centre two get a smaller value font size since they share the row with the two
+        wider headline blocks. */
+    .dash-cf-cum-chart-meta-grid
+    {
+        align-items: center;
+        text-align: center;
+    }
+    .dash-cf-cum-chart-meta-grid .dash-cf-cum-chart-value { font-size: 16px; }
+    .dash-cf-cum-chart-meta-grid .dash-cf-cum-chart-title { font-size: 11px; }
     .dash-cf-cum-chart-title
     {
         font-size: 12px;
@@ -978,6 +989,14 @@ export const heliosCardStyles = css`
         background: var(--ha-card-background, #1c1c1c);
         border: 1.5px solid;
         box-shadow: none;
+    }
+    .dash-cf-cum-chart-dot-grid-import
+    {
+        background: var(--energy-grid-consumption-color, #488fc2);
+    }
+    .dash-cf-cum-chart-dot-grid-export
+    {
+        background: var(--energy-grid-return-color, #8353d1);
     }
 
     /*  Per-mount grow animation: every time the SVG mounts (i.e. the card becomes the active front), the
