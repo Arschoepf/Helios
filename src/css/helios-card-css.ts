@@ -475,10 +475,11 @@ export const heliosCardStyles = css`
         width: 100%;
         height: 100%;
         min-height: 0;
-        /*  Perspective restored on the stage so the rotateY on side cards reads as 3D depth. The earlier
-            blur the user reported turned out to come from backdrop-filter on the back card overlays, not
-            from perspective; with those overlays gone, the side-card 3D tilt is back without the cost. */
-        perspective: 2400px;
+        /*  NO perspective on the stage. Setting perspective on a parent forces every child (even those
+            without 3D transforms) into a 3D rendering context, which Safari rasterises at fractional
+            resolution and the front card kept reading as blurry. The 3D rotateY is now applied per-card
+            via the transform perspective(2400px) rotateY(...) FUNCTION (not the property) on the side
+            cards only, so the front card is rendered in a truly 2D context and stays sharp. */
     }
     .dash-cf-card
     {
@@ -999,22 +1000,25 @@ export const heliosCardStyles = css`
         background: var(--energy-grid-return-color, #8353d1);
     }
 
-    /*  Per-mount grow animation: every time the SVG mounts (i.e. the card becomes the active front), the
-        curves grow from the baseline upward. Same recipe as the previous chart's reveal: scaleY from 0 to
-        1 anchored to the bottom. */
-    @keyframes dash-cf-cum-chart-grow
-    {
-        from { transform: scaleY(0); }
-        to   { transform: scaleY(1); }
-    }
+    /*  Chart grow / collapse driven by a transition on the .dash-cf-card-front class. NON-active card
+        charts sit at scaleY(0) (collapsed at the baseline), the ACTIVE card chart sits at scaleY(1) (full
+        height). When the user navigates to a different day, the class swaps from card A to card B, both
+        cards animate their transform smoothly: A collapses back to baseline, B grows up to full height.
+        No JS animation logic, no keyframe re-mount tricks, just a CSS transition keyed to the parent
+        class change. */
     .dash-cf-cum-chart-svg
     {
         transform-origin: bottom;
-        animation: dash-cf-cum-chart-grow 600ms cubic-bezier(0.22, 1, 0.36, 1) 0ms both;
+        transform: scaleY(0);
+        transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .dash-cf-stage.dash-cf-entering .dash-cf-cum-chart-svg
+    .dash-cf-card-front .dash-cf-cum-chart-svg
     {
-        animation-delay: 280ms;
+        transform: scaleY(1);
+    }
+    .dash-cf-stage.dash-cf-entering .dash-cf-card-front .dash-cf-cum-chart-svg
+    {
+        transition-delay: 280ms;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
@@ -1093,28 +1097,28 @@ export const heliosCardStyles = css`
         /*  Scale + opacity so the entrance is visible even while the parent .detail-panel runs its own 250 ms
             opacity fade-in (the two overlap during 0-250 ms; the parent fade alone would mask a pure opacity
             change on the card). Drop opacity to 0 too so the card properly fades in once the panel settles. */
-        0%   { opacity: 0; transform: translate(-50%, -50%) translateZ(0) scale(0.92); }
-        100% { opacity: 1; transform: translate(-50%, -50%) translateZ(0) scale(1);    }
+        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+        100% { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
     }
     @keyframes dash-cf-enter-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
     }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
@@ -1124,30 +1128,30 @@ export const heliosCardStyles = css`
 
     @keyframes dash-cf-exit-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateZ(0) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        0%   { transform: perspective(2400px) translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        100% { transform: perspective(2400px) translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
     }
     @keyframes dash-cf-exit-front
     {
         /*  Symmetric exit: scale down + fade out. The parent .detail-panel does NOT fade out (it just unmounts
             at t=1 s), so this is the only motion on the front card during exit. */
-        0%   { opacity: 1; transform: translate(-50%, -50%) translateZ(0) scale(1);    }
-        100% { opacity: 0; transform: translate(-50%, -50%) translateZ(0) scale(0.92); }
+        0%   { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
+        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
     }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-exit-back-left  350ms ease-in 0ms   both; }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-exit-back-right 350ms ease-in 0ms   both; }

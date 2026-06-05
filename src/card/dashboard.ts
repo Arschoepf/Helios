@@ -415,15 +415,17 @@ function renderCoverflowCard(
                         : cardOffset ===  1 ? (tLocal.detail.dayLabelTomorrow  ?? 'Tomorrow')
                         :                     (tLocal.detail.dayLabelDayAfter  ?? 'In 2 days');
 
-    //Conditional transform: the FRONT card gets ONLY the centring translate, NO translateX / scale (those
-    //would all reduce to identity but the browser still rasterises the transformed layer to a texture,
-    //which on bigger cards reads as blurry text + curves). Side cards keep the full transform chain.
-    //
-    //translateZ(0) is appended unconditionally: it forces every card into its own compositor layer with
-    //integer-pixel snapping. Without it Safari (specifically) rasterised the cards at fractional
-    //resolution and the user kept seeing blur on Safari only. translateZ(0) is a Z-axis no-op (it lands
-    //on the perspective focal plane) so the visual position does not change, only the GPU layer changes.
-    const transformParts = ['translate(-50%, -50%)', 'translateZ(0)'];
+    //The FRONT card gets ONLY the centring translate(-50%, -50%), no 3D anything, so it renders in a
+    //plain 2D context = sharp on every browser including Safari. The side cards get the perspective()
+    //transform FUNCTION (not the CSS property) so the rotateY reads as 3D depth WITHOUT pulling the
+    //front card into a global 3D rendering context. Per-card perspective vs parent perspective is the
+    //key Safari fix: only the side cards live in their own 3D scope.
+    const transformParts: string[] = [];
+    if (rotY !== 0)
+    {
+        transformParts.push('perspective(2400px)');
+    }
+    transformParts.push('translate(-50%, -50%)');
     if (txPct !== 0)
     {
         transformParts.push(`translateX(${txPct}%)`);
@@ -2101,6 +2103,20 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
         (host as unknown as { requestUpdate(): void }).requestUpdate();
     }, 1000);
     host._engine?.setDetailMode(true);
+    //Invalidate the refresh-gate cache so the next render runs the full chain (refreshGrid +
+    //refreshBattery + refreshPv) immediately. Without this, opening the dashboard right after a page load
+    //could leave the grid samples buffer empty if the previous render's gate held the cached refs.
+    const h = host as unknown as {
+        _lastRefreshHassRef?:           unknown;
+        _lastRefreshConfigRef?:         unknown;
+        _lastRefreshTimeRangeRef?:      unknown;
+        _lastRefreshEnergyDefaultsRef?: unknown;
+    };
+    h._lastRefreshHassRef           = undefined;
+    h._lastRefreshConfigRef         = undefined;
+    h._lastRefreshTimeRangeRef      = undefined;
+    h._lastRefreshEnergyDefaultsRef = undefined;
+    (host as unknown as { requestUpdate(): void }).requestUpdate();
     startDashCountUpLoop(host);
 }
 
