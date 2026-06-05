@@ -636,13 +636,17 @@ export const heliosCardStyles = css`
         display: block;
         touch-action: none;
     }
-    /*  Hover dots. Filled with their per-curve radial gradient (see <defs> in dashboardRadial.ts).
-        A soft drop-shadow gives the dot some lift over the curve below. */
-    .dash-radial-sphere
+    /*  Hover dots. Plain coloured disc per curve, thin contrasting stroke so the dot stays legible
+        on both the filled area and the dashed forecast outline. */
+    .dash-radial-dot
     {
         pointer-events: none;
-        filter: drop-shadow(0 0.5px 1.5px rgba(0, 0, 0, 0.35));
+        stroke: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        stroke-width: 0.6;
     }
+    .dash-radial-dot-cloud { fill: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.75)) 95%, transparent); }
+    .dash-radial-dot-prod  { fill: var(--energy-solar-color, #ff9800); }
+    .dash-radial-dot-cons  { fill: var(--energy-grid-consumption-color, #488fc2); }
 
     /*  Corner pills, absolutely positioned so they float over the SVG without nudging its layout.
         TL production, TR import, BL cloud, BR clock (the four together form a fixed-width matched
@@ -783,14 +787,44 @@ export const heliosCardStyles = css`
     /*  Sun layers, same recipe as the 3D card sun. NO background tinted disc this revision: the
         user asked for just a reference rim + an irradiance fill so the centre reads as a single
         clean disc growing inside a circle. */
+    .dash-radial-sun-bg
+    {
+        /*  Theme-contrasting background plate. --primary-text-color resolves to white on dark
+            themes and to black on light themes, so the "empty disc" reads as an opposite-of-card
+            surface regardless of the active HA theme. */
+        fill: var(--primary-text-color, #ffffff);
+        fill-opacity: 0.85;
+    }
     .dash-radial-sun-fill
     {
         fill: var(--helios-sun-color, var(--amber-color, #f59e0b));
     }
     .dash-radial-sun-rim
     {
-        stroke: color-mix(in srgb, var(--helios-sun-color, #f59e0b) 70%, #000000 30%);
+        /*  Reference rim takes the sun colour exactly, no darkening, so the rim reads as the
+            outline of the same sun the rest of the card paints. */
+        stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
         stroke-width: 1.4;
+    }
+
+    /*  Thin annulus border lines. Drawn at each ring's inner + outer edges so a curve collapsing
+        to the inner radius (a 0-value hour) reads as touching the boundary rather than spilling
+        across it. Stroke colour follows the theme contrast colour at low opacity so the lines stay
+        as a subtle structural cue, not a competing element. */
+    .dash-radial-ring-border
+    {
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 22%, transparent);
+        stroke-width: 0.4;
+    }
+
+    /*  Night arc inside the dial annulus, from sunset clockwise through midnight to sunrise.
+        Painted as a slightly darker overlay on top of the dial track so the eye reads the night
+        portion of the day at a glance. */
+    .dash-radial-night
+    {
+        fill: color-mix(in srgb, var(--primary-text-color, #ffffff) 12%, transparent);
+        stroke: none;
+        pointer-events: none;
     }
     /*  Two cursors. The "now" cursor stays on today only and uses the primary accent colour. The
         "hover" cursor follows the pointer on any front card and uses the secondary text colour so
@@ -798,11 +832,10 @@ export const heliosCardStyles = css`
         edge of the irradiance reference circle and end at the outer edge of the sundial. */
     .dash-radial-cursor-now
     {
-        stroke: var(--primary-color, #03a9f4);
-        stroke-width: 2;
+        stroke: var(--primary-text-color, #ffffff);
+        stroke-width: 1.3;
         stroke-linecap: round;
         fill: none;
-        filter: drop-shadow(0 0 4px color-mix(in srgb, var(--primary-color, #03a9f4) 60%, transparent));
     }
     .dash-radial-cursor-hover
     {
@@ -2002,15 +2035,6 @@ export const heliosCardStyles = css`
         stroke: var(--card-background-color, #ffffff);
         stroke-width: 1;
         vector-effect: non-scaling-stroke;
-        pointer-events: none;
-    }
-    /*  Bright highlight overlay rendered on top of the hover dot, offset to its upper-left so the
-        dot reads as a lit 3D sphere rather than the flat disc the bare colored circle gives. The
-        chart SVG uses preserveAspectRatio="none" so the dot still distorts to an ellipse on wide
-        cards, but the highlight is enough to give the visual a sphere feel. */
-    .hc-hover-dot-highlight
-    {
-        fill-opacity: 0.55;
         pointer-events: none;
     }
 

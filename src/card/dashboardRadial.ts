@@ -494,6 +494,66 @@ function currentHourFraction(): number
 }
 
 
+//Find sunrise + sunset times for a calendar day at (lat, lon). Returns the hour fractions in
+//[0, 24) where the sun crosses the horizon. Polar days return both null (sun never sets / never
+//rises). Stepped at 5 min to keep the cost low while still landing within ~5 min of the true
+//crossing, which is invisible at the dial's 24 hour scale. Memoised per (dayStartMs, lat, lon)
+//bucket so a multi-card dashboard does not recompute the same crossing five times per render.
+const _sunriseSunsetCache = new Map<string, { sunrise: number | null; sunset: number | null }>();
+function findSunriseSunset(dayStartMs: number, lat: number, lon: number): { sunrise: number | null; sunset: number | null }
+{
+    const key = `${dayStartMs}|${lat.toFixed(3)}|${lon.toFixed(3)}`;
+    const cached = _sunriseSunsetCache.get(key);
+    if (cached) { return cached; }
+    let sunrise: number | null = null;
+    let sunset:  number | null = null;
+    let prevAlt = getSunPosition(new Date(dayStartMs), lat, lon).altitude;
+    const startBelowHorizon = prevAlt < 0;
+    for (let m = 5; m <= 24 * 60; m += 5)
+    {
+        const t   = new Date(dayStartMs + m * 60 * 1000);
+        const alt = getSunPosition(t, lat, lon).altitude;
+        if (prevAlt < 0 && alt >= 0 && sunrise === null) { sunrise = m / 60; }
+        else if (prevAlt >= 0 && alt < 0 && sunset === null) { sunset = m / 60; }
+        prevAlt = alt;
+    }
+    //Polar day: never crossed. Polar night: never crossed either. Leave both null in those edge
+    //cases so the caller knows there is nothing to paint.
+    void startBelowHorizon;
+    const result = { sunrise, sunset };
+    _sunriseSunsetCache.set(key, result);
+    return result;
+}
+
+
+//SVG path command for the night-period filled segment in the dial annulus. From sunset hour at the
+//inner radius, clockwise (through midnight) to sunrise hour, radial out to the outer radius, then
+//counter-clockwise back to sunset hour at the outer radius, closed. Returns the empty string when
+//either sunrise or sunset is null (polar day / night), or when the night spans the entire day.
+function buildNightArcPath(sunset: number | null, sunrise: number | null, innerR: number, outerR: number): string
+{
+    if (sunset === null || sunrise === null) { return ''; }
+    //Convert to angle in degrees, clockwise from top (matches polarPt's alpha convention).
+    const a0 = ((sunset  - 12) % 24) * 15;
+    const a1 = ((sunrise - 12) % 24) * 15;
+    let span = a1 - a0;
+    if (span < 0) { span += 360; }
+    if (span <= 1 || span >= 359) { return ''; }
+    const largeArc = span > 180 ? 1 : 0;
+    const [sx1, sy1] = polarPt(sunset,  innerR);
+    const [ex1, ey1] = polarPt(sunrise, innerR);
+    const [ex2, ey2] = polarPt(sunrise, outerR);
+    const [sx2, sy2] = polarPt(sunset,  outerR);
+    return [
+        `M ${sx1.toFixed(2)} ${sy1.toFixed(2)}`,
+        `A ${innerR} ${innerR} 0 ${largeArc} 1 ${ex1.toFixed(2)} ${ey1.toFixed(2)}`,
+        `L ${ex2.toFixed(2)} ${ey2.toFixed(2)}`,
+        `A ${outerR} ${outerR} 0 ${largeArc} 0 ${sx2.toFixed(2)} ${sy2.toFixed(2)}`,
+        'Z'
+    ].join(' ');
+}
+
+
 //Pointer -> hour conversion. Reads the SVG's bounding box, computes the angle of (clientX, clientY)
 //relative to the centre and maps it into the [0, 24) hour range using the same noon-on-top clockwise
 //convention as the rest of the file. The v2 implementation mapped angle 0 to hour 0, which mirrored
@@ -570,6 +630,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 
     const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
     const sunFillR     = R_SUN_REF * (ratioPct / 100);
+
+    //Sunrise / sunset for the displayed day at the home location. Feeds the night-zone arc painted
+    //in the dial annulus so the user sees at a glance how much of the day was dark.
+    const homeCoords  = getHomeCoords(host.config, host.hass);
+    const sunRiseSet  = homeCoords ? findSunriseSunset(dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
+    const nightPath   = buildNightArcPath(sunRiseSet.sunset, sunRiseSet.sunrise, R_DIAL_INNER, R_DIAL_OUTER);
 
     //Now cursor: only on the current day.
     const showNowCursor = isFront && nowMs >= dayStartMs && nowMs < dayEndMs;
@@ -765,27 +831,6 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 @pointermove="${onPointerMove}"
                 @pointerleave="${onPointerLeave}"
             >
-                <defs>
-                    <!-- Sphere gradients for the hover dots: each curve gets its own radial gradient
-                         with a light highlight at the top-left of the dot, simulating a 3D ball lit
-                         from the upper-left. This replaces the flat-disc look of a plain circle +
-                         solid fill. -->
-                    <radialGradient id="dash-radial-sphere-prod-${cardOffset}" cx="35%" cy="32%" r="65%">
-                        <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.85"/>
-                        <stop offset="35%"  stop-color="var(--energy-solar-color, #ff9800)" stop-opacity="1"/>
-                        <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
-                    </radialGradient>
-                    <radialGradient id="dash-radial-sphere-cons-${cardOffset}" cx="35%" cy="32%" r="65%">
-                        <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.85"/>
-                        <stop offset="35%"  stop-color="var(--energy-grid-consumption-color, #488fc2)" stop-opacity="1"/>
-                        <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
-                    </radialGradient>
-                    <radialGradient id="dash-radial-sphere-cloud-${cardOffset}" cx="35%" cy="32%" r="65%">
-                        <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.85"/>
-                        <stop offset="35%"  stop-color="var(--secondary-text-color, rgba(255, 255, 255, 0.7))" stop-opacity="1"/>
-                        <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
-                    </radialGradient>
-                </defs>
                 <!-- Ring tracks. Each track is a circle with stroke-width = annulus thickness, so
                      the visual is a real ring with breathing room between it and its neighbours.
                      The dial track is drawn here too because the hour labels + sub-hour ticks live
@@ -799,6 +844,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <circle class="dash-radial-dial-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_DIAL_INNER  + R_DIAL_OUTER)  / 2}"
                         fill="none" stroke-width="${R_DIAL_OUTER - R_DIAL_INNER}"/>
 
+                <!-- Night-period arc in the dial annulus. A solid-filled annular segment from sunset
+                     hour around through midnight to sunrise hour, painted as a slightly darker tint
+                     on top of the dial track. Drawn here (above the track, before the ticks +
+                     labels) so the ticks + labels read on top of the night zone. -->
+                ${nightPath ? svg`<path class="dash-radial-night" d="${nightPath}"/>` : nothing}
+
                 <!-- Past fills (annulus shapes between the ring's inner edge and the per-hour data
                      curve) painted via the evenodd fill rule so the inner subpath carves the centre
                      of the donut shape cleanly. Future outlines are a simple polyline along the data
@@ -810,12 +861,28 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
                 ${consPastPath    ? svg`<path class="dash-radial-cons-fill"    fill-rule="evenodd" d="${consPastPath}"/>`    : nothing}
 
-                <!-- Sun: just a reference rim + a scaled inner fill. The diagram itself is enough
-                     to read the irradiance ratio (the disc fills the rim at 100 %, vanishes at 0 %),
-                     no numeric percentage on top. The visual matches the 3D card sun on the map. -->
+                <!-- Sun: three layers. Background fill at R_SUN_REF in the theme-contrasting text
+                     colour (white on dark themes, black on light themes) so the reference disc has
+                     a visible "empty plate" the orange fill sits on top of. Scaled inner fill in the
+                     sun colour, radius drives the irradiance reading. Reference rim in the sun
+                     colour. The visual matches the 3D card sun on the map. -->
+                <circle class="dash-radial-sun-bg"   cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"/>
                 <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}"/>
                 <circle class="dash-radial-sun-rim"  cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"
                         fill="none"/>
+
+                <!-- Thin border lines on every annulus boundary, one at the inner edge and one at
+                     the outer edge of each ring. Sit just outside the data fills so a curve
+                     collapsing to the inner edge (the 0-value case) does not bleed past the boundary
+                     visually. -->
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CLOUD_INNER}" fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CLOUD_OUTER}" fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_PROD_INNER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_PROD_OUTER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CONS_INNER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CONS_OUTER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_INNER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_OUTER}"  fill="none"/>
 
                 <!-- Sundial perimeter: quarter-hour ticks then hour labels. The labels themselves
                      anchor the hour positions, no separate full-tick is drawn. -->
@@ -828,11 +895,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <!-- Hover cursor (any front card with an active hover hour). -->
                 ${hoverCursor ? svg`<path class="dash-radial-cursor-hover" d="${hoverCursor}"/>` : nothing}
 
-                <!-- Hover spheres: one per data ring at the hover-hour value. Top layer so they are
-                     always visible above the curves. -->
-                ${hoverCloudSphere ? svg`<circle class="dash-radial-sphere" cx="${hoverCloudSphere.x.toFixed(2)}" cy="${hoverCloudSphere.y.toFixed(2)}" r="4" fill="url(#dash-radial-sphere-cloud-${cardOffset})"/>` : nothing}
-                ${hoverProdSphere  ? svg`<circle class="dash-radial-sphere" cx="${hoverProdSphere.x.toFixed(2)}"  cy="${hoverProdSphere.y.toFixed(2)}"  r="4" fill="url(#dash-radial-sphere-prod-${cardOffset})"/>`  : nothing}
-                ${hoverConsSphere  ? svg`<circle class="dash-radial-sphere" cx="${hoverConsSphere.x.toFixed(2)}"  cy="${hoverConsSphere.y.toFixed(2)}"  r="4" fill="url(#dash-radial-sphere-cons-${cardOffset})"/>`  : nothing}
+                <!-- Hover dots: one per data ring at the hover-hour value. Top layer so they are
+                     always visible above the curves. Plain colored disc with a thin contrast stroke,
+                     no gradient, just slightly thicker than the timeline hover dots. -->
+                ${hoverCloudSphere ? svg`<circle class="dash-radial-dot dash-radial-dot-cloud" cx="${hoverCloudSphere.x.toFixed(2)}" cy="${hoverCloudSphere.y.toFixed(2)}" r="3"/>` : nothing}
+                ${hoverProdSphere  ? svg`<circle class="dash-radial-dot dash-radial-dot-prod"  cx="${hoverProdSphere.x.toFixed(2)}"  cy="${hoverProdSphere.y.toFixed(2)}"  r="3"/>` : nothing}
+                ${hoverConsSphere  ? svg`<circle class="dash-radial-dot dash-radial-dot-cons"  cx="${hoverConsSphere.x.toFixed(2)}"  cy="${hoverConsSphere.y.toFixed(2)}"  r="3"/>` : nothing}
             </svg>
         </div>
     `;
