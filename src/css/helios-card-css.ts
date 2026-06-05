@@ -954,8 +954,14 @@ export const heliosCardStyles = css`
     /*  Chart curves grow / collapse on day navigation: only the CURVES (.dash-cf-cum-chart-curves <g>)
         scale, the night zones + baseline band + sunrise/sunset markers stay visible at full size. The
         active card sits at scaleY(1) (curves full height), every other card at scaleY(0) (curves
-        collapsed at the baseline). Swapping the .dash-cf-card-front class triggers the transition both
-        ways. */
+        collapsed at the baseline). Asymmetric transition: 1100 ms slow grow when a card BECOMES front
+        (eye-pleasing polish, declared inside the .dash-cf-card-front rule), 350 ms fast collapse when
+        a card LEAVES front (declared on the base selector so the leaving card's curves are gone by
+        the time its CoverFlow slide settles 420 ms later). A symmetric 1100 ms transition let the
+        side-card's curves linger at mid scaleY for ~680 ms after the card was already parked at its
+        side position, which read as a curve ghost stacked on top of the new front card's grow.
+        Rapid swipes used to compound the ghost because every in-flight collapse was still mid-way
+        when the next swap kicked another one. */
     .dash-cf-cum-chart-curves
     {
         /*  Origin at the W=0 baseline in SVG user space (viewBox 500 x 200, PAD_B = 12, baseline = 188).
@@ -963,11 +969,12 @@ export const heliosCardStyles = css`
             below the baseline stays visible throughout the animation. */
         transform-origin: 250px 188px;
         transform: scaleY(0);
-        transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
+        transition: transform 350ms cubic-bezier(0.4, 0, 0.6, 1);
     }
     .dash-cf-card-front .dash-cf-cum-chart-curves
     {
         transform: scaleY(1);
+        transition: transform 1100ms cubic-bezier(0.22, 1, 0.36, 1);
     }
     .dash-cf-stage.dash-cf-entering .dash-cf-card-front .dash-cf-cum-chart-curves
     {
