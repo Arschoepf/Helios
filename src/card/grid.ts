@@ -316,6 +316,22 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
             if (deduped.length > 0)
             {
                 bufMap.set(entity, deduped);
+                //Invalidate the refresh-gate cache on HeliosCard so the next updated() pass runs the FULL
+                //refresh chain again, recomputing the slope (and therefore the live grid chip value) from
+                //the newly-populated bufMap. Without this the gate short-circuits the refresh because the
+                //hass / config / energyDefaults references have not changed since the WS round-trip
+                //started, and the chip stays null until something else triggers a render. Symptom on the
+                //user side: 'I have to refresh the page to see import / export chips'.
+                const h = host as unknown as {
+                    _lastRefreshHassRef?:           unknown;
+                    _lastRefreshConfigRef?:         unknown;
+                    _lastRefreshTimeRangeRef?:      unknown;
+                    _lastRefreshEnergyDefaultsRef?: unknown;
+                };
+                h._lastRefreshHassRef           = undefined;
+                h._lastRefreshConfigRef         = undefined;
+                h._lastRefreshTimeRangeRef      = undefined;
+                h._lastRefreshEnergyDefaultsRef = undefined;
                 host.requestUpdate();
             }
             _historyFetched.set(entity, Date.now());

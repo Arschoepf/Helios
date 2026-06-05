@@ -418,7 +418,12 @@ function renderCoverflowCard(
     //Conditional transform: the FRONT card gets ONLY the centring translate, NO translateX / scale (those
     //would all reduce to identity but the browser still rasterises the transformed layer to a texture,
     //which on bigger cards reads as blurry text + curves). Side cards keep the full transform chain.
-    const transformParts = ['translate(-50%, -50%)'];
+    //
+    //translateZ(0) is appended unconditionally: it forces every card into its own compositor layer with
+    //integer-pixel snapping. Without it Safari (specifically) rasterised the cards at fractional
+    //resolution and the user kept seeing blur on Safari only. translateZ(0) is a Z-axis no-op (it lands
+    //on the perspective focal plane) so the visual position does not change, only the GPU layer changes.
+    const transformParts = ['translate(-50%, -50%)', 'translateZ(0)'];
     if (txPct !== 0)
     {
         transformParts.push(`translateX(${txPct}%)`);

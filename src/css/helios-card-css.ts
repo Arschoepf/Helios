@@ -486,11 +486,10 @@ export const heliosCardStyles = css`
         top: 50%;
         left: 50%;
         /*  Card sized via plain percentages of the closest positioned ancestor (.dash-cf-stage). Height
-            anchors at 90 % so 5 % of the stage sits above + below the card, width derives from the height
-            via the aspect ratio, max-width 82 % caps it on tall narrow stages (phone portrait) where the
-            height-derived width would otherwise overflow horizontally. No container-type opt-in needed,
-            which keeps the perspective rasterisation sharp. */
-        height: 90%;
+            at 96 % leaves a 2 % gutter top + bottom so the card uses the visible space the panel offers,
+            width derives from the height via the aspect ratio, max-width 82 % caps it on tall narrow
+            stages (phone portrait) where the height-derived width would otherwise overflow horizontally. */
+        height: 96%;
         max-width: 82%;
         aspect-ratio: 4 / 6;
         border-radius: 18px;
@@ -522,11 +521,12 @@ export const heliosCardStyles = css`
             0 24px 48px rgba(0, 0, 0, 0.22);
         overflow-y: auto;
         overflow-x: hidden;
-        /*  Scroll stays INSIDE the card, no scroll chaining to the parent window when the user swipes
-            past the boundary. Combined with overflow-y: auto this means: touch / wheel inside the card
-            swipes its content; reaching the top or bottom does NOT trigger a window scroll behind. */
         overscroll-behavior: contain;
         scrollbar-width: none;
+        /*  Safari-specific antialiasing hint for the headline values. The translateZ(0) compositor-layer
+            promotion happens via the inline transform set in dashboard.ts, not here, because the inline
+            transform would otherwise override any CSS transform property. */
+        -webkit-font-smoothing: antialiased;
     }
     /*  Bottom-fade mask removed. mask-image forces the card into a compositor layer which the browser
         then rasterises, the side effect was a subtle blur on the card content. The user can still scroll
@@ -1093,28 +1093,28 @@ export const heliosCardStyles = css`
         /*  Scale + opacity so the entrance is visible even while the parent .detail-panel runs its own 250 ms
             opacity fade-in (the two overlap during 0-250 ms; the parent fade alone would mask a pure opacity
             change on the card). Drop opacity to 0 too so the card properly fades in once the panel settles. */
-        0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
-        100% { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
+        0%   { opacity: 0; transform: translate(-50%, -50%) translateZ(0) scale(0.92); }
+        100% { opacity: 1; transform: translate(-50%, -50%) translateZ(0) scale(1);    }
     }
     @keyframes dash-cf-enter-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
     }
     @keyframes dash-cf-enter-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
-        100% { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
     }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="0"]  { animation: dash-cf-enter-front      300ms ease-out 0ms   both; }
     .dash-cf-stage.dash-cf-entering .dash-cf-card[data-day-offset="-1"] { animation: dash-cf-enter-mid-left   350ms ease-out 300ms both; }
@@ -1124,30 +1124,30 @@ export const heliosCardStyles = css`
 
     @keyframes dash-cf-exit-back-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(-50%) scale(0.58) rotateY(-38deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-back-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(50%) scale(0.58) rotateY(38deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-left
     {
-        0%   { transform: translate(-50%, -50%) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(-32%) scale(0.74) rotateY(-22deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(0%)   scale(1)    rotateY(0deg);   opacity: 0; }
     }
     @keyframes dash-cf-exit-mid-right
     {
-        0%   { transform: translate(-50%, -50%) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
-        100% { transform: translate(-50%, -50%) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
+        0%   { transform: translate(-50%, -50%) translateZ(0) translateX(32%) scale(0.74) rotateY(22deg); opacity: 1; }
+        100% { transform: translate(-50%, -50%) translateZ(0) translateX(0%)  scale(1)    rotateY(0deg);  opacity: 0; }
     }
     @keyframes dash-cf-exit-front
     {
         /*  Symmetric exit: scale down + fade out. The parent .detail-panel does NOT fade out (it just unmounts
             at t=1 s), so this is the only motion on the front card during exit. */
-        0%   { opacity: 1; transform: translate(-50%, -50%) scale(1);    }
-        100% { opacity: 0; transform: translate(-50%, -50%) scale(0.92); }
+        0%   { opacity: 1; transform: translate(-50%, -50%) translateZ(0) scale(1);    }
+        100% { opacity: 0; transform: translate(-50%, -50%) translateZ(0) scale(0.92); }
     }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="-2"] { animation: dash-cf-exit-back-left  350ms ease-in 0ms   both; }
     .dash-cf-stage.dash-cf-exiting .dash-cf-card[data-day-offset="2"]  { animation: dash-cf-exit-back-right 350ms ease-in 0ms   both; }
