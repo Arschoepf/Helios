@@ -50,8 +50,12 @@ export interface CumChartData
 {
     actualSamples:    Array<{ tMs: number; kwh: number }>;
     predictedSamples: Array<{ tMs: number; kwh: number }>;
+    gridImportSamples: Array<{ tMs: number; kwh: number }>;
+    gridExportSamples: Array<{ tMs: number; kwh: number }>;
     totalActualKwh:    number;
     totalPredictedKwh: number;
+    totalGridImportKwh: number;
+    totalGridExportKwh: number;
     maxKwh:           number;
     sunriseMs:        number | null;
     sunsetMs:         number | null;
@@ -162,17 +166,159 @@ export function computeDayCumulative(host: DashboardHost, dayOffset: number): Cu
         }
     }
 
+    const gridImportSamples = computeGridDayCumulative(host, 'import', win.startMs, win.endMs, liveEndMs);
+    const gridExportSamples = computeGridDayCumulative(host, 'export', win.startMs, win.endMs, liveEndMs);
+
+    const totalGridImportKwh = gridImportSamples.length > 0
+        ? gridImportSamples[gridImportSamples.length - 1].kwh
+        : 0;
+    const totalGridExportKwh = gridExportSamples.length > 0
+        ? gridExportSamples[gridExportSamples.length - 1].kwh
+        : 0;
+
+    //Re-expand the chart Y axis if a grid curve dwarfs the production curve (typical winter day with no
+    //production + heavy import). Without this the grid dashed lines would push past the top of the frame.
+    const maxKwhAll = Math.max(
+        maxKwh,
+        totalGridImportKwh,
+        totalGridExportKwh,
+    );
+
     return {
         actualSamples,
         predictedSamples,
+        gridImportSamples,
+        gridExportSamples,
         totalActualKwh:    actualSamples[actualSamples.length - 1].kwh,
         totalPredictedKwh: predictedSamples[predictedSamples.length - 1].kwh,
-        maxKwh,
+        totalGridImportKwh,
+        totalGridExportKwh,
+        maxKwh: maxKwhAll,
         sunriseMs, sunsetMs,
         dayStartMs: win.startMs,
         dayEndMs:   win.endMs,
         liveEndMs,
     };
+}
+
+
+//Cumulative grid import or export over the day, in kWh. Reads per-entity samples populated by refreshGrid
+//(grid.ts) which already covers 5 days back via the recorder LTS arm + 6 h via the raw arm, so past day
+//offsets resolve too. Cumulative-kWh meters (the standard HA Energy wiring) give the running total per
+//entity directly (current value minus midnight value); instantaneous-power meters integrate trapezoidally
+//from W to kWh. Multi-entity grids sum the per-entity contributions at the union timeline.
+function computeGridDayCumulative(
+    host:       DashboardHost,
+    side:       'import' | 'export',
+    dayStartMs: number,
+    dayEndMs:   number,
+    liveEndMs:  number,
+): Array<{ tMs: number; kwh: number }>
+{
+    const samplesMap = side === 'import' ? host._gridImportSamples : host._gridExportSamples;
+    const unitsMap   = side === 'import' ? host._gridImportUnits   : host._gridExportUnits;
+    if (!samplesMap || samplesMap.size === 0)
+    {
+        return [];
+    }
+    //Per-entity cumulative arrays in kWh, all anchored to dayStartMs at 0 kWh.
+    const perEntity: Array<Array<{ tMs: number; kwh: number }>> = [];
+    const fetchHorizon = Math.min(Date.now(), dayEndMs, liveEndMs);
+    for (const [entity, samples] of samplesMap)
+    {
+        if (samples.length < 1) continue;
+        const unit = (unitsMap?.get(entity) ?? '').toLowerCase();
+        const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
+        const energyScale = unit === 'wh' ? 0.001 : unit === 'mwh' ? 1000 : 1; //to kWh
+        const out: Array<{ tMs: number; kwh: number }> = [];
+        if (isCum)
+        {
+            //Cumulative meter: find the meter reading at midnight (interpolate the first in-day sample
+            //pair) and subtract from every later sample to get the running day total in kWh.
+            const meterMidnight = interpolateMeterAt(samples, dayStartMs);
+            if (meterMidnight === null) continue;
+            for (const s of samples)
+            {
+                if (s.t < dayStartMs || s.t > Math.min(dayEndMs, fetchHorizon)) continue;
+                const kwh = Math.max(0, (s.v - meterMidnight) * energyScale);
+                out.push({ tMs: s.t, kwh });
+            }
+        }
+        else
+        {
+            //Instantaneous power meter (W / kW / MW): trapezoidal integration sample-by-sample.
+            const wScale = unit === 'kw' ? 1000 : unit === 'mw' ? 1_000_000 : 1;
+            let cumWh = 0;
+            let prevT: number | null = null;
+            let prevW: number | null = null;
+            for (const s of samples)
+            {
+                if (s.t < dayStartMs || s.t > Math.min(dayEndMs, fetchHorizon)) continue;
+                const w = s.v * wScale;
+                if (prevT !== null && prevW !== null)
+                {
+                    const dh = (s.t - prevT) / 3_600_000;
+                    if (dh > 0 && dh < 6)
+                    {
+                        cumWh += (prevW + w) / 2 * dh;
+                    }
+                }
+                prevT = s.t;
+                prevW = w;
+                out.push({ tMs: s.t, kwh: Math.max(0, cumWh / 1000) });
+            }
+        }
+        if (out.length > 0)
+        {
+            perEntity.push(out);
+        }
+    }
+    if (perEntity.length === 0)
+    {
+        return [];
+    }
+    //Multi-entity sum: union timeline + interpolate each entity at every union timestamp.
+    const allTimesSet = new Set<number>();
+    for (const series of perEntity)
+    {
+        for (const p of series) allTimesSet.add(p.tMs);
+    }
+    allTimesSet.add(dayStartMs);
+    const times = Array.from(allTimesSet).sort((a, b) => a - b);
+    const out: Array<{ tMs: number; kwh: number }> = [];
+    for (const t of times)
+    {
+        let sum = 0;
+        for (const series of perEntity)
+        {
+            const v = interpolateKwhAt(series, t);
+            if (v !== null) sum += v;
+        }
+        out.push({ tMs: t, kwh: sum });
+    }
+    return out;
+}
+
+
+//Linearly interpolate a cumulative meter sample buffer (raw entity values, mixed cadence) at a target
+//time. Returns the meter reading in native unit. Used to anchor cumulative meters at midnight so the
+//per-entity day-cumulative offset is correct even when no sample fell exactly on midnight.
+function interpolateMeterAt(samples: Array<{ t: number; v: number }>, tMs: number): number | null
+{
+    if (samples.length === 0) return null;
+    if (tMs <= samples[0].t) return samples[0].v;
+    const last = samples[samples.length - 1];
+    if (tMs >= last.t) return last.v;
+    let lo = 0, hi = samples.length - 1;
+    while (lo < hi - 1)
+    {
+        const mid = (lo + hi) >> 1;
+        if (samples[mid].t <= tMs) lo = mid;
+        else hi = mid;
+    }
+    const a = samples[lo], b = samples[hi];
+    if (b.t === a.t) return a.v;
+    return a.v + ((tMs - a.t) / (b.t - a.t)) * (b.v - a.v);
 }
 
 
@@ -405,6 +551,8 @@ function renderCumChartSVG(
     const actualPath    = buildPath(data.actualSamples);
     const actualArea    = buildArea(data.actualSamples);
     const predictedPath = buildPath(data.predictedSamples);
+    const gridImportPath = buildPath(data.gridImportSamples);
+    const gridExportPath = buildPath(data.gridExportSamples);
 
     //Night overlay: opacity rectangles before sunrise + after sunset (clamped to the SVG bounds).
     const nightLeftEnd    = data.sunriseMs !== null ? xOf(data.sunriseMs) : null;
@@ -454,6 +602,12 @@ function renderCumChartSVG(
             ` : nothing}
             ${predictedPath ? svg`
                 <path class="dash-cf-cum-chart-predicted" d="${predictedPath}" style="stroke: ${predictedColor};"></path>
+            ` : nothing}
+            ${gridImportPath ? svg`
+                <path class="dash-cf-cum-chart-grid-import" d="${gridImportPath}"></path>
+            ` : nothing}
+            ${gridExportPath ? svg`
+                <path class="dash-cf-cum-chart-grid-export" d="${gridExportPath}"></path>
             ` : nothing}
             ${actualPath ? svg`
                 <path class="dash-cf-cum-chart-actual-line" d="${actualPath}"></path>

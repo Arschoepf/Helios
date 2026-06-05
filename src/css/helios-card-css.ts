@@ -895,11 +895,11 @@ export const heliosCardStyles = css`
         vector-effect: non-scaling-stroke;
         pointer-events: none;
     }
-    /*  Y=0 baseline band, in the solar palette at low opacity so the chart's floor reads as the "ground"
-        the curves rise from. */
+    /*  Y=0 baseline band, in the solar palette at the SAME opacity as the production area above so the
+        baseline reads as a continuous extension of the area (not a paler hint of it). */
     .dash-cf-cum-chart-baseline-band
     {
-        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 18%, transparent);
+        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 30%, transparent);
     }
     .dash-cf-cum-chart-actual-area
     {
@@ -917,6 +917,30 @@ export const heliosCardStyles = css`
     .dash-cf-cum-chart-predicted
     {
         fill: none;
+        stroke-width: 1.6;
+        stroke-dasharray: 4 3;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+    }
+    /*  Cumulative grid import + export curves: same dashed recipe as the forecast curve, in the HA Energy
+        grid palette so the user can read each direction against the production area at a glance. The exact
+        daily totals come straight from the per-entity recorder samples buffer (the timeline scrub uses the
+        same data path, so the dashboard chart and HA Energy stay in sync). */
+    .dash-cf-cum-chart-grid-import
+    {
+        fill: none;
+        stroke: var(--energy-grid-consumption-color, #488fc2);
+        stroke-width: 1.6;
+        stroke-dasharray: 4 3;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-cf-cum-chart-grid-export
+    {
+        fill: none;
+        stroke: var(--energy-grid-return-color, #8353d1);
         stroke-width: 1.6;
         stroke-dasharray: 4 3;
         stroke-linejoin: round;
