@@ -50,7 +50,7 @@ export const en: Translations = {
         dayLabelDayBefore:    '2 days ago',
         dayLabelTomorrow:     'Tomorrow',
         dayLabelDayAfter:     'In 2 days',
-        shadingDomeHint:      'Auto-learned shading dome. Each cell shows the average PV production observed for that sun position over the year, at the cloud-cover level set by the slider below. Helios uses this map to refine the forecast: when the model predicts a clear-sky output, it is multiplied by the observed ratio at the current sun position so a tree shading the panels at 4 pm in winter is automatically reflected in the next-hour estimate.',
+        shadingDomeHint:      'Auto-learned shading dome. Each cell shows the average PV output at that sun position, for the cloud cover chosen below. Helios applies it to the forecast so real shadows (a tree at 4 pm, a chimney in winter) are captured automatically.',
     },
 
     editor:

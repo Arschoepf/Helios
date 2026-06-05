@@ -3173,7 +3173,10 @@ export const heliosCardStyles = css`
         background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
-        border-radius: var(--ha-card-border-radius, 12px);
+        /*  Hard 16 px instead of var(--ha-card-border-radius) because some themes set the variable to 0 in
+            panel view and the hint card rendered with square corners. Section view kept the right radius
+            because ha-card scopes its own radius variable. */
+        border-radius: 16px;
         font-size: 12px;
         line-height: 1.45;
         z-index: 49;

@@ -89,21 +89,21 @@ export function toggleShadingDome(host: ShadingDomeHost): void
     }
     if (!host._shadingDomeMode)
     {
+        //Mark fade-in start so the fade-loop kicks immediately, but DEFER flipping _shadingDomeMode +
+        //_shadingDomeChipMask to the next animation frame. The defer ensures Lit renders the cloud picker
+        //once with sliderActive=false (resting state, parked below the card) BEFORE the next render flips
+        //sliderActive=true and the CSS transition fires. Without the defer, the picker mounted with
+        //is-active on the first paint after toggle and the slide-in animation was skipped entirely on
+        //default-UI -> ShadingDome (it worked LiDAR -> ShadingDome only because the LiDAR slider's
+        //resting state in that path happens to give Lit a paint frame to settle).
         host._shadingDomeFadeOutStartMs = null;
         host._shadingDomeFadeInStartMs  = performance.now();
-        host._shadingDomeMode           = true;
-        //Defer the chip-mask flip by one animation frame so the
-        //browser commits the dome SVG's "opacity 0" first frame
-        //BEFORE the shading-dome-active class hits ha-card. Without
-        //this gap, the chip opacity transition was being collapsed
-        //into the same paint as the class flip and the chips
-        //disappeared instantly instead of fading. Symmetric to the
-        //exit path where the class flip leads the dome retirement.
-        refreshShadingDomeScene(host);
         refreshOverlays(host);
         requestAnimationFrame(() =>
         {
-            host._shadingDomeChipMask = true;
+            host._shadingDomeMode      = true;
+            host._shadingDomeChipMask  = true;
+            refreshShadingDomeScene(host);
             host.requestUpdate();
         });
         startShadingDomeFadeLoop(host);
@@ -539,7 +539,7 @@ export function renderShadingDomeCloudPicker(
     const activeCls    = sliderActive ? ' is-active' : '';
     const tr = pickTranslations((host as unknown as { hass?: { language?: string } }).hass?.language);
     const hint = tr.detail.shadingDomeHint
-        ?? 'Auto-learned shading dome. Each cell shows the average PV production observed for that sun position over the year, at the cloud-cover level set by the slider below. Helios uses this map to refine the forecast.';
+        ?? 'Auto-learned shading dome. Each cell shows the average PV output at that sun position, for the cloud cover chosen below. Helios applies it to the forecast so real shadows are captured automatically.';
     return html`
         <div class="shading-dome-cloud-hint${activeCls}" aria-hidden="${!sliderActive}">${hint}</div>
         <div class="shading-dome-cloud-slider${activeCls}" aria-label="Cloud cover" ?aria-hidden="${!sliderActive}">

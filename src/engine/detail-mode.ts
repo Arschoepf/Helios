@@ -19,7 +19,9 @@ import type { Map as MapLibreMap } from 'maplibre-gl';
 
 
 const DETAIL_MODE_ZOOM_TARGET     = 19.5;
-const DETAIL_MODE_PITCH_TARGET    = 80;
+//Detail-mode dive ends at the in-card pitch min (30 deg = mostly top-down). At 80 deg the ground was
+//nearly edge-on and the house read as a flat smudge per the user's call.
+const DETAIL_MODE_PITCH_TARGET    = 30;
 const DETAIL_MODE_TRANSITION_MS   = 800;
 //Window during which fresh user gestures are swallowed after a
 //detail-mode exit. The exit click that dismisses the dashboard
