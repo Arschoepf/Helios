@@ -884,6 +884,17 @@ export const heliosCardStyles = css`
     {
         fill: color-mix(in srgb, var(--primary-text-color, #ffffff) 8%, transparent);
     }
+    /*  Sunrise + sunset vertical dashed markers. Drawn right after the night zones so they sit BEHIND
+        the area + curves (later paint = on top in SVG). Same dashed pattern as the cursor line but a bit
+        more transparent so they read as a static day-boundary cue rather than the live hover indicator. */
+    .dash-cf-cum-chart-sun-marker
+    {
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 40%, transparent);
+        stroke-width: 1;
+        stroke-dasharray: 3 3;
+        vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
     /*  Y=0 baseline band, in the solar palette at low opacity so the chart's floor reads as the "ground"
         the curves rise from. */
     .dash-cf-cum-chart-baseline-band

@@ -342,11 +342,11 @@ export function renderCumChart(
         <div class="dash-cf-cum-chart">
             <header class="dash-cf-cum-chart-header">
                 <div class="dash-cf-cum-chart-meta dash-cf-cum-chart-meta-actual" style="color: ${baseSolar};">
-                    <span class="dash-cf-cum-chart-title">${t.detail.todayProduced ?? 'Production'}</span>
+                    <span class="dash-cf-cum-chart-title">${t.detail.tileProductionLabel ?? 'Production'}</span>
                     <span class="dash-cf-cum-chart-value">${actualDisplay.toFixed(1)} <span class="dash-cf-cum-chart-unit">kWh</span></span>
                 </div>
                 <div class="dash-cf-cum-chart-meta dash-cf-cum-chart-meta-predicted" style="color: ${predictedSolid};">
-                    <span class="dash-cf-cum-chart-title">${t.detail.todayForecast ?? 'Forecast'}</span>
+                    <span class="dash-cf-cum-chart-title">${t.detail.tileForecastLabel ?? 'Forecast'}</span>
                     <span class="dash-cf-cum-chart-value">${predictedDisplay.toFixed(1)} <span class="dash-cf-cum-chart-unit">kWh</span></span>
                 </div>
             </header>
@@ -438,6 +438,13 @@ function renderCumChartSVG(
             ` : nothing}
             ${nightRightStart !== null && nightRightStart < W ? svg`
                 <rect class="dash-cf-cum-chart-night" x="${nightRightStart.toFixed(2)}" y="0" width="${(W - nightRightStart).toFixed(2)}" height="${H}"></rect>
+            ` : nothing}
+
+            ${nightLeftEnd !== null && nightLeftEnd > 0 && nightLeftEnd < W ? svg`
+                <line class="dash-cf-cum-chart-sun-marker" x1="${nightLeftEnd.toFixed(2)}" y1="0" x2="${nightLeftEnd.toFixed(2)}" y2="${H}"></line>
+            ` : nothing}
+            ${nightRightStart !== null && nightRightStart > 0 && nightRightStart < W ? svg`
+                <line class="dash-cf-cum-chart-sun-marker" x1="${nightRightStart.toFixed(2)}" y1="0" x2="${nightRightStart.toFixed(2)}" y2="${H}"></line>
             ` : nothing}
 
             <rect class="dash-cf-cum-chart-baseline-band" x="0" y="${baselineY.toFixed(2)}" width="${W}" height="${(H - baselineY).toFixed(2)}"></rect>
