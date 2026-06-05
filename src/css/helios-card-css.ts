@@ -433,20 +433,29 @@ export const heliosCardStyles = css`
             a card width of ~69 % of the stage height; the side cards keep their txPct +/- 32 / 50 %
             offsets so they still peek out from behind the front card and stay clickable. */
         aspect-ratio: 5 / 7;
-        border-radius: 18px;
-        /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
-            darker than --ha-card-background on both default HA themes. The inner bandeau + stat tiles + chart
-            placeholder then bind to --ha-card-background and end up LIGHTER than this outer body, matching
-            the HA frontend convention that "the card is lighter than its surrounding background" (visible on
-            tile-cards: white-on-page-grey in light theme, dark-gray-on-page-black in dark theme). */
+        /*  Outer card chrome bound to the HA frontend tokens so the CoverFlow card frame matches
+            the surrounding dashboard. Bigger radius than the inner mini-cards (1.5x) so the outer
+            shell visually contains the stack inside it without their corners poking through. */
+        /*  Concentric rounded-rectangle rule: an outer corner should equal the inner radius plus
+            the inner padding so the inner mini-cards visually align with the outer shell. With
+            8 px padding between the inner cards and the outer edge, outer-radius = inner-radius
+            + 8 px keeps the curve continuous regardless of how the HA theme tunes the inner
+            radius via --ha-card-border-radius. */
+        border-radius: calc(var(--ha-card-border-radius, 12px) + 8px);
         background: var(--primary-background-color, var(--ha-card-background, #1c1c1c));
-        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.12));
+        border: var(--ha-card-border-width, 1px) solid var(--ha-card-border-color, var(--divider-color, rgba(255, 255, 255, 0.12)));
         box-shadow:
             0 4px 12px rgba(0, 0, 0, 0.25),
             0 12px 32px rgba(0, 0, 0, 0.18);
+        /*  Mini-cards inside (bandeau, badge strip, radial card, footer clock) sit at the HA
+            frontend's standard 8 px gap. The same 8 px also serves as inner padding so each mini-
+            card breathes inside the outer shell. No per-child margins anywhere on the front face,
+            all spacing comes from this gap + padding pair. */
         display: flex;
         flex-direction: column;
         align-items: stretch;
+        gap: 8px;
+        padding: 8px;
         cursor: pointer;
         transition:
             transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -482,22 +491,37 @@ export const heliosCardStyles = css`
         left, the date group in the centre and the close button (or a spacer on non-front cards) on the right
         regardless of card width. Background and border colours bind to the HA theme tokens so the strip
         follows the active frontend theme. */
-    .dash-cf-card-bandeau
+    /*  The outer Helios ha-card sets a Helios-specific background (#000 for the map area), a
+        480 px min-height floor for the map, and a helios-card container scope. The inner mini-
+        cards on the CoverFlow front face are also ha-cards (so the HA frontend chrome applies)
+        and must opt out of all three: standard HA card background, no min-height floor, and no
+        nested container scope (otherwise @container helios-card queries elsewhere in this file
+        would resolve against the inner mini-card width and mis-fire). */
+    ha-card.dash-cf-card-bandeau,
+    ha-card.dash-radial-badge,
+    ha-card.dash-radial-wrap,
+    ha-card.dash-radial-clock-strip
     {
-        margin: 8px;
+        background:   var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        min-height:   0;
+        height:       auto;
+        width:        auto;
+        container-type: normal;
+    }
+
+    /*  Bandeau: ha-card host, so background / border / border-radius / box-shadow come from the
+        HA frontend's own ha-card styles. Only the layout (grid columns + padding) lives here. */
+    ha-card.dash-cf-card-bandeau
+    {
         padding: 6px 10px;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        color: var(--primary-text-color, #ffffff);
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        /*  Bind to the HA frontend's card-corner token (default 12 px) so every mini-card on the
-            CoverFlow front face shares the same corner radius as the surrounding HA dashboard. */
-        border-radius: var(--ha-card-border-radius, 12px);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         display: grid;
         grid-template-columns: auto 1fr auto;
         align-items: center;
         gap: 8px;
         flex-shrink: 0;
+        min-height: 0;
+        height: auto;
+        width: auto;
     }
     /*  Weather chip on the left. Circular, slightly larger than the inner glyph so the icon sits centred
         without nudging up or down. line-height: 0 on the chip + a flex-centred ha-icon kills the default
@@ -611,53 +635,43 @@ export const heliosCardStyles = css`
         layer over the rings: "now" in primary colour, "hover" in secondary text colour. Four corner
         pills float over the SVG: TL production, TR consumption, BL cloud, BR clock. The SVG is
         capped at a tighter max-width so the dial does not eat the whole card horizontally. */
-    /*  Radial card. Mirrors a Mushroom-style HA card around the SVG dial so the dial reads as one
-        of the stacked mini-cards on the CoverFlow front face. Flex: 1 1 0 so it absorbs whatever
-        height is left between the bandeau / badge strip on top and the clock strip on the bottom,
-        with a small inner padding that keeps the SVG breathing inside the rounded border. */
-    .dash-radial-wrap
+    /*  Radial card. ha-card host so background / border / border-radius / box-shadow come from
+        the HA frontend's own ha-card styles. flex: 1 1 0 so the dial absorbs whatever vertical
+        space is left between the strips above and below it. */
+    ha-card.dash-radial-wrap
     {
         position: relative;
         flex: 1 1 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        margin: 0 8px;
         padding: 6px;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        border-radius: var(--ha-card-border-radius, 12px);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         min-height: 0;
+        height: auto;
+        width: auto;
         overflow: hidden;
     }
-    /*  Badge strip: a transparent flex row containing three HA-frontend-style badges (one per
-        data ring). The badges themselves are the cards, so the strip itself adds no chrome. */
+    /*  Badge strip: a transparent flex row containing three HA-style badges (one per data ring).
+        The badges themselves are ha-cards so the strip itself adds no chrome. */
     .dash-radial-chip-strip
     {
-        margin: 8px 8px 0;
         display: flex;
         align-items: stretch;
         gap: 8px;
         flex-shrink: 0;
     }
-    /*  Footer clock card. Mirrors the bandeau geometry so the front face stays visually balanced
-        top-to-bottom. Rendered conditionally by the helper (skipped when there is no clock to
-        show on past / future cards with no active hover). */
-    .dash-radial-clock-strip
+    /*  Footer clock card. ha-card host, layout only. Rendered conditionally by the helper
+        (skipped on past / future cards with no active hover). */
+    ha-card.dash-radial-clock-strip
     {
-        margin: 8px 8px;
         padding: 6px 10px;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        color: var(--primary-text-color, #ffffff);
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        border-radius: var(--ha-card-border-radius, 12px);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
         flex-shrink: 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        min-height: 32px;
+        min-height: 0;
+        height: auto;
+        width: auto;
     }
     .dash-radial-clock-value
     {
@@ -667,11 +681,12 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         color: var(--primary-text-color, #ffffff);
     }
-    /*  HA-frontend-style badge: a small card with a circular tinted icon chip on the left and the
-        entity label on the right (swapped for the live value during a radial hover). Flex: 1 1 0
-        + min-width: 0 + ellipsis on the text lets the three badges share the strip width evenly
-        and always stay on the same line, regardless of how narrow the CoverFlow card is. */
-    .dash-radial-badge
+    /*  HA-frontend-style badge: ha-card host (chrome from HA frontend) with a circular tinted
+        icon chip on the left + the entity label on the right (swapped for the live value during
+        a radial hover). flex: 1 1 0 + min-width: 0 + ellipsis on the text lets the three badges
+        share the strip width evenly and always stay on the same line, regardless of how narrow
+        the CoverFlow card is. */
+    ha-card.dash-radial-badge
     {
         flex: 1 1 0;
         min-width: 0;
@@ -679,10 +694,9 @@ export const heliosCardStyles = css`
         align-items: center;
         gap: 6px;
         padding: 4px 8px 4px 4px;
-        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
-        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
-        border-radius: var(--ha-card-border-radius, 12px);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        min-height: 0;
+        height: auto;
+        width: auto;
     }
     .dash-radial-badge-chip
     {
@@ -716,10 +730,9 @@ export const heliosCardStyles = css`
         text-overflow: ellipsis;
         min-width: 0;
     }
-    /*  Per-badge accent: the icon chip background + glyph use the HA energy palette tokens for
-        production / battery, and the Helios card primary accent for cloud (cloud is a model-
-        derived value, not an HA entity). The badge body itself stays neutral so the strip reads
-        cohesively, the colour lives in the chip on the left. */
+    /*  Per-badge accent on the icon chip (the badge body itself stays neutral so the strip reads
+        cohesively). Production + battery follow the HA energy palette tokens, cloud uses the
+        secondary-text-color so the icon matches the grey cloud ring rendered in the dial below. */
     .dash-radial-badge-prod .dash-radial-badge-chip
     {
         background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 22%, transparent);
@@ -727,8 +740,8 @@ export const heliosCardStyles = css`
     }
     .dash-radial-badge-batt .dash-radial-badge-chip
     {
-        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 14%, transparent);
-        color: var(--primary-text-color, #ffffff);
+        background: color-mix(in srgb, var(--state-icon-color, var(--primary-text-color, #ffffff)) 18%, transparent);
+        color: var(--state-icon-color, var(--primary-text-color, #ffffff));
     }
     .dash-radial-badge-batt-charge .dash-radial-badge-chip
     {
@@ -742,8 +755,8 @@ export const heliosCardStyles = css`
     }
     .dash-radial-badge-cloud .dash-radial-badge-chip
     {
-        background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
-        color: var(--primary-color, #03a9f4);
+        background: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.65)) 22%, transparent);
+        color: var(--secondary-text-color, rgba(255, 255, 255, 0.65));
     }
     .dash-radial-svg
     {

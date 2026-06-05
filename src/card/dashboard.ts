@@ -473,7 +473,7 @@ function renderCoverflowCard(
             data-delta="${deltaAttr}"
             @click="${(e: Event) => { if (!isFront) { e.stopPropagation(); navigateDashDay(host, cardOffset); } }}"
         >
-            <header class="dash-cf-card-bandeau">
+            <ha-card class="dash-cf-card-bandeau">
                 <span class="dash-cf-card-weather-chip" aria-hidden="true">
                     <ha-icon icon="${weatherIcon}"></ha-icon>
                 </span>
@@ -494,7 +494,7 @@ function renderCoverflowCard(
                 ` : html`
                     <span class="dash-cf-card-bandeau-spacer" aria-hidden="true"></span>
                 `}
-            </header>
+            </ha-card>
 
             ${renderDashCardChipStrip(host, cardOffset, activeOffset, radialData)}
             ${renderRadialDial(host, cardOffset, activeOffset, radialData)}

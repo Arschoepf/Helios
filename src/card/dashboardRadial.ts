@@ -780,7 +780,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     } : undefined;
 
     return html`
-        <div class="dash-radial-wrap" @wheel="${onWheel}">
+        <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
             <svg
                 class="dash-radial-svg"
                 viewBox="0 0 ${VIEWBOX} ${VIEWBOX}"
@@ -860,7 +860,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${hoverProdDot  ? svg`<circle class="dash-radial-dot dash-radial-dot-prod"  cx="${hoverProdDot.x.toFixed(2)}"  cy="${hoverProdDot.y.toFixed(2)}"  r="3"/>` : nothing}
                 ${hoverBattDot  ? svg`<circle class="dash-radial-dot ${hoverBattDot.charging ? 'dash-radial-dot-batt-charge' : 'dash-radial-dot-batt-discharge'}" cx="${hoverBattDot.x.toFixed(2)}" cy="${hoverBattDot.y.toFixed(2)}" r="3"/>` : nothing}
             </svg>
-        </div>
+        </ha-card>
     `;
 }
 
@@ -895,18 +895,18 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
 
     return html`
         <div class="dash-radial-chip-strip">
-            <div class="dash-radial-badge dash-radial-badge-prod">
-                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:solar-power-variant"></ha-icon></span>
+            <ha-card class="dash-radial-badge dash-radial-badge-prod">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:solar-power"></ha-icon></span>
                 <span class="dash-radial-badge-text">${hoverActive && prodW !== null ? formatW(host.hass, prodW) : prodLabel}</span>
-            </div>
-            <div class="dash-radial-badge ${battCls}">
-                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:home-battery"></ha-icon></span>
+            </ha-card>
+            <ha-card class="dash-radial-badge ${battCls}">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:battery"></ha-icon></span>
                 <span class="dash-radial-badge-text">${hoverActive && battText !== null ? battText : battLabel}</span>
-            </div>
-            <div class="dash-radial-badge dash-radial-badge-cloud">
-                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:weather-cloudy"></ha-icon></span>
+            </ha-card>
+            <ha-card class="dash-radial-badge dash-radial-badge-cloud">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:cloud"></ha-icon></span>
                 <span class="dash-radial-badge-text">${hoverActive && cloudP !== null ? formatPct(host.hass, cloudP) : cloudLabel}</span>
-            </div>
+            </ha-card>
         </div>
     `;
 }
@@ -929,8 +929,8 @@ export function renderDashCardClockStrip(host: DashboardHost, cardOffset: number
         : formatHoverClock(currentHourFraction(), host.hass);
 
     return html`
-        <div class="dash-radial-clock-strip">
+        <ha-card class="dash-radial-clock-strip">
             <span class="dash-radial-clock-value">${text}</span>
-        </div>
+        </ha-card>
     `;
 }
