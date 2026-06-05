@@ -615,12 +615,102 @@ export const heliosCardStyles = css`
     .dash-radial-wrap
     {
         position: relative;
-        flex: 1 1 auto;
+        flex: 1 1 0;
         display: flex;
         align-items: center;
         justify-content: center;
-        padding: 0 8px 12px;
+        padding: 6px 10px;
         min-height: 0;
+    }
+    /*  Top chip strip rendered right below the bandeau and footer clock strip rendered at the
+        bottom of the card. Both mirror the bandeau geometry (same margin, padding, radius,
+        background, border) so the front face of the card reads as three matching strips with the
+        radial dial occupying the slack space between them. */
+    .dash-radial-chip-strip,
+    .dash-radial-clock-strip
+    {
+        margin: 0 8px;
+        padding: 6px 10px;
+        background: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(0, 0, 0, 0.12));
+        border-radius: 16px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+    }
+    .dash-radial-clock-strip { margin-bottom: 8px; }
+    .dash-radial-chip-strip  { gap: 14px; }
+    /*  Mushroom-style chip: a circular tinted disc + the entity icon, swapping to the entity
+        text value when the user hovers the radial dial. Width auto-grows when a text value
+        replaces the icon so the chip stays legible. */
+    .dash-radial-chip
+    {
+        min-width: 28px;
+        height: 28px;
+        padding: 0 8px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+        font-size: 12px;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .dash-radial-chip ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    .dash-radial-chip-value
+    {
+        line-height: 1.2;
+    }
+    /*  Per-chip tint. Production / battery follow the HA energy palette tokens so the chip lines
+        up with the matching ring in the radial dial below. Cloud uses the Helios card primary
+        accent because cloud cover is not an HA entity in the user's setup, it is a derived value
+        from our weather model. */
+    .dash-radial-chip-prod
+    {
+        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 22%, transparent);
+        color: var(--energy-solar-color, #ff9800);
+    }
+    .dash-radial-chip-batt
+    {
+        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 14%, transparent);
+        color: var(--primary-text-color, #ffffff);
+    }
+    .dash-radial-chip-batt-charge
+    {
+        background: color-mix(in srgb, var(--energy-battery-in-color, #5cba47) 22%, transparent);
+        color: var(--energy-battery-in-color, #5cba47);
+    }
+    .dash-radial-chip-batt-discharge
+    {
+        background: color-mix(in srgb, var(--energy-battery-out-color, #d8a657) 22%, transparent);
+        color: var(--energy-battery-out-color, #d8a657);
+    }
+    .dash-radial-chip-cloud
+    {
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
+        color: var(--primary-color, #03a9f4);
+    }
+    .dash-radial-clock-value
+    {
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        font-variant-numeric: tabular-nums;
+        color: var(--primary-text-color, #ffffff);
     }
     .dash-radial-svg
     {
@@ -839,20 +929,6 @@ export const heliosCardStyles = css`
     {
         fill: color-mix(in srgb, var(--primary-text-color, #ffffff) 12%, transparent);
         stroke: none;
-        pointer-events: none;
-    }
-    /*  Sunset / sunrise MDI icons inside the dial annulus, kept upright (no radial rotation) and
-        tinted with the sun colour so the user reads them as horizon-crossing markers, not as
-        generic chrome. */
-    .dash-radial-sun-icon
-    {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--helios-sun-color, var(--amber-color, #f59e0b));
-        --mdc-icon-size: 13px;
         pointer-events: none;
     }
     /*  Two cursors. The "now" cursor stays on today only and uses the primary accent colour. The

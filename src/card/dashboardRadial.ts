@@ -27,7 +27,6 @@ import { getSunPosition } from '../engine/sun';
 import { pvInverterMaxW, pvNormalizeToWatts, computePvPowerWeighted } from './pv';
 import { getHomeCoords } from './init';
 import { formatLocalisedNumber } from './format';
-import { pickTranslations } from '../i18n';
 
 
 //Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
@@ -557,15 +556,30 @@ function pointerToHourFraction(svgEl: SVGSVGElement, clientX: number, clientY: n
 }
 
 
-//Render the radial dial for one CoverFlow card. Front card is the only one that wires hover
-//handlers, so a quiet rear card never costs a pointermove dispatch.
-export function renderRadialDial(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult
+//Pre-computed per-card data bundle shared by the radial dial, the top chip strip and the footer
+//clock strip. Holding all three views off the same compute pass avoids walking the history series
+//three times per render.
+export interface RadialDayData
 {
-    const isFront    = cardOffset === activeOffset;
+    dayStartMs:    number;
+    dayEndMs:      number;
+    pastEndHour:   number;
+    hourlyProd:    (number | null)[];
+    hourlyBatt:    (number | null)[];
+    hourlyCloud:   (number | null)[];
+    prodScaleMax:  number;
+    battScaleMax:  number;
+    cloudScaleMax: number;
+    sunRiseSet:    { sunrise: number | null; sunset: number | null };
+    ratioPct:      number;
+}
+
+
+export function prepareRadialDayData(host: DashboardHost, cardOffset: number): RadialDayData
+{
     const dayStartMs = dayStartMsFor(cardOffset);
     const dayEndMs   = dayStartMs + DAY_MS;
     const nowMs      = Date.now();
-    const t          = pickTranslations(host.hass?.language);
 
     let pastEndHour: number;
     if (dayEndMs <= nowMs)        { pastEndHour = 24; }
@@ -576,25 +590,35 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const hourlyBatt  = computeHourlyBattery(host, dayStartMs);
     const hourlyCloud = computeHourlyCloud(host, dayStartMs);
 
-    //Split the signed battery curve into charge (positive) and discharge (positive absolute) per-
-    //hour arrays so two annulus paths can paint inside the same ring with their own colours.
-    const hourlyBattCharge:    (number | null)[] = hourlyBatt.map(v => (v === null ? null : v > 0 ?  v : 0));
-    const hourlyBattDischarge: (number | null)[] = hourlyBatt.map(v => (v === null ? null : v < 0 ? -v : 0));
-
-    //Scales are RELATIVE to the day's own max so the visual variation of each ring reads cleanly.
-    //Anchoring on the inverter cap (5+ kW) used to make the production ring sit at 30 to 50 % of
-    //the available height for the whole sunlight window, so the bell-shape of the day flattened
-    //into a thin uniform band. With a day-relative scale plus a 25 % headroom, peak hours fill the
-    //ring and dip hours read as a clear narrowing.
     let prodMax = 0;
     for (const v of hourlyProd) { if (v !== null && v > prodMax) { prodMax = v; } }
     const prodScaleMax  = Math.max(1, prodMax * 1.25, 500);
-    //Battery share-the-scale: charge + discharge get the same maximum so a 1 kW charge looks the
-    //same height as a 1 kW discharge from the inner-edge baseline.
     let battMax = 0;
     for (const v of hourlyBatt) { if (v !== null && Math.abs(v) > battMax) { battMax = Math.abs(v); } }
     const battScaleMax  = Math.max(1, battMax * 1.25, 500);
     const cloudScaleMax = 100;
+
+    const homeCoords = getHomeCoords(host.config, host.hass);
+    const sunRiseSet = homeCoords ? findSunriseSunset(dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
+    const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
+
+    return { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyBatt, hourlyCloud, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
+}
+
+
+//Render the radial dial for one CoverFlow card. Front card is the only one that wires hover
+//handlers, so a quiet rear card never costs a pointermove dispatch.
+export function renderRadialDial(host: DashboardHost, cardOffset: number, activeOffset: number, data: RadialDayData): TemplateResult
+{
+    const isFront    = cardOffset === activeOffset;
+    const nowMs      = Date.now();
+
+    const { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyBatt, hourlyCloud, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
+
+    //Split the signed battery curve into charge (positive) and discharge (positive absolute) per-
+    //hour arrays so two annulus paths can paint inside the same ring with their own colours.
+    const hourlyBattCharge:    (number | null)[] = hourlyBatt.map(v => (v === null ? null : v > 0 ?  v : 0));
+    const hourlyBattDischarge: (number | null)[] = hourlyBatt.map(v => (v === null ? null : v < 0 ? -v : 0));
 
     //Slice the arrays by the past / future boundary. Past hours feed the solid fills, future hours
     //feed the dashed outlines. Consumption has no future data so its future portion is always empty.
@@ -619,14 +643,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         ? buildRadialOutlinePath(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
         : '';
 
-    const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
-    const sunFillR     = R_SUN_REF * (ratioPct / 100);
+    const sunFillR = R_SUN_REF * (ratioPct / 100);
 
-    //Sunrise / sunset for the displayed day at the home location. Feeds the night-zone arc painted
-    //in the dial annulus so the user sees at a glance how much of the day was dark.
-    const homeCoords  = getHomeCoords(host.config, host.hass);
-    const sunRiseSet  = homeCoords ? findSunriseSunset(dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
-    const nightPath   = buildNightArcPath(sunRiseSet.sunset, sunRiseSet.sunrise, R_DIAL_INNER, R_DIAL_OUTER);
+    //Sunrise / sunset feeds the night-zone arc painted in the dial annulus so the user sees at a
+    //glance how much of the day was dark. Sunrise + sunset values themselves come from the shared
+    //RadialDayData bundle so the same crossings are reused by every consumer.
+    const nightPath = buildNightArcPath(sunRiseSet.sunset, sunRiseSet.sunrise, R_DIAL_INNER, R_DIAL_OUTER);
 
     //Now cursor: only on the current day.
     const showNowCursor = isFront && nowMs >= dayStartMs && nowMs < dayEndMs;
@@ -678,47 +700,6 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
             const [x, y] = polarPt(hf, r);
             hoverBattDot = { x, y, charging: battVal > 0 };
         }
-    }
-
-    //Corner read-outs. When hovering, every corner snaps to the hover hour. Otherwise the production
-    //and consumption corners show the "now" reading (today) or the daily mean (past / forecast), the
-    //cloud corner shows the day's mean cloud cover, and the clock corner shows "now" or the day's
-    //friendly label.
-    const meanOf = (arr: ReadonlyArray<number | null>): number | null =>
-    {
-        let s = 0, c = 0;
-        for (const v of arr) { if (v !== null) { s += v; c++; } }
-        return c > 0 ? s / c : null;
-    };
-    const hourIdxFor = (hf: number): number => Math.max(0, Math.min(23, Math.floor(hf)));
-
-    let cornerProdW:    number | null = null;
-    let cornerBattW:    number | null = null;
-    let cornerCloudPct: number | null = null;
-    let cornerClock:    string | null = null;
-
-    if (hoverHour !== null && hoverHour !== undefined)
-    {
-        const idx        = hourIdxFor(hoverHour);
-        cornerProdW      = hourlyProd[idx];
-        cornerBattW      = hourlyBatt[idx];
-        cornerCloudPct   = hourlyCloud[idx];
-        cornerClock      = formatHoverClock(hoverHour, host.hass);
-    }
-    else if (showNowCursor)
-    {
-        const idx        = hourIdxFor(nowHour);
-        cornerProdW      = hourlyProd[idx];
-        cornerBattW      = hourlyBatt[idx];
-        cornerCloudPct   = hourlyCloud[idx];
-        cornerClock      = formatHoverClock(nowHour, host.hass);
-    }
-    else
-    {
-        cornerProdW      = meanOf(hourlyProd);
-        cornerBattW      = meanOf(hourlyBatt);
-        cornerCloudPct   = meanOf(hourlyCloud);
-        cornerClock      = null;
     }
 
     //Sub-hour + hour ticks. 96 positions around the dial (15 min step). Each tick paints TWO line
@@ -797,28 +778,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         }
     } : undefined;
 
-    const t12 = uses12HourFormat(host.hass);
-    void t12;
-
     return html`
         <div class="dash-radial-wrap" @wheel="${onWheel}">
-            <div class="dash-radial-corner dash-radial-corner-tl">
-                <span class="dash-radial-corner-label">${t.detail.radialProductionLabel ?? t.detail.tileProductionLabel ?? 'Production'}</span>
-                <span class="dash-radial-corner-value dash-radial-corner-prod">${formatW(host.hass, cornerProdW)}</span>
-            </div>
-            <div class="dash-radial-corner dash-radial-corner-tr">
-                <span class="dash-radial-corner-label">${t.detail.radialBatteryLabel ?? 'Battery'}</span>
-                <span class="dash-radial-corner-value ${(cornerBattW ?? 0) >= 0 ? 'dash-radial-corner-batt-charge' : 'dash-radial-corner-batt-discharge'}">${cornerBattW === null ? '—' : `${(cornerBattW >= 0 ? '+' : '−')} ${formatW(host.hass, Math.abs(cornerBattW))}`}</span>
-            </div>
-            <div class="dash-radial-corner dash-radial-corner-bl">
-                <span class="dash-radial-corner-label">${t.detail.radialCloudLabel ?? 'Cloud'}</span>
-                <span class="dash-radial-corner-value dash-radial-corner-cloud">${formatPct(host.hass, cornerCloudPct)}</span>
-            </div>
-            <div class="dash-radial-corner dash-radial-corner-br">
-                <span class="dash-radial-corner-label">${t.detail.radialHourLabel ?? 'Time'}</span>
-                <span class="dash-radial-corner-value dash-radial-corner-clock">${cornerClock ?? '—'}</span>
-            </div>
-
             <svg
                 class="dash-radial-svg"
                 viewBox="0 0 ${VIEWBOX} ${VIEWBOX}"
@@ -844,27 +805,6 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      on top of the dial track. Drawn here (above the track, before the ticks +
                      labels) so the ticks + labels read on top of the night zone. -->
                 ${nightPath ? svg`<path class="dash-radial-night" d="${nightPath}"/>` : nothing}
-
-                <!-- Sunset + sunrise marker icons inside the dial annulus, exactly at the two
-                     horizon-crossing hour fractions. Rendered as foreignObject so the ha-icon custom
-                     element works inside the SVG, kept upright (no radial rotation) for legibility.
-                     Visible only when sunrise + sunset are both resolved (skipped on polar days). -->
-                ${sunRiseSet.sunrise !== null ? (() => {
-                    const [x, y] = polarPt(sunRiseSet.sunrise, R_HOUR_LABEL);
-                    return svg`<foreignObject x="${(x - 6.5).toFixed(2)}" y="${(y - 6.5).toFixed(2)}" width="13" height="13">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="dash-radial-sun-icon">
-                            <ha-icon icon="mdi:weather-sunset-up"></ha-icon>
-                        </div>
-                    </foreignObject>`;
-                })() : nothing}
-                ${sunRiseSet.sunset !== null ? (() => {
-                    const [x, y] = polarPt(sunRiseSet.sunset, R_HOUR_LABEL);
-                    return svg`<foreignObject x="${(x - 6.5).toFixed(2)}" y="${(y - 6.5).toFixed(2)}" width="13" height="13">
-                        <div xmlns="http://www.w3.org/1999/xhtml" class="dash-radial-sun-icon">
-                            <ha-icon icon="mdi:weather-sunset-down"></ha-icon>
-                        </div>
-                    </foreignObject>`;
-                })() : nothing}
 
                 <!-- Past fills (annulus shapes between the ring's inner edge and the per-hour data
                      curve) painted via the evenodd fill rule so the inner subpath carves the centre
@@ -919,6 +859,69 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${hoverProdDot  ? svg`<circle class="dash-radial-dot dash-radial-dot-prod"  cx="${hoverProdDot.x.toFixed(2)}"  cy="${hoverProdDot.y.toFixed(2)}"  r="3"/>` : nothing}
                 ${hoverBattDot  ? svg`<circle class="dash-radial-dot ${hoverBattDot.charging ? 'dash-radial-dot-batt-charge' : 'dash-radial-dot-batt-discharge'}" cx="${hoverBattDot.x.toFixed(2)}" cy="${hoverBattDot.y.toFixed(2)}" r="3"/>` : nothing}
             </svg>
+        </div>
+    `;
+}
+
+
+//Top chip strip rendered right below the card bandeau. Three mushroom-style chips, one per data
+//ring (production / battery / cloud). The chip body is a coloured pill, the inner glyph is the
+//entity icon by default. While the user hovers the radial dial, the icon is replaced by the live
+//value at the hovered hour. When the chip has no value for the hovered hour (e.g. a forecast hour
+//for the battery curve), the icon is kept so the chip never collapses to a "—".
+export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number, activeOffset: number, data: RadialDayData): TemplateResult
+{
+    const isFront     = cardOffset === activeOffset;
+    const hoverHour   = isFront ? host._dashRadialHoverHour : null;
+    const hoverActive = hoverHour !== null && hoverHour !== undefined;
+    const idx         = hoverActive ? Math.max(0, Math.min(23, Math.floor(hoverHour as number))) : -1;
+    const prodW       = idx >= 0 ? data.hourlyProd[idx]  : null;
+    const battW       = idx >= 0 ? data.hourlyBatt[idx]  : null;
+    const cloudP      = idx >= 0 ? data.hourlyCloud[idx] : null;
+
+    const battCls = battW !== null && battW > 0 ? 'dash-radial-chip-batt-charge'
+                  : battW !== null && battW < 0 ? 'dash-radial-chip-batt-discharge'
+                  :                                'dash-radial-chip-batt';
+    const battText = battW === null ? null
+                   : battW === 0    ? formatW(host.hass, 0)
+                   : `${battW > 0 ? '+' : '−'} ${formatW(host.hass, Math.abs(battW))}`;
+
+    return html`
+        <div class="dash-radial-chip-strip">
+            <div class="dash-radial-chip dash-radial-chip-prod">
+                ${hoverActive && prodW !== null
+                    ? html`<span class="dash-radial-chip-value">${formatW(host.hass, prodW)}</span>`
+                    : html`<ha-icon icon="mdi:solar-power-variant"></ha-icon>`}
+            </div>
+            <div class="dash-radial-chip ${battCls}">
+                ${hoverActive && battText !== null
+                    ? html`<span class="dash-radial-chip-value">${battText}</span>`
+                    : html`<ha-icon icon="mdi:home-battery"></ha-icon>`}
+            </div>
+            <div class="dash-radial-chip dash-radial-chip-cloud">
+                ${hoverActive && cloudP !== null
+                    ? html`<span class="dash-radial-chip-value">${formatPct(host.hass, cloudP)}</span>`
+                    : html`<ha-icon icon="mdi:weather-cloudy"></ha-icon>`}
+            </div>
+        </div>
+    `;
+}
+
+
+//Footer clock strip mirrors the bandeau geometry at the bottom of the card. Centred clock readout:
+//live wall-clock by default, hovered hour while the user hovers the radial dial.
+export function renderDashCardClockStrip(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult
+{
+    const isFront     = cardOffset === activeOffset;
+    const hoverHour   = isFront ? host._dashRadialHoverHour : null;
+    const hoverActive = hoverHour !== null && hoverHour !== undefined;
+    const text = hoverActive
+        ? formatHoverClock(hoverHour as number, host.hass)
+        : formatHoverClock(currentHourFraction(), host.hass);
+
+    return html`
+        <div class="dash-radial-clock-strip">
+            <span class="dash-radial-clock-value">${text}</span>
         </div>
     `;
 }

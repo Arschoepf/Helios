@@ -27,7 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { renderRadialDial } from './dashboardRadial';
+import { renderRadialDial, renderDashCardChipStrip, renderDashCardClockStrip, prepareRadialDayData } from './dashboardRadial';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -460,6 +460,10 @@ function renderCoverflowCard(
     const stats = computeDayStats(host, cardOffset);
     const weatherIcon = cloudCoverIcon(stats.avgCloud);
 
+    //Shared per-card data bundle, computed once and threaded into both the radial dial and the
+    //top chip strip so the hourly aggregation only runs once per card per render.
+    const radialData = prepareRadialDayData(host, cardOffset);
+
 
     return html`
         <article
@@ -492,7 +496,9 @@ function renderCoverflowCard(
                 `}
             </header>
 
-            ${renderRadialDial(host, cardOffset, activeOffset)}
+            ${renderDashCardChipStrip(host, cardOffset, activeOffset, radialData)}
+            ${renderRadialDial(host, cardOffset, activeOffset, radialData)}
+            ${renderDashCardClockStrip(host, cardOffset, activeOffset)}
         </article>
     `;
 }
