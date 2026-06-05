@@ -2108,7 +2108,7 @@ export const heliosCardStyles = css`
     .hc-chart-predicted
     {
         stroke-dasharray: 4 3;
-        stroke-width: 1.8;
+        stroke-width: 1;
     }
 
     /*  Per-source PV curves, one per HA Energy solar source on multi-source installs. Drawn UNDER the aggregate
