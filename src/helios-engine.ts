@@ -3635,6 +3635,13 @@ export class HeliosEngine
     //In-flight detail-mode dive tween. Cancelled on every fresh setDetailMode call so a rapid click-exit-click can't stack two animations driving the
     //same camera.
     _detailDiveRaf?: number;
+    //Pre-dive pose snapshot, captured at the moment setDetailMode(true) fires so the symmetric exit
+    //transition restores EXACTLY the pose the user was on before opening the dashboard. Without this
+    //the exit ended at the hemisphere-aware default (CAMERA_PITCH_REST_DEG + initial bearing), which
+    //quietly broke users who had a camera-locked pose dialled in and now had to repoint manually
+    //every time they closed the dashboard. Undefined when no dive is in flight.
+    _detailEntryPitch?:   number;
+    _detailEntryBearing?: number;
     //Wall-clock timestamp until which fresh user gestures are
     //ignored. Bumped on detail-mode exit; the card reads it via
     //isUserGestureSuppressed() to filter timeline scrubs the same
