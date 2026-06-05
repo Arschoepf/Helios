@@ -10,5 +10,5 @@
 //engine itself).
 
 export const CAMERA_PITCH_MIN_DEG  = 30;
-export const CAMERA_PITCH_MAX_DEG  = 85;
+export const CAMERA_PITCH_MAX_DEG  = 60;
 export const CAMERA_PITCH_REST_DEG = 55;
