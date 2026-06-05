@@ -527,10 +527,17 @@ export const heliosCardStyles = css`
         overflow-x: hidden;
         overscroll-behavior: contain;
         scrollbar-width: none;
-        /*  Safari-specific antialiasing hint for the headline values. The translateZ(0) compositor-layer
-            promotion happens via the inline transform set in dashboard.ts, not here, because the inline
-            transform would otherwise override any CSS transform property. */
-        -webkit-font-smoothing: antialiased;
+        /*  Front card centred WITHOUT any transform: top/right/bottom/left set to 0 + margin auto +
+            explicit width / height (from the base rule). Removes every transform from the front card so
+            the browser does not promote it to a compositor layer and the content renders at native pixel
+            resolution. The !important overrides override the inline top/left/transform from the base
+            rule + the JS-set inline transform, which still apply to the side cards. */
+        top:    0 !important;
+        left:   0 !important;
+        right:  0;
+        bottom: 0;
+        margin: auto;
+        transform: none !important;
     }
     /*  Bottom-fade mask removed. mask-image forces the card into a compositor layer which the browser
         then rasterises, the side effect was a subtle blur on the card content. The user can still scroll
