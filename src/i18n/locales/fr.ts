@@ -47,6 +47,7 @@ export const fr: Translations = {
         dayLabelDayBefore:    'Avant-hier',
         dayLabelTomorrow:     'Demain',
         dayLabelDayAfter:     'Après-demain',
+        shadingDomeHint:      'Dôme d\'auto-apprentissage. Chaque cellule représente la production PV moyenne observée pour cette position du soleil au cours de l\'année, au niveau de couverture nuageuse choisi par le curseur ci-dessous. Helios s\'en sert pour affiner la prévision : quand le modèle prédit une production ciel clair, elle est multipliée par le ratio observé à la position actuelle du soleil, donc l\'ombre d\'un arbre à 16 h en hiver est automatiquement prise en compte dans l\'estimation de l\'heure suivante.',
     },
 
     editor:

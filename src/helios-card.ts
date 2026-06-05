@@ -2697,11 +2697,11 @@ export class HeliosCard extends LitElement
                       the slice selector is right next to the chip
                       that opened the view.                          -->
                 ${renderShadingDomeOverlay(this)}
-                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (pct) => {
+                ${renderShadingDomeCloudPicker(this, (pct) => {
                     this._shadingDomeCloudPct = pct;
                     refreshShadingDomeScene(this);
                     this.requestUpdate();
-                }) : nothing}
+                })}
                 ${renderLidarViewOpacityPicker(this, this._onLidarOpacityChange)}
 
             </ha-card>

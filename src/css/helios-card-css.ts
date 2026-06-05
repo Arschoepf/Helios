@@ -3158,6 +3158,38 @@ export const heliosCardStyles = css`
         chip on the far RIGHT is the immediate readout. Shares the
         same pill, same z, same bottom anchor as the LiDAR opacity
         slider so the two modes feel mounted to the same rail. */
+    /*  Explanation block sitting directly above the cloud-cover slider on the Shading Dome view. Same
+        slide-in animation as the slider so the two read as one unit, with a small gap between them so
+        the text does not stick to the slider rail. Border-radius + colours from the HA frontend tokens. */
+    .shading-dome-cloud-hint
+    {
+        position: absolute;
+        bottom: 60px;
+        left: 16px;
+        right: 16px;
+        max-width: 540px;
+        margin: 0 auto;
+        padding: 10px 14px;
+        background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
+        border-radius: var(--ha-card-border-radius, 12px);
+        font-size: 12px;
+        line-height: 1.45;
+        z-index: 49;
+        opacity: 0;
+        transform: translateY(60px);
+        pointer-events: none;
+        transition: transform 0.35s ease, opacity 0.35s ease;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+    }
+    .shading-dome-cloud-hint.is-active
+    {
+        opacity: 1;
+        transform: translateY(0);
+        pointer-events: auto;
+    }
+
     .shading-dome-cloud-slider
     {
         position: absolute;

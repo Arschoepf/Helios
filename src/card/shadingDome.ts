@@ -18,6 +18,7 @@
 
 import { svg, html, nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
+import { pickTranslations } from '../i18n';
 import {
     binFor,
     cellKey,
@@ -536,7 +537,11 @@ export function renderShadingDomeCloudPicker(
     //dome's own fade-out instead of waiting for it to complete.
     const sliderActive = host._shadingDomeMode && host._shadingDomeFadeOutStartMs === null;
     const activeCls    = sliderActive ? ' is-active' : '';
+    const tr = pickTranslations((host as unknown as { hass?: { language?: string } }).hass?.language);
+    const hint = tr.detail.shadingDomeHint
+        ?? 'Auto-learned shading dome. Each cell shows the average PV production observed for that sun position over the year, at the cloud-cover level set by the slider below. Helios uses this map to refine the forecast.';
     return html`
+        <div class="shading-dome-cloud-hint${activeCls}" aria-hidden="${!sliderActive}">${hint}</div>
         <div class="shading-dome-cloud-slider${activeCls}" aria-label="Cloud cover" ?aria-hidden="${!sliderActive}">
             <ha-icon class="shading-dome-cloud-icon shading-dome-cloud-icon--sun"   icon="mdi:weather-sunny"></ha-icon>
             <div class="shading-dome-cloud-track-wrap">

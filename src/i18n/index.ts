@@ -92,6 +92,9 @@ export interface Translations
         dayLabelDayBefore?:     string; //'2 days ago'
         dayLabelTomorrow?:      string; //'Tomorrow'
         dayLabelDayAfter?:      string; //'In 2 days'
+        //Explanation block shown above the cloud-cover slider on the Shading Dome view, so the user
+        //understands what the dome represents without having to dig into docs.
+        shadingDomeHint?:       string; //'Each cell shows what the sun delivers from that sky position...'
     };
 
     editor:

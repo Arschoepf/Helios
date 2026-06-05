@@ -755,7 +755,7 @@ export class HeliosEngine
         {
             return;
         }
-        const clamped = Math.max(0, Math.min(85, deg));
+        const clamped = Math.max(30, Math.min(85, deg));
         this.map.setPitch(clamped);
     }
     //Toggle the lock at runtime so the lock chip applies immediately
@@ -1315,7 +1315,7 @@ export class HeliosEngine
         //plane (90° would reveal the missing under-side of the
         //basemap mesh).
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
-        const PITCH_MIN_DEG = 0;
+        const PITCH_MIN_DEG = 30;
         const PITCH_MAX_DEG = 85;
         let dragRotating  = false;
         let lastPointerX  = 0;
