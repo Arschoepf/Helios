@@ -22,6 +22,7 @@
 
 import { html, svg, nothing, type TemplateResult } from 'lit';
 import type { DashboardHost } from './dashboard';
+import { navigateDashDay } from './dashboard';
 import { getSunPosition } from '../engine/sun';
 import { pvInverterMaxW, pvNormalizeToWatts, computePvPowerWeighted } from './pv';
 import { getHomeCoords } from './init';
@@ -581,9 +582,42 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //pointermove handler below. Same shape as the now cursor but in secondary text colour so the
     //two read as a layered pair when the user hovers over the live day.
     const hoverHour = isFront ? host._dashRadialHoverHour : null;
-    const hoverCursor = (hoverHour !== null && hoverHour !== undefined)
-        ? `M ${polarPt(hoverHour, R_SUN_REF)[0].toFixed(2)} ${polarPt(hoverHour, R_SUN_REF)[1].toFixed(2)} L ${polarPt(hoverHour, R_DIAL_OUTER)[0].toFixed(2)} ${polarPt(hoverHour, R_DIAL_OUTER)[1].toFixed(2)}`
+    const hoverActive = (hoverHour !== null && hoverHour !== undefined);
+    const hoverCursor = hoverActive
+        ? `M ${polarPt(hoverHour as number, R_SUN_REF)[0].toFixed(2)} ${polarPt(hoverHour as number, R_SUN_REF)[1].toFixed(2)} L ${polarPt(hoverHour as number, R_DIAL_OUTER)[0].toFixed(2)} ${polarPt(hoverHour as number, R_DIAL_OUTER)[1].toFixed(2)}`
         : '';
+
+    //Hover spheres: one on each curve at the hover-hour radius. The radius interpolates between
+    //adjacent hour samples so the sphere slides smoothly along the curve as the cursor moves. Each
+    //sphere is a small circle (4 viewBox units) filled with a per-curve radial gradient that
+    //simulates a light source at the upper-left, giving the dot a 3D ball look rather than the
+    //flat-disc look of a plain <circle> + solid fill.
+    const interpRadius = (values: ReadonlyArray<number | null>, scaleMax: number, innerR: number, outerR: number, hour: number): number =>
+    {
+        const hWhole = Math.floor(hour) % 24;
+        const f      = hour - Math.floor(hour);
+        const v      = values[hWhole];
+        const next   = values[(hWhole + 1) % 24];
+        const r      = v === null    ? innerR : innerR + Math.max(0, Math.min(1, v    / scaleMax)) * (outerR - innerR);
+        const rNext  = next === null ? innerR : innerR + Math.max(0, Math.min(1, next / scaleMax)) * (outerR - innerR);
+        return r + (rNext - r) * f;
+    };
+    let hoverProdSphere:  { x: number; y: number } | null = null;
+    let hoverConsSphere:  { x: number; y: number } | null = null;
+    let hoverCloudSphere: { x: number; y: number } | null = null;
+    if (hoverActive)
+    {
+        const hf  = hoverHour as number;
+        const idx = Math.max(0, Math.min(23, Math.floor(hf)));
+        //Only paint a sphere when the curve actually has a value at that hour, otherwise the
+        //sphere would slam into the inner edge and read as a stuck dot.
+        const prodVal  = hourlyProd[idx];
+        const consVal  = hourlyCons[idx];
+        const cloudVal = hourlyCloud[idx];
+        if (prodVal  !== null) { const r = interpRadius(hourlyProd,  prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER,  hf); const [x, y] = polarPt(hf, r); hoverProdSphere  = { x, y }; }
+        if (consVal  !== null) { const r = interpRadius(hourlyCons,  consScaleMax,  R_CONS_INNER,  R_CONS_OUTER,  hf); const [x, y] = polarPt(hf, r); hoverConsSphere  = { x, y }; }
+        if (cloudVal !== null) { const r = interpRadius(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverCloudSphere = { x, y }; }
+    }
 
     //Corner read-outs. When hovering, every corner snaps to the hover hour. Otherwise the production
     //and consumption corners show the "now" reading (today) or the daily mean (past / forecast), the
@@ -652,16 +686,17 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         tickLines.push(svg`<line class="${cls}" x1="${ix1.toFixed(2)}" y1="${iy1.toFixed(2)}" x2="${ix2.toFixed(2)}" y2="${iy2.toFixed(2)}"/>`);
     }
 
-    //Hour labels: 24 around the perimeter. Format respects HA's 12 / 24 setting. Skip 13..23 when
-    //the dial is in 12-hour mode AND the layout already shows their 1..11 counterparts on the
-    //afternoon quadrant. We DO render the duplicate label so the clock reads like a real analog face
-    //(both 1 AM and 1 PM share the same digit, the position carries the meaning).
+    //Hour labels: 24 around the perimeter. Format respects HA's 12 / 24 setting. The label is rotated
+    //radially so its top points outward from the centre (12 upright at top, 18 rotated 90 deg cw at
+    //right, 0 upside-down at bottom, 6 rotated 90 deg ccw at left). The rotation matches the dial's
+    //hand-of-a-clock convention so the user reads the numbers naturally walking around the dial.
     const hourLabels: TemplateResult[] = [];
     for (let h = 0; h < 24; h++)
     {
-        const [x, y] = polarPt(h, R_HOUR_LABEL);
-        const lbl    = formatDialHourLabel(h, host.hass);
-        hourLabels.push(svg`<text class="dash-radial-hour-label" x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" dominant-baseline="central">${lbl}</text>`);
+        const [x, y]   = polarPt(h, R_HOUR_LABEL);
+        const lbl      = formatDialHourLabel(h, host.hass);
+        const rotation = ((h - 12) % 24) * 15;
+        hourLabels.push(svg`<text class="dash-radial-hour-label" x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" dominant-baseline="central" transform="rotate(${rotation} ${x.toFixed(2)} ${y.toFixed(2)})">${lbl}</text>`);
     }
 
     //Pointer handlers (front card only). Imperative because every pointermove on a multi-second
@@ -681,30 +716,47 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         host._dashRadialHoverHour = null;
         host.requestUpdate();
     } : undefined;
+    //Desktop wheel-scroll over the front card cycles through the day offsets, scroll-down advances
+    //one day forward, scroll-up moves back one day. Wheel events are throttled by accumulating the
+    //deltaY value, so a continuous trackpad swipe doesn't fire dozens of navigations per second.
+    const onWheel = isFront ? (e: WheelEvent) =>
+    {
+        e.preventDefault();
+        const acc = (host._dashRadialWheelAcc ?? 0) + e.deltaY;
+        const THRESHOLD = 60;
+        if (Math.abs(acc) >= THRESHOLD)
+        {
+            const dir = acc > 0 ? 1 : -1;
+            host._dashRadialWheelAcc = 0;
+            navigateDashDay(host, (host._dashDayOffset ?? 0) + dir);
+        }
+        else
+        {
+            host._dashRadialWheelAcc = acc;
+        }
+    } : undefined;
 
     const t12 = uses12HourFormat(host.hass);
     void t12;
 
     return html`
-        <div class="dash-radial-wrap">
+        <div class="dash-radial-wrap" @wheel="${onWheel}">
             <div class="dash-radial-corner dash-radial-corner-tl">
-                <span class="dash-radial-corner-label">${t.detail.tileProductionLabel ?? 'Production'}</span>
+                <span class="dash-radial-corner-label">${t.detail.radialProductionLabel ?? t.detail.tileProductionLabel ?? 'Production'}</span>
                 <span class="dash-radial-corner-value dash-radial-corner-prod">${formatW(host.hass, cornerProdW)}</span>
             </div>
             <div class="dash-radial-corner dash-radial-corner-tr">
-                <span class="dash-radial-corner-label">${t.detail.tileImportLabel ?? 'Consumption'}</span>
+                <span class="dash-radial-corner-label">${t.detail.radialImportLabel ?? t.detail.tileImportLabel ?? 'Import'}</span>
                 <span class="dash-radial-corner-value dash-radial-corner-cons">${formatW(host.hass, cornerConsW)}</span>
             </div>
             <div class="dash-radial-corner dash-radial-corner-bl">
-                <span class="dash-radial-corner-label">${t.detail.todayPeak ? 'Cloud' : 'Cloud'}</span>
+                <span class="dash-radial-corner-label">${t.detail.radialCloudLabel ?? 'Cloud'}</span>
                 <span class="dash-radial-corner-value dash-radial-corner-cloud">${formatPct(host.hass, cornerCloudPct)}</span>
             </div>
-            ${cornerClock !== null ? html`
-                <div class="dash-radial-corner dash-radial-corner-br">
-                    <span class="dash-radial-corner-label">${t.detail.todayLabel ?? 'Time'}</span>
-                    <span class="dash-radial-corner-value dash-radial-corner-clock">${cornerClock}</span>
-                </div>
-            ` : nothing}
+            <div class="dash-radial-corner dash-radial-corner-br">
+                <span class="dash-radial-corner-label">${t.detail.radialHourLabel ?? 'Time'}</span>
+                <span class="dash-radial-corner-value dash-radial-corner-clock">${cornerClock ?? '—'}</span>
+            </div>
 
             <svg
                 class="dash-radial-svg"
@@ -713,6 +765,27 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 @pointermove="${onPointerMove}"
                 @pointerleave="${onPointerLeave}"
             >
+                <defs>
+                    <!-- Sphere gradients for the hover dots: each curve gets its own radial gradient
+                         with a light highlight at the top-left of the dot, simulating a 3D ball lit
+                         from the upper-left. This replaces the flat-disc look of a plain circle +
+                         solid fill. -->
+                    <radialGradient id="dash-radial-sphere-prod-${cardOffset}" cx="35%" cy="32%" r="65%">
+                        <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.85"/>
+                        <stop offset="35%"  stop-color="var(--energy-solar-color, #ff9800)" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
+                    </radialGradient>
+                    <radialGradient id="dash-radial-sphere-cons-${cardOffset}" cx="35%" cy="32%" r="65%">
+                        <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.85"/>
+                        <stop offset="35%"  stop-color="var(--energy-grid-consumption-color, #488fc2)" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
+                    </radialGradient>
+                    <radialGradient id="dash-radial-sphere-cloud-${cardOffset}" cx="35%" cy="32%" r="65%">
+                        <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.85"/>
+                        <stop offset="35%"  stop-color="var(--secondary-text-color, rgba(255, 255, 255, 0.7))" stop-opacity="1"/>
+                        <stop offset="100%" stop-color="#000000" stop-opacity="0.45"/>
+                    </radialGradient>
+                </defs>
                 <!-- Ring tracks. Each track is a circle with stroke-width = annulus thickness, so
                      the visual is a real ring with breathing room between it and its neighbours.
                      The dial track is drawn here too because the hour labels + sub-hour ticks live
@@ -737,17 +810,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
                 ${consPastPath    ? svg`<path class="dash-radial-cons-fill"    fill-rule="evenodd" d="${consPastPath}"/>`    : nothing}
 
-                <!-- Sun: just a reference rim + a scaled inner fill. No halo and no tinted bg disc,
-                     either of which would fight the reference rim and skew the visual reading of
-                     the irradiance ratio. -->
+                <!-- Sun: just a reference rim + a scaled inner fill. The diagram itself is enough
+                     to read the irradiance ratio (the disc fills the rim at 100 %, vanishes at 0 %),
+                     no numeric percentage on top. The visual matches the 3D card sun on the map. -->
                 <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}"/>
                 <circle class="dash-radial-sun-rim"  cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"
                         fill="none"/>
-
-                <!-- Irradiance percentage centred on the disc, permanent. -->
-                <text class="dash-radial-irrad-label" x="${CENTER}" y="${CENTER}" text-anchor="middle" dominant-baseline="central">
-                    ${Math.round(ratioPct)}%
-                </text>
 
                 <!-- Sundial perimeter: quarter-hour ticks then hour labels. The labels themselves
                      anchor the hour positions, no separate full-tick is drawn. -->
@@ -759,6 +827,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 
                 <!-- Hover cursor (any front card with an active hover hour). -->
                 ${hoverCursor ? svg`<path class="dash-radial-cursor-hover" d="${hoverCursor}"/>` : nothing}
+
+                <!-- Hover spheres: one per data ring at the hover-hour value. Top layer so they are
+                     always visible above the curves. -->
+                ${hoverCloudSphere ? svg`<circle class="dash-radial-sphere" cx="${hoverCloudSphere.x.toFixed(2)}" cy="${hoverCloudSphere.y.toFixed(2)}" r="4" fill="url(#dash-radial-sphere-cloud-${cardOffset})"/>` : nothing}
+                ${hoverProdSphere  ? svg`<circle class="dash-radial-sphere" cx="${hoverProdSphere.x.toFixed(2)}"  cy="${hoverProdSphere.y.toFixed(2)}"  r="4" fill="url(#dash-radial-sphere-prod-${cardOffset})"/>`  : nothing}
+                ${hoverConsSphere  ? svg`<circle class="dash-radial-sphere" cx="${hoverConsSphere.x.toFixed(2)}"  cy="${hoverConsSphere.y.toFixed(2)}"  r="4" fill="url(#dash-radial-sphere-cons-${cardOffset})"/>`  : nothing}
             </svg>
         </div>
     `;

@@ -1030,22 +1030,12 @@ export function renderChart(host: ChartHost): TemplateResult
                     x2="${hoverX.toFixed(2)}" y2="${H}"
                 ></line>
                 ${isFinite(hoverYCld) ? svg`
-                    <circle
-                        class="hc-hover-dot"
-                        cx="${hoverX.toFixed(2)}"
-                        cy="${hoverYCld.toFixed(2)}"
-                        r="2.4"
-                        fill="${cloudColor}"
-                    ></circle>
+                    <circle class="hc-hover-dot"           cx="${hoverX.toFixed(2)}"           cy="${hoverYCld.toFixed(2)}"           r="2.4" fill="${cloudColor}"></circle>
+                    <circle class="hc-hover-dot-highlight" cx="${(hoverX - 0.7).toFixed(2)}"   cy="${(hoverYCld - 0.7).toFixed(2)}"   r="0.8" fill="#ffffff"></circle>
                 ` : ''}
                 ${isFinite(hoverYIrr) ? svg`
-                    <circle
-                        class="hc-hover-dot"
-                        cx="${hoverX.toFixed(2)}"
-                        cy="${hoverYIrr.toFixed(2)}"
-                        r="2.4"
-                        fill="${sunColor}"
-                    ></circle>
+                    <circle class="hc-hover-dot"           cx="${hoverX.toFixed(2)}"           cy="${hoverYIrr.toFixed(2)}"           r="2.4" fill="${sunColor}"></circle>
+                    <circle class="hc-hover-dot-highlight" cx="${(hoverX - 0.7).toFixed(2)}"   cy="${(hoverYIrr - 0.7).toFixed(2)}"   r="0.8" fill="#ffffff"></circle>
                 ` : ''}
             ` : nothing}
         </svg>
@@ -1586,13 +1576,8 @@ export function renderPvChart(host: ChartHost): TemplateResult
                     x1="${hoverX.toFixed(2)}" y1="0"
                     x2="${hoverX.toFixed(2)}" y2="${H}"
                 ></line>
-                <circle
-                    class="hc-hover-dot"
-                    cx="${hoverX.toFixed(2)}"
-                    cy="${hoverY.toFixed(2)}"
-                    r="2.4"
-                    fill="${pvColor}"
-                ></circle>
+                <circle class="hc-hover-dot"           cx="${hoverX.toFixed(2)}"         cy="${hoverY.toFixed(2)}"         r="2.4" fill="${pvColor}"></circle>
+                <circle class="hc-hover-dot-highlight" cx="${(hoverX - 0.7).toFixed(2)}" cy="${(hoverY - 0.7).toFixed(2)}" r="0.8" fill="#ffffff"></circle>
             ` : nothing}
         </svg>
     `;

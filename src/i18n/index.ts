@@ -100,6 +100,13 @@ export interface Translations
         //is still in flight. The banner retires for the rest of the card lifetime once every phase
         //has completed once, so this string is only ever seen during the initial wait.
         loadingLabel?:          string; //'Fetching data...'
+        //Corner pill labels on the dashboard radial dial. radialHourLabel carries the "what time is
+        //it" sense, so the translation is the conversational noun for clock time, not the literal
+        //"hour" unit ("Time" in EN, "Heure" in FR).
+        radialProductionLabel?: string; //'Production'
+        radialImportLabel?:     string; //'Import'
+        radialCloudLabel?:      string; //'Cloud'
+        radialHourLabel?:       string; //'Time'
     };
 
     editor:

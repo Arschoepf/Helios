@@ -626,16 +626,27 @@ export const heliosCardStyles = css`
     {
         /*  Width caps at 92 % of the available card column so the dial reads as the focal element
             without crowding the side gutters. Height caps at the available space, the aspect ratio
-            stays 1 / 1 so the dial is always a true circle. */
+            stays 1 / 1 so the dial is always a true circle. touch-action: none disables the
+            browser's default scroll / pan / zoom gestures inside the dial so a finger drag for the
+            hover cursor on mobile no longer scrolls the page underneath. */
         width:      min(100%, 92%);
         height:     auto;
         max-height: 100%;
         aspect-ratio: 1 / 1;
         display: block;
+        touch-action: none;
+    }
+    /*  Hover dots. Filled with their per-curve radial gradient (see <defs> in dashboardRadial.ts).
+        A soft drop-shadow gives the dot some lift over the curve below. */
+    .dash-radial-sphere
+    {
+        pointer-events: none;
+        filter: drop-shadow(0 0.5px 1.5px rgba(0, 0, 0, 0.35));
     }
 
     /*  Corner pills, absolutely positioned so they float over the SVG without nudging its layout.
-        TL production, TR consumption, BL cloud, BR clock (clock only when a cursor is active). */
+        TL production, TR import, BL cloud, BR clock (the four together form a fixed-width matched
+        set so the user reads them as one consistent legend regardless of the underlying value). */
     .dash-radial-corner
     {
         position: absolute;
@@ -643,10 +654,12 @@ export const heliosCardStyles = css`
         flex-direction: column;
         line-height: 1.2;
         pointer-events: none;
-        padding: 4px 8px;
+        padding: 4px 10px;
         background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) 80%, transparent);
         border-radius: 8px;
         backdrop-filter: blur(2px);
+        width: 78px;
+        box-sizing: border-box;
     }
     .dash-radial-corner-tl { top:    6px;  left:  8px; text-align: left;  }
     .dash-radial-corner-tr { top:    6px;  right: 8px; text-align: right; }
@@ -779,18 +792,6 @@ export const heliosCardStyles = css`
         stroke: color-mix(in srgb, var(--helios-sun-color, #f59e0b) 70%, #000000 30%);
         stroke-width: 1.4;
     }
-    .dash-radial-irrad-label
-    {
-        font-family: inherit;
-        font-size: 18px;
-        font-weight: 600;
-        fill: var(--primary-text-color, #ffffff);
-        paint-order: stroke;
-        stroke: color-mix(in srgb, var(--ha-card-background, #1c1c1c) 70%, transparent);
-        stroke-width: 2;
-        font-variant-numeric: tabular-nums;
-    }
-
     /*  Two cursors. The "now" cursor stays on today only and uses the primary accent colour. The
         "hover" cursor follows the pointer on any front card and uses the secondary text colour so
         the two read as a layered pair when the user hovers over today. Both anchor at the outer
@@ -2001,6 +2002,15 @@ export const heliosCardStyles = css`
         stroke: var(--card-background-color, #ffffff);
         stroke-width: 1;
         vector-effect: non-scaling-stroke;
+        pointer-events: none;
+    }
+    /*  Bright highlight overlay rendered on top of the hover dot, offset to its upper-left so the
+        dot reads as a lit 3D sphere rather than the flat disc the bare colored circle gives. The
+        chart SVG uses preserveAspectRatio="none" so the dot still distorts to an ellipse on wide
+        cards, but the highlight is enough to give the visual a sphere feel. */
+    .hc-hover-dot-highlight
+    {
+        fill-opacity: 0.55;
         pointer-events: none;
     }
 

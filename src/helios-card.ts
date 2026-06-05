@@ -514,6 +514,9 @@ export class HeliosCard extends LitElement
     //Hover state for the radial dial in the dashboard. Hour fraction in [0..24) when the cursor sits
     //over the SVG, null otherwise. Front card only, the rear cards never wire pointer handlers.
     @state() _dashRadialHoverHour: number | null = null;
+    //Mouse wheel accumulator for the dashboard radial dial day-navigation gesture. Not a @state on
+    //purpose: every wheel event mutates this slot and a @state would re-render on every tick.
+    _dashRadialWheelAcc: number = 0;
     //Hover position on the timeline chart cards, expressed as a
     //percent of the visible time range. Null when the pointer is
     //outside the cards; drives the hover guide line, the per-curve

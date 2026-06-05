@@ -50,6 +50,12 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //Radial dial hover hour, [0..24) when the cursor sits over the SVG, null otherwise. Front card
     //only, the rear cards never wire their pointer handlers.
     _dashRadialHoverHour:  number | null;
+    //Mouse wheel accumulator for the radial dial day-navigation gesture. Each tick of a trackpad or
+    //a notched wheel adds to the running sum; when the magnitude crosses a threshold the dashboard
+    //navigates one day and the accumulator resets. Reset to 0 between dashboard sessions in
+    //handleHomeClick. Mutable, not @state, because every wheel event would otherwise trigger a Lit
+    //re-render.
+    _dashRadialWheelAcc?:  number;
     //Timestamp the detail panel opened at. Drives the headline count-up animation on the produced-kWh + forecast-kWh figures so the
     //numbers tick from 0 up to the real value over ~700 ms whenever the user enters detail mode. Reset to null on exit so a subsequent
     //re-open replays the animation. Null while the panel is closed.
