@@ -1,7 +1,7 @@
 import maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
-import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './engine/weather';
+import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './engine/buildings';
 import { projectExtrusionShadows } from './engine/shadows';
 import { resolveLidarSource } from './engine/lidar';
@@ -466,6 +466,11 @@ export class HeliosEngine
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
+    //Consecutive non-429 failure count (5xx, network, JSON parse). Drives a graduated back-off so
+    //a server outage at the previous flat 60 s cadence (= 1440 retries / day per card, compounded
+    //across multiple cards / tabs) can no longer pile up the kind of traffic that triggers an IP
+    //rate limit even without a single 429 from the API. Resets on success.
+    private _otherErrorStreak = 0;
 
     private _fetchAbortController?: AbortController;
     private _resizeDebounceTimer?:  number;
@@ -3523,9 +3528,10 @@ export class HeliosEngine
             );
             this._renderForCurrentSelection();
 
-            //Successful fetch: reset the rate-limit back-off so the
-            //next 429 (if any) starts again at the shortest delay.
-            this._rateLimitStreak = 0;
+            //Successful fetch: reset both back-off streaks so the next failure (if any) starts again
+            //at the shortest delay.
+            this._rateLimitStreak  = 0;
+            this._otherErrorStreak = 0;
 
             if (this._selectedTime === null)
             {
@@ -3586,11 +3592,14 @@ export class HeliosEngine
             }
             else
             {
-                //Non-rate-limit error (network blip, 500, ...): try
-                //again in 1 minute, repeatedly. These usually clear up
-                //fast and don't merit the same back-off treatment.
-                retryDelay = 60_000;
-                this._weatherTimer = window.setInterval(
+                //Non-rate-limit error (network blip, 500, JSON parse): graduated back-off table
+                //(1 min, 5 min, 15 min, 60 min cap) instead of the previous flat 60 s setInterval.
+                //setTimeout (not setInterval) so we only schedule ONE retry: if it succeeds the
+                //streak resets, if it fails again we re-enter this branch and pick the next slot.
+                const idx = Math.min(this._otherErrorStreak, OTHER_ERROR_BACKOFF_MS.length - 1);
+                retryDelay = OTHER_ERROR_BACKOFF_MS[idx];
+                this._otherErrorStreak++;
+                this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
                     retryDelay
                 );
@@ -3692,6 +3701,13 @@ export class HeliosEngine
                 window.clearInterval(this._skyTimer);
                 this._skyTimer = undefined;
             }
+            //Drop the weather refresh timer too. Until this fix, a card sitting in a hidden tab or
+            //scrolled off-screen kept hitting Open-Meteo every 10 min indefinitely, the timer
+            //callback fired and `_refreshWeather` ran end-to-end (cache miss after the 45 min TTL =
+            //a real network request). On a multi-monitor / multi-tab setup that could account for
+            //hundreds of requests per day per stale tab. _refreshWeather will re-arm naturally on
+            //un-pause via the normal success path.
+            this._clearWeatherTimer();
         }
         else
         {
@@ -3706,6 +3722,13 @@ export class HeliosEngine
                     }
                     this._refreshShadowsAndAtmosphere();
                 }, 60_000);
+            }
+            //Re-arm the weather refresh: one immediate fetch (which reads from localStorage cache
+            //inside its 45 min TTL so a quick visibility flip costs nothing) and the success path
+            //schedules the 10 min interval.
+            if (this._weatherTimer === undefined)
+            {
+                this._refreshWeather(this._fetchLat, this._fetchLon);
             }
         }
     }
@@ -4989,7 +5012,12 @@ export class HeliosEngine
             weather:
             {
                 samples:          this._homeHourlyData?.times.length ?? 0,
-                rateLimitStreak:  this._rateLimitStreak
+                rateLimitStreak:  this._rateLimitStreak,
+                //Module-level counters shared across every Helios card on the page (the localStorage
+                //cache + the inflight dedup map both live at module scope), so the figures reflect
+                //the COMBINED Open-Meteo traffic of this browser session. Most useful to read when
+                //debugging a rate-limit or audit complaint.
+                openMeteoStats:   getWeatherFetchStats()
             },
             timeline:
             {
