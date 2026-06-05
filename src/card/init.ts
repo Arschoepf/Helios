@@ -14,6 +14,7 @@ import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
 import { refreshShadingDomeScene, type ShadingDomeHost } from './shadingDome';
 import type { ChartSeries } from './charts';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 //Visual config keys that the engine reacts to via updateConfig(). Editing any of these from the visual editor or via the YAML hot-
@@ -219,7 +220,7 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
 //OverlaysHost so refreshOverlays(host) lands cleanly inside the
 //engine onWeatherUpdate / onMapTransform callbacks; the rest is
 //the engine + init lifecycle state the bootstrap mutates.
-export interface InitHost extends OverlaysHost
+export interface InitHost extends OverlaysHost, LoadingTrackerHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
@@ -526,10 +527,20 @@ function wireEngineCallbacks(host: InitHost): void
     host._engine.onFetchStart = () =>
     {
         host._fetching = true;
+        beginLoadingPhase(host, 'weather-forecast');
     };
     host._engine.onFetchEnd = () =>
     {
         host._fetching = false;
+        endLoadingPhase(host, 'weather-forecast');
+    };
+    host._engine.onBuildingsFetchStart = () =>
+    {
+        beginLoadingPhase(host, 'buildings');
+    };
+    host._engine.onBuildingsFetchEnd = () =>
+    {
+        endLoadingPhase(host, 'buildings');
     };
     host._engine.onWeatherUpdate = data =>
     {
@@ -625,10 +636,12 @@ function wireEngineCallbacks(host: InitHost): void
     host._engine.onShadowComputeStart = () =>
     {
         host._shadowBusy = true;
+        beginLoadingPhase(host, 'lidar-raster');
     };
     host._engine.onShadowComputeEnd = () =>
     {
         host._shadowBusy = false;
+        endLoadingPhase(host, 'lidar-raster');
     };
     //Exposure compute busy flag: same pattern, used by the mode-bar
     //LiDAR button to swap to a spinner + lock mode-switching while
@@ -636,6 +649,8 @@ function wireEngineCallbacks(host: InitHost): void
     host._engine.onLidarExposureBusyChange = (busy: boolean): void =>
     {
         host._lidarExposureBusy = busy;
+        if (busy) { beginLoadingPhase(host, 'lidar-exposure'); }
+        else      { endLoadingPhase(host, 'lidar-exposure'); }
     };
 
 }

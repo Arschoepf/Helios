@@ -95,6 +95,11 @@ export interface Translations
         //Explanation block shown above the cloud-cover slider on the Shading Dome view, so the user
         //understands what the dome represents without having to dig into docs.
         shadingDomeHint?:       string; //'Each cell shows what the sun delivers from that sky position...'
+        //Label inside the top-of-card loading banner, visible while the first hydration wave of
+        //data fetches (PV, battery, grid, solar radiation, daily totals, weather, buildings, LiDAR)
+        //is still in flight. The banner retires for the rest of the card lifetime once every phase
+        //has completed once, so this string is only ever seen during the initial wait.
+        loadingLabel?:          string; //'Fetching data...'
     };
 
     editor:

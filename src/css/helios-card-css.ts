@@ -3077,6 +3077,72 @@ export const heliosCardStyles = css`
         pointer-events: auto;
     }
 
+
+    /*  Loading banner. Shown at the top of the card while the first hydration wave of data fetches is
+        still in flight (PV, battery, grid, solar radiation, daily totals, weather, buildings, LiDAR).
+        Retires for the rest of the card lifetime once every started phase has finished once, so
+        routine background refreshes (mode switches, scrub, time tick) do NOT bring it back. Same
+        visual vocabulary as .shading-dome-cloud-hint (rounded card, themed bg + border + shadow) so
+        the user reads one consistent loading language. Slide-in from the top + opacity, slide-out
+        downwards via the same pure CSS transition pattern (no keyframes, no animation: forwards).
+        Sits above the timeline + mode bar at z-index 60. */
+    .loading-banner
+    {
+        position: absolute;
+        top: 12px;
+        left: 16px;
+        right: 16px;
+        max-width: 380px;
+        margin: 0 auto;
+        padding: 8px 14px 10px;
+        background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
+        border-radius: 16px;
+        font-size: 12px;
+        line-height: 1.4;
+        z-index: 60;
+        opacity: 0;
+        transform: translateY(-60px);
+        pointer-events: none;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+        transition: opacity 0.35s ease, transform 0.35s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .loading-banner.is-visible
+    {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .loading-banner-label
+    {
+        font-weight: 500;
+        opacity: 0.85;
+        text-align: center;
+    }
+    /*  Track: tinted divider colour so the bar reads against any theme background. */
+    .loading-banner-bar
+    {
+        position: relative;
+        width: 100%;
+        height: 6px;
+        background: var(--divider-color, rgba(255, 255, 255, 0.15));
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .loading-banner-bar-fill
+    {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        background: var(--primary-color, #03a9f4);
+        border-radius: 999px;
+        transition: width 0.35s ease;
+    }
+
     .shading-dome-cloud-slider
     {
         position: absolute;

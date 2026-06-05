@@ -13,6 +13,7 @@
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 //-----------------------------------------------------------------
@@ -129,7 +130,7 @@ export interface RadiationHistory
 }
 
 //Structural surface the host card exposes to this module.
-export interface RadiationHost
+export interface RadiationHost extends LoadingTrackerHost
 {
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
@@ -294,6 +295,7 @@ export async function fetchSolarRadiationHistory(
         return;
     }
     host._solarRadiationFetching = true;
+    beginLoadingPhase(host, 'solar-radiation');
     try
     {
         const now = new Date();
@@ -363,6 +365,7 @@ export async function fetchSolarRadiationHistory(
     finally
     {
         host._solarRadiationFetching = false;
+        endLoadingPhase(host, 'solar-radiation');
     }
 }
 

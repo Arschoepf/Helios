@@ -72,6 +72,7 @@ import
 } from './card/timeline';
 import { enterLidarView, exitLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
 import type { CardMode } from './card/card-mode';
+import { renderLoadingBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
 import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime, clearGridModuleCaches } from './card/grid';
 import {
     subscribeEnergyPrefs,
@@ -530,6 +531,13 @@ export class HeliosCard extends LitElement
     //the overlay was just flashing for nothing).
     _energyDefaultsLoaded   = false;
     private _dailyTotalsKicked = false;
+    //Loading-tracker state. _loadingPhases maps each registered phase id to its progress (started /
+    //done). _loadingHasCompleted latches once every started phase reaches done for the FIRST time,
+    //after that the banner stays hidden for the rest of the card lifetime so routine background
+    //refreshes do not flash the "Fetching data..." card up again. See src/card/loading-tracker.ts
+    //for the helpers that mutate these.
+    @state() _loadingPhases:       ReadonlyMap<LoadingPhaseId, LoadingPhaseState> = new Map();
+    @state() _loadingHasCompleted: boolean = false;
     //True while the home is "focused": the existing overlay HUD is
     //hidden, the camera is eased to a closer / more pitched pose,
     //and a detail dashboard panel takes over. Toggled by clicking
@@ -838,6 +846,9 @@ export class HeliosCard extends LitElement
         clearGridModuleCaches();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
+        //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.
+        this._loadingPhases       = new Map();
+        this._loadingHasCompleted = false;
         this.requestUpdate();
     }
 
@@ -1168,6 +1179,9 @@ export class HeliosCard extends LitElement
                 this._shadingDomeSvgVisible = false;
                 this._cloudMode          = false;
                 this._detailMode         = false;
+                //New home means a fresh hydration wave, surface the loading banner again.
+                this._loadingPhases       = new Map();
+                this._loadingHasCompleted = false;
             }
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
@@ -1933,6 +1947,8 @@ export class HeliosCard extends LitElement
             <ha-card class="${cardClasses}">
 
                 <div id="map-container"></div>
+
+                ${renderLoadingBanner(this)}
 
                 ${hasApiKey && this._timeRange ? html`
                     <div

@@ -8,6 +8,7 @@ import { formatLocalisedNumber } from './format';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 //-----------------------------------------------------------------
@@ -87,7 +88,7 @@ export function resolveBatteryEntities(defaults: EnergyDefaults): { powerEntity:
 //fields are typed non-readonly so refresh / fetch helpers can
 //assign them; Lit's @state reactivity is preserved because each
 //assignment hits the same setter the decorator installed.
-export interface BatteryHost
+export interface BatteryHost extends LoadingTrackerHost
 {
     readonly hass:       any;
     readonly _timeRange: { start: Date; end: Date } | null;
@@ -495,6 +496,7 @@ export async function fetchBatteryHistory(
         return;
     }
     host._batteryFetching = true;
+    beginLoadingPhase(host, 'battery-history');
     try
     {
         //History only exists up to "now", the future half of the timeline has no battery data. Clamp the fetch end so we don't waste a roundtrip on
@@ -604,6 +606,7 @@ export async function fetchBatteryHistory(
     finally
     {
         host._batteryFetching = false;
+        endLoadingPhase(host, 'battery-history');
     }
 }
 

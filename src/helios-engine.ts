@@ -493,6 +493,10 @@ export class HeliosEngine
     public onFetchStart?:    () => void;
     public onFetchEnd?:      () => void;
     public onWeatherUpdate?: (data: WeatherData) => void;
+    //Buildings GeoJSON fetch lifecycle. Fired around fetchBuildingsAroundHome so the card can track
+    //the buildings phase in the loading banner.
+    public onBuildingsFetchStart?: () => void;
+    public onBuildingsFetchEnd?:   () => void;
 
     //Irradiance samples pushed in by the card from a HA solar-radiation
     //sensor: the entity's history (recorder snapshots) up to "now",
@@ -3062,6 +3066,8 @@ export class HeliosEngine
         this._buildingsFetchKey = key;
         bumpStat('buildingFetchStarts');
 
+        try { this.onBuildingsFetchStart?.(); } catch (_) {}
+
         fetchBuildingsAroundHome(
         {
             homeLon:             this.homeLon,
@@ -3091,6 +3097,10 @@ export class HeliosEngine
                 return;
             }
             console.warn('[HELIOS] Buildings fetch failed:', err);
+        })
+        .finally(() =>
+        {
+            try { this.onBuildingsFetchEnd?.(); } catch (_) {}
         });
     }
 

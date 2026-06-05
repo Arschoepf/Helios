@@ -33,6 +33,7 @@ import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 type Sample = { t: number; v: number; lastChangeT?: number | null };
@@ -106,7 +107,7 @@ const LIVE_SLOPE_LOOKBACK_MS = 10 * 60_000;
 const SCRUB_EDGE_TOLERANCE_MS = 10 * 60_000;
 
 
-export interface GridHost
+export interface GridHost extends LoadingTrackerHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
@@ -149,6 +150,30 @@ export interface GridHost
 }
 
 
+//Per-host counter tracking how many grid-history fetches are currently in flight for this card.
+//Aggregates per-entity fetches into a single 'grid-history' phase: the first dispatched fetch begins
+//the phase, the last completed fetch ends it. WeakMap so the entry GCs with its card.
+const _gridInflightByHost = new WeakMap<object, number>();
+function gridPhaseEnter(host: GridHost): void
+{
+    const count = (_gridInflightByHost.get(host) ?? 0) + 1;
+    _gridInflightByHost.set(host, count);
+    if (count === 1)
+    {
+        beginLoadingPhase(host, 'grid-history');
+    }
+}
+function gridPhaseLeave(host: GridHost): void
+{
+    const count = Math.max(0, (_gridInflightByHost.get(host) ?? 1) - 1);
+    _gridInflightByHost.set(host, count);
+    if (count === 0)
+    {
+        endLoadingPhase(host, 'grid-history');
+    }
+}
+
+
 function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string, Sample[]>): void
 {
     if (!host.hass?.callWS)
@@ -173,6 +198,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
         return;
     }
     _historyInflight.add(entity);
+    gridPhaseEnter(host);
     const end      = new Date();
     const rawStart = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
     const ltsStart = new Date(end.getTime() - GRID_LTS_WINDOW_MS);
@@ -350,6 +376,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
         finally
         {
             _historyInflight.delete(entity);
+            gridPhaseLeave(host);
         }
     })();
 }

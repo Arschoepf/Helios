@@ -4,6 +4,8 @@
 //`energy_preferences_updated` event when the user edits the dashboard, the subscription pulls a fresh snapshot and the
 //render cascade picks it up.
 
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+
 
 export interface EnergyDefaults
 {
@@ -59,7 +61,7 @@ export const EMPTY_ENERGY_DEFAULTS: EnergyDefaults =
 };
 
 
-export interface EnergyPrefsHost
+export interface EnergyPrefsHost extends LoadingTrackerHost
 {
     readonly hass: any;
     _energyDefaults: EnergyDefaults;
@@ -80,6 +82,7 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
     {
         return;
     }
+    beginLoadingPhase(host, 'energy-prefs');
     try
     {
         const prefs = await host.hass.callWS({ type: 'energy/get_prefs' }) as {
@@ -96,6 +99,10 @@ export async function fetchEnergyPrefs(host: EnergyPrefsHost): Promise<void>
         //and the next push from `energy_preferences_updated` will retry. The boot gate still flips so the spinner
         //does not block indefinitely on RBAC-denied or older HA cores that do not expose energy/get_prefs.
         host._energyDefaultsLoaded = true;
+    }
+    finally
+    {
+        endLoadingPhase(host, 'energy-prefs');
     }
 }
 
@@ -141,7 +148,7 @@ export function unsubscribeEnergyPrefs(host: EnergyPrefsHost): void
 
 //Host shape consumed by `refreshHaDailyTotals`. The card writes the four slots when the recorder query lands; downstream
 //render functions prefer these over the local-integration values for the detail-panel headline figures.
-export interface HaDailyTotalsHost
+export interface HaDailyTotalsHost extends LoadingTrackerHost
 {
     readonly hass: any;
     readonly _energyDefaults: EnergyDefaults;
@@ -328,14 +335,27 @@ export async function fetchKwhChangeForRange(
 //call (one WS round-trip per non-empty list, fired in parallel).
 export async function refreshHaDailyTotals(host: HaDailyTotalsHost): Promise<void>
 {
+    beginLoadingPhase(host, 'ha-daily-totals');
     const defaults = host._energyDefaults;
-    const [solar, imp, exp, charged, discharged] = await Promise.all([
-        fetchTodayKwhChange(host, defaults.solarStatEnergyFroms),
-        fetchTodayKwhChange(host, defaults.gridStatEnergyFroms),
-        fetchTodayKwhChange(host, defaults.gridStatEnergyTos),
-        fetchTodayKwhChange(host, defaults.batteryStatEnergyTos),
-        fetchTodayKwhChange(host, defaults.batteryStatEnergyFroms),
-    ]);
+    let solar:      number | null = null;
+    let imp:        number | null = null;
+    let exp:        number | null = null;
+    let charged:    number | null = null;
+    let discharged: number | null = null;
+    try
+    {
+        [solar, imp, exp, charged, discharged] = await Promise.all([
+            fetchTodayKwhChange(host, defaults.solarStatEnergyFroms),
+            fetchTodayKwhChange(host, defaults.gridStatEnergyFroms),
+            fetchTodayKwhChange(host, defaults.gridStatEnergyTos),
+            fetchTodayKwhChange(host, defaults.batteryStatEnergyTos),
+            fetchTodayKwhChange(host, defaults.batteryStatEnergyFroms),
+        ]);
+    }
+    finally
+    {
+        endLoadingPhase(host, 'ha-daily-totals');
+    }
     let changed = false;
     if (solar !== null && solar !== host._haSolarTodayKwh)
     {

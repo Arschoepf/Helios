@@ -14,6 +14,7 @@ import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
 import { resolveBatteryEntities } from './battery';
 import { callWSWithTimeout, WsTimeoutError, scheduleIdle } from './ws-timeout';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 //Resolve the live PV entity from the HA Energy dashboard solar source. Prefers the optional `stat_rate` (signed W or kW)
@@ -69,7 +70,7 @@ export interface PvRate
 //mutable `_pv*` fields are typed non-readonly so the refresh / fetch
 //helpers can assign them; Lit's @state reactivity is preserved
 //because the assignment hits the same setter the decorator installed.
-export interface PvHost
+export interface PvHost extends LoadingTrackerHost
 {
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
@@ -693,6 +694,7 @@ export async function fetchPvHistory(
         return;
     }
     host._pvFetching = true;
+    beginLoadingPhase(host, 'pv-history');
     try
     {
         //History only exists up to "now", anything past that is the forecast half of the timeline and has no production data. Clamp the fetch end so
@@ -791,6 +793,7 @@ export async function fetchPvHistory(
     finally
     {
         host._pvFetching = false;
+        endLoadingPhase(host, 'pv-history');
     }
 }
 
