@@ -3092,9 +3092,9 @@ export const heliosCardStyles = css`
         top: 12px;
         left: 16px;
         right: 16px;
-        max-width: 380px;
+        max-width: 260px;
         margin: 0 auto;
-        padding: 8px 14px 10px;
+        padding: 6px 12px 8px;
         background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
