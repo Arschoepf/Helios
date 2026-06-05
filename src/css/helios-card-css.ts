@@ -492,7 +492,10 @@ export const heliosCardStyles = css`
             stages (phone portrait) where the height-derived width would otherwise overflow horizontally. */
         height: 96%;
         max-width: 82%;
-        aspect-ratio: 4 / 6;
+        /*  Narrower aspect than the previous 4/6 so the front card no longer covers the J-1 / J+1 cards
+            behind it. With height 96 % and aspect 4/7, card width is 96 % x 4/7 = ~55 % of the stage
+            height, leaving the side cards visible + clickable at their txPct +/- 32 / 50 % offsets. */
+        aspect-ratio: 4 / 7;
         border-radius: 18px;
         /*  Outer CoverFlow card body uses --primary-background-color (the dashboard "page" colour), one shade
             darker than --ha-card-background on both default HA themes. The inner bandeau + stat tiles + chart
@@ -1000,23 +1003,22 @@ export const heliosCardStyles = css`
         background: var(--energy-grid-return-color, #8353d1);
     }
 
-    /*  Chart grow / collapse driven by a transition on the .dash-cf-card-front class. NON-active card
-        charts sit at scaleY(0) (collapsed at the baseline), the ACTIVE card chart sits at scaleY(1) (full
-        height). When the user navigates to a different day, the class swaps from card A to card B, both
-        cards animate their transform smoothly: A collapses back to baseline, B grows up to full height.
-        No JS animation logic, no keyframe re-mount tricks, just a CSS transition keyed to the parent
-        class change. */
-    .dash-cf-cum-chart-svg
+    /*  Chart curves grow / collapse on day navigation: only the CURVES (.dash-cf-cum-chart-curves <g>)
+        scale, the night zones + baseline band + sunrise/sunset markers stay visible at full size. The
+        active card sits at scaleY(1) (curves full height), every other card at scaleY(0) (curves
+        collapsed at the baseline). Swapping the .dash-cf-card-front class triggers the transition both
+        ways. */
+    .dash-cf-cum-chart-curves
     {
         transform-origin: bottom;
         transform: scaleY(0);
         transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
     }
-    .dash-cf-card-front .dash-cf-cum-chart-svg
+    .dash-cf-card-front .dash-cf-cum-chart-curves
     {
         transform: scaleY(1);
     }
-    .dash-cf-stage.dash-cf-entering .dash-cf-card-front .dash-cf-cum-chart-svg
+    .dash-cf-stage.dash-cf-entering .dash-cf-card-front .dash-cf-cum-chart-curves
     {
         transition-delay: 280ms;
     }

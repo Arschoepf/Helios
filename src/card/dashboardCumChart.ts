@@ -629,21 +629,23 @@ function renderCumChartSVG(
 
             <rect class="dash-cf-cum-chart-baseline-band" x="0" y="${baselineY.toFixed(2)}" width="${W}" height="${(H - baselineY).toFixed(2)}"></rect>
 
-            ${actualArea ? svg`
-                <path class="dash-cf-cum-chart-actual-area" d="${actualArea}"></path>
-            ` : nothing}
-            ${predictedPath ? svg`
-                <path class="dash-cf-cum-chart-predicted" d="${predictedPath}" style="stroke: ${predictedColor};"></path>
-            ` : nothing}
-            ${gridImportPath ? svg`
-                <path class="dash-cf-cum-chart-grid-import" d="${gridImportPath}"></path>
-            ` : nothing}
-            ${gridExportPath ? svg`
-                <path class="dash-cf-cum-chart-grid-export" d="${gridExportPath}"></path>
-            ` : nothing}
-            ${actualPath ? svg`
-                <path class="dash-cf-cum-chart-actual-line" d="${actualPath}"></path>
-            ` : nothing}
+            <g class="dash-cf-cum-chart-curves">
+                ${actualArea ? svg`
+                    <path class="dash-cf-cum-chart-actual-area" d="${actualArea}"></path>
+                ` : nothing}
+                ${predictedPath ? svg`
+                    <path class="dash-cf-cum-chart-predicted" d="${predictedPath}" style="stroke: ${predictedColor};"></path>
+                ` : nothing}
+                ${gridImportPath ? svg`
+                    <path class="dash-cf-cum-chart-grid-import" d="${gridImportPath}"></path>
+                ` : nothing}
+                ${gridExportPath ? svg`
+                    <path class="dash-cf-cum-chart-grid-export" d="${gridExportPath}"></path>
+                ` : nothing}
+                ${actualPath ? svg`
+                    <path class="dash-cf-cum-chart-actual-line" d="${actualPath}"></path>
+                ` : nothing}
+            </g>
 
             ${cursorX !== null ? svg`
                 <line class="dash-cf-cum-chart-cursor" x1="${cursorX.toFixed(2)}" y1="0" x2="${cursorX.toFixed(2)}" y2="${H}"></line>
