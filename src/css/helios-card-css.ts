@@ -836,6 +836,26 @@ export const heliosCardStyles = css`
         display: block;
         touch-action: none;
     }
+    /*  Constant stroke width across SVG render sizes. Every stroke (ring borders, ticks, cursors,
+        curve outlines, sun bars) renders at the same apparent thickness regardless of viewBox
+        scaling, matching the way the mini-card borders stay 1 px in both section view and panel
+        view. The ring TRACKS are explicitly opted out because their stroke IS the annulus shape
+        (stroke-width = ring thickness), so they MUST scale with the viewBox or the annulus
+        collapses to a hairline in panel-view. */
+    .dash-radial-svg *
+    {
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-radial-svg .dash-radial-cloud-track,
+    .dash-radial-svg .dash-radial-cloud-track-future,
+    .dash-radial-svg .dash-radial-prod-track,
+    .dash-radial-svg .dash-radial-prod-track-future,
+    .dash-radial-svg .dash-radial-batt-track,
+    .dash-radial-svg .dash-radial-batt-track-future,
+    .dash-radial-svg .dash-radial-dial-track
+    {
+        vector-effect: none;
+    }
     /*  Hover dots. Plain coloured disc per curve, thin contrasting stroke so the dot stays legible
         on both the filled area and the dashed forecast outline. */
     .dash-radial-dot
@@ -910,6 +930,19 @@ export const heliosCardStyles = css`
     {
         stroke: color-mix(in srgb, var(--divider-color, rgba(255, 255, 255, 0.12)) 70%, transparent);
     }
+    /*  Not-yet-elapsed half of each data ring background. Same stroke colour as the past arc but
+        at a much reduced opacity so the background reads as "this hasn't happened yet". Painted
+        as a separate arc path so the past + future halves can be styled independently without
+        having to mask a single full-circle track. */
+    .dash-radial-cloud-track-future,
+    .dash-radial-prod-track-future,
+    .dash-radial-batt-track-future
+    {
+        opacity: 0.35;
+    }
+    .dash-radial-cloud-track-future { stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.55)) 12%, transparent); }
+    .dash-radial-prod-track-future  { stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 14%, transparent); }
+    .dash-radial-batt-track-future  { stroke: color-mix(in srgb, var(--energy-battery-in-color, #5cba47) 10%, transparent); }
 
     /*  Ring fills + future outlines. Past portions render as filled polygons (solid area below the
         curve), future portions as dashed outlines without fill. Same vocabulary on cloud /
@@ -1003,16 +1036,14 @@ export const heliosCardStyles = css`
         stroke-width: 0.7;
         stroke-linecap: round;
     }
-    /*  Hour numerals sit OUTSIDE the dial outer edge. Raw SVG-unit font-size scales linearly
-        with the SVG render size, so the labels were huge in panel-view and microscopic in
-        section view. Clamp() bound by HA frontend typography tokens with cqi as the fluid term
-        keeps the labels readable across both layouts. cqi here resolves against .dash-cf-card
-        (which is the nearest container-type: inline-size). HA's body family + medium weight
-        match the rest of the tile chrome. */
+    /*  Hour numerals fixed at the HA frontend body font-size in CSS pixels so they stay readable
+        across BOTH section view and panel-view, regardless of how the SVG scales. clamp() +
+        cqi did not behave as expected on SVG text in panel-view (the labels grew enormous),
+        a plain px value pulled off the HA frontend body token gives a predictable result. */
     .dash-radial-hour-label
     {
         font-family: var(--ha-font-family-body, inherit);
-        font-size: clamp(var(--ha-font-size-xs, 12px), 1.9cqi, var(--ha-font-size-m, 14px));
+        font-size: var(--ha-font-size-s, 13px);
         font-weight: var(--ha-font-weight-medium, 500);
         fill: var(--primary-text-color, #ffffff);
         font-variant-numeric: tabular-nums;
@@ -1084,14 +1115,16 @@ export const heliosCardStyles = css`
         stroke: none;
         pointer-events: none;
     }
-    /*  Hover cursor only. The "now" cursor is dropped: the visible boundary between the full-
-        opacity past fill and the reduced-opacity future fill already marks the current hour, an
-        extra dashed line on top was redundant. */
+    /*  Hover cursor styled exactly like the 3D card's solar-ray leader: sun-coloured stroke,
+        5-5 dashed pattern, stroke-opacity 0.55, line-cap round. Anchored at the outer edge of
+        the irradiance reference rim and ending at the outer edge of the sundial, so the cursor
+        reads as a radial ray from the sun across the data rings out to the dial perimeter. */
     .dash-radial-cursor-hover
     {
-        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 80%, transparent);
-        stroke-width: 1.4;
-        stroke-dasharray: 2 2;
+        stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
+        stroke-width: 1;
+        stroke-dasharray: 5 5;
+        stroke-opacity: 0.55;
         stroke-linecap: round;
         fill: none;
         pointer-events: none;

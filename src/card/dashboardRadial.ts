@@ -55,10 +55,11 @@ const R_BATT_OUTER             = 159;
 const R_DIAL_INNER             = 165;
 const R_DIAL_OUTER             = 183;   //dial annulus narrower than v5 to make room for outside-the-ring hour labels
 const R_HOUR_LABEL             = 192;   //hour labels sit OUTSIDE the dial outer edge
-//Hover cursor endpoints. Pulled in from the sun envelope + the dial outer so the cursor reads
-//as a clear span across the three data rings instead of touching both boundaries.
-const R_CURSOR_INNER           = R_CLOUD_INNER;
-const R_CURSOR_OUTER           = R_DIAL_INNER;
+//Hover cursor endpoints. Anchored at the outer edge of the irradiance reference rim (= sun
+//disc) and ending at the outer edge of the dial annulus, matching the 3D card's solar-ray
+//leader: a sun-coloured dashed line radiating outward from the sun toward its target.
+const R_CURSOR_INNER           = R_SUN_REF;
+const R_CURSOR_OUTER           = R_DIAL_OUTER;
 //Tick layout. Two endpoints per tick, one near the outer edge of the dial and one near the
 //inner edge. The hour / half / quarter triplet uses different lengths so the eye still snaps to
 //the hour cardinals, but every tick now stays well clear of the centre of the dial annulus so
@@ -129,6 +130,27 @@ function buildRadialAnnulusPath(
         d += ' Z';
     }
     return d;
+}
+
+
+//Ring-track arc along a single radius (mid-ring). The track is a stroke of width = ring annulus
+//thickness, so the path traces the centre of the ring and the stroke spreads to inner + outer
+//edges. Used to split each data ring's track into past + future segments so each segment can
+//take its own opacity (full strength for past, faded for not-yet-elapsed hours). A 24 hour span
+//is drawn as two half-arcs so the SVG arc command does not degenerate on a closed circle.
+function buildRingArcPath(midR: number, fromHour: number, toHour: number): string
+{
+    if (toHour <= fromHour + 0.001) { return ''; }
+    if (toHour - fromHour >= 23.999)
+    {
+        const [x1, y1] = polarPt(0, midR);
+        const [x2, y2] = polarPt(12, midR);
+        return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${midR} ${midR} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)} A ${midR} ${midR} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    }
+    const [x1, y1] = polarPt(fromHour, midR);
+    const [x2, y2] = polarPt(toHour,   midR);
+    const largeArc = toHour - fromHour > 12 ? 1 : 0;
+    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${midR} ${midR} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
 }
 
 
@@ -314,6 +336,61 @@ function computeHourlyBattery(host: DashboardHost, dayStartMs: number): (number 
     for (let h = 0; h < 24; h++)
     {
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
+    }
+    return values;
+}
+
+
+//Hourly production from the FORECAST model for every hour of the day, regardless of past /
+//future. The radial dial overlays this as a dashed line on top of the past actual fill so the
+//user can compare the model's prediction against the realised production for the same hour. Same
+//computePvPowerWeighted * pvCalibK * effectiveForecastRatio pipeline the timeline forecast curve
+//uses, so the dial outline matches the headline forecast number on every day.
+function computeHourlyProductionForecast(host: DashboardHost, dayStartMs: number): (number | null)[]
+{
+    const values: (number | null)[] = new Array(24).fill(null);
+    const series = host._chartSeries;
+    const coords = getHomeCoords(host.config, host.hass);
+    if (!series || !coords || series.times.length === 0) { return values; }
+    const cap    = pvInverterMaxW(host.config);
+    const k      = pvCalibK(host.config);
+    if (k === null) { return values; }
+    const cal    = computeForecastCalibration(host);
+    const calR   = cal ? cal.ratio : 1;
+    trainShadingMap(host);
+    const shading = currentShadingMap();
+    const nowMs  = Date.now();
+    const raster = host._engine?.getLidarRaster() ?? null;
+    for (let h = 0; h < 24; h++)
+    {
+        const hourMidMs = dayStartMs + h * HOUR_MS + HOUR_MS / 2;
+        let bestIdx = -1;
+        let bestDt  = Infinity;
+        for (let i = 0; i < series.times.length; i++)
+        {
+            const dt = Math.abs(series.times[i].getTime() - hourMidMs);
+            if (dt < bestDt) { bestDt = dt; bestIdx = i; }
+        }
+        if (bestIdx < 0 || bestDt > HOUR_MS) { continue; }
+        const cloud = series.cloud[bestIdx] ?? 0;
+        const wRaw  = computePvPowerWeighted(
+            host.config,
+            series.times[bestIdx],
+            coords.lat,
+            coords.lon,
+            cloud,
+            {
+                airTempC: series.temperature?.[bestIdx],
+                windMs:   series.windSpeed?.[bestIdx],
+                raster,
+            }
+        );
+        const eff = effectiveForecastRatio(shading, series.times[bestIdx], coords.lat, coords.lon, cloud, calR, nowMs);
+        const w   = wRaw * k * eff;
+        if (Number.isFinite(w))
+        {
+            values[h] = Math.min(cap, Math.max(0, w));
+        }
     }
     return values;
 }
@@ -609,18 +686,19 @@ function pointerToHourFraction(svgEl: SVGSVGElement, clientX: number, clientY: n
 //three times per render.
 export interface RadialDayData
 {
-    dayStartMs:    number;
-    dayEndMs:      number;
-    pastEndHour:   number;
-    hourlyProd:    (number | null)[];
-    hourlyBatt:    (number | null)[];
-    hourlyCloud:   (number | null)[];
-    hourlyIrr:     (number | null)[];
-    prodScaleMax:  number;
-    battScaleMax:  number;
-    cloudScaleMax: number;
-    sunRiseSet:    { sunrise: number | null; sunset: number | null };
-    ratioPct:      number;
+    dayStartMs:     number;
+    dayEndMs:       number;
+    pastEndHour:    number;
+    hourlyProd:     (number | null)[];
+    hourlyForecast: (number | null)[];
+    hourlyBatt:     (number | null)[];
+    hourlyCloud:    (number | null)[];
+    hourlyIrr:      (number | null)[];
+    prodScaleMax:   number;
+    battScaleMax:   number;
+    cloudScaleMax:  number;
+    sunRiseSet:     { sunrise: number | null; sunset: number | null };
+    ratioPct:       number;
 }
 
 
@@ -635,13 +713,18 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     else if (dayStartMs >= nowMs) { pastEndHour = 0;  }
     else                          { pastEndHour = (nowMs - dayStartMs) / HOUR_MS; }
 
-    const hourlyProd  = computeHourlyProduction(host, dayStartMs);
-    const hourlyBatt  = computeHourlyBattery(host, dayStartMs);
-    const hourlyCloud = computeHourlyCloud(host, dayStartMs);
-    const hourlyIrr   = computeHourlyIrradiance(host, dayStartMs);
+    const hourlyProd     = computeHourlyProduction(host, dayStartMs);
+    const hourlyForecast = computeHourlyProductionForecast(host, dayStartMs);
+    const hourlyBatt     = computeHourlyBattery(host, dayStartMs);
+    const hourlyCloud    = computeHourlyCloud(host, dayStartMs);
+    const hourlyIrr      = computeHourlyIrradiance(host, dayStartMs);
 
+    //Scale max accounts for BOTH the realised + forecast curves so the past fill and the forecast
+    //outline share the same radial space, the forecast line at peak hour reads at the same height
+    //regardless of how the day's actual production ended up.
     let prodMax = 0;
-    for (const v of hourlyProd) { if (v !== null && v > prodMax) { prodMax = v; } }
+    for (const v of hourlyProd)     { if (v !== null && v > prodMax) { prodMax = v; } }
+    for (const v of hourlyForecast) { if (v !== null && v > prodMax) { prodMax = v; } }
     const prodScaleMax  = Math.max(1, prodMax * 1.25, 500);
     let battMax = 0;
     for (const v of hourlyBatt) { if (v !== null && Math.abs(v) > battMax) { battMax = Math.abs(v); } }
@@ -652,7 +735,7 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     const sunRiseSet = homeCoords ? findSunriseSunset(dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
     const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
 
-    return { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
+    return { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
 }
 
 
@@ -662,7 +745,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 {
     const isFront    = cardOffset === activeOffset;
 
-    const { dayStartMs, pastEndHour, hourlyProd, hourlyBatt, hourlyCloud, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
+    const { dayStartMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
 
     //Split the signed battery curve into charge (positive) and discharge (positive absolute) per-
     //hour arrays so two annulus paths can paint inside the same ring with their own colours.
@@ -675,9 +758,6 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const floorPastH = Math.floor(pastEndHour);
     const prodPastPath = pastEndHour > 0
         ? buildRadialAnnulusPath(hourlyProd.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
-        : '';
-    const prodFuturePath = pastEndHour < 24
-        ? buildRadialOutlinePath(hourlyProd, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, floorPastH, 24)
         : '';
     const battChargePath = pastEndHour > 0
         ? buildRadialAnnulusPath(hourlyBattCharge.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
@@ -699,40 +779,57 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //RadialDayData bundle so the same crossings are reused by every consumer.
     const nightPath = buildNightArcPath(sunRiseSet.sunset, sunRiseSet.sunrise, R_DIAL_INNER, R_DIAL_OUTER);
 
+    //Past / future split on the data fills. Past hours fill at full opacity, future hours fill
+    //at reduced opacity so the past / future boundary reads directly off the fill contrast and
+    //the dedicated "now" cursor can stay dropped.
+    const prodFutureFillPath = pastEndHour < 24
+        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyForecast.slice(ceilPastH, 24)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
+        : '';
+    const cloudFutureFillPath = pastEndHour < 24
+        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyCloud.slice(ceilPastH, 24)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
+        : '';
+
+    //Per-ring track arcs split into past + future segments. The not-yet-elapsed half of each ring
+    //gets its own class so CSS can paint it at a reduced opacity, the user reads the
+    //background of every ring as already-happened (full strength) vs not-yet-happened (faded).
+    //Applies to cloud + production + battery rings, NOT the irradiance disc (which is the day's
+    //overall reading, no past / future concept) and NOT the dial track (structural).
+    const cloudMidR     = (R_CLOUD_INNER + R_CLOUD_OUTER) / 2;
+    const prodMidR      = (R_PROD_INNER  + R_PROD_OUTER)  / 2;
+    const battMidR      = (R_BATT_INNER  + R_BATT_OUTER)  / 2;
+    const cloudTrackPast    = buildRingArcPath(cloudMidR, 0, pastEndHour);
+    const cloudTrackFuture  = buildRingArcPath(cloudMidR, pastEndHour, 24);
+    const prodTrackPast     = buildRingArcPath(prodMidR,  0, pastEndHour);
+    const prodTrackFuture   = buildRingArcPath(prodMidR,  pastEndHour, 24);
+    const battTrackPast     = buildRingArcPath(battMidR,  0, pastEndHour);
+    const battTrackFuture   = buildRingArcPath(battMidR,  pastEndHour, 24);
+
+    //Full-day production-forecast outline. The previous beta only drew the dashed forecast
+    //outline for the FUTURE portion of the day, the user wants it visible over the past too so
+    //they can compare the model's prediction against the realised production hour-by-hour.
+    const prodForecastOutlinePath = hourlyForecast.some(v => v !== null)
+        ? buildRadialOutlinePath(hourlyForecast, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, 0, 24)
+        : '';
+
     //Collapsed counterpart paths for the day-load grow animation. Each per-hour curve has a "from"
     //version with all values forced to 0, so the annulus visibly collapses to the ring's inner
     //edge. SMIL animates the d attribute from the collapsed string to the real string, the visual
     //is each curve growing within its OWN annulus from inner to outer instead of the previous
     //scale-from-centre puff (which expanded everything from a single point and looked rough).
     const zeroArr24: (number | null)[] = new Array(24).fill(0);
-    const fromProdPast        = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
-    const fromProdFutureFill  = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
-    const fromProdFuture      = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER,  floorPastH, 24) : '';
-    const fromBattCharge      = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
-    const fromBattDischarge   = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
-    const fromCloudPast       = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
-    const fromCloudFutureFill = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
-    const fromCloudFuture     = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
+    const fromProdPast            = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
+    const fromProdFutureFill      = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
+    const fromProdForecastOutline = prodForecastOutlinePath ? buildRadialOutlinePath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER,  0, 24) : '';
+    const fromBattCharge          = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
+    const fromBattDischarge       = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
+    const fromCloudPast           = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromCloudFutureFill     = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromCloudFuture         = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
     //Night arc collapses to the inner radius (zero-width annular segment) so it grows outward to
     //fill the dial annulus over the animation window.
     const fromNightPath = buildNightArcPath(sunRiseSet.sunset, sunRiseSet.sunrise, R_DIAL_INNER, R_DIAL_INNER);
 
     const ANIM_DUR = '700ms';
-
-    //Future-fill paths. The previous beta painted the future portion of each forecastable ring
-    //(cloud + production) as a plain dashed outline so the "no data yet" zone read as an empty
-    //sketch. The user now wants the dial to drop the dedicated "now" cursor altogether and
-    //instead use a fill-opacity split: past zones keep their full-opacity fill, future zones get
-    //the same fill at reduced opacity so the past / future boundary is visible from the fill
-    //contrast alone. The dashed outline stays on top of the low-opacity fill so the forecast
-    //curve remains a clear line on top of the wash. Battery has no forecast model so no future
-    //fill on its ring.
-    const prodFutureFillPath = pastEndHour < 24
-        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyProd.slice(ceilPastH, 24)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
-        : '';
-    const cloudFutureFillPath = pastEndHour < 24
-        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyCloud.slice(ceilPastH, 24)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
-        : '';
 
     //Hover cursor: only on the front card AND only when the host carries a hover hour set by the
     //pointermove handler below. Same shape as the now cursor but in secondary text colour so the
@@ -893,16 +990,19 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                     </radialGradient>
                 </defs>
 
-                <!-- Ring tracks. Each track is a circle with stroke-width = annulus thickness, so
-                     the visual is a real ring with breathing room between it and its neighbours.
-                     The dial track is drawn here too because the hour ticks live INSIDE the dial
-                     annulus and need its background to anchor them. -->
-                <circle class="dash-radial-cloud-track" cx="${CENTER}" cy="${CENTER}" r="${(R_CLOUD_INNER + R_CLOUD_OUTER) / 2}"
-                        fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>
-                <circle class="dash-radial-prod-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_PROD_INNER  + R_PROD_OUTER)  / 2}"
-                        fill="none" stroke-width="${R_PROD_OUTER - R_PROD_INNER}"/>
-                <circle class="dash-radial-batt-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_BATT_INNER  + R_BATT_OUTER)  / 2}"
-                        fill="none" stroke-width="${R_BATT_OUTER - R_BATT_INNER}"/>
+                <!-- Ring tracks split into past + future arcs. Past arcs sit at full opacity, the
+                     not-yet-elapsed half of every data ring is painted faded so the background of
+                     the ring reads as already-happened (full strength) vs not-yet-happened (low
+                     opacity). The dial track is a single circle since it has no past / future
+                     concept (structural). All tracks paint with vector-effect: non-scaling-stroke
+                     via CSS so the apparent ring thickness stays constant regardless of how the
+                     SVG scales in panel-view vs section-view dashboards. -->
+                ${cloudTrackPast   ? svg`<path class="dash-radial-cloud-track"        d="${cloudTrackPast}"   fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>` : nothing}
+                ${cloudTrackFuture ? svg`<path class="dash-radial-cloud-track-future" d="${cloudTrackFuture}" fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>` : nothing}
+                ${prodTrackPast    ? svg`<path class="dash-radial-prod-track"         d="${prodTrackPast}"    fill="none" stroke-width="${R_PROD_OUTER  - R_PROD_INNER}"/>`  : nothing}
+                ${prodTrackFuture  ? svg`<path class="dash-radial-prod-track-future"  d="${prodTrackFuture}"  fill="none" stroke-width="${R_PROD_OUTER  - R_PROD_INNER}"/>`  : nothing}
+                ${battTrackPast    ? svg`<path class="dash-radial-batt-track"         d="${battTrackPast}"    fill="none" stroke-width="${R_BATT_OUTER  - R_BATT_INNER}"/>`  : nothing}
+                ${battTrackFuture  ? svg`<path class="dash-radial-batt-track-future"  d="${battTrackFuture}"  fill="none" stroke-width="${R_BATT_OUTER  - R_BATT_INNER}"/>`  : nothing}
                 <circle class="dash-radial-dial-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_DIAL_INNER  + R_DIAL_OUTER)  / 2}"
                         fill="none" stroke-width="${R_DIAL_OUTER - R_DIAL_INNER}"/>
 
@@ -938,8 +1038,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${prodFutureFillPath ? svg`<path class="dash-radial-prod-fill-future" fill-rule="evenodd" d="${prodFutureFillPath}">
                     <animate attributeName="d" from="${fromProdFutureFill}" to="${prodFutureFillPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>` : nothing}
-                ${prodFuturePath ? svg`<path class="dash-radial-prod-future" d="${prodFuturePath}">
-                    <animate attributeName="d" from="${fromProdFuture}" to="${prodFuturePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                ${prodForecastOutlinePath ? svg`<path class="dash-radial-prod-future" d="${prodForecastOutlinePath}">
+                    <animate attributeName="d" from="${fromProdForecastOutline}" to="${prodForecastOutlinePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>` : nothing}
                 ${battChargePath ? svg`<path class="dash-radial-batt-charge" fill-rule="evenodd" d="${battChargePath}">
                     <animate attributeName="d" from="${fromBattCharge}" to="${battChargePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
