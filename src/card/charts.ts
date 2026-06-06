@@ -1029,14 +1029,12 @@ export function renderChart(host: ChartHost): TemplateResult
                     x1="${hoverX.toFixed(2)}" y1="0"
                     x2="${hoverX.toFixed(2)}" y2="${H}"
                 ></line>
-                ${isFinite(hoverYCld) ? svg`
-                    <circle class="hc-hover-dot" cx="${hoverX.toFixed(2)}" cy="${hoverYCld.toFixed(2)}" r="3" fill="${cloudColor}"></circle>
-                ` : ''}
-                ${isFinite(hoverYIrr) ? svg`
-                    <circle class="hc-hover-dot" cx="${hoverX.toFixed(2)}" cy="${hoverYIrr.toFixed(2)}" r="3" fill="${sunColor}"></circle>
-                ` : ''}
             ` : nothing}
         </svg>
+        ${showHover ? html`
+            ${isFinite(hoverYCld) ? html`<div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverYCld / H * 100).toFixed(2)}%; background: ${cloudColor};"></div>` : nothing}
+            ${isFinite(hoverYIrr) ? html`<div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverYIrr / H * 100).toFixed(2)}%; background: ${sunColor};"></div>` : nothing}
+        ` : nothing}
     `;
 }
 
@@ -1574,9 +1572,11 @@ export function renderPvChart(host: ChartHost): TemplateResult
                     x1="${hoverX.toFixed(2)}" y1="0"
                     x2="${hoverX.toFixed(2)}" y2="${H}"
                 ></line>
-                <circle class="hc-hover-dot" cx="${hoverX.toFixed(2)}" cy="${hoverY.toFixed(2)}" r="3" fill="${pvColor}"></circle>
             ` : nothing}
         </svg>
+        ${showHover && isFinite(hoverY) ? html`
+            <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverY / H * 100).toFixed(2)}%; background: ${pvColor};"></div>
+        ` : nothing}
     `;
 }
 

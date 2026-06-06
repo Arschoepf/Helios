@@ -46,6 +46,10 @@ export interface DashboardHost extends ChartHost, BatteryHost
 
     _detailMode:           boolean;
     _homeHover:            boolean;
+    //Latches true the first time every started loading phase finishes. The home hitbox click is
+    //gated on this so the user cannot open the dashboard mid-boot, only after the engine + map +
+    //weather data have settled.
+    _loadingHasCompleted:  boolean;
     _dashChartHoverTs:     number | null;
     //Radial dial hover hour, [0..24) when the cursor sits over the SVG, null otherwise. Front card
     //only, the rear cards never wire their pointer handlers.
@@ -2049,6 +2053,11 @@ export function handleHomeClick(host: DashboardHost, e: Event): void
     //it.
     e.stopPropagation();
     if (host._detailMode) { return; }
+    //Loading guard: don't open the dashboard while the engine + map + weather data are still
+    //settling. Opening mid-boot would render empty cards with "—" everywhere and the user would
+    //see numbers populating one by one as each phase completes, looks broken. The hitbox stays
+    //clickable from a hit-detection standpoint but the open is a no-op until the loader latches.
+    if (!host._loadingHasCompleted) { return; }
     //Clear the hover flag immediately, the hitbox un-renders
     //once detail mode opens so mouseleave never fires; without
     //this the glow would flash back on as soon as the user

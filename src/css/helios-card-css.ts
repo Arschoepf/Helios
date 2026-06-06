@@ -125,6 +125,16 @@ export const heliosCardStyles = css`
         pointer-events: auto;
         z-index: 55;
     }
+    /*  Loading-state hitbox: still rendered (the user sees the home pill underneath) but inert.
+        No pointer events so click + mouseenter / mouseleave never fire, the wait cursor flags
+        the brief "still loading" window so the user does not think the click is broken when the
+        dashboard fails to open. The class is removed the moment the loader latches and the
+        normal pointer cursor + click handler come back. */
+    .home-hitbox.is-loading
+    {
+        cursor: wait;
+        pointer-events: none;
+    }
 
     /*  Home hover glow. Same base + top + side-quad polygons as the
         cloud-dome mask (so it tracks rotation pixel-for-pixel with
@@ -309,6 +319,17 @@ export const heliosCardStyles = css`
     {
         opacity: 1;
         pointer-events: auto;
+    }
+    /*  Dashboard mode (detail-active) hides the top-right toggle rail (UI / LiDAR / ShadowDome
+        buttons) entirely. The rail makes sense in the layered card modes where the user is
+        switching between visualisations, in the dashboard dive the user is looking at the day's
+        data and the toggles are visually noisy. They come back the moment the user closes the
+        dashboard (the class is dropped). Same specificity as the overlay-masked rule above, this
+        rule comes later so it wins by cascade order. */
+    ha-card.detail-active .overlay-top-right
+    {
+        opacity: 0;
+        pointer-events: none;
     }
 
 
@@ -749,6 +770,31 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         line-height: 0;
+    }
+    /*  Sunrise + sunset corner overlays sit at the bottom-left + bottom-right of the radial
+        card. Same typography + chrome as the top-left clock overlay (HA frontend body token,
+        secondary text colour) so the three corners read as one set of structural read-outs:
+        clock = where we are in the day, sunrise = when daylight started, sunset = when daylight
+        ended. Fixed for the day, no hover update, ha-icon tinted with the sun colour so the
+        eye groups the two horizon markers visually. */
+    .dash-radial-hour-text-sunrise
+    {
+        top: auto;
+        bottom: 6px;
+        left: 10px;
+        right: auto;
+    }
+    .dash-radial-hour-text-sunset
+    {
+        top: auto;
+        bottom: 6px;
+        right: 10px;
+        left: auto;
+    }
+    .dash-radial-hour-text-sunrise ha-icon,
+    .dash-radial-hour-text-sunset  ha-icon
+    {
+        color: var(--helios-sun-color, var(--amber-color, #f59e0b));
     }
     /*  HA-frontend tile-card-style badge: ha-card host (chrome from HA frontend) with a circular
         tinted icon chip on the left and a two-line text stack on the right (entity LABEL on top,
@@ -2401,6 +2447,27 @@ export const heliosCardStyles = css`
         stroke-width: 1;
         vector-effect: non-scaling-stroke;
         pointer-events: none;
+    }
+    /*  Timeline curve hover dot rendered as an absolutely-positioned HTML element overlay on
+        the chart card. The chart SVG uses preserveAspectRatio="none" so the area + line paths
+        stretch with the chart container width, but the previous SVG <circle r="3"> hover dots
+        were stretched too and ended up as tall ovals / cylinders at common chart aspect ratios.
+        Pulling the dots out into HTML CSS-pixel ovals (perfectly round via width = height +
+        border-radius 50%) decouples the dot shape from the SVG stretch, the user always sees a
+        circular marker centred on the curve. Position derived from the SVG hoverX / W and hoverY
+        / H ratios, the chart card and the SVG share the same content area so percentages map
+        cleanly between the two coordinate spaces. */
+    .hc-hover-dot-html
+    {
+        position: absolute;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        border: 1.5px solid var(--card-background-color, #ffffff);
+        box-sizing: border-box;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 5;
     }
 
     /*  Hover tooltip card, sits above the chart-card stack inside

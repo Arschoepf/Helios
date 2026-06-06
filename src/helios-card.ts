@@ -2702,7 +2702,7 @@ export class HeliosCard extends LitElement
                       pose and triggers the dashboard overlay.  -->
                 ${hasHomeCoords && layout !== null && !this._detailMode ? html`
                     <div
-                        class="home-hitbox"
+                        class="home-hitbox ${this._loadingHasCompleted ? '' : 'is-loading'}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                         @click="${(e: Event) => handleHomeClick(this, e)}"
                         @mouseenter="${this._onHomeEnter}"

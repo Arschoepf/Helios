@@ -981,9 +981,19 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //Per-card gradient id so multiple CoverFlow cards on the same page never collide.
     const haloGradId = `dash-radial-sun-halo-${cardOffset}`;
 
+    //Sunrise / sunset corner overlays. Fixed to the selected day's horizon crossings (no
+    //hover-driven update), so the user always sees the day's daylight window read straight off
+    //the card. Skipped on polar day / polar night when findSunriseSunset returns null. Same
+    //typography family as the top-left clock overlay (HA frontend body token, secondary text
+    //colour, tabular nums for the time numerals).
+    const sunriseText = sunRiseSet.sunrise !== null ? formatHoverClock(sunRiseSet.sunrise, host.hass) : '';
+    const sunsetText  = sunRiseSet.sunset  !== null ? formatHoverClock(sunRiseSet.sunset,  host.hass) : '';
+
     return html`
         <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
             ${showHour ? html`<span class="dash-radial-hour-text"><ha-icon icon="mdi:clock-outline"></ha-icon><span>${hourText}</span></span>` : nothing}
+            ${sunriseText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunrise"><ha-icon icon="mdi:weather-sunset-up"></ha-icon><span>${sunriseText}</span></span>` : nothing}
+            ${sunsetText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunset"><ha-icon icon="mdi:weather-sunset-down"></ha-icon><span>${sunsetText}</span></span>` : nothing}
             <div class="dash-radial-hour-labels" aria-hidden="true">${hourLabelsHtml}</div>
             ${keyed(isFront ? `f-${dayStartMs}` : `b-${cardOffset}`, html`<svg
                 class="dash-radial-svg"
