@@ -422,6 +422,15 @@ export const heliosCardStyles = css`
     {
         position: relative;
         grid-area: 1 / 1;
+        /*  Re-scope --ha-card-border-radius for the inner mini-cards. Panel-view dashboards
+            (single-card mode) override the token to 0 on the outer Helios card so the card
+            fills the screen edge-to-edge, the override cascades down and crushes every inner
+            ha-card on the CoverFlow front face to square corners. Re-establishing the token
+            here (default 12 px, the HA frontend's own default) keeps the bandeau / badges /
+            radial card rounded inside the now-edge-to-edge outer card, the user's theme can
+            still override this scope by setting --ha-card-border-radius on .dash-cf-card via
+            card-mod or a frontend theme. */
+        --ha-card-border-radius: 12px;
         /*  Card sized via plain percentages of the closest positioned ancestor (.dash-cf-stage). Height
             at 96 % leaves a 2 % gutter top + bottom so the card uses the visible space the panel offers,
             width derives from the height via the aspect ratio, max-width 82 % caps it on tall narrow
@@ -499,8 +508,7 @@ export const heliosCardStyles = css`
         would resolve against the inner mini-card width and mis-fire). */
     ha-card.dash-cf-card-bandeau,
     ha-card.dash-radial-badge,
-    ha-card.dash-radial-wrap,
-    ha-card.dash-radial-clock-strip
+    ha-card.dash-radial-wrap
     {
         background:   var(--ha-card-background, var(--card-background-color, #1c1c1c));
         min-height:   0;
@@ -660,48 +668,44 @@ export const heliosCardStyles = css`
         gap: 8px;
         flex-shrink: 0;
     }
-    /*  Footer clock card. ha-card host, layout only. Rendered conditionally by the helper
-        (skipped on past / future cards with no active hover). */
-    ha-card.dash-radial-clock-strip
+    /*  Hour overlay in the top-left of the radial card. Plain HA-frontend text (no chip / no
+        chrome) so it reads as a subtle timestamp on top of the dial. Live wall-clock on today's
+        card by default, hovered hour while the user hovers the dial, hidden on past / future
+        cards with no active hover. */
+    .dash-radial-hour-text
     {
-        padding: 6px 10px;
-        flex-shrink: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 0;
-        height: auto;
-        width: auto;
-    }
-    .dash-radial-clock-value
-    {
-        font-size: 14px;
-        font-weight: 700;
-        letter-spacing: 0.4px;
+        position: absolute;
+        top: 6px;
+        left: 10px;
+        font-size: 12px;
+        font-weight: 500;
         font-variant-numeric: tabular-nums;
-        color: var(--primary-text-color, #ffffff);
+        color: var(--secondary-text-color, rgba(255, 255, 255, 0.7));
+        pointer-events: none;
+        z-index: 1;
     }
     /*  HA-frontend-style badge: ha-card host (chrome from HA frontend) with a circular tinted
         icon chip on the left + the entity label on the right (swapped for the live value during
         a radial hover). flex: 1 1 0 + min-width: 0 + ellipsis on the text lets the three badges
         share the strip width evenly and always stay on the same line, regardless of how narrow
-        the CoverFlow card is. */
+        the CoverFlow card is. Padding mirrors the bandeau (6 px vertical / 10 px horizontal)
+        so the badge strip lines up at the same height as the bandeau above it. */
     ha-card.dash-radial-badge
     {
         flex: 1 1 0;
         min-width: 0;
         display: inline-flex;
         align-items: center;
-        gap: 6px;
-        padding: 4px 8px 4px 4px;
+        gap: 8px;
+        padding: 6px 10px;
         min-height: 0;
         height: auto;
         width: auto;
     }
     .dash-radial-badge-chip
     {
-        width: 24px;
-        height: 24px;
+        width: 32px;
+        height: 32px;
         border-radius: 50%;
         display: inline-flex;
         align-items: center;
@@ -711,7 +715,7 @@ export const heliosCardStyles = css`
     }
     .dash-radial-badge-chip ha-icon
     {
-        --mdc-icon-size: 16px;
+        --mdc-icon-size: 18px;
         color: inherit;
         display: flex;
         align-items: center;

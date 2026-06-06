@@ -779,8 +779,18 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         }
     } : undefined;
 
+    //Hour overlay (top-left of the radial card). Live wall-clock by default on today's card,
+    //hovered hour while the user hovers the dial. Hidden on past / future cards with no active
+    //hover so the corner stays clean when there is nothing meaningful to show.
+    const isToday    = cardOffset === 0;
+    const showHour   = isFront && (hoverActive || isToday);
+    const hourText   = !showHour ? '' : hoverActive
+        ? formatHoverClock(hoverHour as number, host.hass)
+        : formatHoverClock(currentHourFraction(), host.hass);
+
     return html`
         <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
+            ${showHour ? html`<span class="dash-radial-hour-text">${hourText}</span>` : nothing}
             <svg
                 class="dash-radial-svg"
                 viewBox="0 0 ${VIEWBOX} ${VIEWBOX}"
@@ -912,25 +922,3 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
 }
 
 
-//Footer clock strip mirrors the bandeau geometry at the bottom of the card. Live wall-clock by
-//default on today's card, hovered hour while the user hovers the radial dial. Hidden entirely
-//when there is nothing to show (past / future card with no active hover), so the bottom of the
-//card collapses to the radial card's bottom edge.
-export function renderDashCardClockStrip(host: DashboardHost, cardOffset: number, activeOffset: number): TemplateResult | typeof nothing
-{
-    const isFront     = cardOffset === activeOffset;
-    const hoverHour   = isFront ? host._dashRadialHoverHour : null;
-    const hoverActive = hoverHour !== null && hoverHour !== undefined;
-    const isToday     = cardOffset === 0;
-    if (!isFront || (!hoverActive && !isToday)) { return nothing; }
-
-    const text = hoverActive
-        ? formatHoverClock(hoverHour as number, host.hass)
-        : formatHoverClock(currentHourFraction(), host.hass);
-
-    return html`
-        <ha-card class="dash-radial-clock-strip">
-            <span class="dash-radial-clock-value">${text}</span>
-        </ha-card>
-    `;
-}
