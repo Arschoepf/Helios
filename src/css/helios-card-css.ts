@@ -614,7 +614,7 @@ export const heliosCardStyles = css`
     }
     .dash-cf-card-date
     {
-        font-size: clamp(13px, 2.2cqw, 16px);
+        font-size: clamp(var(--ha-font-size-s, 13px), 2.2cqw, var(--ha-font-size-l, 16px));
         font-weight: var(--ha-font-weight-bold, 700);
         letter-spacing: 0.2px;
         text-transform: capitalize;
@@ -635,7 +635,7 @@ export const heliosCardStyles = css`
         color: var(--primary-color, #03a9f4);
         border-radius: 14px;
         padding: 2px 10px;
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: var(--ha-font-weight-bold, 700);
         line-height: 1.4;
         white-space: nowrap;
@@ -755,7 +755,7 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         font-weight: var(--ha-font-weight-medium, 500);
         font-variant-numeric: tabular-nums;
         color: var(--secondary-text-color, rgba(255, 255, 255, 0.7));
@@ -1446,7 +1446,7 @@ export const heliosCardStyles = css`
     .dash-card.dash-battery  .dash-card-icon { color: var(--energy-battery-out-color, #4db6ac); background: rgba(77, 182, 172, 0.12); }
     .dash-card-label
     {
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: var(--ha-font-weight-bold, 700);
         letter-spacing: 1.4px;
         text-transform: uppercase;
@@ -1458,7 +1458,7 @@ export const heliosCardStyles = css`
         reads as a sidekick, not a title.                            */
     .dash-card-date
     {
-        font-size: 10px;
+        font-size: var(--ha-font-size-xs, 10px);
         font-weight: 600;
         font-variant-numeric: tabular-nums;
         opacity: 0.45;
@@ -1474,7 +1474,7 @@ export const heliosCardStyles = css`
     }
     .dash-stat-value
     {
-        font-size: 28px;
+        font-size: var(--ha-font-size-3xl, 28px);
         font-weight: 800;
         font-variant-numeric: tabular-nums;
         line-height: 1;
@@ -1482,21 +1482,21 @@ export const heliosCardStyles = css`
     }
     .dash-stat-unit
     {
-        font-size: 13px;
+        font-size: var(--ha-font-size-s, 13px);
         font-weight: var(--ha-font-weight-medium, 500);
         opacity: 0.65;
         margin-left: 3px;
     }
     .dash-stat-value-sm
     {
-        font-size: 18px;
+        font-size: var(--ha-font-size-xl, 18px);
         font-weight: var(--ha-font-weight-bold, 700);
         font-variant-numeric: tabular-nums;
         line-height: 1;
     }
     .dash-stat-unit-sm
     {
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: var(--ha-font-weight-medium, 500);
         opacity: 0.65;
     }
@@ -1581,7 +1581,7 @@ export const heliosCardStyles = css`
     }
     .dash-stat-refined
     {
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: 600;
         opacity: 0.75;
         white-space: nowrap;
@@ -1615,11 +1615,11 @@ export const heliosCardStyles = css`
         content: attr(data-tooltip);
         position: absolute;
         bottom: calc(100% + 6px);
-        background: rgba(0, 0, 0, 0.85);
-        color: #ffffff;
+        background: color-mix(in srgb, var(--card-background-color, #000) 85%, transparent);
+        color: var(--primary-text-color, #ffffff);
         padding: 6px 10px;
         border-radius: 4px;
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: var(--ha-font-weight-medium, 500);
         letter-spacing: 0.1px;
         white-space: normal;
@@ -1644,7 +1644,7 @@ export const heliosCardStyles = css`
         but doesn't compete with the headline number.            */
     .dash-stat-delta
     {
-        font-size: 13px;
+        font-size: var(--ha-font-size-s, 13px);
         font-weight: var(--ha-font-weight-bold, 700);
         font-variant-numeric: tabular-nums;
         margin-left: 6px;
@@ -1667,11 +1667,11 @@ export const heliosCardStyles = css`
         bottom: calc(100% + 6px);
         left: 50%;
         transform: translateX(-50%);
-        background: rgba(0, 0, 0, 0.85);
-        color: #ffffff;
+        background: color-mix(in srgb, var(--card-background-color, #000) 85%, transparent);
+        color: var(--primary-text-color, #ffffff);
         padding: 4px 8px;
         border-radius: 4px;
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: var(--ha-font-weight-medium, 500);
         letter-spacing: 0.1px;
         white-space: nowrap;
@@ -1705,7 +1705,7 @@ export const heliosCardStyles = css`
             widths (~330 px inner width). Below that the parent
             flex-wrap kicks in and they stack as before.        */
         gap: 4px;
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
         /*  Pin every child's line-box to the same vertical extent
@@ -1742,7 +1742,7 @@ export const heliosCardStyles = css`
     }
     .dash-today-line .dash-line-label
     {
-        font-size: 10px;
+        font-size: var(--ha-font-size-xs, 10px);
         text-transform: uppercase;
         letter-spacing: 0.8px;
         opacity: 0.55;
@@ -1986,9 +1986,9 @@ export const heliosCardStyles = css`
     .dash-today-chart-tooltip
     {
         position: absolute;
-        background: rgba(0, 0, 0, 0.85);
-        color: #ffffff;
-        font-size: 10px;
+        background: color-mix(in srgb, var(--card-background-color, #000) 85%, transparent);
+        color: var(--primary-text-color, #ffffff);
+        font-size: var(--ha-font-size-xs, 10px);
         font-weight: 600;
         letter-spacing: 0.2px;
         padding: 4px 8px;
@@ -2040,7 +2040,7 @@ export const heliosCardStyles = css`
         the timeline). */
     .dash-today-chart-tooltip-row-sub
     {
-        font-size: 10px;
+        font-size: var(--ha-font-size-xs, 10px);
         opacity: 0.82;
         padding-left: 2px;
     }
@@ -2077,7 +2077,7 @@ export const heliosCardStyles = css`
     .dash-today-chart-tooltip-value
     {
         font-weight: var(--ha-font-weight-bold, 700);
-        color: #ffffff;
+        color: var(--primary-text-color, #ffffff);
     }
 
     /*  Skeleton placeholder shown in place of the produced value      */
@@ -2123,13 +2123,13 @@ export const heliosCardStyles = css`
         display: flex;
         align-items: center;
         gap: 6px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         font-variant-numeric: tabular-nums;
     }
     .dash-tomorrow-peak ha-icon { --mdc-icon-size: 14px; }
     .dash-tomorrow-peak .dash-line-label
     {
-        font-size: 10px;
+        font-size: var(--ha-font-size-xs, 10px);
         text-transform: uppercase;
         letter-spacing: 1px;
         opacity: 0.55;
@@ -2177,7 +2177,7 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
     }
@@ -2187,7 +2187,7 @@ export const heliosCardStyles = css`
     .dash-flow-value { font-weight: var(--ha-font-weight-bold, 700); }
     .dash-flow-label
     {
-        font-size: 10px;
+        font-size: var(--ha-font-size-xs, 10px);
         text-transform: uppercase;
         letter-spacing: 1px;
         opacity: 0.55;
@@ -2460,7 +2460,7 @@ export const heliosCardStyles = css`
         padding: 6px 8px;
         box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.16), 0 1px 4px 0 rgba(0, 0, 0, 0.06);
         font-family: var(--ha-font-family-body, 'Roboto', sans-serif);
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         line-height: 1.25;
         font-variant-numeric: tabular-nums;
         white-space: nowrap;
@@ -2529,7 +2529,7 @@ export const heliosCardStyles = css`
         drawn on the chart underneath so the user can match row to curve at a glance. */
     .tb-hover-tooltip-row-sub
     {
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         opacity: 0.78;
         padding-left: 4px;
     }
@@ -3177,7 +3177,7 @@ export const heliosCardStyles = css`
         background: transparent;
         color: var(--primary-text-color, #212121);
         border-radius: 50%;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         line-height: 1;
         font-variant-numeric: tabular-nums;
@@ -3276,7 +3276,7 @@ export const heliosCardStyles = css`
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
         border-radius: 16px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         line-height: 1.45;
         z-index: 49;
         opacity: 0;
@@ -3319,7 +3319,7 @@ export const heliosCardStyles = css`
         color: var(--primary-text-color, #ffffff);
         border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
         border-radius: 16px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         line-height: 1.4;
         z-index: 60;
         opacity: 0;
@@ -3472,7 +3472,7 @@ export const heliosCardStyles = css`
     {
         min-width: 36px;
         text-align: right;
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: 600;
         color: rgba(255, 255, 255, 0.85);
         font-variant-numeric: tabular-nums;
@@ -3563,7 +3563,7 @@ export const heliosCardStyles = css`
     {
         min-width: 36px;
         text-align: right;
-        font-size: 11px;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: 600;
         color: rgba(255, 255, 255, 0.85);
         font-variant-numeric: tabular-nums;
@@ -3600,7 +3600,7 @@ export const heliosCardStyles = css`
         border:     2px solid var(--pv-leader-color, var(--energy-solar-color, #ff9800));
         border-radius: 999px;
         padding: 3px 10px;
-        font-size:    12px;
+        font-size:    var(--ha-font-size-s, 12px);
         font-weight:  600;
         line-height:  1.2;
         font-variant-numeric: tabular-nums;
@@ -3648,7 +3648,7 @@ export const heliosCardStyles = css`
         border:     2px solid var(--battery-leader-color, var(--energy-battery-out-color, #4db6ac));
         border-radius: 999px;
         padding: 3px 10px;
-        font-size:    12px;
+        font-size:    var(--ha-font-size-s, 12px);
         font-weight:  600;
         line-height:  1.2;
         font-variant-numeric: tabular-nums;
@@ -3685,7 +3685,7 @@ export const heliosCardStyles = css`
         color: var(--primary-text-color, #212121);
         border-radius: 999px;
         padding: 3px 10px;
-        font-size: 12px;
+        font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         line-height: 1.2;
         font-variant-numeric: tabular-nums;
@@ -4061,7 +4061,7 @@ export const heliosCardStyles = css`
         border:     2px solid var(--helios-sun-color, var(--amber-color, var(--warning-color, #ffc107)));
         border-radius: 999px;
         padding: 3px 10px;
-        font-size:    12px;
+        font-size:    var(--ha-font-size-s, 12px);
         font-weight:  600;
         line-height:  1.2;
         font-variant-numeric: tabular-nums;
@@ -4205,7 +4205,7 @@ export const heliosCardStyles = css`
         .grid-export-label,
         .solar-pct-label
         {
-            font-size: 14px;
+            font-size: var(--ha-font-size-m, 14px);
             padding: 4px 12px;
         }
         .pv-pct-label ha-icon,
@@ -4218,11 +4218,11 @@ export const heliosCardStyles = css`
         }
         .tb-day-strip-cell
         {
-            font-size: clamp(8px, 5.5cqw, 12px);
+            font-size: clamp(8px, 5.5cqw, var(--ha-font-size-s, 12px));
         }
         .tb-hover-tooltip
         {
-            font-size: 13px;
+            font-size: var(--ha-font-size-s, 13px);
         }
     }
 
