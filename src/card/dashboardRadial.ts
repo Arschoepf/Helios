@@ -929,11 +929,11 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         const topPct  = 50 - labelRadiusPct * Math.cos(alpha);
         const rotation = ((h - 12) % 24) * 15;
         const lbl     = formatDialHourLabel(h, host.hass);
-        //Cardinal positions (0 / 6 / 12 / 18) read as the four primary anchors of a clock face,
+        //Cardinal positions every 3 hours (0 / 3 / 6 / 9 / 12 / 15 / 18 / 21) anchor the dial,
         //the in-between hours collapse out via a CSS @container query when the CoverFlow card is
         //too narrow to fit all 24 numerals comfortably. Same breakpoint as the chip-strip 4-to-2
         //grid switch so the dial chrome reduces in step with the strip layout above it.
-        const cardinalCls = h === 0 || h === 6 || h === 12 || h === 18 ? ' dash-radial-hour-label-cardinal' : '';
+        const cardinalCls = h % 3 === 0 ? ' dash-radial-hour-label-cardinal' : '';
         hourLabelsHtml.push(html`<span class="dash-radial-hour-label${cardinalCls}" style="left: ${leftPct.toFixed(2)}%; top: ${topPct.toFixed(2)}%; transform: translate(-50%, -50%) rotate(${rotation.toFixed(2)}deg);">${lbl}</span>`);
     }
 
