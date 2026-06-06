@@ -20,6 +20,11 @@ export const eu: Translations = {
         dayLabelTomorrow:     'Bihar',
         dayLabelDayAfter:     '2 egun barru',
         shadingDomeHint:      'Auto-ikasitako itzal-kupula. Gelaxka bakoitzak eguzkiaren posizio horretako batez besteko PV irteera erakusten du, behean aukeratutako hodei estaldura kontuan hartuta. Heliosek aurreikuspenari aplikatzen dio, eta horrela benetako itzalak (zuhaitz bat 16:00etan, tximinia bat neguan) automatikoki harrapatzen dira.',
+        loadingLabel:         'Datuak eskuratzen, itxaron mesedez...',
+        radialProductionLabel: 'Ekoizpena',
+        radialBatteryLabel:   'Bateria',
+        radialCloudLabel:     'Hodeiak',
+        radialIrradianceLabel: 'Irradiantzia',
     },
 
     editor:

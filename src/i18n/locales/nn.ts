@@ -18,6 +18,11 @@ export const nn: Translations = {
         dayLabelTomorrow:     'I morgon',
         dayLabelDayAfter:     'Om 2 dagar',
         shadingDomeHint:      'Sjølvlært skuggekuppel. Kvar celle viser gjennomsnittleg PV-effekt i den solposisjonen, for skydekket valt under. Helios bruker den på prognosen slik at faktiske skuggar (eit tre kl. 16, ein pipe om vinteren) fangast opp automatisk.',
+        loadingLabel:           'Hentar data, vent litt...',
+        radialProductionLabel:  'Produksjon',
+        radialBatteryLabel:     'Batteri',
+        radialCloudLabel:       'Skyer',
+        radialIrradianceLabel:  'Innstråling',
     },
 
     editor:

@@ -20,6 +20,11 @@ export const fa: Translations = {
         dayLabelTomorrow:     'فردا',
         dayLabelDayAfter:     '2 روز دیگر',
         shadingDomeHint:      'گنبد سایه‌اندازی خودآموز. هر سلول میانگین خروجی PV در آن موقعیت خورشید را برای پوشش ابر انتخاب‌شده در پایین نشان می‌دهد. Helios آن را به پیش‌بینی اعمال می‌کند تا سایه‌های واقعی (یک درخت در ساعت ۴ بعدازظهر، یک دودکش در زمستان) به‌طور خودکار ثبت شوند.',
+        loadingLabel:         'در حال دریافت داده‌ها، لطفاً صبر کنید...',
+        radialProductionLabel: 'تولید',
+        radialBatteryLabel:   'باتری',
+        radialCloudLabel:     'ابرها',
+        radialIrradianceLabel: 'تابش خورشیدی',
     },
 
     editor:

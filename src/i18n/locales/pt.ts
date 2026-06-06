@@ -15,6 +15,11 @@ export const pt: Translations = {
         dayLabelTomorrow:     'Amanhã',
         dayLabelDayAfter:     'Daqui a 2 dias',
         shadingDomeHint:      'Cúpula de sombreamento autoaprendida. Cada célula mostra a produção PV média nessa posição do sol, para a cobertura de nuvens escolhida abaixo. O Helios aplica-a à previsão para que as sombras reais (uma árvore às 16 h, uma chaminé no inverno) sejam capturadas automaticamente.',
+        loadingLabel:         'A obter dados, aguarde...',
+        radialProductionLabel: 'Produção',
+        radialBatteryLabel:    'Bateria',
+        radialCloudLabel:      'Nuvens',
+        radialIrradianceLabel: 'Irradiância',
     },
 
     editor:

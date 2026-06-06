@@ -19,6 +19,11 @@ export const id: Translations = {
         dayLabelTomorrow:     'Besok',
         dayLabelDayAfter:     'Dalam 2 hari',
         shadingDomeHint:      'Kubah peneduh yang dipelajari otomatis. Setiap sel menunjukkan keluaran PV rata-rata pada posisi matahari tersebut, untuk tutupan awan yang dipilih di bawah. Helios menerapkannya pada prakiraan sehingga bayangan nyata (pohon pukul 16, cerobong asap di musim dingin) tertangkap secara otomatis.',
+        loadingLabel:           'Mengambil data, harap tunggu...',
+        radialProductionLabel:  'Produksi',
+        radialBatteryLabel:     'Baterai',
+        radialCloudLabel:       'Awan',
+        radialIrradianceLabel:  'Iradiansi',
     },
 
     editor:

@@ -15,6 +15,11 @@ export const de: Translations = {
         dayLabelTomorrow:     'Morgen',
         dayLabelDayAfter:     'In 2 Tagen',
         shadingDomeHint:      'Selbstgelernte Verschattungskuppel. Jede Zelle zeigt die durchschnittliche PV-Leistung an dieser Sonnenposition, für die unten gewählte Wolkendecke. Helios wendet sie auf die Prognose an, sodass reale Schatten (ein Baum um 16 Uhr, ein Schornstein im Winter) automatisch erfasst werden.',
+        loadingLabel:         'Daten werden geladen, bitte warten...',
+        radialProductionLabel: 'Produktion',
+        radialBatteryLabel:   'Batterie',
+        radialCloudLabel:     'Wolken',
+        radialIrradianceLabel: 'Einstrahlung',
     },
 
     editor:

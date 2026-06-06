@@ -19,6 +19,11 @@ export const si: Translations = {
         dayLabelTomorrow:     'හෙට',
         dayLabelDayAfter:     'දින 2කින්',
         shadingDomeHint:      'ස්වයංක්‍රීයව ඉගෙන ගත් සෙවණ ගුම්මුස්ස. සෑම සෛලයක්ම පහත තෝරාගත් වලාකුළු ආවරණය සඳහා එම සූර්ය ස්ථානයේදී සාමාන්‍ය PV ප්‍රතිදානය පෙන්වයි. Helios එය පුරෝකථනයට යොදන අතර එමඟින් සැබෑ සෙවණැලි (සවස 4ට ගසක්, ශීත ඍතුවේ දුම්වැටයක්) ස්වයංක්‍රීයව හසුකර ගනී.',
+        loadingLabel:         'දත්ත ලබා ගනිමින්, කරුණාකර රැඳී සිටින්න...',
+        radialProductionLabel: 'නිෂ්පාදනය',
+        radialBatteryLabel:    'බැටරිය',
+        radialCloudLabel:      'වලාකුළු',
+        radialIrradianceLabel: 'සූර්ය විකිරණය',
     },
 
     editor:

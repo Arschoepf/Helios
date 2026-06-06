@@ -20,6 +20,11 @@ export const eo: Translations = {
         dayLabelTomorrow:     'Morgaŭ',
         dayLabelDayAfter:     'Post 2 tagoj',
         shadingDomeHint:      'Aŭtomate lernita ombra kupolo. Ĉiu ĉelo montras la mezan PV-eligon ĉe tiu sunpozicio, por la nuba kovrado elektita sube. Helios aplikas ĝin al la prognozo, do realaj ombroj (arbo je la 16-a, kameno vintre) estas kaptitaj aŭtomate.',
+        loadingLabel:         'Prenas datumojn, bonvolu atendi...',
+        radialProductionLabel: 'Produktado',
+        radialBatteryLabel:   'Baterio',
+        radialCloudLabel:     'Nuboj',
+        radialIrradianceLabel: 'Sunradiado',
     },
 
     editor:

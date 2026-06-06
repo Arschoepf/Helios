@@ -19,6 +19,11 @@ export const fi: Translations = {
         dayLabelTomorrow:     'Huomenna',
         dayLabelDayAfter:     '2 päivän päästä',
         shadingDomeHint:      'Itseopittu varjostuskupoli. Jokainen solu näyttää keskimääräisen PV-tuotannon kyseisessä auringon asennossa, alla valitulla pilvipeitteellä. Helios soveltaa sitä ennusteeseen, joten todelliset varjot (puu klo 16, savupiippu talvella) tallentuvat automaattisesti.',
+        loadingLabel:         'Haetaan tietoja, odota hetki...',
+        radialProductionLabel: 'Tuotanto',
+        radialBatteryLabel:   'Akku',
+        radialCloudLabel:     'Pilvet',
+        radialIrradianceLabel: 'Säteily',
     },
 
     editor:

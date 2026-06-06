@@ -20,6 +20,11 @@ export const ur: Translations = {
         dayLabelTomorrow:     'کل',
         dayLabelDayAfter:     '2 دن بعد',
         shadingDomeHint:      'خود تربیت یافتہ سایہ گنبد۔ ہر سیل اس سورج کی پوزیشن پر اوسط PV آؤٹ پٹ دکھاتا ہے، نیچے منتخب کردہ بادل کی کوریج کے لیے۔ Helios اسے پیش گوئی پر لاگو کرتا ہے تاکہ حقیقی سائے (شام 4 بجے ایک درخت، سردیوں میں ایک چمنی) خود بخود کیپچر ہو جائیں۔',
+        loadingLabel:         'ڈیٹا حاصل کیا جا رہا ہے، براہ کرم انتظار کریں...',
+        radialProductionLabel: 'پیداوار',
+        radialBatteryLabel:    'بیٹری',
+        radialCloudLabel:      'بادل',
+        radialIrradianceLabel: 'شمسی تابکاری',
     },
 
     editor:

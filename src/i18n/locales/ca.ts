@@ -19,6 +19,11 @@ export const ca: Translations = {
         dayLabelTomorrow:     'Demà',
         dayLabelDayAfter:     'D\'aquí a 2 dies',
         shadingDomeHint:      'Cúpula d\'ombrejat autoapresa. Cada cel·la mostra la sortida PV mitjana en aquesta posició solar, per a la cobertura de núvols escollida a sota. Helios l\'aplica a la previsió perquè les ombres reals (un arbre a les 16 h, una xemeneia a l\'hivern) es capturin automàticament.',
+        loadingLabel:         'Obtenint dades, espereu si us plau...',
+        radialProductionLabel: 'Producció',
+        radialBatteryLabel:   'Bateria',
+        radialCloudLabel:     'Núvols',
+        radialIrradianceLabel: 'Irradiància',
     },
 
     editor:

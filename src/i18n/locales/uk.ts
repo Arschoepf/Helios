@@ -20,6 +20,11 @@ export const uk: Translations = {
         dayLabelTomorrow:     'Завтра',
         dayLabelDayAfter:     'Післязавтра',
         shadingDomeHint:      'Самонавчена тіньова купола. Кожна клітинка показує середню вихідну потужність PV у цій позиції сонця для обраної нижче хмарності. Helios застосовує її до прогнозу, щоб реальні тіні (дерево о 16 годині, димар взимку) фіксувалися автоматично.',
+        loadingLabel:         'Отримання даних, зачекайте...',
+        radialProductionLabel: 'Виробництво',
+        radialBatteryLabel:    'Батарея',
+        radialCloudLabel:      'Хмарність',
+        radialIrradianceLabel: 'Інсоляція',
     },
 
     editor:

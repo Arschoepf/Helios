@@ -18,6 +18,11 @@ export const fy: Translations = {
         dayLabelTomorrow:     'Moarn',
         dayLabelDayAfter:     'Oer 2 dagen',
         shadingDomeHint:      'Auto-leare skaadkoepel. Elke sel lit de gemiddelde PV-útfier sjen by dy sinposysje, foar de wolkebedekking hjirûnder keazen. Helios past it ta op de foarsizzing, sadat echte skaden (in beam om 16:00 oere, in skoarstien yn de winter) automatysk fêstlein wurde.',
+        loadingLabel:         'Gegevens ophelje, efkes geduld...',
+        radialProductionLabel: 'Produksje',
+        radialBatteryLabel:   'Batterij',
+        radialCloudLabel:     'Wolken',
+        radialIrradianceLabel: 'Ynstrieling',
     },
 
     editor:

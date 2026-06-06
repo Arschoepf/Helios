@@ -20,6 +20,11 @@ export const sk: Translations = {
         dayLabelTomorrow:     'Zajtra',
         dayLabelDayAfter:     'Pozajtra',
         shadingDomeHint:      'Samoučiaca sa tieniaca kupola. Každá bunka ukazuje priemerný výkon FV pri tejto polohe slnka, pre oblačnosť zvolenú nižšie. Helios ju aplikuje na predpoveď, takže skutočné tiene (strom o 16. h, komín v zime) sú zachytávané automaticky.',
+        loadingLabel:         'Načítavajú sa údaje, počkajte prosím...',
+        radialProductionLabel: 'Výroba',
+        radialBatteryLabel:    'Batéria',
+        radialCloudLabel:      'Oblačnosť',
+        radialIrradianceLabel: 'Ožiarenie',
     },
 
     editor:

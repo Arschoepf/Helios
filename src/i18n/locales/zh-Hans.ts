@@ -19,6 +19,11 @@ export const zhHans: Translations = {
         dayLabelTomorrow:     '明天',
         dayLabelDayAfter:     '2 天后',
         shadingDomeHint:      '自学习遮阳穹顶。每个单元格显示该太阳位置上的平均光伏输出，对应下方选择的云量。Helios将其应用于预报，因此真实阴影（下午4点的树木、冬季的烟囱）会自动被捕获。',
+        loadingLabel:         '正在获取数据，请稍候...',
+        radialProductionLabel: '发电',
+        radialBatteryLabel:    '电池',
+        radialCloudLabel:      '云量',
+        radialIrradianceLabel: '辐照度',
     },
 
     editor:

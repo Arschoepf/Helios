@@ -20,6 +20,11 @@ export const bg: Translations = {
         dayLabelTomorrow:     'Утре',
         dayLabelDayAfter:     'Вдругиден',
         shadingDomeHint:      'Самообучаваща се сенчеста купола. Всяка клетка показва средната мощност на ФВ при тази позиция на слънцето, за избраната облачност по-долу. Helios я прилага към прогнозата, така че реалните сенки (дърво в 16 ч., комин през зимата) се улавят автоматично.',
+        loadingLabel:         'Извличане на данни, моля изчакайте...',
+        radialProductionLabel: 'Производство',
+        radialBatteryLabel:   'Батерия',
+        radialCloudLabel:     'Облаци',
+        radialIrradianceLabel: 'Слънчева радиация',
     },
 
     editor:

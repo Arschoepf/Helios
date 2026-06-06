@@ -19,6 +19,11 @@ export const th: Translations = {
         dayLabelTomorrow:     'พรุ่งนี้',
         dayLabelDayAfter:     'ในอีก 2 วัน',
         shadingDomeHint:      'โดมการบังเงาที่เรียนรู้อัตโนมัติ แต่ละเซลล์แสดงเอาต์พุต PV เฉลี่ยที่ตำแหน่งดวงอาทิตย์นั้น สำหรับเมฆปกคลุมที่เลือกด้านล่าง Helios จะนำไปใช้กับการพยากรณ์เพื่อให้เงาจริง (ต้นไม้ตอน 16:00 ปล่องไฟในฤดูหนาว) ถูกบันทึกโดยอัตโนมัติ',
+        loadingLabel:         'กำลังดึงข้อมูล โปรดรอสักครู่...',
+        radialProductionLabel: 'การผลิต',
+        radialBatteryLabel:    'แบตเตอรี่',
+        radialCloudLabel:      'เมฆ',
+        radialIrradianceLabel: 'ความเข้มแสงอาทิตย์',
     },
 
     editor:

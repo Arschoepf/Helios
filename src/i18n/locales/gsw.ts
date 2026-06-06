@@ -19,6 +19,11 @@ export const gsw: Translations = {
         dayLabelTomorrow:     'Morn',
         dayLabelDayAfter:     'I 2 Tag',
         shadingDomeHint:      'Automatisch glerneti Verschattigskuppele. Jedi Zälle zeigt d\'durchschnittlechi PV-Leischtig a däre Sunneposition, für d\'Wolkedecki under usgwählt. Helios wändet si uf d\'Prognose aa, so dass echti Schatte (es Baum am Namittag um 16:00, es Kämi im Winter) automatisch erfasst wärde.',
+        loadingLabel:           'Date wärde glade, bitte warte...',
+        radialProductionLabel:  'Produktion',
+        radialBatteryLabel:     'Batterie',
+        radialCloudLabel:       'Wolke',
+        radialIrradianceLabel:  'Iistrahlig',
     },
 
     editor:

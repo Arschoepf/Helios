@@ -20,6 +20,11 @@ export const bn: Translations = {
         dayLabelTomorrow:     'আগামীকাল',
         dayLabelDayAfter:     '2 দিন পরে',
         shadingDomeHint:      'স্বয়ংক্রিয়ভাবে শেখা ছায়া গম্বুজ। প্রতিটি সেল সেই সূর্যের অবস্থানে গড় PV আউটপুট দেখায়, নীচে নির্বাচিত মেঘের আবরণের জন্য। Helios এটি পূর্বাভাসে প্রয়োগ করে যাতে প্রকৃত ছায়া (বিকেল ৪টায় একটি গাছ, শীতে একটি চিমনি) স্বয়ংক্রিয়ভাবে ধরা পড়ে।',
+        loadingLabel:         'ডেটা আনা হচ্ছে, অনুগ্রহ করে অপেক্ষা করুন...',
+        radialProductionLabel: 'উৎপাদন',
+        radialBatteryLabel:   'ব্যাটারি',
+        radialCloudLabel:     'মেঘ',
+        radialIrradianceLabel: 'সৌর বিকিরণ',
     },
 
     editor:

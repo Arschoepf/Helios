@@ -20,6 +20,11 @@ export const srLatn: Translations = {
         dayLabelTomorrow:     'Sutra',
         dayLabelDayAfter:     'Prekosutra',
         shadingDomeHint:      'Samonaučena kupola zasenjenja. Svaka ćelija prikazuje prosečan PV izlaz u toj poziciji sunca, za oblačnost izabranu ispod. Helios je primenjuje na prognozu kako bi se stvarne senke (drvo u 16h, dimnjak zimi) automatski uhvatile.',
+        loadingLabel:         'Preuzimanje podataka, molimo sačekajte...',
+        radialProductionLabel: 'Proizvodnja',
+        radialBatteryLabel:    'Baterija',
+        radialCloudLabel:      'Oblačnost',
+        radialIrradianceLabel: 'Iradijansa',
     },
 
     editor:

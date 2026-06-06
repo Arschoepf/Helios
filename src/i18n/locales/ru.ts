@@ -20,6 +20,11 @@ export const ru: Translations = {
         dayLabelTomorrow:     'Завтра',
         dayLabelDayAfter:     'Послезавтра',
         shadingDomeHint:      'Самообучающийся затеняющий купол. Каждая ячейка показывает среднюю выходную мощность PV в этом положении солнца для облачности, выбранной ниже. Helios применяет её к прогнозу, чтобы реальные тени (дерево в 16 ч, дымоход зимой) автоматически учитывались.',
+        loadingLabel:         'Загрузка данных, пожалуйста, подождите...',
+        radialProductionLabel: 'Выработка',
+        radialBatteryLabel:    'Батарея',
+        radialCloudLabel:      'Облачность',
+        radialIrradianceLabel: 'Инсоляция',
     },
 
     editor:

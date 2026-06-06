@@ -20,6 +20,11 @@ export const tr: Translations = {
         dayLabelTomorrow:     'Yarın',
         dayLabelDayAfter:     '2 gün sonra',
         shadingDomeHint:      'Kendi kendine öğrenen gölgeleme kubbesi. Her hücre, aşağıda seçilen bulut örtüsü için o güneş konumundaki ortalama PV çıkışını gösterir. Helios bunu tahmine uygular, böylece gerçek gölgeler (saat 16\'da bir ağaç, kışın bir baca) otomatik olarak yakalanır.',
+        loadingLabel:         'Veriler alınıyor, lütfen bekleyin...',
+        radialProductionLabel: 'Üretim',
+        radialBatteryLabel:    'Batarya',
+        radialCloudLabel:      'Bulutluluk',
+        radialIrradianceLabel: 'Işınım',
     },
 
     editor:

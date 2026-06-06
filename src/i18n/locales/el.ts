@@ -20,6 +20,11 @@ export const el: Translations = {
         dayLabelTomorrow:     'Αύριο',
         dayLabelDayAfter:     'Μεθαύριο',
         shadingDomeHint:      'Αυτοδιδάγμενος θόλος σκιάς. Κάθε κελί δείχνει τη μέση παραγωγή Φ/Β σε αυτή τη θέση του ήλιου, για τη νέφωση που επιλέγεται παρακάτω. Ο Helios το εφαρμόζει στην πρόβλεψη ώστε οι πραγματικές σκιές (ένα δέντρο στις 16:00, μια καμινάδα τον χειμώνα) να καταγράφονται αυτόματα.',
+        loadingLabel:         'Λήψη δεδομένων, παρακαλώ περιμένετε...',
+        radialProductionLabel: 'Παραγωγή',
+        radialBatteryLabel:   'Μπαταρία',
+        radialCloudLabel:     'Σύννεφα',
+        radialIrradianceLabel: 'Ηλιακή ακτινοβολία',
     },
 
     editor:

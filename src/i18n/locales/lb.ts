@@ -18,6 +18,11 @@ export const lb: Translations = {
         dayLabelTomorrow:     'Muer',
         dayLabelDayAfter:     'An 2 Deeg',
         shadingDomeHint:      'Selbstgeléiert Schiedekuppel. All Zell weist den duerchschnëttleche PV-Output op där Sonnepositioun, fir d\'Wollekendecke ënnert gewielt. Helios benotzt et op d\'Prognose, sou dass reell Schiet (e Bam ëm 16 Auer, en Kamäin am Wanter) automatesch erfaasst ginn.',
+        loadingLabel:           'Daten ginn ofgeruff, w.e.g. waart...',
+        radialProductionLabel:  'Produktioun',
+        radialBatteryLabel:     'Batterie',
+        radialCloudLabel:       'Wolleken',
+        radialIrradianceLabel:  'Astralung',
     },
 
     editor:

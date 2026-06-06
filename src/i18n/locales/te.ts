@@ -20,6 +20,11 @@ export const te: Translations = {
         dayLabelTomorrow:     'రేపు',
         dayLabelDayAfter:     '2 రోజుల్లో',
         shadingDomeHint:      'స్వయంగా నేర్చుకున్న షేడింగ్ గుమ్మటం. ప్రతి సెల్ ఆ సూర్య స్థానంలో సగటు PV అవుట్‌పుట్‌ను చూపుతుంది, దిగువ ఎంచుకున్న మేఘ కవరేజ్‌కు. Helios దీన్ని అంచనాలకు వర్తింపజేస్తుంది, తద్వారా నిజమైన నీడలు (సాయంత్రం 4 గంటలకు ఒక చెట్టు, చలికాలంలో ఒక చిమ్నీ) స్వయంచాలకంగా క్యాప్చర్ చేయబడతాయి.',
+        loadingLabel:         'డేటాను పొందుతోంది, దయచేసి వేచి ఉండండి...',
+        radialProductionLabel: 'ఉత్పత్తి',
+        radialBatteryLabel:    'బ్యాటరీ',
+        radialCloudLabel:      'మేఘాలు',
+        radialIrradianceLabel: 'సౌర వికిరణం',
     },
 
     editor:

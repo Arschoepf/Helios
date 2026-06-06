@@ -17,6 +17,11 @@ export const pl: Translations = {
         dayLabelTomorrow:     'Jutro',
         dayLabelDayAfter:     'Za 2 dni',
         shadingDomeHint:      'Samouczona kopuła zacieniająca. Każda komórka pokazuje średnią moc PV w tej pozycji słońca, dla wybranego poniżej zachmurzenia. Helios stosuje ją w prognozie, dzięki czemu rzeczywiste cienie (drzewo o 16, komin zimą) są wychwytywane automatycznie.',
+        loadingLabel:         'Pobieranie danych, proszę czekać...',
+        radialProductionLabel: 'Produkcja',
+        radialBatteryLabel:    'Bateria',
+        radialCloudLabel:      'Zachmurzenie',
+        radialIrradianceLabel: 'Nasłonecznienie',
     },
 
     editor:

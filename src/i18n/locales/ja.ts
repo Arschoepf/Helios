@@ -19,6 +19,11 @@ export const ja: Translations = {
         dayLabelTomorrow:     '明日',
         dayLabelDayAfter:     '2日後',
         shadingDomeHint:      '自動学習された遮光ドーム。各セルはその太陽位置での平均PV出力を、下で選択された雲量に基づいて表示します。Heliosはこれを予測に適用するため、実際の影（午後4時の木、冬の煙突）が自動的に捕捉されます。',
+        loadingLabel:           'データを取得しています。しばらくお待ちください...',
+        radialProductionLabel:  '発電',
+        radialBatteryLabel:     'バッテリー',
+        radialCloudLabel:       '雲',
+        radialIrradianceLabel:  '日射量',
     },
 
     editor:

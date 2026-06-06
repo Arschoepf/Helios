@@ -20,6 +20,11 @@ export const hi: Translations = {
         dayLabelTomorrow:     'कल',
         dayLabelDayAfter:     '2 दिन बाद',
         shadingDomeHint:      'स्व-सीखा हुआ छाया गुंबद. प्रत्येक कोशिका उस सूर्य की स्थिति पर औसत PV आउटपुट दिखाती है, नीचे चुने गए बादलों के आवरण के लिए. Helios इसे पूर्वानुमान पर लागू करता है ताकि वास्तविक छायाएं (शाम 4 बजे एक पेड़, सर्दियों में एक चिमनी) स्वचालित रूप से कैप्चर हो जाएं.',
+        loadingLabel:           'डेटा प्राप्त किया जा रहा है, कृपया प्रतीक्षा करें...',
+        radialProductionLabel:  'उत्पादन',
+        radialBatteryLabel:     'बैटरी',
+        radialCloudLabel:       'बादल',
+        radialIrradianceLabel:  'सौर विकिरण',
     },
 
     editor:

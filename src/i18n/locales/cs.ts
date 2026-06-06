@@ -17,6 +17,11 @@ export const cs: Translations = {
         dayLabelTomorrow:     'Zítra',
         dayLabelDayAfter:     'Pozítří',
         shadingDomeHint:      'Samoučící se stínicí kupole. Každá buňka ukazuje průměrný výstup FV při této pozici slunce pro oblačnost zvolenou níže. Helios ji aplikuje na předpověď, takže skutečné stíny (strom v 16 h, komín v zimě) se zachycují automaticky.',
+        loadingLabel:         'Načítání dat, čekejte prosím...',
+        radialProductionLabel: 'Výroba',
+        radialBatteryLabel:   'Baterie',
+        radialCloudLabel:     'Oblačnost',
+        radialIrradianceLabel: 'Ozáření',
     },
 
     editor:

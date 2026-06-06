@@ -20,6 +20,11 @@ export const he: Translations = {
         dayLabelTomorrow:     'מחר',
         dayLabelDayAfter:     'מחרתיים',
         shadingDomeHint:      'כיפת הצללה לומדת אוטומטית. כל תא מציג את תפוקת ה-PV הממוצעת באותה מיקום שמש, עבור כיסוי העננים שנבחר למטה. Helios מיישם אותה על התחזית כך שצללים אמיתיים (עץ בשעה 16:00, ארובה בחורף) נקלטים אוטומטית.',
+        loadingLabel:           'טוען נתונים, אנא המתן...',
+        radialProductionLabel:  'ייצור',
+        radialBatteryLabel:     'סוללה',
+        radialCloudLabel:       'עננים',
+        radialIrradianceLabel:  'עוצמת קרינה',
     },
 
     editor:

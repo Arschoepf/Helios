@@ -20,6 +20,11 @@ export const ka: Translations = {
         dayLabelTomorrow:     'ხვალ',
         dayLabelDayAfter:     'ზეგ',
         shadingDomeHint:      'თვით-სწავლადი ჩრდილოვანი გუმბათი. თითოეული უჯრედი აჩვენებს საშუალო PV გამოსავალს იმ მზის პოზიციაში, ქვემოთ არჩეული ღრუბლიანობისთვის. Helios იყენებს მას პროგნოზზე, ისე რომ რეალური ჩრდილები (ხე 16:00 საათზე, საკვამური ზამთარში) ავტომატურად ფიქსირდება.',
+        loadingLabel:           'მონაცემების მიღება, გთხოვთ მოიცადოთ...',
+        radialProductionLabel:  'წარმოება',
+        radialBatteryLabel:     'ბატარეა',
+        radialCloudLabel:       'ღრუბლები',
+        radialIrradianceLabel:  'ირადიაცია',
     },
 
     editor:

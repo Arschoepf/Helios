@@ -20,6 +20,11 @@ export const cy: Translations = {
         dayLabelTomorrow:     'Yfory',
         dayLabelDayAfter:     'Mewn 2 ddiwrnod',
         shadingDomeHint:      'Cromen gysgodol hunan-ddysgu. Mae pob cell yn dangos y cynnyrch PV cyfartalog yn safle\'r haul honno, ar gyfer y gorchudd cwmwl a ddewiswyd isod. Mae Helios yn ei chymhwyso i\'r rhagolwg fel bod cysgodion go iawn (coeden am 16:00, simnai yn y gaeaf) yn cael eu dal yn awtomatig.',
+        loadingLabel:         'Yn nôl data, arhoswch os gwelwch yn dda...',
+        radialProductionLabel: 'Cynhyrchu',
+        radialBatteryLabel:   'Batri',
+        radialCloudLabel:     'Cymylau',
+        radialIrradianceLabel: 'Pelydriad',
     },
 
     editor:

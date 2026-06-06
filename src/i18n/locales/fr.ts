@@ -25,7 +25,7 @@ export const fr: Translations = {
         loadingLabel:         'Récupération des données, veuillez patienter...',
         radialProductionLabel: 'Production',
         radialBatteryLabel:    'Batterie',
-        radialCloudLabel:      'Cloud',
+        radialCloudLabel:      'Nuages',
         radialIrradianceLabel: 'Irradiance',
     },
 

@@ -20,6 +20,11 @@ export const ar: Translations = {
         dayLabelTomorrow:     'غداً',
         dayLabelDayAfter:     'بعد غد',
         shadingDomeHint:      'قبة تظليل ذاتية التعلم. تعرض كل خلية متوسط إنتاج الكهروضوئية في موقع الشمس هذا، للغطاء السحابي المحدد أدناه. يطبقها هيليوس على التنبؤ بحيث يتم التقاط الظلال الحقيقية (شجرة الساعة 4 مساءً، مدخنة في الشتاء) تلقائياً.',
+        loadingLabel:         'جارٍ جلب البيانات، يرجى الانتظار...',
+        radialProductionLabel: 'الإنتاج',
+        radialBatteryLabel:   'البطارية',
+        radialCloudLabel:     'الغيوم',
+        radialIrradianceLabel: 'الإشعاع الشمسي',
     },
 
     editor:

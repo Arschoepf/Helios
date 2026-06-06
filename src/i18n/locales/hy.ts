@@ -20,6 +20,11 @@ export const hy: Translations = {
         dayLabelTomorrow:     'Վաղը',
         dayLabelDayAfter:     'Մյուս օրը',
         shadingDomeHint:      'Ինքնուսուցանվող ստվերային գմբեթ. Յուրաքանչյուր բջիջ ցույց է տալիս PV-ի միջին արտադրությունը արևի այդ դիրքի համար՝ ստորև ընտրված ամպամածության դեպքում: Helios-ը կիրառում է այն կանխատեսման վրա, որպեսզի իրական ստվերները (ծառ ժամը 16:00-ին, ծխնելույզ ձմռանը) ինքնաբերաբար գրանցվեն:',
+        loadingLabel:           'Տվյալների բեռնում, խնդրում ենք սպասել...',
+        radialProductionLabel:  'Արտադրություն',
+        radialBatteryLabel:     'Մարտկոց',
+        radialCloudLabel:       'Ամպեր',
+        radialIrradianceLabel:  'Ճառագայթում',
     },
 
     editor:
