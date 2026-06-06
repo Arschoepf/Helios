@@ -226,9 +226,11 @@ function numFromCfg(v: unknown): number | null
     return null;
 }
 
-//One-shot warning latch. When the user enables the local provider but leaves the config incomplete or invalid, log exactly once per session so the
-//silent fall-through is diagnosable without spamming the console on every shadow refresh.
+//One-shot warning latches. When the user enables the local provider but leaves the config incomplete or invalid, log exactly once per session so the
+//silent fall-through is diagnosable without spamming the console on every shadow refresh. Same one-shot pattern for the "bbox valid but does not
+//cover the home" case (typical lat / lon swap) and for the silent fall-through onto a public provider.
 let _warnedInvalidLocalNdsm = false;
+let _warnedBboxDoesNotCoverHome = false;
 
 //Config-aware provider resolver. Behaviour:
 //
@@ -272,6 +274,24 @@ export function resolveLidarSource(
         if (local.covers(lat, lon))
         {
             return local;
+        }
+        //Bbox validates but the home is OUTSIDE the rectangle. Most common
+        //case is a lat / lon swap in the config (the user pasted longitudes
+        //into the *-lat keys and latitudes into the *-lon keys, both pass
+        //the bare -90..90 / -180..180 range check). Surface the actual
+        //numbers so the user can spot the swap from the console without
+        //digging into the source.
+        if (!_warnedBboxDoesNotCoverHome)
+        {
+            _warnedBboxDoesNotCoverHome = true;
+            console.warn(
+                '[HELIOS] local-nDSM bbox does not cover the home, falling back to public providers.\n'
+              + '  home:     lat ' + lat.toFixed(5) + ', lon ' + lon.toFixed(5) + '\n'
+              + '  bbox lat: [' + localCfg.minLat + ', ' + localCfg.maxLat + ']\n'
+              + '  bbox lon: [' + localCfg.minLon + ', ' + localCfg.maxLon + ']\n'
+              + '  If the lat / lon ranges look swapped (latitudes in the lon fields or vice versa), '
+              + 'check the four lidar-local-ndsm-{min,max}-{lat,lon} keys.'
+            );
         }
     }
 
