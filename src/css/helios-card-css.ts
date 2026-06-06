@@ -615,7 +615,7 @@ export const heliosCardStyles = css`
     .dash-cf-card-date
     {
         font-size: clamp(13px, 2.2cqw, 16px);
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         letter-spacing: 0.2px;
         text-transform: capitalize;
         color: var(--primary-text-color, #ffffff);
@@ -636,7 +636,7 @@ export const heliosCardStyles = css`
         border-radius: 14px;
         padding: 2px 10px;
         font-size: 11px;
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         line-height: 1.4;
         white-space: nowrap;
         flex-shrink: 0;
@@ -756,7 +756,7 @@ export const heliosCardStyles = css`
         align-items: center;
         gap: 4px;
         font-size: 12px;
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
         font-variant-numeric: tabular-nums;
         color: var(--secondary-text-color, rgba(255, 255, 255, 0.7));
         pointer-events: none;
@@ -948,47 +948,6 @@ export const heliosCardStyles = css`
     .dash-radial-dot-prod          { fill: var(--energy-solar-color, #ff9800); }
     .dash-radial-dot-batt-charge   { fill: var(--energy-battery-in-color,  #5cba47); }
     .dash-radial-dot-batt-discharge{ fill: var(--energy-battery-out-color, #d8a657); }
-
-    /*  Corner pills, absolutely positioned so they float over the SVG without nudging its layout.
-        TL production, TR import, BL cloud, BR clock (the four together form a fixed-width matched
-        set so the user reads them as one consistent legend regardless of the underlying value). */
-    .dash-radial-corner
-    {
-        position: absolute;
-        display: flex;
-        flex-direction: column;
-        line-height: 1.2;
-        pointer-events: none;
-        padding: 4px 10px;
-        background: color-mix(in srgb, var(--ha-card-background, var(--card-background-color, #1c1c1c)) 80%, transparent);
-        border-radius: 8px;
-        backdrop-filter: blur(2px);
-        width: 78px;
-        box-sizing: border-box;
-    }
-    .dash-radial-corner-tl { top:    6px;  left:  8px; text-align: left;  }
-    .dash-radial-corner-tr { top:    6px;  right: 8px; text-align: right; }
-    .dash-radial-corner-bl { bottom: 6px;  left:  8px; text-align: left;  }
-    .dash-radial-corner-br { bottom: 6px;  right: 8px; text-align: right; }
-    .dash-radial-corner-label
-    {
-        color: var(--secondary-text-color, rgba(255, 255, 255, 0.65));
-        font-size: 10px;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-    }
-    .dash-radial-corner-value
-    {
-        font-size: 14px;
-        font-weight: 600;
-        font-variant-numeric: tabular-nums;
-    }
-    .dash-radial-corner-prod              { color: var(--energy-solar-color, #ff9800); }
-    .dash-radial-corner-batt-charge       { color: var(--energy-battery-in-color,  #5cba47); }
-    .dash-radial-corner-batt-discharge    { color: var(--energy-battery-out-color, #d8a657); }
-    .dash-radial-corner-cloud             { color: var(--primary-text-color, #ffffff); }
-    .dash-radial-corner-clock             { color: var(--primary-color, #03a9f4); }
-
 
     /*  Ring tracks (background of each ring). Same vocabulary across the three data rings, only the
         token differs so each ring picks up the right energy-palette colour. The dial track is
@@ -1488,7 +1447,7 @@ export const heliosCardStyles = css`
     .dash-card-label
     {
         font-size: 11px;
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         letter-spacing: 1.4px;
         text-transform: uppercase;
         opacity: 0.75;
@@ -1524,21 +1483,21 @@ export const heliosCardStyles = css`
     .dash-stat-unit
     {
         font-size: 13px;
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
         opacity: 0.65;
         margin-left: 3px;
     }
     .dash-stat-value-sm
     {
         font-size: 18px;
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         font-variant-numeric: tabular-nums;
         line-height: 1;
     }
     .dash-stat-unit-sm
     {
         font-size: 11px;
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
         opacity: 0.65;
     }
 
@@ -1634,8 +1593,8 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         margin-left: 3px;
     }
-    .dash-stat-refined-up   { color: #22c55e; }
-    .dash-stat-refined-down { color: #ef4444; }
+    .dash-stat-refined-up   { color: var(--success-color, #22c55e); }
+    .dash-stat-refined-down { color: var(--error-color, #ef4444); }
     /*  Custom-styled tooltip explaining where the refined value
         comes from. Same dark-box visual as .dash-stat-delta::after
         below so the two tooltips share a vocabulary.
@@ -1661,7 +1620,7 @@ export const heliosCardStyles = css`
         padding: 6px 10px;
         border-radius: 4px;
         font-size: 11px;
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
         letter-spacing: 0.1px;
         white-space: normal;
         max-width: 220px;
@@ -1686,15 +1645,15 @@ export const heliosCardStyles = css`
     .dash-stat-delta
     {
         font-size: 13px;
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         font-variant-numeric: tabular-nums;
         margin-left: 6px;
         opacity: 0.85;
         position: relative;
         cursor: help;
     }
-    .dash-stat-delta-up   { color: #22c55e; }
-    .dash-stat-delta-down { color: #ef4444; }
+    .dash-stat-delta-up   { color: var(--success-color, #22c55e); }
+    .dash-stat-delta-down { color: var(--error-color, #ef4444); }
     /*  Custom CSS hover hint. Native title= works but only fires
         after a ~1 s hover delay and is gated by browser quirks
         inside HA's nested Shadow DOM; a pure CSS ::after
@@ -1713,7 +1672,7 @@ export const heliosCardStyles = css`
         padding: 4px 8px;
         border-radius: 4px;
         font-size: 11px;
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
         letter-spacing: 0.1px;
         white-space: nowrap;
         opacity: 0;
@@ -1777,7 +1736,7 @@ export const heliosCardStyles = css`
         desktop and on smartphone.                                 */
     .dash-today-line .dash-line-value
     {
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         line-height: 1;
         transform: translateY(1px);
     }
@@ -2058,7 +2017,7 @@ export const heliosCardStyles = css`
     }
     .dash-today-chart-tooltip-time
     {
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         opacity: 0.85;
         font-size: 9px;
         letter-spacing: 0.6px;
@@ -2110,14 +2069,14 @@ export const heliosCardStyles = css`
     }
     .dash-today-chart-tooltip-key
     {
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         font-size: 9px;
         letter-spacing: 0.5px;
         text-transform: uppercase;
     }
     .dash-today-chart-tooltip-value
     {
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         color: #ffffff;
     }
 
@@ -2175,7 +2134,7 @@ export const heliosCardStyles = css`
         letter-spacing: 1px;
         opacity: 0.55;
     }
-    .dash-tomorrow-peak .dash-line-value { font-weight: 700; }
+    .dash-tomorrow-peak .dash-line-value { font-weight: var(--ha-font-weight-bold, 700); }
 
     /*  Section: battery                                                */
 
@@ -2223,9 +2182,9 @@ export const heliosCardStyles = css`
         white-space: nowrap;
     }
     .dash-battery-flow ha-icon { --mdc-icon-size: 14px; }
-    .dash-battery-flow-charge    ha-icon { color: #22c55e; }
-    .dash-battery-flow-discharge ha-icon { color: #ef4444; }
-    .dash-flow-value { font-weight: 700; }
+    .dash-battery-flow-charge    ha-icon { color: var(--success-color, #22c55e); }
+    .dash-battery-flow-discharge ha-icon { color: var(--error-color, #ef4444); }
+    .dash-flow-value { font-weight: var(--ha-font-weight-bold, 700); }
     .dash-flow-label
     {
         font-size: 10px;
@@ -2518,7 +2477,7 @@ export const heliosCardStyles = css`
         display: flex;
         align-items: center;
         gap: 6px;
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         letter-spacing: 0.3px;
         padding-bottom: 4px;
         margin-bottom: 4px;
@@ -2619,7 +2578,7 @@ export const heliosCardStyles = css`
         border: 1px solid var(--primary-color, #03a9f4);
         border-radius: 3px;
         font-size: inherit;
-        font-weight: 700;
+        font-weight: var(--ha-font-weight-bold, 700);
         letter-spacing: 0.4px;
         text-transform: uppercase;
         line-height: 1;
@@ -2856,12 +2815,12 @@ export const heliosCardStyles = css`
         overflow: hidden;
         text-overflow: clip;
         z-index: 2;
-        font-weight: 400;
+        font-weight: var(--ha-font-weight-normal, 400);
     }
 
     .tb-day-strip-cell.is-today
     {
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
     }
     /*  Active day during scrub / hover gets a faint brand-blue tint
         and bumps the label to a slightly heavier weight so the user
@@ -3379,7 +3338,7 @@ export const heliosCardStyles = css`
     }
     .loading-banner-label
     {
-        font-weight: 500;
+        font-weight: var(--ha-font-weight-medium, 500);
         opacity: 0.85;
         text-align: center;
     }
