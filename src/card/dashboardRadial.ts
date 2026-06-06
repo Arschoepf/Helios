@@ -21,6 +21,7 @@
 //Implemented as alpha = (hour - 12) * pi / 12, then x = r * sin(alpha), y = -r * cos(alpha).
 
 import { html, svg, nothing, type TemplateResult } from 'lit';
+import { keyed } from 'lit/directives/keyed.js';
 import type { DashboardHost } from './dashboard';
 import { navigateDashDay } from './dashboard';
 import { getSunPosition } from '../engine/sun';
@@ -40,7 +41,8 @@ const CENTER                   = 200;
 //explicit inner edge, outer edge and a 4 unit gap before the next ring. The dial ring is wide enough
 //to host its hour labels INSIDE it at the mid-annulus, plus the hour / half / quarter ticks against
 //BOTH its outer and inner edges (mirrored).
-const R_SUN_REF                = 55;   //reference rim circle, also irradiance max disc radius
+const R_SUN_REF                = 28;   //reference rim circle, also irradiance max disc radius (halved from v5)
+const R_SUN_HALO_MAX           = 55;   //outer envelope of the halo at 100 % irradiance (= old R_SUN_REF)
 const R_CLOUD_INNER            = 63;
 const R_CLOUD_OUTER            = 91;
 const R_PROD_INNER             = 97;
@@ -48,8 +50,9 @@ const R_PROD_OUTER             = 125;
 const R_BATT_INNER             = 131;
 const R_BATT_OUTER             = 159;
 const R_DIAL_INNER             = 165;
-const R_DIAL_OUTER             = 197;
-const R_HOUR_LABEL             = R_DIAL_INNER + (R_DIAL_OUTER - R_DIAL_INNER) * 0.5;  //labels centred inside the dial annulus
+const R_DIAL_OUTER             = 183;   //dial annulus narrower than v5 to make room for outside-the-ring hour labels
+const R_HOUR_LABEL             = 192;   //hour labels sit OUTSIDE the dial outer edge
+const R_SUN_ICON               = (R_DIAL_INNER + R_DIAL_OUTER) / 2;  //sunrise / sunset MDI icons at mid-dial
 //Tick layout. Each tick has two endpoints inside the dial annulus, one on the OUTER side (close to
 //R_DIAL_OUTER) and one on the INNER side (close to R_DIAL_INNER). The hour / half / quarter triplet
 //uses different lengths so the eye still snaps to the hour cardinals.
@@ -694,12 +697,15 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         const cloudVal = hourlyCloud[idx];
         if (prodVal  !== null) { const r = interpRadius(hourlyProd,  prodScaleMax,  R_PROD_INNER, R_PROD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverProdDot  = { x, y }; }
         if (cloudVal !== null) { const r = interpRadius(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverCloudDot = { x, y }; }
-        if (battVal  !== null && battVal !== 0)
+        if (battVal !== null)
         {
+            //Show the dot at every hovered hour the curve has a sample for, even idle hours where
+            //the battery is at 0. At 0 the dot lands on the ring's inner edge (the zero baseline
+            //both annulus paths share), so the user always sees where the cursor crosses the curve.
             const absSeries: ReadonlyArray<number | null> = hourlyBatt.map(v => (v === null ? null : Math.abs(v)));
             const r = interpRadius(absSeries, battScaleMax, R_BATT_INNER, R_BATT_OUTER, hf);
             const [x, y] = polarPt(hf, r);
-            hoverBattDot = { x, y, charging: battVal > 0 };
+            hoverBattDot = { x, y, charging: battVal >= 0 };
         }
     }
 
@@ -788,20 +794,36 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         ? formatHoverClock(hoverHour as number, host.hass)
         : formatHoverClock(currentHourFraction(), host.hass);
 
+    //Irradiance halo: a soft sun-coloured glow centred on the sun disc. The halo's outer radius
+    //tracks the irradiance ratio: at 0 % the halo collapses to the rim (invisible behind the disc),
+    //at 100 % it reaches R_SUN_HALO_MAX which is the pre-shrink sun-disc envelope. A radial
+    //gradient fades the glow to fully transparent at the outer edge so it blends into the cloud
+    //ring instead of cutting a hard circle.
+    const haloR = R_SUN_REF + (R_SUN_HALO_MAX - R_SUN_REF) * (ratioPct / 100);
+    //Per-card gradient id so multiple CoverFlow cards on the same page never collide.
+    const haloGradId = `dash-radial-sun-halo-${cardOffset}`;
+
     return html`
         <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
-            ${showHour ? html`<span class="dash-radial-hour-text">${hourText}</span>` : nothing}
-            <svg
+            ${showHour ? html`<span class="dash-radial-hour-text"><ha-icon icon="mdi:clock-outline"></ha-icon><span>${hourText}</span></span>` : nothing}
+            ${keyed(isFront ? `f-${dayStartMs}` : `b-${cardOffset}`, html`<svg
                 class="dash-radial-svg"
                 viewBox="0 0 ${VIEWBOX} ${VIEWBOX}"
                 preserveAspectRatio="xMidYMid meet"
                 @pointermove="${onPointerMove}"
                 @pointerleave="${onPointerLeave}"
             >
+                <defs>
+                    <radialGradient id="${haloGradId}">
+                        <stop offset="0%"   stop-color="var(--helios-sun-color, var(--amber-color, #f59e0b))" stop-opacity="0.55"/>
+                        <stop offset="100%" stop-color="var(--helios-sun-color, var(--amber-color, #f59e0b))" stop-opacity="0"/>
+                    </radialGradient>
+                </defs>
+
                 <!-- Ring tracks. Each track is a circle with stroke-width = annulus thickness, so
                      the visual is a real ring with breathing room between it and its neighbours.
-                     The dial track is drawn here too because the hour labels + sub-hour ticks live
-                     INSIDE the dial annulus and need its background to anchor them. -->
+                     The dial track is drawn here too because the hour ticks live INSIDE the dial
+                     annulus and need its background to anchor them. -->
                 <circle class="dash-radial-cloud-track" cx="${CENTER}" cy="${CENTER}" r="${(R_CLOUD_INNER + R_CLOUD_OUTER) / 2}"
                         fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>
                 <circle class="dash-radial-prod-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_PROD_INNER  + R_PROD_OUTER)  / 2}"
@@ -811,33 +833,57 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <circle class="dash-radial-dial-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_DIAL_INNER  + R_DIAL_OUTER)  / 2}"
                         fill="none" stroke-width="${R_DIAL_OUTER - R_DIAL_INNER}"/>
 
-                <!-- Night-period arc in the dial annulus. A solid-filled annular segment from sunset
-                     hour around through midnight to sunrise hour, painted as a slightly darker tint
-                     on top of the dial track. Drawn here (above the track, before the ticks +
-                     labels) so the ticks + labels read on top of the night zone. -->
-                ${nightPath ? svg`<path class="dash-radial-night" d="${nightPath}"/>` : nothing}
+                <!-- Animated group: every data curve + the sun disc + halo + night arc + sunrise /
+                     sunset icons grow from the centre on day load. CSS animation triggers on every
+                     mount, the parent template is keyed by dayStartMs so day navigation re-mounts
+                     this group and re-fires the animation. -->
+                <g class="dash-radial-grow">
+                    <!-- Night-period arc in the dial annulus. A solid-filled annular segment from
+                         sunset hour around through midnight to sunrise hour. -->
+                    ${nightPath ? svg`<path class="dash-radial-night" d="${nightPath}"/>` : nothing}
 
-                <!-- Past fills (annulus shapes between the ring's inner edge and the per-hour data
-                     curve) painted via the evenodd fill rule so the inner subpath carves the centre
-                     of the donut shape cleanly. Future outlines are a simple polyline along the data
-                     curve at the variable outer radius, no fill needed. Painted inside out so the
-                     outer rings stay on top. -->
-                ${cloudPastPath   ? svg`<path class="dash-radial-cloud-fill"   fill-rule="evenodd" d="${cloudPastPath}"/>`   : nothing}
-                ${cloudFuturePath ? svg`<path class="dash-radial-cloud-future" d="${cloudFuturePath}"/>` : nothing}
-                ${prodPastPath    ? svg`<path class="dash-radial-prod-fill"    fill-rule="evenodd" d="${prodPastPath}"/>`    : nothing}
-                ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
-                ${battChargePath    ? svg`<path class="dash-radial-batt-charge"    fill-rule="evenodd" d="${battChargePath}"/>`    : nothing}
-                ${battDischargePath ? svg`<path class="dash-radial-batt-discharge" fill-rule="evenodd" d="${battDischargePath}"/>` : nothing}
+                    <!-- Past fills (annulus shapes between the ring inner edge and the per-hour
+                         curve) painted via the evenodd fill rule. Future outlines are a polyline
+                         along the data curve at the variable outer radius, no fill. Painted inside
+                         out so the outer rings stay on top. -->
+                    ${cloudPastPath   ? svg`<path class="dash-radial-cloud-fill"   fill-rule="evenodd" d="${cloudPastPath}"/>`   : nothing}
+                    ${cloudFuturePath ? svg`<path class="dash-radial-cloud-future" d="${cloudFuturePath}"/>` : nothing}
+                    ${prodPastPath    ? svg`<path class="dash-radial-prod-fill"    fill-rule="evenodd" d="${prodPastPath}"/>`    : nothing}
+                    ${prodFuturePath  ? svg`<path class="dash-radial-prod-future"  d="${prodFuturePath}"/>`  : nothing}
+                    ${battChargePath    ? svg`<path class="dash-radial-batt-charge"    fill-rule="evenodd" d="${battChargePath}"/>`    : nothing}
+                    ${battDischargePath ? svg`<path class="dash-radial-batt-discharge" fill-rule="evenodd" d="${battDischargePath}"/>` : nothing}
 
-                <!-- Sun: three layers. Background fill at R_SUN_REF in the theme-contrasting text
-                     colour (white on dark themes, black on light themes) so the reference disc has
-                     a visible "empty plate" the orange fill sits on top of. Scaled inner fill in the
-                     sun colour, radius drives the irradiance reading. Reference rim in the sun
-                     colour. The visual matches the 3D card sun on the map. -->
-                <circle class="dash-radial-sun-bg"   cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"/>
-                <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}"/>
-                <circle class="dash-radial-sun-rim"  cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"
-                        fill="none"/>
+                    <!-- Sun: halo + bg + irradiance fill + rim. The halo sits BEHIND the disc so
+                         the centre stays the disc colour, only the outer halo ring shows around
+                         the rim. Halo radius scales with irradiance. -->
+                    <circle class="dash-radial-sun-halo" cx="${CENTER}" cy="${CENTER}" r="${haloR.toFixed(2)}" fill="url(#${haloGradId})"/>
+                    <circle class="dash-radial-sun-bg"   cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}"/>
+                    <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}"/>
+                    <circle class="dash-radial-sun-rim"  cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}" fill="none"/>
+
+                    <!-- Sunrise / sunset MDI icons painted inside the dial annulus at the radial
+                         position of the actual horizon crossings. Hours sit outside the annulus
+                         now, so the icons get the inside half of the ring to themselves. Skipped
+                         on polar day / polar night (sunrise + sunset both null). -->
+                    ${sunRiseSet.sunrise !== null ? (() =>
+                    {
+                        const [x, y] = polarPt(sunRiseSet.sunrise, R_SUN_ICON);
+                        return svg`<foreignObject x="${(x - 6.5).toFixed(2)}" y="${(y - 6.5).toFixed(2)}" width="13" height="13">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="dash-radial-sun-icon">
+                                <ha-icon icon="mdi:weather-sunset-up"></ha-icon>
+                            </div>
+                        </foreignObject>`;
+                    })() : nothing}
+                    ${sunRiseSet.sunset !== null ? (() =>
+                    {
+                        const [x, y] = polarPt(sunRiseSet.sunset, R_SUN_ICON);
+                        return svg`<foreignObject x="${(x - 6.5).toFixed(2)}" y="${(y - 6.5).toFixed(2)}" width="13" height="13">
+                            <div xmlns="http://www.w3.org/1999/xhtml" class="dash-radial-sun-icon">
+                                <ha-icon icon="mdi:weather-sunset-down"></ha-icon>
+                            </div>
+                        </foreignObject>`;
+                    })() : nothing}
+                </g>
 
                 <!-- Thin border lines on every annulus boundary, one at the inner edge and one at
                      the outer edge of each ring. Sit just outside the data fills so a curve
@@ -852,8 +898,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_INNER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_OUTER}"  fill="none"/>
 
-                <!-- Sundial perimeter: quarter-hour ticks then hour labels. The labels themselves
-                     anchor the hour positions, no separate full-tick is drawn. -->
+                <!-- Sundial perimeter: quarter-hour ticks then hour labels (outside the ring). -->
                 ${tickLines}
                 ${hourLabels}
 
@@ -869,7 +914,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 ${hoverCloudDot ? svg`<circle class="dash-radial-dot dash-radial-dot-cloud" cx="${hoverCloudDot.x.toFixed(2)}" cy="${hoverCloudDot.y.toFixed(2)}" r="3"/>` : nothing}
                 ${hoverProdDot  ? svg`<circle class="dash-radial-dot dash-radial-dot-prod"  cx="${hoverProdDot.x.toFixed(2)}"  cy="${hoverProdDot.y.toFixed(2)}"  r="3"/>` : nothing}
                 ${hoverBattDot  ? svg`<circle class="dash-radial-dot ${hoverBattDot.charging ? 'dash-radial-dot-batt-charge' : 'dash-radial-dot-batt-discharge'}" cx="${hoverBattDot.x.toFixed(2)}" cy="${hoverBattDot.y.toFixed(2)}" r="3"/>` : nothing}
-            </svg>
+            </svg>`)}
         </ha-card>
     `;
 }

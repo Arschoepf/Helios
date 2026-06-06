@@ -677,12 +677,24 @@ export const heliosCardStyles = css`
         position: absolute;
         top: 6px;
         left: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
         font-size: 12px;
         font-weight: 500;
         font-variant-numeric: tabular-nums;
         color: var(--secondary-text-color, rgba(255, 255, 255, 0.7));
         pointer-events: none;
         z-index: 1;
+        line-height: 1;
+    }
+    .dash-radial-hour-text ha-icon
+    {
+        --mdc-icon-size: 14px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+        line-height: 0;
     }
     /*  HA-frontend-style badge: ha-card host (chrome from HA frontend) with a circular tinted
         icon chip on the left + the entity label on the right (swapped for the live value during
@@ -936,6 +948,44 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
     }
 
+    /*  Sun halo: a soft sun-coloured glow ring sitting behind the disc. Stroke is none, the fill
+        is the per-card radial gradient defined in the SVG <defs>. The halo grows from the rim out
+        to the pre-shrink envelope at 100 % irradiance, the gradient fades to fully transparent at
+        the outer edge so it blends into the cloud ring instead of cutting a hard circle. */
+    .dash-radial-sun-halo
+    {
+        stroke: none;
+        pointer-events: none;
+    }
+    /*  Sunset / sunrise MDI icons painted inside the dial annulus at the radial position of the
+        sun crossings. Kept upright (no radial rotation) and tinted with the sun colour. */
+    .dash-radial-sun-icon
+    {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--helios-sun-color, var(--amber-color, #f59e0b));
+        --mdc-icon-size: 13px;
+        pointer-events: none;
+    }
+    /*  Day-load grow animation. Every data curve + the sun (halo + disc + rim) + sunrise / sunset
+        icons + night arc live in a single <g class="dash-radial-grow"> so the whole "data layer"
+        inflates from the centre to its final size every time the user navigates to a new day.
+        The SVG element is keyed by dayStartMs so day navigation re-mounts the group and the CSS
+        animation fires fresh each time, hover-only re-renders never re-fire it. */
+    .dash-radial-grow
+    {
+        transform-origin: 50% 50%;
+        transform-box: view-box;
+        animation: dash-radial-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    @keyframes dash-radial-grow
+    {
+        from { transform: scale(0);   opacity: 0; }
+        to   { transform: scale(1);   opacity: 1; }
+    }
     /*  Sun layers, same recipe as the 3D card sun. NO background tinted disc this revision: the
         user asked for just a reference rim + an irradiance fill so the centre reads as a single
         clean disc growing inside a circle. */
