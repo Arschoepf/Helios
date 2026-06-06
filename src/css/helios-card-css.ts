@@ -666,14 +666,27 @@ export const heliosCardStyles = css`
         width: auto;
         overflow: hidden;
     }
-    /*  Badge strip: a transparent flex row containing three HA-style badges (one per data ring).
-        The badges themselves are ha-cards so the strip itself adds no chrome. */
+    /*  Badge strip: a transparent CSS grid containing four HA-tile-card-style badges (Irradiance,
+        Cloud, Production, Battery in dial-radius order). The grid switches between 2 columns and
+        4 columns at the .dash-cf-card container width breakpoint below, so the strip is always
+        either 2 or 4 across, never 1 or 3 (the user explicitly excluded the odd layouts). The
+        badges themselves are ha-cards so the strip itself adds no chrome. */
     .dash-radial-chip-strip
     {
-        display: flex;
-        align-items: stretch;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 8px;
         flex-shrink: 0;
+    }
+    /*  Wide cards fit all four badges on one line. The breakpoint is sized so a single badge
+        keeps a comfortable minimum width (~150 px) at the 4-column threshold, narrower cards
+        fall back to a 2x2 grid instead. */
+    @container (min-width: 640px)
+    {
+        .dash-radial-chip-strip
+        {
+            grid-template-columns: repeat(4, 1fr);
+        }
     }
     /*  Hour overlay in the top-left of the radial card. Plain HA-frontend text (no chip / no
         chrome) so it reads as a subtle timestamp on top of the dial. Live wall-clock on today's
@@ -703,28 +716,26 @@ export const heliosCardStyles = css`
         align-items: center;
         line-height: 0;
     }
-    /*  HA-frontend-style badge: ha-card host (chrome from HA frontend) with a circular tinted
-        icon chip on the left + the entity label on the right (swapped for the live value during
-        a radial hover). flex: 1 1 0 + min-width: 0 + ellipsis on the text lets the three badges
-        share the strip width evenly and always stay on the same line, regardless of how narrow
-        the CoverFlow card is. Padding mirrors the bandeau (6 px vertical / 10 px horizontal)
-        so the badge strip lines up at the same height as the bandeau above it. */
+    /*  HA-frontend tile-card-style badge: ha-card host (chrome from HA frontend) with a circular
+        tinted icon chip on the left and a two-line text stack on the right (entity LABEL on top,
+        live VALUE below). Padding + gap mirror the HA tile-card the user shared (Lave-vaisselle /
+        0 W). min-width: 0 + flex + ellipsis on the text spans guarantee the badge never breaks
+        its 1-line label / 1-line value layout, regardless of how narrow the grid column is. */
     ha-card.dash-radial-badge
     {
-        flex: 1 1 0;
         min-width: 0;
-        display: inline-flex;
+        display: flex;
         align-items: center;
-        gap: 8px;
-        padding: 6px 10px;
+        gap: 12px;
+        padding: 8px 12px;
         min-height: 0;
         height: auto;
         width: auto;
     }
     .dash-radial-badge-chip
     {
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         display: inline-flex;
         align-items: center;
@@ -734,20 +745,45 @@ export const heliosCardStyles = css`
     }
     .dash-radial-badge-chip ha-icon
     {
-        --mdc-icon-size: 18px;
+        --mdc-icon-size: 22px;
         color: inherit;
         display: flex;
         align-items: center;
         justify-content: center;
         line-height: 0;
     }
-    .dash-radial-badge-text
+    .dash-radial-badge-stack
     {
-        font-size: 11px;
-        font-weight: 700;
-        line-height: 1.2;
-        font-variant-numeric: tabular-nums;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+        flex: 1;
+    }
+    /*  Label + value typography pulled straight off the HA frontend tokens so the badge tracks
+        the active HA theme's font sizes and weights. Label is the entity name (primary text
+        colour, medium weight), value is the live reading (secondary text colour, regular
+        weight), both ellipsised on overflow so a 2-column layout never wraps text. */
+    .dash-radial-badge-label
+    {
+        font-family: var(--ha-font-family-body, inherit);
+        font-size: var(--ha-font-size-m, 14px);
+        font-weight: var(--ha-font-weight-medium, 500);
+        line-height: 1.25;
         color: var(--primary-text-color, #ffffff);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        min-width: 0;
+    }
+    .dash-radial-badge-value
+    {
+        font-family: var(--ha-font-family-body, inherit);
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: var(--ha-font-weight-normal, 400);
+        line-height: 1.25;
+        font-variant-numeric: tabular-nums;
+        color: var(--secondary-text-color, rgba(255, 255, 255, 0.7));
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -886,6 +922,14 @@ export const heliosCardStyles = css`
         stroke-width: 1.1;
         stroke-linejoin: round;
     }
+    .dash-radial-cloud-fill-future
+    {
+        /*  Future zone of the cloud ring: same fill colour as the past zone but at a lower
+            opacity, so the dial reads as "past data full strength, forecast wash on top". The
+            dashed outline (.dash-radial-cloud-future) sits on top of this wash as the contour. */
+        fill:   color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.65)) 14%, transparent);
+        stroke: none;
+    }
     .dash-radial-cloud-future
     {
         fill: none;
@@ -901,6 +945,14 @@ export const heliosCardStyles = css`
         stroke: color-mix(in srgb, var(--energy-solar-color, #ff9800) 85%, transparent);
         stroke-width: 1.2;
         stroke-linejoin: round;
+    }
+    .dash-radial-prod-fill-future
+    {
+        /*  Future zone of the production ring: half-opacity orange wash under the dashed
+            forecast outline so the user sees the forecast volume as a softer tint of the past
+            fill, without losing the contour line. */
+        fill:   color-mix(in srgb, var(--energy-solar-color, #ff9800) 22%, transparent);
+        stroke: none;
     }
     .dash-radial-prod-future
     {
@@ -951,18 +1003,17 @@ export const heliosCardStyles = css`
         stroke-width: 0.7;
         stroke-linecap: round;
     }
-    /*  Hour numerals sit OUTSIDE the dial outer edge. The font-size in raw SVG units would scale
-        linearly with the SVG render size: huge in panel-view mode (big card), almost unreadable
-        in section view (small card). Binding the size to clamp() + container query units instead
-        keeps the labels in a comfortable reading band across both layouts. cqi here resolves to
-        1 % of the .dash-cf-card width because the outer card carries a container-type: inline-size
-        declaration above. The HA frontend's --ha-font-size-* tokens drive the clamp bounds so the
-        label tracks the user's typography choices. */
+    /*  Hour numerals sit OUTSIDE the dial outer edge. Raw SVG-unit font-size scales linearly
+        with the SVG render size, so the labels were huge in panel-view and microscopic in
+        section view. Clamp() bound by HA frontend typography tokens with cqi as the fluid term
+        keeps the labels readable across both layouts. cqi here resolves against .dash-cf-card
+        (which is the nearest container-type: inline-size). HA's body family + medium weight
+        match the rest of the tile chrome. */
     .dash-radial-hour-label
     {
-        font-family: inherit;
-        font-size: clamp(var(--ha-font-size-xs, 11px), 1.6cqi, var(--ha-font-size-l, 16px));
-        font-weight: 500;
+        font-family: var(--ha-font-family-body, inherit);
+        font-size: clamp(var(--ha-font-size-xs, 12px), 1.9cqi, var(--ha-font-size-m, 14px));
+        font-weight: var(--ha-font-weight-medium, 500);
         fill: var(--primary-text-color, #ffffff);
         font-variant-numeric: tabular-nums;
     }
@@ -976,22 +1027,17 @@ export const heliosCardStyles = css`
         stroke: none;
         pointer-events: none;
     }
-    /*  Sunrise / sunset markers painted inside the dial annulus at the radial position of the
-        actual horizon crossings. Native SVG geometry (half-disc + horizon line + tiny arrow head)
-        rotated radially via SVG transform so the marker's "up" always faces outward from the dial
-        centre. Stroke + fill bound to the sun colour so the markers read as sun-related glyphs. */
-    .dash-radial-sun-marker
+    /*  Sunrise / sunset bars painted INSIDE the dial annulus as a sun-coloured radial stroke
+        spanning the full width of the ring at the exact hour of the horizon crossing. Replaces
+        the previous mdi-icon markers, which competed for space with the hour ticks and had to
+        fight CSS px / SVG-unit scale ratios. A single radial bar reads as one bold horizon line
+        per crossing, no rotation or symbol orientation to worry about. */
+    .dash-radial-sun-bar
     {
-        fill:   var(--helios-sun-color, var(--amber-color, #f59e0b));
         stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
-        stroke-width: 0.6;
+        stroke-width: 2.6;
         stroke-linecap: round;
-        stroke-linejoin: round;
         pointer-events: none;
-    }
-    .dash-radial-sun-marker line
-    {
-        stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
     }
     /*  Sun layers, same recipe as the 3D card sun. NO background tinted disc this revision: the
         user asked for just a reference rim + an irradiance fill so the centre reads as a single
@@ -1038,17 +1084,9 @@ export const heliosCardStyles = css`
         stroke: none;
         pointer-events: none;
     }
-    /*  Two cursors. The "now" cursor stays on today only and uses the primary accent colour. The
-        "hover" cursor follows the pointer on any front card and uses the secondary text colour so
-        the two read as a layered pair when the user hovers over today. Both anchor at the outer
-        edge of the irradiance reference circle and end at the outer edge of the sundial. */
-    .dash-radial-cursor-now
-    {
-        stroke: var(--primary-text-color, #ffffff);
-        stroke-width: 1.3;
-        stroke-linecap: round;
-        fill: none;
-    }
+    /*  Hover cursor only. The "now" cursor is dropped: the visible boundary between the full-
+        opacity past fill and the reduced-opacity future fill already marks the current hour, an
+        extra dashed line on top was redundant. */
     .dash-radial-cursor-hover
     {
         stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 80%, transparent);
