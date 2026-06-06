@@ -1066,6 +1066,17 @@ export const heliosCardStyles = css`
         line-height: 1;
         white-space: nowrap;
     }
+    /*  Narrow CoverFlow cards: hide every non-cardinal hour numeral. The four cardinals (12 / 18
+        / 0 / 6) stay so the dial keeps its top / right / bottom / left anchors. Same breakpoint
+        as the chip-strip 4-to-2 column grid switch above so the dial chrome thins out in step
+        with the strip layout. */
+    @container (max-width: 639px)
+    {
+        .dash-radial-hour-label:not(.dash-radial-hour-label-cardinal)
+        {
+            display: none;
+        }
+    }
 
     /*  Sun halo: a soft sun-coloured glow ring sitting behind the disc. Stroke is none, the fill
         is the per-card radial gradient defined in the SVG <defs>. The halo grows from the rim out
@@ -1125,11 +1136,14 @@ export const heliosCardStyles = css`
     }
 
     /*  Night arc inside the dial annulus, from sunset clockwise through midnight to sunrise.
-        Painted as a slightly darker overlay on top of the dial track so the eye reads the night
-        portion of the day at a glance. */
+        Painted as a darker overlay on top of the dial track. Previous beta bound the fill to
+        --primary-text-color which is THEME-DEPENDENT: in a dark theme primary-text-color is
+        white, so the "darker" night fill ended up LIGHTER than the surrounding dial. Switched to
+        a fixed black + alpha so the night portion is always darker than the day portion
+        regardless of the active HA theme. */
     .dash-radial-night
     {
-        fill: color-mix(in srgb, var(--primary-text-color, #ffffff) 12%, transparent);
+        fill: rgba(0, 0, 0, 0.4);
         stroke: none;
         pointer-events: none;
     }
@@ -1201,13 +1215,12 @@ export const heliosCardStyles = css`
         new stacking context per back card that bled into the front card's compositing, the front-card
         content read as blurry as a side effect. Replaced with plain opacity, no GPU layer hint, no front
         card side effect. */
-    /*  Side cards are heavily faded so the focused front card reads as the only data layer the
-        user pays attention to. J-1 / J+1 sit at 10 % opacity (very faint) and J-2 / J+2 at 20 %
-        opacity (slightly more visible) so the further-away cards peek through the closer ones
-        instead of stacking opaque, the front-card animations and curves are not visually
-        competing with whatever the side stack is showing. */
-    .dash-cf-card[data-delta="-1"], .dash-cf-card[data-delta="1"]  { opacity: 0.10; }
-    .dash-cf-card[data-delta="-2"], .dash-cf-card[data-delta="2"]  { opacity: 0.20; }
+    /*  Side cards subtly faded so the focused front card carries the eye, but still visible
+        enough that the user can tell which days are stacked behind. J-1 / J+1 sit at 90 %
+        opacity (just a 10 % haze, the eye still reads them clearly), J-2 / J+2 fade further to
+        70 % so the further-away cards read as more distant in the stack. */
+    .dash-cf-card[data-delta="-1"], .dash-cf-card[data-delta="1"]  { opacity: 0.90; }
+    .dash-cf-card[data-delta="-2"], .dash-cf-card[data-delta="2"]  { opacity: 0.70; }
 
     /*  Enter / exit animation, 1 s total, staged in three phases. The cards translate from BEHIND their forward
         neighbour to their resting transform:

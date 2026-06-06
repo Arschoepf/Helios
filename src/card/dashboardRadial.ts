@@ -922,7 +922,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         const topPct  = 50 - labelRadiusPct * Math.cos(alpha);
         const rotation = ((h - 12) % 24) * 15;
         const lbl     = formatDialHourLabel(h, host.hass);
-        hourLabelsHtml.push(html`<span class="dash-radial-hour-label" style="left: ${leftPct.toFixed(2)}%; top: ${topPct.toFixed(2)}%; transform: translate(-50%, -50%) rotate(${rotation.toFixed(2)}deg);">${lbl}</span>`);
+        //Cardinal positions (0 / 6 / 12 / 18) read as the four primary anchors of a clock face,
+        //the in-between hours collapse out via a CSS @container query when the CoverFlow card is
+        //too narrow to fit all 24 numerals comfortably. Same breakpoint as the chip-strip 4-to-2
+        //grid switch so the dial chrome reduces in step with the strip layout above it.
+        const cardinalCls = h === 0 || h === 6 || h === 12 || h === 18 ? ' dash-radial-hour-label-cardinal' : '';
+        hourLabelsHtml.push(html`<span class="dash-radial-hour-label${cardinalCls}" style="left: ${leftPct.toFixed(2)}%; top: ${topPct.toFixed(2)}%; transform: translate(-50%, -50%) rotate(${rotation.toFixed(2)}deg);">${lbl}</span>`);
     }
 
     //Pointer handlers (front card only). Imperative because every pointermove on a multi-second
@@ -1056,8 +1061,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                     <animate attributeName="d" from="${fromBattDischarge}" to="${battDischargePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>` : nothing}
 
-                <!-- Sun: halo + bg + irradiance fill + rim. Each circle's r animates from 0 to its
-                     final radius so the disc inflates in place. Halo radius scales with irradiance. -->
+                <!-- Sun: halo + bg + irradiance fill + rim. Only the data-driven layers animate:
+                     halo + bg + the variable-radius fill all inflate from r=0 on day load. The
+                     reference rim is structural (the irradiance scale anchor) and stays at its
+                     final radius from the start so the user always sees the reference circle, the
+                     fill animates inside it as the day's irradiance reading flowing toward the
+                     reference. -->
                 <circle class="dash-radial-sun-halo" cx="${CENTER}" cy="${CENTER}" r="${haloR.toFixed(2)}" fill="url(#${haloGradId})">
                     <animate attributeName="r" from="0" to="${haloR.toFixed(2)}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </circle>
@@ -1067,9 +1076,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}">
                     <animate attributeName="r" from="0" to="${sunFillR.toFixed(2)}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </circle>
-                <circle class="dash-radial-sun-rim" cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}" fill="none">
-                    <animate attributeName="r" from="0" to="${R_SUN_REF}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
-                </circle>
+                <circle class="dash-radial-sun-rim" cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}" fill="none"/>
 
                 <!-- Sunrise / sunset bars: a sun-coloured radial stroke spanning the full width
                      of the dial annulus at the exact hour of sun crossing. Drawn AFTER the night
