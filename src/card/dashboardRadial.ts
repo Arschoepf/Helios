@@ -133,6 +133,27 @@ function buildRadialAnnulusPath(
 }
 
 
+//Ring-track arc along a single radius (mid-ring). The track is a stroke of width = ring annulus
+//thickness, so the path traces the centre of the ring and the stroke spreads to inner + outer
+//edges. Used to split each data ring's track into past + future segments so each segment can
+//take its own opacity (full strength for past, faded for not-yet-elapsed hours). A 24 hour span
+//is drawn as two half-arcs so the SVG arc command does not degenerate on a closed circle.
+function buildRingArcPath(midR: number, fromHour: number, toHour: number): string
+{
+    if (toHour <= fromHour + 0.001) { return ''; }
+    if (toHour - fromHour >= 23.999)
+    {
+        const [x1, y1] = polarPt(0, midR);
+        const [x2, y2] = polarPt(12, midR);
+        return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${midR} ${midR} 0 0 1 ${x2.toFixed(2)} ${y2.toFixed(2)} A ${midR} ${midR} 0 0 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+    }
+    const [x1, y1] = polarPt(fromHour, midR);
+    const [x2, y2] = polarPt(toHour,   midR);
+    const largeArc = toHour - fromHour > 12 ? 1 : 0;
+    return `M ${x1.toFixed(2)} ${y1.toFixed(2)} A ${midR} ${midR} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`;
+}
+
+
 //Open radial outline path (no Z close). Used for the past portion when slicing by current hour.
 function buildRadialOutlinePath(
     perHourValues: ReadonlyArray<number | null>,
@@ -768,6 +789,21 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyCloud.slice(ceilPastH, 24)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
         : '';
 
+    //Per-ring track arcs split into past + future segments. The not-yet-elapsed half of each ring
+    //gets its own class so CSS can paint it at a reduced opacity, the user reads the
+    //background of every ring as already-happened (full strength) vs not-yet-happened (faded).
+    //Applies to cloud + production + battery rings, NOT the irradiance disc (which is the day's
+    //overall reading, no past / future concept) and NOT the dial track (structural).
+    const cloudMidR     = (R_CLOUD_INNER + R_CLOUD_OUTER) / 2;
+    const prodMidR      = (R_PROD_INNER  + R_PROD_OUTER)  / 2;
+    const battMidR      = (R_BATT_INNER  + R_BATT_OUTER)  / 2;
+    const cloudTrackPast    = buildRingArcPath(cloudMidR, 0, pastEndHour);
+    const cloudTrackFuture  = buildRingArcPath(cloudMidR, pastEndHour, 24);
+    const prodTrackPast     = buildRingArcPath(prodMidR,  0, pastEndHour);
+    const prodTrackFuture   = buildRingArcPath(prodMidR,  pastEndHour, 24);
+    const battTrackPast     = buildRingArcPath(battMidR,  0, pastEndHour);
+    const battTrackFuture   = buildRingArcPath(battMidR,  pastEndHour, 24);
+
     //Full-day production-forecast outline. The previous beta only drew the dashed forecast
     //outline for the FUTURE portion of the day, the user wants it visible over the past too so
     //they can compare the model's prediction against the realised production hour-by-hour.
@@ -984,10 +1020,19 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                     </radialGradient>
                 </defs>
 
-                <!-- Dial track only. The cloud + production + battery ring backgrounds are
-                     dropped this revision (the data fills + curve outlines read the rings on
-                     their own without a coloured backdrop), the dial track stays because the
-                     hour ticks live inside it and need its anchor to read against. -->
+                <!-- Ring tracks split into past + future arcs. Past arcs sit at full opacity, the
+                     not-yet-elapsed half of every data ring is painted faded so the background of
+                     the ring reads as already-happened (full strength) vs not-yet-happened (low
+                     opacity). The dial track is a single circle since it has no past / future
+                     concept (structural). All tracks paint with vector-effect: non-scaling-stroke
+                     via CSS so the apparent ring thickness stays constant regardless of how the
+                     SVG scales in panel-view vs section-view dashboards. -->
+                ${cloudTrackPast   ? svg`<path class="dash-radial-cloud-track"        d="${cloudTrackPast}"   fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>` : nothing}
+                ${cloudTrackFuture ? svg`<path class="dash-radial-cloud-track-future" d="${cloudTrackFuture}" fill="none" stroke-width="${R_CLOUD_OUTER - R_CLOUD_INNER}"/>` : nothing}
+                ${prodTrackPast    ? svg`<path class="dash-radial-prod-track"         d="${prodTrackPast}"    fill="none" stroke-width="${R_PROD_OUTER  - R_PROD_INNER}"/>`  : nothing}
+                ${prodTrackFuture  ? svg`<path class="dash-radial-prod-track-future"  d="${prodTrackFuture}"  fill="none" stroke-width="${R_PROD_OUTER  - R_PROD_INNER}"/>`  : nothing}
+                ${battTrackPast    ? svg`<path class="dash-radial-batt-track"         d="${battTrackPast}"    fill="none" stroke-width="${R_BATT_OUTER  - R_BATT_INNER}"/>`  : nothing}
+                ${battTrackFuture  ? svg`<path class="dash-radial-batt-track-future"  d="${battTrackFuture}"  fill="none" stroke-width="${R_BATT_OUTER  - R_BATT_INNER}"/>`  : nothing}
                 <circle class="dash-radial-dial-track"  cx="${CENTER}" cy="${CENTER}" r="${(R_DIAL_INNER  + R_DIAL_OUTER)  / 2}"
                         fill="none" stroke-width="${R_DIAL_OUTER - R_DIAL_INNER}"/>
 
@@ -1071,13 +1116,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      the outer edge of each ring. Sit just outside the data fills so a curve
                      collapsing to the inner edge (the 0-value case) does not bleed past the boundary
                      visually. -->
-                <!-- Inner edge of each data ring + both edges of the dial. The outer edge of the
-                     cloud / production / battery rings is dropped this revision (the data fill
-                     reaches that boundary on its own, an extra delimiter line read as visual
-                     clutter on top of the fill). -->
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CLOUD_INNER}" fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_CLOUD_OUTER}" fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_PROD_INNER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_PROD_OUTER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_BATT_INNER}"  fill="none"/>
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_BATT_OUTER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_INNER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_OUTER}"  fill="none"/>
 
