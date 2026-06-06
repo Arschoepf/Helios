@@ -1036,17 +1036,35 @@ export const heliosCardStyles = css`
         stroke-width: 0.7;
         stroke-linecap: round;
     }
-    /*  Hour numerals fixed at the HA frontend body font-size in CSS pixels so they stay readable
-        across BOTH section view and panel-view, regardless of how the SVG scales. clamp() +
-        cqi did not behave as expected on SVG text in panel-view (the labels grew enormous),
-        a plain px value pulled off the HA frontend body token gives a predictable result. */
+    /*  Hour labels are rendered as an HTML overlay OUTSIDE the SVG so the font-size is just CSS
+        pixels, not affected by the viewBox / display scaling that made the previous SVG <text>
+        labels grow enormous in panel-view. The overlay matches the SVG's footprint (same width
+        cap + aspect ratio + centring) so the per-hour percentage positions land on the same
+        circle the dial ticks anchor to. The labels themselves are absolutely positioned by JS-
+        computed left / top percentages + a rotate() transform that matches the radial label
+        orientation the SVG used. */
+    .dash-radial-hour-labels
+    {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: min(100%, 92%);
+        aspect-ratio: 1 / 1;
+        max-height: 100%;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 2;
+    }
     .dash-radial-hour-label
     {
+        position: absolute;
         font-family: var(--ha-font-family-body, inherit);
         font-size: var(--ha-font-size-s, 13px);
         font-weight: var(--ha-font-weight-medium, 500);
-        fill: var(--primary-text-color, #ffffff);
+        color: var(--primary-text-color, #ffffff);
         font-variant-numeric: tabular-nums;
+        line-height: 1;
+        white-space: nowrap;
     }
 
     /*  Sun halo: a soft sun-coloured glow ring sitting behind the disc. Stroke is none, the fill

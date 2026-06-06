@@ -905,17 +905,24 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         tickLines.push(svg`<line class="${cls}" x1="${ix1.toFixed(2)}" y1="${iy1.toFixed(2)}" x2="${ix2.toFixed(2)}" y2="${iy2.toFixed(2)}"/>`);
     }
 
-    //Hour labels: 24 around the perimeter. Format respects HA's 12 / 24 setting. The label is rotated
-    //radially so its top points outward from the centre (12 upright at top, 18 rotated 90 deg cw at
-    //right, 0 upside-down at bottom, 6 rotated 90 deg ccw at left). The rotation matches the dial's
-    //hand-of-a-clock convention so the user reads the numbers naturally walking around the dial.
-    const hourLabels: TemplateResult[] = [];
+    //Hour labels rendered as an HTML overlay OUTSIDE the SVG (not as SVG <text>). SVG content
+    //gets scaled by the viewBox / display ratio, so SVG text font-size in CSS px ends up scaled
+    //too: huge in panel-view, microscopic in section view. Pulling the labels into an absolutely
+    //positioned HTML overlay decouples them from the SVG transform and the font-size is just
+    //plain CSS pixels, the HA frontend body token applies cleanly regardless of how the SVG
+    //resizes. The overlay container is sized to match the SVG (min(100 %, 92 %) width +
+    //aspect-ratio 1 / 1, centred via the wrap's flex-centre) so the per-hour percentage
+    //positions land on the same circle the SVG ticks anchor to.
+    const labelRadiusPct = (R_HOUR_LABEL / VIEWBOX) * 100;
+    const hourLabelsHtml: TemplateResult[] = [];
     for (let h = 0; h < 24; h++)
     {
-        const [x, y]   = polarPt(h, R_HOUR_LABEL);
-        const lbl      = formatDialHourLabel(h, host.hass);
+        const alpha = ((h - 12) / 12) * Math.PI;
+        const leftPct = 50 + labelRadiusPct * Math.sin(alpha);
+        const topPct  = 50 - labelRadiusPct * Math.cos(alpha);
         const rotation = ((h - 12) % 24) * 15;
-        hourLabels.push(svg`<text class="dash-radial-hour-label" x="${x.toFixed(2)}" y="${y.toFixed(2)}" text-anchor="middle" dominant-baseline="central" transform="rotate(${rotation} ${x.toFixed(2)} ${y.toFixed(2)})">${lbl}</text>`);
+        const lbl     = formatDialHourLabel(h, host.hass);
+        hourLabelsHtml.push(html`<span class="dash-radial-hour-label" style="left: ${leftPct.toFixed(2)}%; top: ${topPct.toFixed(2)}%; transform: translate(-50%, -50%) rotate(${rotation.toFixed(2)}deg);">${lbl}</span>`);
     }
 
     //Pointer handlers (front card only). Imperative because every pointermove on a multi-second
@@ -976,6 +983,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     return html`
         <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
             ${showHour ? html`<span class="dash-radial-hour-text"><ha-icon icon="mdi:clock-outline"></ha-icon><span>${hourText}</span></span>` : nothing}
+            <div class="dash-radial-hour-labels" aria-hidden="true">${hourLabelsHtml}</div>
             ${keyed(isFront ? `f-${dayStartMs}` : `b-${cardOffset}`, html`<svg
                 class="dash-radial-svg"
                 viewBox="0 0 ${VIEWBOX} ${VIEWBOX}"
@@ -1093,9 +1101,10 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_INNER}"  fill="none"/>
                 <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_DIAL_OUTER}"  fill="none"/>
 
-                <!-- Sundial perimeter: quarter-hour ticks then hour labels (outside the ring). -->
+                <!-- Sundial perimeter: quarter-hour ticks. Hour labels are rendered as an HTML
+                     overlay siblings of this SVG so the font-size stays constant in CSS pixels
+                     regardless of how the SVG scales between section-view and panel-view. -->
                 ${tickLines}
-                ${hourLabels}
 
                 <!-- Hover cursor (any front card with an active hover hour). The dedicated "now"
                      cursor is gone: the visible boundary between full-opacity past fill and the
@@ -1141,6 +1150,35 @@ function formatWm2(hass: { language?: string } | undefined, w: number | null): s
 }
 
 
+function formatKwh(hass: { language?: string } | undefined, kwh: number | null): string
+{
+    if (kwh === null || !Number.isFinite(kwh)) { return '—'; }
+    return `${formatLocalisedNumber(hass as any, kwh, 1)} kWh`;
+}
+
+
+//Day-aggregate helpers used as the chip-strip default values when the user is not hovering the
+//radial dial. dailyMean ignores null buckets and returns the mean of the rest, dailyEnergyKwh
+//sums hourly Watts back into Watt-hours then divides by 1000 for kWh, treating null buckets as
+//zero (a null hour is "no data" not "zero production", so we skip it from the divisor for mean
+//but include it as 0 for the energy sum so the running total never silently jumps when a single
+//bucket is missing).
+function dailyMean(arr: ReadonlyArray<number | null>): number | null
+{
+    let s = 0, c = 0;
+    for (const v of arr) { if (v !== null) { s += v; c++; } }
+    return c > 0 ? s / c : null;
+}
+
+
+function dailyEnergyKwh(arr: ReadonlyArray<number | null>): number | null
+{
+    let s = 0, hasData = false;
+    for (const v of arr) { if (v !== null) { s += v; hasData = true; } }
+    return hasData ? s / 1000 : null;
+}
+
+
 //Combined HA-tile-card-style chip strip rendered above the radial graph. Four mushroom-style
 //badges in dial-radius order (Irradiance + Cloud = inner / model-derived values, then Production +
 //Battery = outer / entity-driven values). Each badge mirrors the HA frontend tile-card layout:
@@ -1168,17 +1206,49 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
     const prodLabel  = t.detail.radialProductionLabel ?? 'Production';
     const battLabel  = t.detail.radialBatteryLabel    ?? 'Battery';
 
-    const irrValue   = irrW   === null ? '—' : formatWm2(host.hass, irrW);
-    const cloudValue = cloudP === null ? '—' : formatPct(host.hass, cloudP);
-    const prodValue  = prodW  === null ? '—' : formatW(host.hass, prodW);
-    //Battery sign convention: + while charging, − while discharging, 0 at idle. Within ±0.5 W the
-    //battery is treated as idle (avoids the "+0 W" / "−0 W" jitter on the badge from rounding).
-    const battValue  = battW === null ? '—'
-                     : Math.abs(battW) < 0.5 ? formatW(host.hass, 0)
-                     : `${battW > 0 ? '+' : '−'} ${formatW(host.hass, Math.abs(battW))}`;
-    const battCls    = battW !== null && battW > 0.5  ? 'dash-radial-badge-batt-charge'
-                     : battW !== null && battW < -0.5 ? 'dash-radial-badge-batt-discharge'
-                     :                                  'dash-radial-badge-batt';
+    //Daily aggregates shown when there is no active hover. Irradiance + cloud read as daily
+    //means (W/m² and % both make sense as an averaged value), production reads as the day's
+    //total energy in kWh (the same unit the tile-card production headline uses), battery reads
+    //as the net daily energy in kWh (sum of charge minus discharge, positive when the battery
+    //ended the day fuller than it started, negative when it ended emptier).
+    const irrDailyMean   = dailyMean(data.hourlyIrr);
+    const cloudDailyMean = dailyMean(data.hourlyCloud);
+    const prodDailyKwh   = dailyEnergyKwh(data.hourlyProd);
+    const battDailyKwh   = dailyEnergyKwh(data.hourlyBatt);
+
+    const irrValue = hoverActive
+        ? (irrW === null ? '—' : formatWm2(host.hass, irrW))
+        : (irrDailyMean === null ? '—' : formatWm2(host.hass, irrDailyMean));
+    const cloudValue = hoverActive
+        ? (cloudP === null ? '—' : formatPct(host.hass, cloudP))
+        : (cloudDailyMean === null ? '—' : formatPct(host.hass, cloudDailyMean));
+    const prodValue = hoverActive
+        ? (prodW === null ? '—' : formatW(host.hass, prodW))
+        : formatKwh(host.hass, prodDailyKwh);
+    //Battery sign convention while hovering: + while charging, − while discharging, 0 at idle.
+    //Daily aggregate uses the same sign convention applied to the net kWh (charge minus
+    //discharge over the day). Within ±0.5 W (instant) or ±0.05 kWh (daily) the battery reads as
+    //flat so the badge does not flicker a stray "+0" / "−0".
+    let battValue: string;
+    let battCls: string;
+    if (hoverActive)
+    {
+        battValue = battW === null ? '—'
+                  : Math.abs(battW) < 0.5 ? formatW(host.hass, 0)
+                  : `${battW > 0 ? '+' : '−'} ${formatW(host.hass, Math.abs(battW))}`;
+        battCls   = battW !== null && battW > 0.5  ? 'dash-radial-badge-batt-charge'
+                  : battW !== null && battW < -0.5 ? 'dash-radial-badge-batt-discharge'
+                  :                                  'dash-radial-badge-batt';
+    }
+    else
+    {
+        battValue = battDailyKwh === null ? '—'
+                  : Math.abs(battDailyKwh) < 0.05 ? formatKwh(host.hass, 0)
+                  : `${battDailyKwh > 0 ? '+' : '−'} ${formatKwh(host.hass, Math.abs(battDailyKwh))}`;
+        battCls   = battDailyKwh !== null && battDailyKwh > 0.05  ? 'dash-radial-badge-batt-charge'
+                  : battDailyKwh !== null && battDailyKwh < -0.05 ? 'dash-radial-badge-batt-discharge'
+                  :                                                 'dash-radial-badge-batt';
+    }
 
     return html`
         <div class="dash-radial-chip-strip">
