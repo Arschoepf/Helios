@@ -45,16 +45,16 @@ const CENTER                   = 200;
 //to host its hour labels INSIDE it at the mid-annulus, plus the hour / half / quarter ticks against
 //BOTH its outer and inner edges (mirrored).
 const R_SUN_REF                = 28;   //reference rim circle, also irradiance max disc radius (halved from v5)
-const R_SUN_HALO_MAX           = 55;   //outer envelope of the halo at 100 % irradiance (= old R_SUN_REF)
-const R_CLOUD_INNER            = 63;
-const R_CLOUD_OUTER            = 91;
-const R_PROD_INNER             = 97;
-const R_PROD_OUTER             = 125;
-const R_BATT_INNER             = 131;
-const R_BATT_OUTER             = 159;
-const R_DIAL_INNER             = 165;
-const R_DIAL_OUTER             = 183;   //dial annulus narrower than v5 to make room for outside-the-ring hour labels
-const R_HOUR_LABEL             = 192;   //hour labels sit OUTSIDE the dial outer edge
+const R_SUN_HALO_MAX           = 50;   //outer envelope of the halo at 100 % irradiance (= old R_SUN_REF, shifted in alongside the rings)
+const R_CLOUD_INNER            = 56;
+const R_CLOUD_OUTER            = 84;
+const R_PROD_INNER             = 90;
+const R_PROD_OUTER             = 118;
+const R_BATT_INNER             = 124;
+const R_BATT_OUTER             = 152;
+const R_DIAL_INNER             = 158;
+const R_DIAL_OUTER             = 176;   //all rings shifted inward by 7 SVG units vs v5 so the gap to R_HOUR_LABEL doubles (was 9, now 16), labels breathe in section-view dashboards as well as panel-view
+const R_HOUR_LABEL             = 192;   //hour labels sit OUTSIDE the dial outer edge with comfortable breathing room
 //Hover cursor endpoints. Anchored at the outer edge of the irradiance reference rim (= sun
 //disc) and ending at the outer edge of the dial annulus, matching the 3D card's solar-ray
 //leader: a sun-coloured dashed line radiating outward from the sun toward its target.
@@ -825,10 +825,6 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const fromCloudPast           = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
     const fromCloudFutureFill     = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
     const fromCloudFuture         = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
-    //Night arc collapses to the inner radius (zero-width annular segment) so it grows outward to
-    //fill the dial annulus over the animation window.
-    const fromNightPath = buildNightArcPath(sunRiseSet.sunset, sunRiseSet.sunrise, R_DIAL_INNER, R_DIAL_INNER);
-
     const ANIM_DUR = '700ms';
 
     //Hover cursor: only on the front card AND only when the host carries a hover hour set by the
@@ -1027,10 +1023,10 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      re-mount, all animates start at begin="0s" so the day's data layer fans out
                      together. -->
 
-                <!-- Night-period arc in the dial annulus. -->
-                ${nightPath ? svg`<path class="dash-radial-night" d="${nightPath}">
-                    <animate attributeName="d" from="${fromNightPath}" to="${nightPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
-                </path>` : nothing}
+                <!-- Night-period arc in the dial annulus. Static (no day-load animation): the
+                     night zone is a structural reference for the day's daylight window, the user
+                     reads it independently of the curve grow animation. -->
+                ${nightPath ? svg`<path class="dash-radial-night" d="${nightPath}"/>` : nothing}
 
                 <!-- Past fills (annulus shapes between the ring inner edge and the per-hour
                      curve) painted via the evenodd fill rule. Future outlines are a polyline

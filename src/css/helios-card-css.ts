@@ -493,6 +493,11 @@ export const heliosCardStyles = css`
             stage. The !important on transform shadows the inline transform that dashboard.ts still emits
             (which still applies to the side cards). */
         transform: none !important;
+        /*  touch-action: none disables the browser's native scroll / pan / zoom for touches on the
+            focused front card. On mobile, dragging across the card no longer scrolls the parent
+            dashboard page underneath, the user reads the radial dial + chip strip without the
+            page jumping around. */
+        touch-action: none;
     }
     /*  Bottom-fade mask removed. mask-image forces the card into a compositor layer which the browser
         then rasterises, the side effect was a subtle blur on the card content. The user can still scroll
@@ -686,6 +691,35 @@ export const heliosCardStyles = css`
         .dash-radial-chip-strip
         {
             grid-template-columns: repeat(4, 1fr);
+        }
+    }
+    /*  Narrow cards (the 2x2 grid layout, typically a CoverFlow card in a section-view dashboard
+        or a phone-portrait window). The badges shrink in lockstep: tighter padding, smaller icon
+        disc, smaller icon glyph, smaller label + value font sizes so values like "287 W/m²" or
+        "19,3 kWh" stop clipping at the right edge of the badge in the 2-column grid. */
+    @container (max-width: 639px)
+    {
+        ha-card.dash-radial-badge
+        {
+            gap: 8px;
+            padding: 6px 8px;
+        }
+        .dash-radial-badge-chip
+        {
+            width: 28px;
+            height: 28px;
+        }
+        .dash-radial-badge-chip ha-icon
+        {
+            --mdc-icon-size: 18px;
+        }
+        .dash-radial-badge-label
+        {
+            font-size: var(--ha-font-size-s, 13px);
+        }
+        .dash-radial-badge-value
+        {
+            font-size: var(--ha-font-size-xs, 11px);
         }
     }
     /*  Hour overlay in the top-left of the radial card. Plain HA-frontend text (no chip / no
@@ -928,7 +962,11 @@ export const heliosCardStyles = css`
     }
     .dash-radial-dial-track
     {
-        stroke: color-mix(in srgb, var(--divider-color, rgba(255, 255, 255, 0.12)) 70%, transparent);
+        /*  Day-zone of the dial annulus. Theme-tracking via --primary-text-color (white in dark
+            theme, black in light) at a stronger opacity than the previous divider-color recipe
+            so the track has enough contrast against the card background to read as a clear ring,
+            in both themes. */
+        stroke: color-mix(in srgb, var(--primary-text-color, rgba(255, 255, 255, 0.7)) 18%, transparent);
     }
     /*  Not-yet-elapsed half of each data ring background. Same stroke colour as the past arc but
         at a much reduced opacity so the background reads as "this hasn't happened yet". Painted
@@ -1127,25 +1165,33 @@ export const heliosCardStyles = css`
 
     /*  Thin annulus border lines. Drawn at each ring's inner + outer edges so a curve collapsing
         to the inner radius (a 0-value hour) reads as touching the boundary rather than spilling
-        across it. Stroke colour follows the theme contrast colour at low opacity so the lines stay
-        as a subtle structural cue, not a competing element. */
+        across it. Opacity bumped from 22 % to 40 % so the lines have enough contrast against the
+        card background in BOTH dark + light themes, the previous opacity made the borders
+        invisible in light themes and just barely visible in dark ones. */
     .dash-radial-ring-border
     {
-        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 22%, transparent);
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 40%, transparent);
         stroke-width: 0.4;
     }
 
     /*  Night arc inside the dial annulus, from sunset clockwise through midnight to sunrise.
-        Painted as a darker overlay on top of the dial track. Previous beta bound the fill to
-        --primary-text-color which is THEME-DEPENDENT: in a dark theme primary-text-color is
-        white, so the "darker" night fill ended up LIGHTER than the surrounding dial. Switched to
-        a fixed black + alpha so the night portion is always darker than the day portion
-        regardless of the active HA theme. */
+        Theme-aware via prefers-color-scheme so the night reads as darker than the day in both
+        themes without being overly heavy: in a dark theme the card background is already dark
+        so the night only needs a light reinforcement (0.30 black), in a light theme the card
+        background is bright so a softer 0.18 black still reads as noticeably darker than the
+        day track without crushing the area to charcoal. */
     .dash-radial-night
     {
-        fill: rgba(0, 0, 0, 0.4);
+        fill: rgba(0, 0, 0, 0.30);
         stroke: none;
         pointer-events: none;
+    }
+    @media (prefers-color-scheme: light)
+    {
+        .dash-radial-night
+        {
+            fill: rgba(0, 0, 0, 0.18);
+        }
     }
     /*  Hover cursor styled exactly like the 3D card's solar-ray leader: sun-coloured stroke,
         5-5 dashed pattern, stroke-opacity 0.55, line-cap round. Anchored at the outer edge of
