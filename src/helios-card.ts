@@ -507,10 +507,6 @@ export class HeliosCard extends LitElement
     //Hover state on the home hitbox. Drives a sun-coloured glow halo around the home silhouette so the user reads the focal building as interactive
     //before clicking.
     @state() _homeHover = false;
-    //Hover state for the today-cumulative chart in the dashboard. ms
-    //epoch of the cursor position on the X axis; null when the pointer
-    //is outside the chart or the chart isn't shown.
-    @state() _dashChartHoverTs: number | null = null;
     //Hover state for the radial dial in the dashboard. Hour fraction in [0..24) when the cursor sits
     //over the SVG, null otherwise. Front card only, the rear cards never wire pointer handlers.
     @state() _dashRadialHoverHour: number | null = null;
@@ -564,15 +560,6 @@ export class HeliosCard extends LitElement
     //(on → off). Engine.setDetailMode drives the camera lerp;
     //CSS class .detail-active on ha-card fades out every overlay.
     @state() _detailMode    = false;
-    //Count-up animation state for the dashboard headline kWh figures.
-    //Timestamp the panel last opened at; the dashboard helpers tick
-    //requestUpdate() until the phase saturates so the figures animate
-    //from 0 to their real value over 700 ms each time the user enters
-    //detail mode. Reset to null on exit so a re-open replays the
-    //animation. _dashCountUpRaf holds the rAF token of the in-flight
-    //tick loop, also set by the dashboard helpers.
-    _dashOpenedAtMs: number | null = null;
-    _dashCountUpRaf?: number;
     //CoverFlow active day offset (0 = today, ±1 = ±1 day, etc.). Reset to 0 every time the dashboard opens via
     //`handleHomeClick`. Swipe gesture state captured between pointerdown / pointerup so the dashboard renderer
     //can navigate the stack without a stateful child component.
@@ -583,9 +570,6 @@ export class HeliosCard extends LitElement
     //animations per card.
     @state() _dashAnimPhase:        'idle' | 'entering' | 'exiting' = 'idle';
     _dashAnimTimer?:                number;
-    //Hover fraction over the FRONT CoverFlow card's chart, in [0..1]. Null when no cursor is on the chart.
-    //Drives the chart header value readout + the vertical guide line at the cursor X.
-    @state() _dashChartHoverFrac:   number | null = null;
     //Single source of truth for which mode the card is in. Drives every transition (slider slide-in
     /// slide-out, chip + leader + arc fade, timeline slide, WebGL dot-cloud fade-in / out, ShadingDome
     //SVG fade-in / out). Set imperatively by the mode-bar click handlers, reacted to by
@@ -1042,11 +1026,6 @@ export class HeliosCard extends LitElement
             cancelAnimationFrame(this._lidarOpacityRaf);
             this._lidarOpacityRaf = 0;
             this._pendingLidarOpacity = null;
-        }
-        if (this._dashCountUpRaf !== undefined)
-        {
-            cancelAnimationFrame(this._dashCountUpRaf);
-            this._dashCountUpRaf = undefined;
         }
         cancelPendingRespawn(this);
         if (this._connectSettleTimer !== undefined)

@@ -26,67 +26,10 @@ export interface Translations
     {
         exitHint:  string;       //close-button aria-label
 
-        //Section labels and short captions for the detail-mode
-        //dashboard. Each section is one factual block:
-        //  todayLabel      , top of the today section
-        //  todayProduced   , trailing text after the produced total
-        //  todayForecast   , trailing text after the projected total
-        //  todayPeak       , trailing text after the actual peak readout
-        //  todayPeakForecast , trailing text after the predicted peak
-        //                      readout (twin of todayPeak for the model)
-        //  todayNotStartedYet , status line shown when produced is
-        //                      effectively zero and the peak is still
-        //                      in the future (production hasn't begun)
-        //  tomorrowLabel   , top of the tomorrow card
-        //  tomorrowPeak    , prefix before the peak time chip
-        //  batteryLabel    , top of the battery vessel section
-        //  batteryCharged  , label under the charge total
-        //  batteryDischarged , label under the discharge total
-        //  actualShort     , short "Actual" label used in compact
-        //                    spaces (chart hover tooltip)
-        //  forecastShort   , short "Forecast" label used in compact
-        //                    spaces (chart hover tooltip)
-        //  deltaTooltip    , native title hover hint on the headline
-        //                    (+X % / -X %) chip, explaining the
-        //                    comparison reference
-        //  forecastRefined , label on the small annotation under
-        //                    PRÉVU showing the calibrated value
-        //                    (e.g. "affiné" in fr)
-        //  forecastCalibrationHint , hover hint explaining what the
-        //                    refined value means and how many days
-        //                    fed into it. Receives a {n} token to
-        //                    be replaced with the day count.
-        todayLabel:        string;
-        todayProduced:     string;
-        todayForecast:     string;
-        todayPeak:         string;
-        todayPeakForecast: string;
-        todayNotStartedYet: string;
-        tomorrowLabel:     string;
-        tomorrowPeak:      string;
-        batteryLabel:      string;
-        batteryCharged:    string;
-        batteryDischarged: string;
-        actualShort:       string;
-        forecastShort:     string;
-        deltaTooltip:      string;
-        forecastRefined:        string;
-        forecastCalibrationHint: string;
-
-        //CoverFlow dashboard panel (alpha.66+). Each key is OPTIONAL because the dashboard.ts renderer
-        //falls back to the English text below via `??` when the active locale has not been updated yet.
-        //All 63 locale files only have to add these keys when ready; until then the English fallback wins.
-        chartProductionTitle?:  string; //'Daily production'
-        chartBatteryTitle?:     string; //'Battery'
-        chartGridTitle?:        string; //'Grid'
+        //CoverFlow dashboard panel. Each key is OPTIONAL because the renderer falls back to the
+        //English text below via `??` when the active locale has not been updated yet, so locale
+        //files only have to add these keys when ready.
         tileProductionLabel?:   string; //'Production'
-        tileForecastLabel?:     string; //'Forecast'
-        tileChargeLabel?:       string; //'Charge'
-        tileDischargeLabel?:    string; //'Discharge'
-        tileImportLabel?:       string; //'Import'
-        tileExportLabel?:       string; //'Export'
-        tooltipForecastLabel?:  string; //'Forecast'
-        tooltipMeasuredLabel?:  string; //'Measured production'
         dayLabelToday?:         string; //'Today'
         dayLabelYesterday?:     string; //'Yesterday'
         dayLabelDayBefore?:     string; //'2 days ago'
@@ -96,22 +39,14 @@ export interface Translations
         //understands what the dome represents without having to dig into docs.
         shadingDomeHint?:       string; //'Each cell shows what the sun delivers from that sky position...'
         //Label inside the top-of-card loading banner, visible while the first hydration wave of
-        //data fetches (PV, battery, grid, solar radiation, daily totals, weather, buildings, LiDAR)
-        //is still in flight. The banner retires for the rest of the card lifetime once every phase
-        //has completed once, so this string is only ever seen during the initial wait.
+        //data fetches is still in flight.
         loadingLabel?:          string; //'Fetching data...'
-        //Corner pill labels on the dashboard radial dial. radialHourLabel carries the "what time is
-        //it" sense, so the translation is the conversational noun for clock time, not the literal
-        //"hour" unit ("Time" in EN, "Heure" in FR).
+        //Badge labels on the dashboard radial dial chip strip (Production / Battery / Cloud /
+        //Irradiance).
         radialProductionLabel?: string; //'Production'
         radialBatteryLabel?:    string; //'Battery'
         radialCloudLabel?:      string; //'Cloud'
         radialIrradianceLabel?: string; //'Irradiance'
-        radialHourLabel?:       string; //'Time'
-        //Kept for backward compatibility, the corner pill was renamed from Import (grid net) to
-        //Battery (charge / discharge) during the v1.8.3 beta cycle. Reserved for a future revival
-        //of a dedicated grid-import ring.
-        radialImportLabel?:     string; //'Import'
     };
 
     editor:
