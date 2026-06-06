@@ -27,7 +27,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { renderRadialDial, renderDashCardChipStrip, prepareRadialDayData } from './dashboardRadial';
+import { renderRadialDial, renderDashCardChipStripTop, renderDashCardChipStripBottom, prepareRadialDayData } from './dashboardRadial';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -496,8 +496,9 @@ function renderCoverflowCard(
                 `}
             </ha-card>
 
-            ${renderDashCardChipStrip(host, cardOffset, activeOffset, radialData)}
+            ${renderDashCardChipStripTop(host, cardOffset, activeOffset, radialData)}
             ${renderRadialDial(host, cardOffset, activeOffset, radialData)}
+            ${renderDashCardChipStripBottom(host, cardOffset, activeOffset, radialData)}
         </article>
     `;
 }

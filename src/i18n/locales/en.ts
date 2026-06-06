@@ -56,6 +56,7 @@ export const en: Translations = {
         radialBatteryLabel:    'Battery',
         radialImportLabel:     'Import',
         radialCloudLabel:      'Cloud',
+        radialIrradianceLabel: 'Irradiance',
         radialHourLabel:       'Time',
     },
 

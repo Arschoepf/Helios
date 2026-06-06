@@ -422,15 +422,22 @@ export const heliosCardStyles = css`
     {
         position: relative;
         grid-area: 1 / 1;
-        /*  Re-scope --ha-card-border-radius for the inner mini-cards. Panel-view dashboards
-            (single-card mode) override the token to 0 on the outer Helios card so the card
-            fills the screen edge-to-edge, the override cascades down and crushes every inner
-            ha-card on the CoverFlow front face to square corners. Re-establishing the token
-            here (default 12 px, the HA frontend's own default) keeps the bandeau / badges /
-            radial card rounded inside the now-edge-to-edge outer card, the user's theme can
-            still override this scope by setting --ha-card-border-radius on .dash-cf-card via
-            card-mod or a frontend theme. */
+        /*  Re-scope the full --ha-card-* token cascade for the inner mini-cards. Panel-view
+            dashboards (single-card mode) override these tokens on the outer Helios card so it
+            fills the screen edge-to-edge with no visible border, the override cascades down and
+            crushes every inner ha-card on the CoverFlow front face to square corners with no
+            border. Re-establishing the tokens here keeps the bandeau / badges / radial card
+            with proper HA frontend chrome regardless of the outer card mode. The user's theme
+            can still override this scope via card-mod or a frontend theme. */
         --ha-card-border-radius: 12px;
+        --ha-card-border-width: 1px;
+        --ha-card-border-color: var(--divider-color, rgba(0, 0, 0, 0.12));
+        /*  Container-type: inline-size on the outer card so cqi units inside (e.g. the hour
+            label clamp) resolve to the card's own width rather than to an ancestor's. Combined
+            with the helios-card opt-out on the inner mini-cards above, the inner cards do not
+            re-name this container so existing @container helios-card queries still target the
+            outer Helios ha-card. */
+        container-type: inline-size;
         /*  Card sized via plain percentages of the closest positioned ancestor (.dash-cf-stage). Height
             at 96 % leaves a 2 % gutter top + bottom so the card uses the visible space the panel offers,
             width derives from the height via the aspect ratio, max-width 82 % caps it on tall narrow
@@ -774,6 +781,11 @@ export const heliosCardStyles = css`
         background: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.65)) 22%, transparent);
         color: var(--secondary-text-color, rgba(255, 255, 255, 0.65));
     }
+    .dash-radial-badge-irr .dash-radial-badge-chip
+    {
+        background: color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #f59e0b)) 22%, transparent);
+        color: var(--helios-sun-color, var(--amber-color, #f59e0b));
+    }
     .dash-radial-svg
     {
         /*  Width caps at 92 % of the available card column so the dial reads as the focal element
@@ -939,10 +951,17 @@ export const heliosCardStyles = css`
         stroke-width: 0.7;
         stroke-linecap: round;
     }
+    /*  Hour numerals sit OUTSIDE the dial outer edge. The font-size in raw SVG units would scale
+        linearly with the SVG render size: huge in panel-view mode (big card), almost unreadable
+        in section view (small card). Binding the size to clamp() + container query units instead
+        keeps the labels in a comfortable reading band across both layouts. cqi here resolves to
+        1 % of the .dash-cf-card width because the outer card carries a container-type: inline-size
+        declaration above. The HA frontend's --ha-font-size-* tokens drive the clamp bounds so the
+        label tracks the user's typography choices. */
     .dash-radial-hour-label
     {
         font-family: inherit;
-        font-size: 10px;
+        font-size: clamp(var(--ha-font-size-xs, 11px), 1.6cqi, var(--ha-font-size-l, 16px));
         font-weight: 500;
         fill: var(--primary-text-color, #ffffff);
         font-variant-numeric: tabular-nums;
@@ -957,34 +976,22 @@ export const heliosCardStyles = css`
         stroke: none;
         pointer-events: none;
     }
-    /*  Sunset / sunrise MDI icons painted inside the dial annulus at the radial position of the
-        sun crossings. Kept upright (no radial rotation) and tinted with the sun colour. */
-    .dash-radial-sun-icon
+    /*  Sunrise / sunset markers painted inside the dial annulus at the radial position of the
+        actual horizon crossings. Native SVG geometry (half-disc + horizon line + tiny arrow head)
+        rotated radially via SVG transform so the marker's "up" always faces outward from the dial
+        centre. Stroke + fill bound to the sun colour so the markers read as sun-related glyphs. */
+    .dash-radial-sun-marker
     {
-        width: 100%;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--helios-sun-color, var(--amber-color, #f59e0b));
-        --mdc-icon-size: 13px;
+        fill:   var(--helios-sun-color, var(--amber-color, #f59e0b));
+        stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
+        stroke-width: 0.6;
+        stroke-linecap: round;
+        stroke-linejoin: round;
         pointer-events: none;
     }
-    /*  Day-load grow animation. Every data curve + the sun (halo + disc + rim) + sunrise / sunset
-        icons + night arc live in a single <g class="dash-radial-grow"> so the whole "data layer"
-        inflates from the centre to its final size every time the user navigates to a new day.
-        The SVG element is keyed by dayStartMs so day navigation re-mounts the group and the CSS
-        animation fires fresh each time, hover-only re-renders never re-fire it. */
-    .dash-radial-grow
+    .dash-radial-sun-marker line
     {
-        transform-origin: 50% 50%;
-        transform-box: view-box;
-        animation: dash-radial-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both;
-    }
-    @keyframes dash-radial-grow
-    {
-        from { transform: scale(0);   opacity: 0; }
-        to   { transform: scale(1);   opacity: 1; }
+        stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
     }
     /*  Sun layers, same recipe as the 3D card sun. NO background tinted disc this revision: the
         user asked for just a reference rim + an irradiance fill so the centre reads as a single
@@ -1105,8 +1112,13 @@ export const heliosCardStyles = css`
         new stacking context per back card that bled into the front card's compositing, the front-card
         content read as blurry as a side effect. Replaced with plain opacity, no GPU layer hint, no front
         card side effect. */
-    .dash-cf-card[data-delta="-1"], .dash-cf-card[data-delta="1"]  { opacity: 0.88; }
-    .dash-cf-card[data-delta="-2"], .dash-cf-card[data-delta="2"]  { opacity: 0.70; }
+    /*  Side cards are heavily faded so the focused front card reads as the only data layer the
+        user pays attention to. J-1 / J+1 sit at 10 % opacity (very faint) and J-2 / J+2 at 20 %
+        opacity (slightly more visible) so the further-away cards peek through the closer ones
+        instead of stacking opaque, the front-card animations and curves are not visually
+        competing with whatever the side stack is showing. */
+    .dash-cf-card[data-delta="-1"], .dash-cf-card[data-delta="1"]  { opacity: 0.10; }
+    .dash-cf-card[data-delta="-2"], .dash-cf-card[data-delta="2"]  { opacity: 0.20; }
 
     /*  Enter / exit animation, 1 s total, staged in three phases. The cards translate from BEHIND their forward
         neighbour to their resting transform:

@@ -106,6 +106,7 @@ export interface Translations
         radialProductionLabel?: string; //'Production'
         radialBatteryLabel?:    string; //'Battery'
         radialCloudLabel?:      string; //'Cloud'
+        radialIrradianceLabel?: string; //'Irradiance'
         radialHourLabel?:       string; //'Time'
         //Kept for backward compatibility, the corner pill was renamed from Import (grid net) to
         //Battery (charge / discharge) during the v1.8.3 beta cycle. Reserved for a future revival
