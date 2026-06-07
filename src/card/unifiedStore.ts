@@ -38,7 +38,6 @@ import type { PvHistory } from './pv';
 import { pvNormalizeToWatts, pvCalibK, pvInverterMaxW, computePvPowerWeighted } from './pv';
 import { effectiveForecastRatio } from './charts';
 import { computeForecastCalibration } from './calibration';
-import { trainShadingMap, currentShadingMap } from './shadingTrainer';
 import { getHomeCoords } from './init';
 
 //Re-export for graph consumers that want to query the user-configured cadence directly (e.g. the
@@ -414,10 +413,7 @@ function buildForecast(
     const cap     = pvInverterMaxW(host.config);
     const cal     = computeForecastCalibration(host as any);
     const calR    = cal ? cal.ratio : 1;
-    trainShadingMap(host as any);
-    const shading = currentShadingMap();
     const raster  = host._engine?.getLidarRaster() ?? null;
-    const nowMs   = Date.now();
 
     //Hourly inner loop: one bucket per hour of the 5-day window, matching the weather model cadence.
     const hourly = new Array<number | null>(FORECAST_BUCKETS_TOTAL).fill(null);
@@ -449,7 +445,7 @@ function buildForecast(
                 raster,
             }
         );
-        const eff = effectiveForecastRatio(shading, t, coords.lat, coords.lon, cc, calR, nowMs);
+        const eff = effectiveForecastRatio(calR);
         const w   = wRaw * k * eff;
         if (Number.isFinite(w))
         {

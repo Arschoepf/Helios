@@ -122,16 +122,5 @@ export const eu: Translations = {
         aboutRepoLidar:        'Helios-Lidar (toki osagarria)',
         aboutCoffeeMessage:    'Helios garatzaile bakar batek egiten du, energia askorekin eta lo gutxirekin. Zure eguneroko errutinan laguntzen badizu, GitHub-eko izar batek edo kafe batek proiektua bizirik mantentzen dute.',
         aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Itzal-mapa egokigarria',
-        shadingHint:           '5 eguneko kalibrazioaren gaineko ikaskuntza-geruza: beheko sare polarraren gelaxka bakoitzak benetako/aurreikusitako batez besteko ratioa gordetzen du, eguzkia posizio horretan zegoenean eta zeruak hodei-estaldura hori zuenean behatutakoa. Aurreikuspenari uneko orduaren arabera tolesten uzten dio, zuhaitzen itzalak, auzoko teilatuak eta LiDARrek atzeman ez zituen beste oztopo batzuengatik. Zure datuetatik eraikitzen da aste batzuetan zehar; ordura arte, kalibrazio eskalarrak hartzen du karga.',
-        shadingStatsCells:     'gelaxkak datuekin',
-        shadingStatsConfident: 'aurreikuspenak konfiantzazkotzat dituen gelaxkak',
-        shadingStatsUnder:     'azpi-ekoizpen indartsuena:',
-        shadingStatsOver:      'gain-ekoizpen indartsuena:',
-        shadingExport:         'Esportatu mapa',
-        shadingImport:         'Inportatu mapa',
-        shadingImportError:    'Fitxategi hori ez da Helios itzal-mapa baliodun bat.',
-        shadingReset:          'Berrezarri mapa',
-        shadingResetConfirm:   'Itzal-mapak ikasitako gelaxka guztiak baztertu nahi dituzu? Aurreikuspena kalibrazio eskalarrera itzuliko da pare bat astetan zehar, mapa berriz bete arte.'
     }
 };

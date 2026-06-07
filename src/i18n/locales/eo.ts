@@ -122,16 +122,5 @@ export const eo: Translations = {
         aboutRepoLidar:        'Helios-Lidar (la kunula retejo)',
         aboutCoffeeMessage:    'Helios estas konstruata de unu ellaboranto kun multe da energio kaj tre malmulte da dormo. Se ĝi helpas vian ĉiutagan rutinon, stelo sur GitHub aŭ kafo tenas la projekton viva.',
         aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Adapta ombro-mapo',
-        shadingHint:           'Lerna tavolo super la 5-taga kalibrado: ĉiu ĉelo de la suba polusa reto tenas la mezan reala/prognozita rilatumon observitan kiam la suno estis en tiu pozicio kaj la ĉielo havis tiun nub-kovron. Permesas al la prognozo kurbiĝi je la ĝusta horo de la tago pro arbo-ombroj, najbaraj tegmentoj kaj aliaj obstrukcoj kiujn la LiDAR ne kaptis. Ĝi konstruiĝas el viaj propraj datumoj dum kelkaj semajnoj; ĝis tiam, la skalara kalibrado portas la ŝarĝon.',
-        shadingStatsCells:     'ĉeloj kun datumoj',
-        shadingStatsConfident: 'ĉeloj fidataj de la prognozo',
-        shadingStatsUnder:     'plej forta sub-produktado:',
-        shadingStatsOver:      'plej forta super-produktado:',
-        shadingExport:         'Eksporti mapon',
-        shadingImport:         'Importi mapon',
-        shadingImportError:    'Tiu dosiero ne estas valida Helios-ombro-mapo.',
-        shadingReset:          'Restarigi mapon',
-        shadingResetConfirm:   'Ĉu forĵeti ĉiun ĉelon kiun la ombro-mapo lernis? La prognozo revenos al la skalara kalibrado dum kelkaj semajnoj ĝis la mapo replenigos.'
     }
 };

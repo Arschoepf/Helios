@@ -128,16 +128,5 @@ export const fr: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios est développé par un seul développeur avec beaucoup d\'énergie et très peu de sommeil. Si ça t\'aide au quotidien, une étoile sur GitHub ou un café garde le projet en vie.',
         aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Carte d\'ombre adaptative',
-        shadingHint:           'Une couche d\'apprentissage par-dessus la calibration 5 jours : chaque cellule de la grille polaire ci-dessous garde la moyenne du rapport réel/prévu observée quand le soleil était à cette position et que la couverture nuageuse était dans cette tranche. Permet à la prévision de plier au bon moment de la journée pour les ombres d\'arbres, les toits voisins et tout obstacle invisible au LiDAR. Se construit à partir de vos propres données sur quelques semaines ; en attendant, la calibration scalaire prend le relais.',
-        shadingStatsCells:     'cellules avec données',
-        shadingStatsConfident: 'cellules utilisées par la prévision',
-        shadingStatsUnder:     'sous-production la plus forte :',
-        shadingStatsOver:      'sur-production la plus forte :',
-        shadingExport:         'Exporter la carte',
-        shadingImport:         'Importer une carte',
-        shadingImportError:    'Ce fichier n\'est pas une carte d\'ombre Helios valide.',
-        shadingReset:          'Réinitialiser la carte',
-        shadingResetConfirm:   'Effacer toutes les cellules apprises par la carte d\'ombre ? La prévision repartira sur la calibration scalaire pendant quelques semaines, le temps que la carte se reconstruise.'
     }
 };

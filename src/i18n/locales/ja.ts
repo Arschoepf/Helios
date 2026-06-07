@@ -121,16 +121,5 @@ export const ja: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios は、たっぷりの情熱とごくわずかな睡眠で、ひとりの開発者が作っています。日々の役に立つなら、GitHub のスターやコーヒーがプロジェクトを生かし続けます。',
         aboutCoffeeLink:       'コーヒーを贈る',
-        shadingSection:        '適応シェーディングマップ',
-        shadingHint:           '5 日校正の上に重ねる学習層: 下の極座標グリッドの各セルには、太陽がその位置で空がその雲量だったときに観測された実測/予測比の平均が保持されます。樹影、隣家の屋根、LiDAR が捉えなかったその他の障害物に合わせて、予測が日中の正しい時間に湾曲するようになります。数週間かけて自分のデータから積み上がります。それまではスカラー校正が役割を担います。',
-        shadingStatsCells:     'データを持つセル',
-        shadingStatsConfident: '予測が信頼するセル',
-        shadingStatsUnder:     '最も強い発電不足:',
-        shadingStatsOver:      '最も強い過剰発電:',
-        shadingExport:         'マップをエクスポート',
-        shadingImport:         'マップをインポート',
-        shadingImportError:    'このファイルは有効な Helios シェーディングマップではありません。',
-        shadingReset:          'マップをリセット',
-        shadingResetConfirm:   'シェーディングマップが学習したすべてのセルを破棄しますか? マップが再び埋まるまでの数週間、予測はスカラー校正に戻ります。'
     }
 };

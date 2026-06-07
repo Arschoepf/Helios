@@ -13,7 +13,6 @@ import
     MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
-import { renderShadingMapSection } from './shadingMapView';
 
 
 //LiDAR View visual knobs that existed before the in-card opacity slider replaced them. Left here as a const tuple so `_update` can strip
@@ -101,10 +100,6 @@ export class HeliosCardEditor extends LitElement
     //`_arrayAdd` adds the new index to this set; `_arrayRemove`
     //shifts the indices above the removed one down by 1.
     @state()                        private _openArrayIndices: Set<number> = new Set();
-    //Open/closed state for nested sub-sections that live INSIDE a top-level section. Sharing the global `_openSection`
-    //here would fight the parent: opening the child sets _openSection = "shading", which makes the parent's
-    //`?open="${_openSection === 'shadows'}"` evaluate false and snap the parent shut. Each nested child owns its own bit.
-    @state()                        private _shadingSubSectionOpen = false;
     //Per-key debounce timers for slider inputs. Sliders fire @input
     //on every pixel of drag, so dispatching `config-changed` per
     //tick would cascade an updateConfig + full re-render through
@@ -869,11 +864,6 @@ export class HeliosCardEditor extends LitElement
                     </div>
                 </label>
                 <div class="hint">${t.editor.shadowOpacityHint}</div>
-
-                <details class="advanced-section" ?open="${this._shadingSubSectionOpen}" @toggle="${(e: Event) => { this._shadingSubSectionOpen = (e.target as HTMLDetailsElement).open; }}">
-                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:radar"></ha-icon>${t.editor.shadingSection}</summary>
-                    ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
-                </details>
 
                 </details>
 

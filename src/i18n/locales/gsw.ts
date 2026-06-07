@@ -121,16 +121,5 @@ export const gsw: Translations = {
         aboutRepoLidar:        'Helios-Lidar (d\'Begleitsyte)',
         aboutCoffeeMessage:    'Helios wird vomne einzige Entwickler buut, mit vill Energie und ganz wenig Schlaf. Wänn\'s dir im Alltag hilft, ghaltet en Stern uf GitHub oder en Kafi s\'Projekt am Läbe.',
         aboutCoffeeLink:       'Chauff mer en Kafi',
-        shadingSection:        'Adaptivi Schattecharte',
-        shadingHint:           'En lernigi Schicht über vor 5-Tag-Kalibrierig: jedi Zälle vom polare Raster do unde haltet s\'durschnittlich tatsächlich/erwartet-Verhältnis, wo beobachtet worde isch, won d\'Sunne i derer Position gschtande isch und de Himmel di Wolkebedeckig gha het. Loht d\'Erwartig zum richtige Zytpunkt vom Tag für Boumschatte, Nachbarsdäch und anderi Hindernis abbiege, won de LiDAR nid erfasst het. Wachsd uus dyne eigene Date über es paar Wuche; bis denn dräit di skalari Kalibrierig d\'Last.',
-        shadingStatsCells:     'Zelle mit Date',
-        shadingStatsConfident: 'Zelle, wo d\'Erwartig vertraut',
-        shadingStatsUnder:     'stärchsti Unterproduktion:',
-        shadingStatsOver:      'stärchsti Überproduktion:',
-        shadingExport:         'Charte exportiere',
-        shadingImport:         'Charte importiere',
-        shadingImportError:    'Die Datei isch kei gülti Helios-Schattecharte.',
-        shadingReset:          'Charte zruckstelle',
-        shadingResetConfirm:   'Alli Zelle wägwerfe, wo d\'Schattecharte glernt het? D\'Erwartig fallt für es paar Wuche uf di skalari Kalibrierig zruck, bis d\'Charte wider uufgfüllt isch.'
     }
 };

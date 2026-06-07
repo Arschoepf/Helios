@@ -122,16 +122,5 @@ export const lt: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios sukūrė vienas kūrėjas su daug energijos ir labai mažai miego. Jei tai padeda jūsų kasdienei rutinai, žvaigždė GitHub\'e ar kava palaiko projektą gyvą.',
         aboutCoffeeLink:       'Pirk man kavos',
-        shadingSection:        'Adaptyvus šešėliavimo žemėlapis',
-        shadingHint:           'Mokomasis sluoksnis virš 5 dienų kalibravimo: kiekvienas žemiau esančio poliarinio tinklelio langelis laiko vidutinį faktinio/prognozuojamo santykį, stebimą, kai saulė buvo toje pozicijoje ir dangus turėjo tą debesų dangtį. Leidžia prognozei lankstytis tinkamu dienos laiku medžių šešėliams, kaimynų stogams ir kitoms kliūtims, kurių LiDAR neužfiksavo. Auga iš jūsų pačių duomenų per kelias savaites; iki tol skaliarinis kalibravimas neša naštą.',
-        shadingStatsCells:     'langelių su duomenimis',
-        shadingStatsConfident: 'prognozės patikimų langelių',
-        shadingStatsUnder:     'stipriausia nepakankama gamyba:',
-        shadingStatsOver:      'stipriausia perteklinė gamyba:',
-        shadingExport:         'Eksportuoti žemėlapį',
-        shadingImport:         'Importuoti žemėlapį',
-        shadingImportError:    'Šis failas nėra galiojantis Helios šešėliavimo žemėlapis.',
-        shadingReset:          'Atstatyti žemėlapį',
-        shadingResetConfirm:   'Išmesti kiekvieną langelį, kurį šešėliavimo žemėlapis išmoko? Prognozė grįš į skaliarinį kalibravimą porai savaičių, kol žemėlapis vėl užsipildys.'
     }
 };

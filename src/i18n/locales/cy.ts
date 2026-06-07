@@ -122,16 +122,5 @@ export const cy: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Mae Helios yn cael ei adeiladu gan un datblygwr gyda llawer o egni a thra ychydig o gwsg. Os yw\'n helpu dy drefn ddyddiol, mae seren ar GitHub neu goffi yn cadw\'r prosiect yn fyw.',
         aboutCoffeeLink:       'Pryn goffi i mi',
-        shadingSection:        'Map cysgodi addasol',
-        shadingHint:           'Haen ddysgu ar ben y galibrad 5 diwrnod: mae pob cell o\'r grid pegynol isod yn dal y gymhareb gyfartalog gwirioneddol/rhagweledig a arsylwyd pan oedd yr haul yn y safle hwnnw ac yr oedd gan yr awyr y gorchudd cwmwl hwnnw. Yn caniatáu i\'r rhagolwg blygu ar yr amser cywir o\'r dydd ar gyfer cysgodion coed, toeau cyfagos a rhwystrau eraill na ddaliodd y LiDAR. Yn cael ei adeiladu o\'th ddata dy hun dros ychydig wythnosau; tan hynny mae\'r galibrad sgalar yn cario\'r baich.',
-        shadingStatsCells:     'celloedd gyda data',
-        shadingStatsConfident: 'celloedd a ymddiriedir gan y rhagolwg',
-        shadingStatsUnder:     'tan-gynhyrchu cryfaf:',
-        shadingStatsOver:      'gor-gynhyrchu cryfaf:',
-        shadingExport:         'Allforio map',
-        shadingImport:         'Mewnforio map',
-        shadingImportError:    'Nid yw\'r ffeil honno\'n fap cysgodi Helios dilys.',
-        shadingReset:          'Ailosod map',
-        shadingResetConfirm:   'Taflu pob cell y mae\'r map cysgodi wedi\'i ddysgu? Bydd y rhagolwg yn dychwelyd i\'r galibrad sgalar am ychydig wythnosau nes y bydd y map yn ail-lenwi.'
     }
 };

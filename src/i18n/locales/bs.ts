@@ -122,16 +122,5 @@ export const bs: Translations = {
         aboutRepoLidar:        'Helios-Lidar (prateći sajt)',
         aboutCoffeeMessage:    'Helios pravi jedan programer s mnogo energije i vrlo malo sna. Ako vam pomaže u dnevnoj rutini, zvjezdica na GitHubu ili kafa održavaju projekat živim.',
         aboutCoffeeLink:       'Kupi mi kafu',
-        shadingSection:        'Adaptivna mapa zasjenjenja',
-        shadingHint:           'Učeći sloj povrh 5-dnevne kalibracije: svaka ćelija polarne mreže ispod sadrži prosječni omjer stvarno/prognozirano posmatran kada je sunce bilo na toj poziciji i kada je nebo imalo tu naoblaku. Omogućava prognozi da se savije u pravo doba dana za sjene drveća, susjednih krovova i drugih prepreka koje LiDAR nije zabilježio. Gradi se iz vaših vlastitih podataka tokom nekoliko sedmica; do tada skalarna kalibracija nosi teret.',
-        shadingStatsCells:     'ćelije s podacima',
-        shadingStatsConfident: 'ćelije kojima prognoza vjeruje',
-        shadingStatsUnder:     'najjača podproizvodnja:',
-        shadingStatsOver:      'najjača nadproizvodnja:',
-        shadingExport:         'Izvezi mapu',
-        shadingImport:         'Uvezi mapu',
-        shadingImportError:    'Taj fajl nije ispravna Helios mapa zasjenjenja.',
-        shadingReset:          'Resetiraj mapu',
-        shadingResetConfirm:   'Odbaciti svaku ćeliju koju je mapa zasjenjenja naučila? Prognoza će se vratiti na skalarnu kalibraciju za par sedmica dok se mapa ponovo ne napuni.'
     }
 };

@@ -120,16 +120,5 @@ export const fy: Translations = {
         aboutRepoLidar:        'Helios-Lidar (de begeliedende side)',
         aboutCoffeeMessage:    'Helios wurdt boud troch ien ûntwikkelder mei in soad enerzjy en hiel min sliep. As it dyn deistige rûte helpt, hâldt in stjer op GitHub of in kop kofje it projekt yn libben.',
         aboutCoffeeLink:       'Keapje my in kofje',
-        shadingSection:        'Adaptive skadekaart',
-        shadingHint:           'In learende laach boppe-op de 5-dagen kalibraasje: elke sel fan it polêre roaster hjirûnder hâldt de gemiddelde werklike/foarseine ferhâlding dy\'t observearre is doe\'t de sinne yn dy posysje stie en de loft dy wolkebedekking hie. Lit de ferwachting op it goede momint fan de dei bûgje foar beamskaden, naburige dakken en oare obstakels dy\'t de LiDAR net fêstlein hat. Bout him op út dyn eigen gegevens oer in pear wiken; oant dy tiid draacht de skalêre kalibraasje de lêst.',
-        shadingStatsCells:     'sellen mei gegevens',
-        shadingStatsConfident: 'sellen dy\'t de ferwachting fertrout',
-        shadingStatsUnder:     'sterkste ûnderproduksje:',
-        shadingStatsOver:      'sterkste oerproduksje:',
-        shadingExport:         'Kaart eksportearje',
-        shadingImport:         'Kaart ymportearje',
-        shadingImportError:    'Dat bestân is gjin jildige Helios-skadekaart.',
-        shadingReset:          'Kaart weromsette',
-        shadingResetConfirm:   'Alle sellen fuortsmite dy\'t de skadekaart leard hat? De ferwachting falt foar in pear wiken werom op de skalêre kalibraasje oant de kaart wer opfuld is.'
     }
 };

@@ -121,16 +121,5 @@ export const fi: Translations = {
         aboutRepoLidar:        'Helios-Lidar (oheissivusto)',
         aboutCoffeeMessage:    'Helios on yhden kehittäjän rakentama, paljon energialla ja hyvin vähäisellä unella. Jos siitä on apua arjessasi, tähti GitHubissa tai kuppi kahvia pitää projektin elossa.',
         aboutCoffeeLink:       'Osta minulle kahvi',
-        shadingSection:        'Adaptiivinen varjokartta',
-        shadingHint:           'Oppiva kerros 5 päivän kalibroinnin päällä: jokainen alla olevan polaariruudukon solu pitää sisällään keskimääräisen todellinen/ennustettu-suhteen, joka on havaittu auringon ollessa kyseisessä asennossa ja taivaan ollessa kyseisellä pilvipeitteellä. Antaa ennusteen taipua oikeaan vuorokaudenaikaan puiden varjoja, naapurikattoja ja muita LiDAR:n havaitsematta jättämiä esteitä varten. Rakentuu omasta datastasi muutaman viikon aikana; siihen asti skalaarikalibrointi kantaa kuorman.',
-        shadingStatsCells:     'solua, joissa on dataa',
-        shadingStatsConfident: 'solua, joihin ennuste luottaa',
-        shadingStatsUnder:     'voimakkain alituotanto:',
-        shadingStatsOver:      'voimakkain ylituotanto:',
-        shadingExport:         'Vie kartta',
-        shadingImport:         'Tuo kartta',
-        shadingImportError:    'Kyseinen tiedosto ei ole kelvollinen Helios-varjokartta.',
-        shadingReset:          'Nollaa kartta',
-        shadingResetConfirm:   'Heitetäänkö kaikki varjokartan oppimat solut pois? Ennuste palaa skalaarikalibrointiin pariksi viikoksi, kunnes kartta täyttyy uudelleen.'
     }
 };

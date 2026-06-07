@@ -12,7 +12,6 @@
 import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
-import { refreshShadingDomeScene, type ShadingDomeHost } from './shadingDome';
 import type { ChartSeries } from './charts';
 import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
@@ -602,10 +601,6 @@ function wireEngineCallbacks(host: InitHost): void
             if (mh._cardMode !== 'lidar')
             {
                 refreshOverlays(host);
-            }
-            if (mh._cardMode === 'shading-dome')
-            {
-                refreshShadingDomeScene(host as unknown as ShadingDomeHost);
             }
         });
     };

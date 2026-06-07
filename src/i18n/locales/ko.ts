@@ -121,16 +121,5 @@ export const ko: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios는 한 명의 개발자가 풍부한 에너지와 매우 적은 잠으로 만들고 있습니다. 일상에 도움이 된다면 GitHub의 별 하나나 커피 한 잔이 프로젝트를 살아 있게 합니다.',
         aboutCoffeeLink:       '커피 한 잔 사주기',
-        shadingSection:        '적응형 음영 맵',
-        shadingHint:           '5일 보정 위에 얹힌 학습 레이어: 아래 극좌표 그리드의 각 셀은 태양이 그 위치에 있고 하늘이 해당 운량을 보였을 때 관측된 실제/예측 비율의 평균을 보유합니다. 나무 그림자, 이웃 지붕, LiDAR가 잡지 못한 다른 장애물 때문에 예측이 하루 중 적절한 시간에 휘도록 해줍니다. 몇 주에 걸쳐 자신의 데이터로 채워지며, 그때까지는 스칼라 보정이 부하를 짊어집니다.',
-        shadingStatsCells:     '데이터가 있는 셀',
-        shadingStatsConfident: '예측이 신뢰하는 셀',
-        shadingStatsUnder:     '가장 큰 발전 부족:',
-        shadingStatsOver:      '가장 큰 발전 과잉:',
-        shadingExport:         '맵 내보내기',
-        shadingImport:         '맵 가져오기',
-        shadingImportError:    '이 파일은 유효한 Helios 음영 맵이 아닙니다.',
-        shadingReset:          '맵 재설정',
-        shadingResetConfirm:   '음영 맵이 학습한 모든 셀을 폐기할까요? 맵이 다시 채워질 때까지 몇 주간 예측은 스칼라 보정으로 되돌아갑니다.'
     }
 };

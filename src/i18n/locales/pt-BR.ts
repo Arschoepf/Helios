@@ -122,16 +122,5 @@ export const ptBR: Translations = {
         aboutRepoLidar:        'Helios-Lidar (o site complementar)',
         aboutCoffeeMessage:    'O Helios é feito por um único desenvolvedor com muita energia e muito pouco sono. Se ele ajuda na sua rotina, uma estrela no GitHub ou um café mantêm o projeto vivo.',
         aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Mapa de sombreamento adaptativo',
-        shadingHint:           'Uma camada de aprendizado em cima da calibração de 5 dias: cada célula da grade polar abaixo guarda a razão média real/previsto observada quando o sol estava naquela posição e o céu tinha aquela cobertura de nuvens. Permite que a previsão se curve na hora certa do dia para sombras de árvores, telhados vizinhos e outros obstáculos que o LiDAR não capturou. É construída a partir dos seus próprios dados ao longo de algumas semanas; até lá, a calibração escalar carrega a carga.',
-        shadingStatsCells:     'células com dados',
-        shadingStatsConfident: 'células em que a previsão confia',
-        shadingStatsUnder:     'subprodução mais forte:',
-        shadingStatsOver:      'sobreprodução mais forte:',
-        shadingExport:         'Exportar mapa',
-        shadingImport:         'Importar mapa',
-        shadingImportError:    'Esse arquivo não é um mapa de sombreamento Helios válido.',
-        shadingReset:          'Restaurar mapa',
-        shadingResetConfirm:   'Descartar todas as células que o mapa de sombreamento aprendeu? A previsão voltará à calibração escalar por algumas semanas até que o mapa se preencha novamente.'
     }
 };

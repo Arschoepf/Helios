@@ -121,16 +121,5 @@ export const ca: Translations = {
         aboutRepoLidar:        'Helios-Lidar (el lloc complementari)',
         aboutCoffeeMessage:    'Helios el fa un sol desenvolupador amb molta energia i molt poca son. Si t\'ajuda en el teu dia a dia, una estrella a GitHub o un cafè mantenen viu el projecte.',
         aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Mapa d\'ombrejat adaptatiu',
-        shadingHint:           'Una capa d\'aprenentatge per sobre del calibratge de 5 dies: cada cel·la de la graella polar de sota guarda la mitjana de la relació real/predita observada quan el sol era en aquesta posició i el cel tenia aquella cobertura de núvols. Permet que la previsió es corbi a l\'hora del dia adequada per a les ombres dels arbres, teulades veïnes i altres obstacles que el LiDAR no ha capturat. Es construeix a partir de les teves pròpies dades al llarg d\'unes setmanes; fins llavors, el calibratge escalar fa la feina.',
-        shadingStatsCells:     'cel·les amb dades',
-        shadingStatsConfident: 'cel·les en què la previsió confia',
-        shadingStatsUnder:     'subproducció més forta:',
-        shadingStatsOver:      'sobreproducció més forta:',
-        shadingExport:         'Exporta el mapa',
-        shadingImport:         'Importa un mapa',
-        shadingImportError:    'Aquest fitxer no és un mapa d\'ombrejat Helios vàlid.',
-        shadingReset:          'Restableix el mapa',
-        shadingResetConfirm:   'Vols descartar totes les cel·les que el mapa d\'ombrejat ha après? La previsió tornarà al calibratge escalar durant un parell de setmanes fins que el mapa es torni a omplir.'
     }
 };

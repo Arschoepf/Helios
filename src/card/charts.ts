@@ -25,35 +25,19 @@ import
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { computeForecastCalibration } from './calibration';
-import { currentShadingMap, trainShadingMap } from './shadingTrainer';
-import { lookupRatio, blendedRatio, type ShadingMap } from '../engine/shadingMap';
 import { sliceForRange } from './unifiedStore';
 
 
-//Resolve the per-point forecast multiplier: blend the learned
-//shading-map ratio (if the corresponding cell is confident
-//enough) with the scalar 5-day calibration ratio (always
-//available as a fallback). Same shape at every call site so the
-//instant tooltip + the hourly chart + the per-day kWh totals all
-//apply identical corrections; that's how a tree's late-afternoon
-//shadow ends up showing in both the dashboard headline and the
-//refined curve simultaneously.
-export function effectiveForecastRatio(
-    map:    ShadingMap,
-    time:   Date,
-    lat:    number,
-    lon:    number,
-    cloud:  number,
-    calR:   number,
-    nowMs:  number,
-): number
+//Per-point forecast multiplier. Used to be a blend between a learned shading-map ratio (per
+//azimuth / altitude / cloud bin, exponentially aged over 30 days) and the scalar 5-day
+//calibration ratio. The dome-trained shading map was retired in v1.8.3 (the gain over the
+//calibration ratio alone was negligible while the storage + visible-dome rendering cost was
+//heavy), so the helper now reduces to identity on calR. Kept as a single hook so a future
+//multiplier (weather grid contribution, hourly bias correction, etc.) can be re-wired through
+//one function call sites already use, without touching the call sites again.
+export function effectiveForecastRatio(calR: number): number
 {
-    const sun = getSunPosition(time, lat, lon);
-    if (!sun || sun.altitude <= 0)
-    {
-        return calR;
-    }
-    return blendedRatio(lookupRatio(map, sun.azimuth, sun.altitude, cloud, nowMs), calR);
+    return calR;
 }
 
 
@@ -449,9 +433,6 @@ export function pvValueAtTime(
     const k      = pvCalibK(host.config);
     const cal    = computeForecastCalibration(host);
     const calR   = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading = currentShadingMap();
-    const nowMs   = Date.now();
     const capW    = pvInverterMaxW(host.config);
     if (k !== null && series && coords && series.times.length >= 2)
     {
@@ -470,8 +451,8 @@ export function pvValueAtTime(
             }
             const cloud0 = series.cloud[i - 1] ?? 0;
             const cloud1 = series.cloud[i] ?? 0;
-            const eff0   = effectiveForecastRatio(shading, series.times[i - 1], coords.lat, coords.lon, cloud0, calR, nowMs);
-            const eff1   = effectiveForecastRatio(shading, series.times[i],     coords.lat, coords.lon, cloud1, calR, nowMs);
+            const eff0   = effectiveForecastRatio(calR);
+            const eff1   = effectiveForecastRatio(calR);
             const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, cloud0, {
                 airTempC: series.temperature[i - 1],
                 windMs:   series.windSpeed[i - 1],
@@ -1672,8 +1653,6 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     const coords   = getHomeCoords(host.config, host.hass);
     const cal      = computeForecastCalibration(host);
     const calR     = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading  = currentShadingMap();
     const capW     = pvInverterMaxW(host.config);
     if (k !== null && k > 0 && series && coords)
     {
@@ -1702,7 +1681,7 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             //pct × k = watts at this hour midpoint × 1h = Wh.
             //Divide by 1000 to land in kWh; clip first so the
             //daily total honours the inverter cap.
-            const eff   = effectiveForecastRatio(shading, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
+            const eff   = effectiveForecastRatio(calR);
             const watts = Math.min(capW, pct * k * eff);
             const kwh   = watts / 1000;
             const dk    = dayKey(tMs);

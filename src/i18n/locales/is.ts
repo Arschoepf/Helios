@@ -121,16 +121,5 @@ export const is_: Translations = {
         aboutRepoLidar:        'Helios-Lidar (fylgisíðan)',
         aboutCoffeeMessage:    'Helios er smíðað af einum forritara með mikla orku og mjög lítinn svefn. Ef það hjálpar í daglegri rútínu þinni, þá heldur stjarna á GitHub eða kaffibolli verkefninu á lífi.',
         aboutCoffeeLink:       'Bjóddu mér kaffi',
-        shadingSection:        'Aðlögunarhæft skuggakort',
-        shadingHint:           'Lærdómslag ofan á 5 daga kvörðunina: hver hólf í pólgrindinni að neðan geymir meðalhlutfallið raun/spáð sem sást þegar sólin var í þeirri stöðu og himinninn hafði þá skýjahulu. Lætur spána beygja á réttum tíma dags fyrir trjáskugga, nágrannaþök og aðrar hindranir sem LiDAR-inn náði ekki að fanga. Byggist upp af þínum eigin gögnum á nokkrum vikum; þangað til ber skalaakvörðunin álagið.',
-        shadingStatsCells:     'hólf með gögnum',
-        shadingStatsConfident: 'hólf sem spáin treystir',
-        shadingStatsUnder:     'mesta vanframleiðsla:',
-        shadingStatsOver:      'mesta yfirframleiðsla:',
-        shadingExport:         'Flytja út kort',
-        shadingImport:         'Flytja inn kort',
-        shadingImportError:    'Þessi skrá er ekki gilt Helios-skuggakort.',
-        shadingReset:          'Endurstilla kort',
-        shadingResetConfirm:   'Henda öllum hólfum sem skuggakortið hefur lært? Spáin fellur aftur á skalaakvörðunina í nokkrar vikur þar til kortið fyllist á ný.'
     }
 };

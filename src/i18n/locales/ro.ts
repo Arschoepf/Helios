@@ -122,16 +122,5 @@ export const ro: Translations = {
         aboutRepoLidar:        'Helios-Lidar (site-ul companion)',
         aboutCoffeeMessage:    'Helios este construit de un singur dezvoltator cu multă energie și foarte puțin somn. Dacă te ajută în rutina zilnică, o stea pe GitHub sau o cafea țin proiectul în viață.',
         aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Hartă de umbrire adaptivă',
-        shadingHint:           'Un strat de învățare peste calibrarea de 5 zile: fiecare celulă a grilei polare de mai jos păstrează raportul mediu real/prognozat observat când soarele era în acea poziție, iar cerul avea acea acoperire de nori. Permite prognozei să se curbeze la momentul potrivit al zilei pentru umbrele copacilor, acoperișurile vecinilor și alte obstacole pe care LiDAR nu le-a capturat. Se construiește din propriile tale date pe parcursul câtorva săptămâni; până atunci, calibrarea scalară duce greul.',
-        shadingStatsCells:     'celule cu date',
-        shadingStatsConfident: 'celule în care prognoza are încredere',
-        shadingStatsUnder:     'cea mai puternică sub-producție:',
-        shadingStatsOver:      'cea mai puternică supra-producție:',
-        shadingExport:         'Exportă harta',
-        shadingImport:         'Importă harta',
-        shadingImportError:    'Acest fișier nu este o hartă de umbrire Helios validă.',
-        shadingReset:          'Resetează harta',
-        shadingResetConfirm:   'Aruncă toate celulele învățate de harta de umbrire? Prognoza va reveni la calibrarea scalară pentru câteva săptămâni, până când harta se reumple.'
     }
 };

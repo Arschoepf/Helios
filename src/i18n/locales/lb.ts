@@ -120,16 +120,5 @@ export const lb: Translations = {
         aboutRepoLidar:        'Helios-Lidar (d\'Begleetsait)',
         aboutCoffeeMessage:    'Helios gëtt vun engem eenzegen Entwéckler mat vill Energie a ganz wéineg Schlof gebaut. Wann et dir an dengem Alldag hëlleft, hält e Stär op GitHub oder e Kaffi d\'Projet um Liewen.',
         aboutCoffeeLink:       'Kaaf mir e Kaffi',
-        shadingSection:        'Adaptiv Schiet-Kaart',
-        shadingHint:           'Eng léierend Schicht uewen op der 5-Deeg-Kalibratioun: all Zell vum polare Gitter hei drënner hält dat duerchschnëttlecht reell/erwaart-Verhältnis, dat observéiert ginn ass, wéi d\'Sonn an där Positioun stoung an den Himmel dës Wolleckenbedeckung hat. Léisst d\'Erwaartung zum richtegen Zäitpunkt vum Dag bei Beemschiet, Nopeschdach an aner Hindernissen, déi de LiDAR net erfaasst huet, ofweichen. Et baut sech aus dengen eegenen Donnéeë iwwer e puer Wochen op; bis dohinner dréit déi skalar Kalibratioun d\'Laascht.',
-        shadingStatsCells:     'Zellen mat Donnéeën',
-        shadingStatsConfident: 'Zellen, deenen d\'Erwaartung vertraut',
-        shadingStatsUnder:     'stäerkste Ënnerproduktioun:',
-        shadingStatsOver:      'stäerkste Iwwerproduktioun:',
-        shadingExport:         'Kaart exportéieren',
-        shadingImport:         'Kaart importéieren',
-        shadingImportError:    'Dëse Fichier ass keng gülteg Helios-Schiet-Kaart.',
-        shadingReset:          'Kaart zerécksetzen',
-        shadingResetConfirm:   'All Zell ewechgeheien, déi d\'Schiet-Kaart geléiert huet? D\'Erwaartung fält fir e puer Wochen op déi skalar Kalibratioun zréck, bis d\'Kaart erëm gefëllt ass.'
     }
 };

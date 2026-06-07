@@ -121,16 +121,5 @@ export const zhHant: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios 由一位開發者以充沛幹勁與極少睡眠打造。如果它能幫到你的日常生活,在 GitHub 上點顆 star 或請喝一杯咖啡,都能讓專案延續下去。',
         aboutCoffeeLink:       '請我喝杯咖啡',
-        shadingSection:        '自適應遮蔽貼圖',
-        shadingHint:           '在 5 天校準之上的學習層:下方極座標格網的每個單元保存了太陽位於該位置且天空有相對應雲量時所觀察到的實際/預測比值之平均。讓預測能在一天中正確的時間,順著樹影、鄰家屋頂以及 LiDAR 未捕捉到的其他遮蔽物彎折。它會依你自己的資料慢慢累積數週;在此期間,標量校準扛起主要任務。',
-        shadingStatsCells:     '已有資料的單元',
-        shadingStatsConfident: '預測信任的單元',
-        shadingStatsUnder:     '最強發電不足:',
-        shadingStatsOver:      '最強發電過剩:',
-        shadingExport:         '匯出貼圖',
-        shadingImport:         '匯入貼圖',
-        shadingImportError:    '該檔案不是有效的 Helios 遮蔽貼圖。',
-        shadingReset:          '重設貼圖',
-        shadingResetConfirm:   '丟棄遮蔽貼圖已學到的所有單元?在貼圖重新填滿前的幾週內,預測將退回到標量校準。'
     }
 };

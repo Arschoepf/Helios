@@ -23,7 +23,6 @@ import { cloudCoverIcon } from './cloud-icons';
 import { hasPvConfigured } from './equipment';
 import { effectiveForecastRatio, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
-import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
 import { renderRadialDial, renderDashCardChipStrip, renderDashCardGraphView, prepareRadialDayData } from './dashboardRadial';
@@ -103,10 +102,8 @@ export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, 
         return null;
     }
     const raster = host._engine?.getLidarRaster() ?? null;
-    const shMap  = currentShadingMap();
     const cal    = computeForecastCalibration(host);
     const calR   = cal?.ratio ?? 1;
-    const nowMs  = Date.now();
     const capW   = pvInverterMaxW(host.config);
     let kwh = 0;
     let any = false;
@@ -127,7 +124,7 @@ export function computeRefinedDailyKwh(host: DashboardHost, dayStartMs: number, 
         {
             continue;
         }
-        const ratio = effectiveForecastRatio(shMap, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
+        const ratio = effectiveForecastRatio(calR);
         kwh += Math.min(capW, pct * k * ratio) / 1000;
         any = true;
     }

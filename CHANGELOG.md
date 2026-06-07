@@ -33,6 +33,45 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Big shift: shading map retired, weather mode foundation (#210)
+
+**The card is no longer a niche PV-enthusiast tool.** Helios now positions itself as a universal
+home weather / energy card; the shading-dome view (a celestial hemisphere overlay learning per-cell
+shading residuals from 30 days of PV history) and its associated training infrastructure are gone.
+The shading map was visually striking but contributed marginally to forecast accuracy on most
+installs while consuming 100-500 KB of localStorage and ~1500 lines of code.
+
+**What ships in this beta:**
+
+- `effectiveForecastRatio` reduces to identity on `calR` (the scalar 5-day calibration ratio).
+  Forecast accuracy remains driven by `computePvPowerWeighted` (physical PV model from `pv-arrays`)
+  × `pvCalibK` × `calR`, which is the bulk of the gain anyway.
+- Four files retired entirely: `engine/shadingMap.ts`, `card/shadingMapView.ts`,
+  `card/shadingTrainer.ts`, `card/shadingDome.ts`. Code paths in `unifiedStore.ts`, `charts.ts`,
+  `dashboard.ts`, `pv.ts` and `helios-card.ts` simplify accordingly.
+- 11 shading-related i18n keys dropped from the type + all 64 locales.
+- Editor "Shading map" debug section removed; the radial-icon button in the mode bar is
+  reassigned to a new "Weather" mode.
+- `helios-shading-map:v2` is no longer written. Existing entries from earlier versions stay until
+  the user / browser collects them (we don't actively clear other apps' storage, but the key never
+  gets touched again so it'll fall out of the LRU).
+
+**What lands in this beta as a foundation:**
+
+- New `weather` card mode replacing the shading-dome slot. Clicking the icon (`mdi:weather-partly
+  -cloudy`) tilts the camera to top-down (pitch 0) and zooms out by ~5 levels with an 1200 ms
+  ease, animates the HUD chip mask the same way the shading-dome did, and exits restoring the
+  exact pre-enter pose.
+- `engine.enterWeatherCamera()` / `engine.exitWeatherCamera()` + `engine.getCloudLayersAt(t)`
+  helpers shipped on the public engine surface.
+- `weatherMode.ts` ships the full fade-loop + lifecycle. The visible overlay is intentionally a
+  bare fading wrapper in this beta; the raster cloud overlay (multi-point Open-Meteo grid +
+  canvas with bilinear interp + Perlin noise) lands in the next beta where the heavier render
+  path can be validated against the perf budget.
+
+**Bundle: -115 KB** uncompressed (-32 KB gzipped) on net, on top of every previous v1.8.3
+optimisation.
+
 ### Chart hover tooltip + adaptive radial layout (#210)
 
 **Dashboard chart hover tooltip.** A small icon + value chip appears at the hover cursor, showing

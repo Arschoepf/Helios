@@ -122,16 +122,5 @@ export const lv: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios ir izveidojis viens izstrādātājs ar daudz enerģijas un ļoti maz miega. Ja tas palīdz jūsu ikdienas rutīnai, zvaigzne GitHub\'ā vai kafija saglabā projektu dzīvu.',
         aboutCoffeeLink:       'Nopērc man kafiju',
-        shadingSection:        'Adaptīvā ēnošanas karte',
-        shadingHint:           'Mācību slānis virs 5 dienu kalibrēšanas: katra zem esošā polārā režģa šūna satur vidējo faktisko/prognozēto attiecību, kas novērota, kad saule bija šajā pozīcijā un debesīm bija šis mākoņu segums. Ļauj prognozei izliekties pareizajā dienas laikā koku ēnām, kaimiņu jumtiem un citiem šķēršļiem, ko LiDAR neuztvēra. Veidojas no jūsu pašu datiem dažu nedēļu laikā; līdz tam skalārā kalibrēšana nes slogu.',
-        shadingStatsCells:     'šūnas ar datiem',
-        shadingStatsConfident: 'šūnas, kurām uzticas prognoze',
-        shadingStatsUnder:     'spēcīgākā nepietiekamā ražošana:',
-        shadingStatsOver:      'spēcīgākā pārmērīgā ražošana:',
-        shadingExport:         'Eksportēt karti',
-        shadingImport:         'Importēt karti',
-        shadingImportError:    'Šis fails nav derīga Helios ēnošanas karte.',
-        shadingReset:          'Atiestatīt karti',
-        shadingResetConfirm:   'Izmest katru šūnu, ko ēnošanas karte ir iemācījusies? Prognoze atgriezīsies skalārajā kalibrēšanā uz pāris nedēļām, līdz karte atkārtoti aizpildās.'
     }
 };

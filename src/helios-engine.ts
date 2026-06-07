@@ -805,6 +805,61 @@ export class HeliosEngine
     //value committed to the YAML config.
     public getCameraBearing(): number { return this.map ? this.map.getBearing() : this.getDefaultBearing(); }
     public getCameraPitch():   number { return this.map ? this.map.getPitch()   : this.getDefaultPitch(); }
+    public getCameraZoom():    number { return this.map ? this.map.getZoom()    : 18; }
+
+    //Pre-weather-mode camera pose snapshot. Captured when enterWeatherCamera() fires so the symmetric
+    //exit (exitWeatherCamera) restores EXACTLY the pose the user was on, bypassing the default
+    //easeTo target which would otherwise drag them back to the boot pose.
+    private _preWeatherPose: { bearing: number; pitch: number; zoom: number; center: [number, number] } | null = null;
+
+    //Weather mode camera transition: zoom out + tilt down to top-down view so the cloud-cover overlay
+    //reads as a meteorological satellite plan. Snapshot the pre-enter pose so the matching exit
+    //animation restores the user's pre-mode framing on the way back. ~1200 ms easeTo for a
+    //deliberate "stepping back to look at the weather" feel.
+    public enterWeatherCamera(): void
+    {
+        if (!this.map) { return; }
+        this._preWeatherPose = {
+            bearing: this.map.getBearing(),
+            pitch:   this.map.getPitch(),
+            zoom:    this.map.getZoom(),
+            center:  [this.homeLon, this.homeLat],
+        };
+        this.map.stop();
+        this.map.easeTo({
+            center:   [this.homeLon, this.homeLat],
+            bearing:  0,
+            pitch:    0,
+            zoom:     Math.max(8, this.map.getZoom() - 5),
+            duration: 1200,
+        });
+    }
+
+    public exitWeatherCamera(): void
+    {
+        if (!this.map) { return; }
+        const pose = this._preWeatherPose;
+        if (!pose) { return; }
+        this._preWeatherPose = null;
+        this.map.stop();
+        this.map.easeTo({
+            center:   pose.center,
+            bearing:  pose.bearing,
+            pitch:    pose.pitch,
+            zoom:     pose.zoom,
+            duration: 1200,
+        });
+    }
+
+    //Public read of the low / mid / high cloud-cover percentages at an arbitrary time. Wraps the
+    //internal _getWeatherAtTime resolver so the weather-mode overlay can pull the same hourly Open-
+    //Meteo numbers every other consumer reads from. Returns 0/0/0 when the home hourly data hasn't
+    //landed yet or the timestamp falls outside the fetched window.
+    public getCloudLayersAt(t: Date): { low: number; mid: number; high: number; cover: number }
+    {
+        const w = this._getWeatherAtTime(t);
+        return { low: w.cloudLow, mid: w.cloudMid, high: w.cloudHigh, cover: w.cloudCover };
+    }
 
     //Auto-rotation state. The map slowly orbits the home in the
     //opposite direction to the sun's apparent motion (decreasing

@@ -82,12 +82,10 @@ import {
     type EnergyDefaults,
 } from './card/energy-prefs';
 import {
-    renderShadingDomeOverlay,
-    renderShadingDomeCloudPicker,
-    enterShadingDome,
-    exitShadingDome,
-    refreshShadingDomeScene,
-} from './card/shadingDome';
+    renderWeatherOverlay,
+    enterWeatherMode,
+    exitWeatherMode,
+} from './card/weatherMode';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
 import
@@ -613,20 +611,13 @@ export class HeliosCard extends LitElement
     //the user always lands on a sensible-looking opacity.
     _lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
 
-    //ShadingDome SVG lifecycle, same role as _lidarLayerActive: lets the dome SVG keep painting through
-    //its exit fade after _cardMode already moved off shading-dome. Flipped to false by the ShadingDome
-    //fade loop on fade-out completion.
-    _shadingDomeSvgVisible:     boolean = false;
-    _shadingDomeFadeInStartMs:  number | null = null;
-    _shadingDomeFadeOutStartMs: number | null = null;
-    _shadingDomeFadeRaf?:       number;
-    //Cloud cover percentage selected by the continuous slider in
-    //the bottom-left of the dome view. 0 = clear sky, 100 = full
-    //overcast. The engine's lookup is bin-based; the bin is
-    //derived from this pct so the user reads the slider as a
-    //continuous knob even though the underlying data is binned.
-    _shadingDomeCloudPct = 0;
-    _shadingDomeScene: import('./card/shadingDome').ShadingDomeScene | null = null;
+    //Weather mode overlay lifecycle. Lets the cloud-cover canvas keep painting through its exit fade
+    //after _cardMode already moved off 'weather'. Flipped to false by the weather fade loop on
+    //fade-out completion. Same role as _lidarLayerActive for the LiDAR view.
+    _weatherOverlayVisible: boolean = false;
+    _weatherFadeInStartMs:  number | null = null;
+    _weatherFadeOutStartMs: number | null = null;
+    _weatherFadeRaf?:       number;
 
     //Cloud-cover dome overlay state. Mutually exclusive with the
     //LiDAR view and the shading dome (click handlers below close
@@ -1022,14 +1013,13 @@ export class HeliosCard extends LitElement
             cancelAnimationFrame(this._lidarFadeRaf);
             this._lidarFadeRaf = undefined;
         }
-        //Same treatment for the dome fade and the dashboard count-up
-        //loops: both self-resubmit via requestAnimationFrame and close
-        //over `this`, so a detached card would otherwise keep ticking
-        //and calling requestUpdate() against the disconnected element.
-        if (this._shadingDomeFadeRaf !== undefined)
+        //Same treatment for the weather overlay fade and the dashboard count-up loops: both
+        //self-resubmit via requestAnimationFrame and close over `this`, so a detached card would
+        //otherwise keep ticking and calling requestUpdate() against the disconnected element.
+        if (this._weatherFadeRaf !== undefined)
         {
-            cancelAnimationFrame(this._shadingDomeFadeRaf);
-            this._shadingDomeFadeRaf = undefined;
+            cancelAnimationFrame(this._weatherFadeRaf);
+            this._weatherFadeRaf = undefined;
         }
         if (this._lidarOpacityRaf)
         {
@@ -1224,7 +1214,7 @@ export class HeliosCard extends LitElement
                 this._cardMode           = 'base';
                 this._overlayMaskActive  = false;
                 this._lidarLayerActive   = false;
-                this._shadingDomeSvgVisible = false;
+                this._weatherOverlayVisible = false;
                 this._cloudMode          = false;
                 this._detailMode         = false;
                 //New home means a fresh hydration wave, surface the loading banner again.
@@ -2065,7 +2055,7 @@ export class HeliosCard extends LitElement
                     //button stays lit while the cloud chips are revealed.
                     const isLayer    = this._cardMode === 'base';
                     const isLidar    = this._cardMode === 'lidar';
-                    const isShading  = this._cardMode === 'shading-dome';
+                    const isWeather  = this._cardMode === 'weather';
                     //Lock mode-switching while the LiDAR exposure sweep is in flight: the user cannot
                     //exit / re-enter / swap modes until the LiDAR view has finished computing.
                     const modeLocked = isLidar && this._lidarExposureBusy;
@@ -2073,9 +2063,9 @@ export class HeliosCard extends LitElement
                     //(see _onModeLayer etc.) so Lit does not see a fresh
                     //closure identity on every render and re-attach the
                     //@click handler four times per cycle.
-                    const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar        : undefined;
-                    const onLayer    = !modeLocked                  ? this._onModeLayer        : undefined;
-                    const onShading  = !modeLocked                  ? this._onModeShadingDome  : undefined;
+                    const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar   : undefined;
+                    const onLayer    = !modeLocked                  ? this._onModeLayer   : undefined;
+                    const onWeather  = !modeLocked                  ? this._onModeWeather : undefined;
                     //Live cloud-cover icon for the cloud-dome button:
                     //sun, partly-cloudy, cloudy or pouring depending on
                     //the current home reading. The user reads the sky
@@ -2123,14 +2113,14 @@ export class HeliosCard extends LitElement
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${isShading ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
+                                    class="mode-bar-seg ${isWeather ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
                                     role="radio"
-                                    aria-checked="${isShading ? 'true' : 'false'}"
+                                    aria-checked="${isWeather ? 'true' : 'false'}"
                                     ?disabled="${modeLocked}"
-                                    aria-label="Adaptive shading dome"
-                                    @click="${onShading}"
+                                    aria-label="Weather view"
+                                    @click="${onWeather}"
                                 >
-                                    <ha-icon icon="mdi:radar"></ha-icon>
+                                    <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
                                 </button>
                             </div>
                         </div>
@@ -2718,20 +2708,13 @@ export class HeliosCard extends LitElement
                       internal scroll / tap would close the panel.  -->
                 ${this._detailMode ? renderDashboard(this) : nothing}
 
-                <!--  Adaptive shading-dome overlay. SVG is full-card,
-                      absolutely positioned, pointer-events disabled
-                      so it never intercepts clicks meant for the
-                      map. Fades in via inline opacity driven by the
-                      fade RAF loop. The cloud-bin picker rides
-                      flush against the top-right chip cluster so
-                      the slice selector is right next to the chip
-                      that opened the view.                          -->
-                ${renderShadingDomeOverlay(this)}
-                ${renderShadingDomeCloudPicker(this, (pct) => {
-                    this._shadingDomeCloudPct = pct;
-                    refreshShadingDomeScene(this);
-                    this.requestUpdate();
-                })}
+                <!--  Weather overlay. Full-card HTML overlay above the MapLibre canvas, painted
+                      with a per-altitude cloud-cover raster sampled from the multi-point Open-
+                      Meteo grid at the SELECTED instant. Pointer-events disabled so it never
+                      intercepts clicks meant for the map. Fades in via inline opacity driven by
+                      the fade RAF loop, then the engine.enterWeatherCamera tilts the camera to
+                      top-down + zooms out so the user reads the area like a satellite plan. -->
+                ${renderWeatherOverlay(this)}
                 ${renderLidarViewOpacityPicker(this, this._onLidarOpacityChange)}
 
             </ha-card>
@@ -2847,11 +2830,11 @@ export class HeliosCard extends LitElement
         this._cloudMode = false;
         this._cardMode  = 'lidar';
     };
-    private _onModeShadingDome = (): void =>
+    private _onModeWeather = (): void =>
     {
         this._exitScrubMode();
         this._cloudMode = false;
-        this._cardMode  = 'shading-dome';
+        this._cardMode  = 'weather';
     };
     //Mode-transition state machine. Called from updated() when _cardMode changed. Single switch on
     //the (prev, next) pair drives:
@@ -2914,22 +2897,23 @@ export class HeliosCard extends LitElement
             }
         }
 
-        if (prev === 'shading-dome' && next !== 'shading-dome')
+        if (prev === 'weather' && next !== 'weather')
         {
-            if (this._shadingDomeSvgVisible)
+            if (this._weatherOverlayVisible)
             {
-                exitShadingDome(this);
+                exitWeatherMode(this);
             }
             if (next === 'base')
             {
-                //Dome SVG is faint, lift the overlay mask immediately so the chips + timeline slide
-                //back in while the dome fades out underneath. Symmetric to the historical behaviour.
+                //Weather overlay is faint, lift the overlay mask immediately so the chips +
+                //timeline slide back in while the overlay fades out and the camera eases back to
+                //the pre-enter pose.
                 this._overlayMaskActive = false;
             }
         }
-        else if (prev !== 'shading-dome' && next === 'shading-dome')
+        else if (prev !== 'weather' && next === 'weather')
         {
-            enterShadingDome(this);
+            enterWeatherMode(this);
         }
     }
     //Reset the timeline scrub state so the absolutely-positioned

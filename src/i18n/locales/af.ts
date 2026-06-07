@@ -120,16 +120,5 @@ export const af: Translations = {
         aboutRepoLidar:        'Helios-Lidar (die gepaarde webwerf)',
         aboutCoffeeMessage:    'Helios word deur een ontwikkelaar gebou, met baie energie en baie min slaap. As dit jou daaglikse roetine help, hou \'n ster op GitHub of \'n koppie koffie die projek aan die lewe.',
         aboutCoffeeLink:       'Koop vir my \'n koffie',
-        shadingSection:        'Aanpasbare skadukaart',
-        shadingHint:           'n Leerlaag bo-op die 5-dae kalibrering: elke sel van die poolrooster hieronder hou die gemiddelde werklik/voorspelde verhouding wat waargeneem is toe die son in daardie posisie was en die lug daardie wolkbedekking gehad het. Laat die voorspelling op die regte tyd van die dag buig vir boomskaduwees, naburige dakke en ander hindernisse wat die LiDAR nie gevang het nie. Bou met jou eie data oor \'n paar weke op; tot dan dra die skalaarkalibrasie die las.',
-        shadingStatsCells:     'selle met data',
-        shadingStatsConfident: 'selle wat die voorspelling vertrou',
-        shadingStatsUnder:     'sterkste onderproduksie:',
-        shadingStatsOver:      'sterkste oorproduksie:',
-        shadingExport:         'Voer kaart uit',
-        shadingImport:         'Voer kaart in',
-        shadingImportError:    'Daardie lêer is nie \'n geldige Helios-skadukaart nie.',
-        shadingReset:          'Stel kaart terug',
-        shadingResetConfirm:   'Gooi elke sel weg wat die skadukaart geleer het? Die voorspelling sal vir \'n paar weke terugval op die skalaarkalibrasie totdat die kaart weer volgemaak is.'
     }
 };

@@ -122,16 +122,5 @@ export const tr: Translations = {
         aboutRepoLidar:        'Helios-Lidar (eşlik eden site)',
         aboutCoffeeMessage:    'Helios, çok enerjisi ve çok az uykusu olan tek bir geliştirici tarafından üretiliyor. Günlük rutininize yardımcı oluyorsa, GitHub\'da bir yıldız veya bir kahve projeyi hayatta tutar.',
         aboutCoffeeLink:       'Buy me a coffee',
-        shadingSection:        'Uyarlanabilir gölgeleme haritası',
-        shadingHint:           '5 günlük kalibrasyonun üzerine bir öğrenme katmanı: aşağıdaki kutupsal ızgaranın her hücresi, güneş o konumdayken ve gökyüzünde o bulut örtüsü varken gözlenen ortalama gerçek/tahmini oranını tutar. Ağaç gölgeleri, komşu çatılar ve LiDAR\'ın yakalamadığı diğer engeller için tahminin günün doğru saatinde bükülmesini sağlar. Birkaç hafta boyunca kendi verilerinizden oluşturulur; o zamana kadar skaler kalibrasyon yükü taşır.',
-        shadingStatsCells:     'verili hücre',
-        shadingStatsConfident: 'tahminin güvendiği hücreler',
-        shadingStatsUnder:     'en güçlü düşük üretim:',
-        shadingStatsOver:      'en güçlü aşırı üretim:',
-        shadingExport:         'Haritayı dışa aktar',
-        shadingImport:         'Haritayı içe aktar',
-        shadingImportError:    'Bu dosya geçerli bir Helios gölgeleme haritası değil.',
-        shadingReset:          'Haritayı sıfırla',
-        shadingResetConfirm:   'Gölgeleme haritasının öğrendiği her hücreyi atmak istiyor musunuz? Tahmin, harita yeniden dolana kadar birkaç hafta boyunca skaler kalibrasyona geri dönecek.'
     }
 };

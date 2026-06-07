@@ -122,16 +122,5 @@ export const hu: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios-t egy fejlesztő építi sok energiával és nagyon kevés alvással. Ha segíti a napi rutinodat, egy csillag a GitHub-on vagy egy kávé életben tartja a projektet.',
         aboutCoffeeLink:       'Vegyél nekem egy kávét',
-        shadingSection:        'Adaptív árnyékolási térkép',
-        shadingHint:           'Tanulási réteg az 5 napos kalibráció tetején: az alábbi poláris rács minden cellája a megfigyelt tényleges/jósolt arány átlagát tartja, amikor a nap ebben a pozícióban volt és az égnek ez a felhőzete volt. Lehetővé teszi az előrejelzés számára, hogy a nap megfelelő idejében hajoljon a fák árnyékaihoz, a szomszédos tetőkhöz és más akadályokhoz, amelyeket a LiDAR nem ragadott meg. A saját adataidból épül fel néhány hét alatt; addig a skaláris kalibráció viszi a terhet.',
-        shadingStatsCells:     'cellák adatokkal',
-        shadingStatsConfident: 'az előrejelzés által megbízható cellák',
-        shadingStatsUnder:     'legerősebb alultermelés:',
-        shadingStatsOver:      'legerősebb túltermelés:',
-        shadingExport:         'Térkép exportálása',
-        shadingImport:         'Térkép importálása',
-        shadingImportError:    'Ez a fájl nem érvényes Helios árnyékolási térkép.',
-        shadingReset:          'Térkép visszaállítása',
-        shadingResetConfirm:   'Eldobjunk minden cellát, amelyet az árnyékolási térkép megtanult? Az előrejelzés visszaesik a skaláris kalibrációra néhány hétre, amíg a térkép újra fel nem töltődik.'
     }
 };

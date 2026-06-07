@@ -122,16 +122,5 @@ export const sl: Translations = {
         aboutRepoLidar:        'Helios-Lidar (spremljevalno spletno mesto)',
         aboutCoffeeMessage:    'Helios gradi en sam razvijalec z veliko energije in zelo malo spanca. Če vam pomaga v dnevni rutini, zvezdica na GitHubu ali kava ohranjata projekt živ.',
         aboutCoffeeLink:       'Kupi mi kavo',
-        shadingSection:        'Prilagodljiva karta senčenja',
-        shadingHint:           'Učeči sloj nad 5-dnevnim umerjanjem: vsaka celica spodnje polarne mreže hrani povprečno razmerje dejansko/napovedano, opaženo, ko je bilo sonce na tem položaju in je nebo imelo to oblačnost. Omogoča napovedi, da se upogne ob pravem času dneva za sence dreves, sosednjih streh in drugih ovir, ki jih LiDAR ni zajel. Gradi se iz vaših lastnih podatkov v nekaj tednih; do tedaj breme nosi skalarno umerjanje.',
-        shadingStatsCells:     'celic s podatki',
-        shadingStatsConfident: 'celic, ki jim napoved zaupa',
-        shadingStatsUnder:     'najmočnejša podproizvodnja:',
-        shadingStatsOver:      'najmočnejša nadproizvodnja:',
-        shadingExport:         'Izvozi karto',
-        shadingImport:         'Uvozi karto',
-        shadingImportError:    'Ta datoteka ni veljavna Helios karta senčenja.',
-        shadingReset:          'Ponastavi karto',
-        shadingResetConfirm:   'Zavreči vsako celico, ki se jo je karta senčenja naučila? Napoved se bo za nekaj tednov vrnila na skalarno umerjanje, dokler se karta ponovno ne napolni.'
     }
 };

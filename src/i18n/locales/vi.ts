@@ -121,16 +121,5 @@ export const vi: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios được xây dựng bởi một nhà phát triển với rất nhiều năng lượng và rất ít giấc ngủ. Nếu nó giúp ích cho thói quen hằng ngày của bạn, một ngôi sao trên GitHub hay một ly cà phê sẽ giữ dự án sống tiếp.',
         aboutCoffeeLink:       'Mời tôi một ly cà phê',
-        shadingSection:        'Bản đồ che bóng thích ứng',
-        shadingHint:           'Một lớp học hỏi nằm trên hiệu chuẩn 5 ngày: mỗi ô của lưới cực bên dưới giữ tỉ lệ trung bình thực tế/dự đoán đã quan sát khi mặt trời ở vị trí đó và bầu trời có lượng mây tương ứng. Cho phép dự báo uốn cong vào đúng thời điểm trong ngày theo bóng cây, mái nhà hàng xóm và những vật cản khác mà LiDAR không bắt được. Tích luỹ từ dữ liệu của bạn trong vài tuần; trước đó, hiệu chuẩn vô hướng đảm nhiệm.',
-        shadingStatsCells:     'ô có dữ liệu',
-        shadingStatsConfident: 'ô được dự báo tin cậy',
-        shadingStatsUnder:     'thiếu sản lượng mạnh nhất:',
-        shadingStatsOver:      'thừa sản lượng mạnh nhất:',
-        shadingExport:         'Xuất bản đồ',
-        shadingImport:         'Nhập bản đồ',
-        shadingImportError:    'Tệp này không phải bản đồ che bóng Helios hợp lệ.',
-        shadingReset:          'Đặt lại bản đồ',
-        shadingResetConfirm:   'Loại bỏ mọi ô mà bản đồ che bóng đã học? Dự báo sẽ trở về hiệu chuẩn vô hướng trong vài tuần cho đến khi bản đồ đầy lại.'
     }
 };

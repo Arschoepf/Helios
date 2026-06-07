@@ -121,16 +121,5 @@ export const id: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios dibangun oleh seorang pengembang dengan banyak energi dan sangat sedikit tidur. Jika ia membantu rutinitas harian Anda, sebuah bintang di GitHub atau secangkir kopi menjaga proyek tetap hidup.',
         aboutCoffeeLink:       'Belikan saya kopi',
-        shadingSection:        'Peta peneduhan adaptif',
-        shadingHint:           'Lapisan pembelajaran di atas kalibrasi 5 hari: setiap sel dari grid polar di bawah menyimpan rasio rata-rata aktual/prediksi yang diamati saat matahari berada di posisi tersebut dan langit memiliki cakupan awan demikian. Membuat prakiraan menekuk pada waktu yang tepat di siang hari karena bayangan pohon, atap tetangga, dan rintangan lain yang tidak ditangkap LiDAR. Terbangun dari data Anda sendiri selama beberapa minggu; sampai saat itu, kalibrasi skalar yang memikul beban.',
-        shadingStatsCells:     'sel berisi data',
-        shadingStatsConfident: 'sel yang dipercaya prakiraan',
-        shadingStatsUnder:     'kekurangan produksi terbesar:',
-        shadingStatsOver:      'kelebihan produksi terbesar:',
-        shadingExport:         'Ekspor peta',
-        shadingImport:         'Impor peta',
-        shadingImportError:    'File itu bukan peta peneduhan Helios yang valid.',
-        shadingReset:          'Reset peta',
-        shadingResetConfirm:   'Buang setiap sel yang sudah dipelajari peta peneduhan? Prakiraan akan kembali ke kalibrasi skalar selama beberapa minggu sampai peta terisi kembali.'
     }
 };

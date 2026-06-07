@@ -120,16 +120,5 @@ export const da: Translations = {
         aboutRepoLidar:        'Helios-Lidar (følgesiden)',
         aboutCoffeeMessage:    'Helios er bygget af én udvikler med masser af energi og meget lidt søvn. Hvis det hjælper i din dagligdag, holder en stjerne på GitHub eller en kop kaffe projektet i live.',
         aboutCoffeeLink:       'Køb mig en kaffe',
-        shadingSection:        'Adaptivt skyggekort',
-        shadingHint:           'Et lærende lag oven på 5-dages-kalibreringen: hver celle i det polære gitter nedenfor indeholder det gennemsnitlige faktisk/forudsagt-forhold, der er observeret, da solen stod i den position, og himlen havde det skydække. Lader prognosen bøje af på det rigtige tidspunkt af dagen for trækskygger, nabotage og andre forhindringer, som LiDAR ikke fangede. Bygges op af dine egne data over et par uger; indtil da bærer den skalære kalibrering belastningen.',
-        shadingStatsCells:     'celler med data',
-        shadingStatsConfident: 'celler, som prognosen stoler på',
-        shadingStatsUnder:     'kraftigste underproduktion:',
-        shadingStatsOver:      'kraftigste overproduktion:',
-        shadingExport:         'Eksportér kort',
-        shadingImport:         'Importér kort',
-        shadingImportError:    'Denne fil er ikke et gyldigt Helios-skyggekort.',
-        shadingReset:          'Nulstil kort',
-        shadingResetConfirm:   'Vil du smide alle celler væk, som skyggekortet har lært? Prognosen falder tilbage til den skalære kalibrering i et par uger, indtil kortet er fyldt op igen.'
     }
 };

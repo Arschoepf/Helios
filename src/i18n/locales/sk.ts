@@ -122,16 +122,5 @@ export const sk: Translations = {
         aboutRepoLidar:        'Helios-Lidar (sprievodný web)',
         aboutCoffeeMessage:    'Helios stavia jeden vývojár s veľkou energiou a veľmi malým spánkom. Ak vám pomáha v dennej rutine, hviezdička na GitHube alebo káva udržiavajú projekt nažive.',
         aboutCoffeeLink:       'Kúp mi kávu',
-        shadingSection:        'Adaptívna mapa tienenia',
-        shadingHint:           'Učiaca sa vrstva nad 5-dňovou kalibráciou: každá bunka polárnej mriežky nižšie obsahuje priemerný pomer skutočné/predpovedané pozorovaný, keď bolo slnko v tejto polohe a obloha mala takúto oblačnosť. Umožňuje predpovedi ohnúť sa v správnu dennú dobu pre tiene stromov, susedných striech a iných prekážok, ktoré LiDAR nezachytil. Buduje sa z vašich vlastných dát počas niekoľkých týždňov; dovtedy nesie záťaž skalárna kalibrácia.',
-        shadingStatsCells:     'buniek s dátami',
-        shadingStatsConfident: 'buniek, ktorým predpoveď dôveruje',
-        shadingStatsUnder:     'najsilnejšia podvýroba:',
-        shadingStatsOver:      'najsilnejšia nadvýroba:',
-        shadingExport:         'Exportovať mapu',
-        shadingImport:         'Importovať mapu',
-        shadingImportError:    'Tento súbor nie je platná Helios mapa tienenia.',
-        shadingReset:          'Resetovať mapu',
-        shadingResetConfirm:   'Zahodiť každú bunku, ktorú sa mapa tienenia naučila? Predpoveď sa vráti k skalárnej kalibrácii na pár týždňov, kým sa mapa znovu nenaplní.'
     }
 };

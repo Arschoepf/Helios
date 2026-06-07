@@ -122,16 +122,5 @@ export const et: Translations = {
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Heliose on ehitanud üks arendaja palju energia ja väga vähese unega. Kui see aitab sinu igapäevast rutiini, hoiab täht GitHubis või kohv projekti elus.',
         aboutCoffeeLink:       'Osta mulle kohv',
-        shadingSection:        'Adaptiivne varjutuskaart',
-        shadingHint:           '5-päevase kalibreerimise peale õppiv kiht: alloleva polaarvõrgustiku iga rakk hoiab keskmist tegelik/prognoositud suhet, mis on vaadeldud, kui päike oli selles asendis ja taevas oli see pilvkate. Lubab prognoosil painduda õigel kellaajal puude varjude, naabrite katuste ja muude takistuste jaoks, mida LiDAR ei tabanud. Kasvab sinu enda andmetest mõne nädala jooksul; seni kannab skalaarne kalibreerimine koormust.',
-        shadingStatsCells:     'andmetega lahtrit',
-        shadingStatsConfident: 'prognoosi poolt usaldatud lahtrit',
-        shadingStatsUnder:     'tugevaim alatootmine:',
-        shadingStatsOver:      'tugevaim ületootmine:',
-        shadingExport:         'Ekspordi kaart',
-        shadingImport:         'Impordi kaart',
-        shadingImportError:    'See fail ei ole kehtiv Helios varjutuskaart.',
-        shadingReset:          'Lähtesta kaart',
-        shadingResetConfirm:   'Visata ära iga lahter, mida varjutuskaart on õppinud? Prognoos langeb tagasi skalaarsele kalibreerimisele paariks nädalaks, kuni kaart end uuesti täidab.'
     }
 };
