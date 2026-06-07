@@ -97,6 +97,18 @@ const STEP_MS                  = HOUR_MS / STEPS_PER_HOUR;
 //when the user swipes between past + future cards (per-day relative scaling would re-stretch the
 //curve and break the "compare two days at a glance" affordance).
 const IRR_SCALE_MAX_WM2        = 1100;
+//Native sample interval of the weather model (Open-Meteo publishes hourly). With STEPS_PER_HOUR > 1
+//each hour of weather data lands in a SINGLE bucket and leaves STEPS_PER_HOUR - 1 empty buckets
+//between every consecutive sample; the path builders then draw those empty buckets at the inner edge
+//(null = baseline) and the curve reads as a series of vertical spikes. WEATHER_INTERP_STEP_MS = STEP_MS
+//tells the interpolator to fill every empty sub-bucket between two hourly samples with a linear blend,
+//so the cloud + irradiance curves render as the smooth hourly progression the user expects, at the
+//STEPS_PER_DAY visual granularity the rest of the pipeline already runs at.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const WEATHER_INTERP_STEP_MS    = STEP_MS;
+//Silence the unused-variable warning, this constant is here for documentation. The actual interp
+//logic uses STEP_MS directly via interpolateNullGaps which walks any-length arrays.
+void WEATHER_INTERP_STEP_MS;
 
 
 //Polar -> Cartesian helper. Angle convention is documented at the top of the file.
@@ -414,6 +426,50 @@ function computeHourlyProductionForecast(host: DashboardHost, dayStartMs: number
 }
 
 
+//Fill the null gaps between two non-null entries with linear interpolation. Used downstream of the
+//weather bucketization passes (cloud, irradiance) where the source series only has one sample per
+//hour but the target array carries STEPS_PER_DAY buckets, so most buckets are empty between hourly
+//samples. Linear interpolation smooths the per-bucket value across the hourly window, the curve
+//then draws as a continuous progression instead of a series of spikes at every hour mark. Edge
+//gaps (before the first non-null, after the last non-null) carry the nearest non-null forward /
+//backward so the curve runs the full day window even when the data is incomplete at the bounds.
+function interpolateNullGaps(arr: (number | null)[]): (number | null)[]
+{
+    const N = arr.length;
+    const out: (number | null)[] = arr.slice();
+    let i = 0;
+    while (i < N)
+    {
+        if (out[i] !== null) { i++; continue; }
+        let j = i;
+        while (j < N && out[j] === null) { j++; }
+        const prev = i > 0 ? out[i - 1] : null;
+        const next = j < N ? out[j]     : null;
+        if (prev === null && next === null) { break; }
+        if (prev === null)
+        {
+            for (let k = i; k < j; k++) { out[k] = next; }
+        }
+        else if (next === null)
+        {
+            for (let k = i; k < N; k++) { out[k] = prev; }
+            break;
+        }
+        else
+        {
+            const span = j - i + 1;
+            for (let k = i; k < j; k++)
+            {
+                const t = (k - i + 1) / span;
+                out[k] = prev + (next - prev) * t;
+            }
+        }
+        i = j;
+    }
+    return out;
+}
+
+
 //Hourly mean irradiance (W / m²) over the day window. Pulled from the weather-model series, same
 //path as the dial's central irradiance ratio but bucketed hourly so the chip strip can show the
 //hovered hour's value. Returns Watts per square metre per hour.
@@ -438,7 +494,10 @@ function computeHourlyIrradiance(host: DashboardHost, dayStartMs: number): (numb
     {
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
-    return values;
+    //Weather series is hourly, only 1 bucket in every STEPS_PER_HOUR ends up populated. Linearly
+    //fill the gaps so the curve renders as a smooth progression across the day at WEATHER_INTERP_STEP_MS
+    //granularity, matching the rest of the pipeline.
+    return interpolateNullGaps(values);
 }
 
 
@@ -465,7 +524,9 @@ function computeHourlyCloud(host: DashboardHost, dayStartMs: number): (number | 
     {
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
-    return values;
+    //Same hourly-to-15-min interpolation as the irradiance pass above so the cloud curve doesn't
+    //read as a series of vertical spikes at each hourly weather sample.
+    return interpolateNullGaps(values);
 }
 
 
@@ -720,25 +781,6 @@ export interface RadialDayData
 }
 
 
-//Memo cache for prepareRadialDayData. Keyed per (host, cache-key); each card render hits the cache on
-//every Lit re-render that doesn't actually change the underlying data sources, so the dominant cost
-//(STEPS_PER_DAY forecast computations, hourly aggregations across a few hundred recorder samples)
-//only fires once per data-change event, not on every hover / scrub / mode switch. WeakMap on the host
-//key auto-cleans up on dashboard teardown, the inner Map is bounded at MAX_CACHE_ENTRIES so a multi-
-//hour session never accumulates indefinitely. Cache key encodes the live data dependencies (sample
-//counts, pastEndHour rounded to the bucket boundary) so any genuine data refresh invalidates.
-const _radialDayDataCache = new WeakMap<DashboardHost, Map<string, RadialDayData>>();
-const MAX_CACHE_ENTRIES   = 30;
-
-function buildRadialCacheKey(host: DashboardHost, cardOffset: number, dayStartMs: number, pastEndHourBucket: number): string
-{
-    const pvHistLen   = host._pvHistory?.times.length    ?? 0;
-    const pvCalibLen  = host._pvCalibStats?.times.length ?? 0;
-    const battHistLen = host._batteryPowerHistory?.times.length ?? 0;
-    const seriesLen   = host._chartSeries?.times.length  ?? 0;
-    return `${cardOffset}|${dayStartMs}|${pastEndHourBucket}|${pvHistLen}|${pvCalibLen}|${battHistLen}|${seriesLen}`;
-}
-
 export function prepareRadialDayData(host: DashboardHost, cardOffset: number): RadialDayData
 {
     const dayStartMs = dayStartMsFor(cardOffset);
@@ -749,22 +791,6 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     if (dayEndMs <= nowMs)        { pastEndHour = 24; }
     else if (dayStartMs >= nowMs) { pastEndHour = 0;  }
     else                          { pastEndHour = (nowMs - dayStartMs) / HOUR_MS; }
-
-    //Cache lookup. pastEndHour rounded to the bucket boundary so the cache stays warm within a single
-    //15-min window, recomputing only when the live now boundary actually crosses into the next bucket.
-    const pastEndHourBucket = Math.floor(pastEndHour * STEPS_PER_HOUR);
-    const cacheKey          = buildRadialCacheKey(host, cardOffset, dayStartMs, pastEndHourBucket);
-    let hostCache = _radialDayDataCache.get(host);
-    if (!hostCache)
-    {
-        hostCache = new Map();
-        _radialDayDataCache.set(host, hostCache);
-    }
-    const cached = hostCache.get(cacheKey);
-    if (cached)
-    {
-        return cached;
-    }
 
     const hourlyProd     = computeHourlyProduction(host, dayStartMs);
     const hourlyForecast = computeHourlyProductionForecast(host, dayStartMs);
@@ -788,16 +814,7 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     const sunRiseSet = homeCoords ? findSunriseSunset(dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
     const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
 
-    const result: RadialDayData = { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
-    //Evict the oldest entry when the cache hits its cap. The insertion order on a Map is preserved, so
-    //keys().next().value is the earliest one in (= the longest-untouched cache row).
-    if (hostCache.size >= MAX_CACHE_ENTRIES)
-    {
-        const oldest = hostCache.keys().next().value;
-        if (oldest !== undefined) { hostCache.delete(oldest); }
-    }
-    hostCache.set(cacheKey, result);
-    return result;
+    return { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
 }
 
 
@@ -1546,25 +1563,48 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
         return BASELINE_Y - r * (BASELINE_Y - TOP_MARGIN_Y);
     };
 
-    //Build the production area path (line + close to baseline + close to start) and the forecast line
-    //path. One vertex per data bucket directly, no sub-bucket smoothing because the input arrays now
-    //resolve at STEPS_PER_DAY granularity (5 min per bucket) so the curve looks continuous from the
-    //bucket density alone.
-    const buildLinePath = (values: ReadonlyArray<number | null>): string =>
+    //Catmull-Rom-derived cubic Bezier path through an array of points. Each segment between two
+    //consecutive vertices uses the neighbouring vertex on each side to derive its control points
+    //((P[i+1] - P[i-1]) / 6 pattern), which keeps the curve C1-continuous through every data point.
+    //End-segment handling wraps the missing neighbour onto the boundary vertex so the smoothing
+    //doesn't kink at x = 0 or x = W. Returns the d attribute for an OPEN path (no Z close); the
+    //area builder downstream wraps the right-then-left-edge return inside its own closing segment.
+    const buildBezierPath = (points: ReadonlyArray<[number, number]>): string =>
+    {
+        const n = points.length;
+        if (n < 2) { return ''; }
+        let d = `M ${points[0][0].toFixed(1)} ${points[0][1].toFixed(1)}`;
+        for (let i = 0; i < n - 1; i++)
+        {
+            const p0 = points[Math.max(0, i - 1)];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = points[Math.min(n - 1, i + 2)];
+            const c1x = p1[0] + (p2[0] - p0[0]) / 6;
+            const c1y = p1[1] + (p2[1] - p0[1]) / 6;
+            const c2x = p2[0] - (p3[0] - p1[0]) / 6;
+            const c2y = p2[1] - (p3[1] - p1[1]) / 6;
+            d += ` C ${c1x.toFixed(1)} ${c1y.toFixed(1)} ${c2x.toFixed(1)} ${c2y.toFixed(1)} ${p2[0].toFixed(1)} ${p2[1].toFixed(1)}`;
+        }
+        return d;
+    };
+    //Build the data points for the production / forecast curves. One vertex per bucket plus a final
+    //anchor at x = W so the curve runs the whole canvas (otherwise the last bucket is dropped).
+    const buildDataPoints = (values: ReadonlyArray<number | null>): [number, number][] =>
     {
         const N = values.length;
-        if (N < 2) { return ''; }
-        let d = '';
+        const points: [number, number][] = [];
         for (let i = 0; i < N; i++)
         {
-            const x = hourToX((i / N) * 24);
-            const y = wattsToY(values[i] ?? null);
-            d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + y.toFixed(1);
+            points.push([hourToX((i / N) * 24), wattsToY(values[i] ?? null)]);
         }
-        //Last vertex anchored at x = W so the curve runs the whole canvas, otherwise the last bucket
-        //gets dropped from the visual.
-        d += ' L ' + W.toFixed(1) + ' ' + wattsToY(values[N - 1] ?? null).toFixed(1);
-        return d;
+        points.push([W, wattsToY(values[N - 1] ?? null)]);
+        return points;
+    };
+    const buildLinePath = (values: ReadonlyArray<number | null>): string =>
+    {
+        if (values.length < 2) { return ''; }
+        return buildBezierPath(buildDataPoints(values));
     };
     //Production area path. Closes to the BOTTOM of the chart (y = H) instead of the production-zero
     //baseline so the fill flows continuously from the curve down to the card edge, the strip below
@@ -1581,34 +1621,26 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
         return line + ' L ' + W.toFixed(1) + ' ' + H.toFixed(1)
                     + ' L 0 ' + H.toFixed(1) + ' Z';
     };
+    //Collapsed "from" counterparts. Same segment count + same command shape (M + N C) as the
+    //real bezier paths so SMIL interpolates without segment-count mismatches. Collapsed shape is
+    //a flat horizontal at y = BASELINE_Y, which slides upward into the real curve on day load.
+    const buildCollapsedDataPoints = (): [number, number][] =>
+    {
+        const N = STEPS_PER_DAY;
+        const points: [number, number][] = [];
+        for (let i = 0; i < N; i++)
+        {
+            points.push([hourToX((i / N) * 24), BASELINE_Y]);
+        }
+        points.push([W, BASELINE_Y]);
+        return points;
+    };
+    const buildCollapsedLinePath = (): string => buildBezierPath(buildCollapsedDataPoints());
     const buildCollapsedAreaPath = (): string =>
     {
-        //All-zero "from" version for the day-load grow animation. Same vertex count as buildAreaPath
-        //so SMIL interpolates without segment count mismatches. Collapsed shape is a flat strip from
-        //y = BASELINE_Y down to y = H, the start state matches the "production = 0" floor that slides
-        //up into the real curve on day load.
-        let d = '';
-        for (let i = 0; i < STEPS_PER_DAY; i++)
-        {
-            const x = hourToX((i / STEPS_PER_DAY) * 24);
-            d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
-        }
-        d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
-        d += ' L ' + W.toFixed(1) + ' ' + H.toFixed(1)
-           + ' L 0 ' + H.toFixed(1) + ' Z';
-        return d;
-    };
-    const buildCollapsedLinePath = (): string =>
-    {
-        //Collapsed counterpart for the line / forecast paths: flat horizontal at y = BASELINE_Y.
-        let d = '';
-        for (let i = 0; i < STEPS_PER_DAY; i++)
-        {
-            const x = hourToX((i / STEPS_PER_DAY) * 24);
-            d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
-        }
-        d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
-        return d;
+        const line = buildBezierPath(buildCollapsedDataPoints());
+        return line + ' L ' + W.toFixed(1) + ' ' + H.toFixed(1)
+                    + ' L 0 ' + H.toFixed(1) + ' Z';
     };
 
     const prodAreaPath     = buildAreaPath(hourlyProdPastOnly);
@@ -1723,7 +1755,7 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                     <animate attributeName="d" from="${fromForecastLine}" to="${forecastLinePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>
                 ${hoverActive
-                    ? svg`<line class="dash-graph-cursor" x1="${hoverX.toFixed(1)}" y1="0" x2="${hoverX.toFixed(1)}" y2="${BASELINE_Y}"/>`
+                    ? svg`<line class="dash-graph-cursor" x1="${hoverX.toFixed(1)}" y1="0" x2="${hoverX.toFixed(1)}" y2="${H}"/>`
                     : nothing}
             </svg>`)}
             ${hoverActive && prodY >= 0 ? html`<div class="dash-graph-hover-dot dash-graph-hover-dot-prod"
