@@ -33,6 +33,36 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Chart hover tooltip + adaptive radial layout (#210)
+
+**Dashboard chart hover tooltip.** A small icon + value chip appears at the hover cursor, showing
+the production and forecast values at the cursor instant when each is available. Anchored near the
+top of the chart so the cursor line stays visible above the tooltip and reads as "cutting through"
+it. HA card tokens for the background / border / shadow so the tooltip follows light + dark
+themes automatically. Icon only, no text labels.
+
+**Adaptive radial dial layout.** The radial dial now adjusts which rings it draws based on the
+user's actual equipment:
+
+- No HA Energy battery source: the battery ring + one inter-ring gap collapse and the freed span
+  (34 viewBox units) is redistributed onto the cloud and production rings. Each grows from 28 to
+  45 units wide.
+- No HA Energy solar source + no `pv-arrays` config: the production ring collapses and its span +
+  one inter-ring gap redistribute onto the cloud and battery rings the same way.
+- Neither PV nor battery: the cloud + irradiance ring fills the entire span between the inner sun
+  disc and the clock annulus (108 units wide).
+
+The clock annulus and the inner irradiance disc keep their original radii in every case so the
+visual anchor points stay consistent. Hover dots, ring track arcs, chip strip badges and the
+graph-mode toggle button all gate themselves on the equipment flags the same way:
+
+- No PV: the chart-mode toggle button hides itself (the graph view would draw an empty production
+  curve) and the view is locked to radial regardless of the persisted mode.
+- No battery: the battery chip + dot don't render.
+
+`hasPvConfigured()` and `hasBatteryConfigured()` ship in a new `src/card/equipment.ts` module that
+reads off the HA Energy defaults + the per-card `pv-arrays` config.
+
 ### Update frequency knob, hatch fix, faster grow animation (#210)
 
 **New editor section "Data display" (above PV install)**, containing a single slider:

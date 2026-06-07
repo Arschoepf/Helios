@@ -33,6 +33,7 @@ import { pvValueAtTime, interpAt, type ChartHost } from './charts';
 import { pvNormalizeToWatts } from './pv';
 import { cfgHex, lerpHexToward } from './format';
 import { DEFAULT_PV_COLOR_HEX } from '../helios-config';
+import { hasPvConfigured, hasBatteryConfigured } from './equipment';
 
 
 //Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
@@ -47,13 +48,80 @@ const CENTER                   = 200;
 //BOTH its outer and inner edges (mirrored).
 const R_SUN_REF                = 28;   //reference rim circle, also irradiance max disc radius (halved from v5)
 const R_SUN_HALO_MAX           = 50;   //outer envelope of the halo at 100 % irradiance (= old R_SUN_REF, shifted in alongside the rings)
-const R_CLOUD_INNER            = 56;
-const R_CLOUD_OUTER            = 84;
-const R_PROD_INNER             = 90;
-const R_PROD_OUTER             = 118;
-const R_BATT_INNER             = 124;
-const R_BATT_OUTER             = 152;
 const R_DIAL_INNER             = 158;
+//Inter-ring gap (units of viewBox). Same value between every data ring + between the outermost data
+//ring and the dial annulus, so the layout reads as evenly-spaced regardless of how many data rings
+//are present (3 / 2 / 1).
+const RING_GAP                 = 6;
+//Default ring widths when all 3 rings (cloud / prod / batt) are present. Sum = 84, plus 4 gaps of 6
+//= 108, matches the available span from R_SUN_HALO_MAX (50) to R_DIAL_INNER (158).
+const RING_WIDTH_3_RINGS       = 28;
+//With one ring removed (no battery OR no PV), one gap is removed too so the freed space is the
+//missing ring width + one gap = 34. Split between the two remaining rings, each grows by 17 to
+//45 units wide. Sum = 2*45 + 3*6 = 108.
+const RING_WIDTH_2_RINGS       = 45;
+//With no data rings at all (no PV + no battery), the entire span between R_SUN_HALO_MAX and
+//R_DIAL_INNER becomes cloud + irradiance (the single-ring case is encoded directly in
+//computeRadialLayout, no width constant needed since the values are R_SUN_HALO_MAX and
+//R_DIAL_INNER themselves).
+
+
+//Per-render radial layout. Driven by what equipment the user has wired: production ring shows up
+//only when PV is configured (HA Energy solar source OR pv-arrays declared); battery ring shows up
+//only when an HA Energy battery source is wired. Removing a ring redistributes its width + one
+//inter-ring gap onto the remaining rings, EXCEPT the clock dial (R_DIAL_INNER -> R_DIAL_OUTER) and
+//the inner irradiance disc (R_SUN_REF / R_SUN_HALO_MAX), both of which stay at their original size
+//so the visual anchor points (clock face, sun disc) read consistently across configurations.
+interface RadialLayout
+{
+    hasPv:           boolean;
+    hasBattery:      boolean;
+    cloudInner:      number;
+    cloudOuter:      number;
+    prodInner:       number;
+    prodOuter:       number;
+    battInner:       number;
+    battOuter:       number;
+}
+
+function computeRadialLayout(hasPv: boolean, hasBattery: boolean): RadialLayout
+{
+    //Three rings: cloud / prod / batt, default widths.
+    if (hasPv && hasBattery)
+    {
+        const cloudInner = R_SUN_HALO_MAX + RING_GAP;
+        const cloudOuter = cloudInner + RING_WIDTH_3_RINGS;
+        const prodInner  = cloudOuter + RING_GAP;
+        const prodOuter  = prodInner  + RING_WIDTH_3_RINGS;
+        const battInner  = prodOuter  + RING_GAP;
+        const battOuter  = battInner  + RING_WIDTH_3_RINGS;
+        return { hasPv, hasBattery, cloudInner, cloudOuter, prodInner, prodOuter, battInner, battOuter };
+    }
+    //Two rings: cloud + prod (no battery) OR cloud + batt (no PV). The removed ring's outer edge is
+    //collapsed onto the now-outermost ring to keep the cluster centred on the same span.
+    if (hasPv && !hasBattery)
+    {
+        const cloudInner = R_SUN_HALO_MAX + RING_GAP;
+        const cloudOuter = cloudInner + RING_WIDTH_2_RINGS;
+        const prodInner  = cloudOuter + RING_GAP;
+        const prodOuter  = prodInner  + RING_WIDTH_2_RINGS;
+        //Battery is hidden, collapse its radii to the prod outer edge so any leftover SVG instruction
+        //(forecast outline future fill etc.) draws an empty annulus instead of a phantom ring.
+        return { hasPv, hasBattery, cloudInner, cloudOuter, prodInner, prodOuter, battInner: prodOuter, battOuter: prodOuter };
+    }
+    if (!hasPv && hasBattery)
+    {
+        const cloudInner = R_SUN_HALO_MAX + RING_GAP;
+        const cloudOuter = cloudInner + RING_WIDTH_2_RINGS;
+        const battInner  = cloudOuter + RING_GAP;
+        const battOuter  = battInner  + RING_WIDTH_2_RINGS;
+        return { hasPv, hasBattery, cloudInner, cloudOuter, prodInner: cloudOuter, prodOuter: cloudOuter, battInner, battOuter };
+    }
+    //One ring: cloud + irradiance fills the entire span between the irradiance halo and the dial.
+    const cloudInner = R_SUN_HALO_MAX;
+    const cloudOuter = R_DIAL_INNER;
+    return { hasPv, hasBattery, cloudInner, cloudOuter, prodInner: cloudOuter, prodOuter: cloudOuter, battInner: cloudOuter, battOuter: cloudOuter };
+}
 //Dial annulus is now twice as wide as before so the hour digits can live INSIDE the ring rather than
 //floating outside it. The freed perimeter space goes back to the dial itself, the dial reads as a
 //proper analog watch ring with the digits painted on it.
@@ -440,6 +508,12 @@ export interface RadialDayData
     //Per-day bucket cadence captured from the unified data source so each render call derives
     //STEPS_PER_HOUR / STEPS_PER_DAY without re-reading the user config from the host.
     bucketsPerHour: number;
+    //Equipment flags. Drive the adaptive radial layout: production ring renders when hasPv, battery
+    //ring renders when hasBattery; missing rings collapse and their space + one inter-ring gap get
+    //redistributed onto the survivors (cloud + irradiance always stay, clock annulus + inner sun
+    //disc stay fixed too).
+    hasPv:          boolean;
+    hasBattery:     boolean;
     hourlyProd:     (number | null)[];
     hourlyForecast: (number | null)[];
     hourlyBatt:     (number | null)[];
@@ -471,6 +545,8 @@ function emptyRadialDayData(host: DashboardHost, cardOffset: number): RadialDayD
         dayEndMs,
         pastEndHour,
         bucketsPerHour,
+        hasPv:          hasPvConfigured(host),
+        hasBattery:     hasBatteryConfigured(host),
         hourlyProd:     empty.slice(),
         hourlyForecast: empty.slice(),
         hourlyBatt:     empty.slice(),
@@ -524,6 +600,8 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
         dayEndMs:       slice.dayEndMs,
         pastEndHour:    slice.pastEndHour,
         bucketsPerHour: slice.bucketsPerHour,
+        hasPv:          hasPvConfigured(host),
+        hasBattery:     hasBatteryConfigured(host),
         hourlyProd,
         hourlyForecast,
         hourlyBatt,
@@ -547,6 +625,16 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const { dayStartMs, pastEndHour, bucketsPerHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
     const STEPS_PER_HOUR = bucketsPerHour;
     const STEPS_PER_DAY  = 24 * STEPS_PER_HOUR;
+    //Adaptive ring radii. Resolved per-render from the equipment flags so missing rings collapse
+    //and the survivors spread to absorb the freed span. Shadowing the module-level R_PROD_* / etc.
+    //removed values via local consts keeps the rest of the render code untouched.
+    const layout         = computeRadialLayout(data.hasPv, data.hasBattery);
+    const R_CLOUD_INNER  = layout.cloudInner;
+    const R_CLOUD_OUTER  = layout.cloudOuter;
+    const R_PROD_INNER   = layout.prodInner;
+    const R_PROD_OUTER   = layout.prodOuter;
+    const R_BATT_INNER   = layout.battInner;
+    const R_BATT_OUTER   = layout.battOuter;
 
     //Split the signed battery curve into charge (positive) and discharge (positive absolute) per-
     //hour arrays so two annulus paths can paint inside the same ring with their own colours.
@@ -559,13 +647,17 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //to a bucket cutoff via STEPS_PER_HOUR.
     const ceilPastSteps  = Math.ceil(pastEndHour * STEPS_PER_HOUR);
     const floorPastH     = Math.floor(pastEndHour);
-    const prodPastPath = pastEndHour > 0
+    //Production + battery paths only get computed when the matching equipment is configured. When
+    //a ring is absent, every path string stays empty and the SVG `${path ? svg`...` : nothing}`
+    //gates further down skip rendering the layer entirely, no phantom annulus painted with zero
+    //width. Cloud + irradiance always render (they're weather data, not equipment-gated).
+    const prodPastPath = data.hasPv && pastEndHour > 0
         ? buildRadialAnnulusPath(hourlyProd.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
         : '';
-    const battChargePath = pastEndHour > 0
+    const battChargePath = data.hasBattery && pastEndHour > 0
         ? buildRadialAnnulusPath(hourlyBattCharge.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
         : '';
-    const battDischargePath = pastEndHour > 0
+    const battDischargePath = data.hasBattery && pastEndHour > 0
         ? buildRadialAnnulusPath(hourlyBattDischarge.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
         : '';
     const cloudPastPath = pastEndHour > 0
@@ -601,7 +693,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //Past / future split on the data fills. Past hours fill at full opacity, future hours fill
     //at reduced opacity so the past / future boundary reads directly off the fill contrast and
     //the dedicated "now" cursor can stay dropped.
-    const prodFutureFillPath = pastEndHour < 24
+    const prodFutureFillPath = data.hasPv && pastEndHour < 24
         ? buildRadialAnnulusPath(new Array(ceilPastSteps).fill(null).concat(hourlyForecast.slice(ceilPastSteps, STEPS_PER_DAY)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
         : '';
     const cloudFutureFillPath = pastEndHour < 24
@@ -621,15 +713,15 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const battMidR      = (R_BATT_INNER  + R_BATT_OUTER)  / 2;
     const cloudTrackPast    = buildRingArcPath(cloudMidR, 0, pastEndHour);
     const cloudTrackFuture  = buildRingArcPath(cloudMidR, pastEndHour, 24);
-    const prodTrackPast     = buildRingArcPath(prodMidR,  0, pastEndHour);
-    const prodTrackFuture   = buildRingArcPath(prodMidR,  pastEndHour, 24);
-    const battTrackPast     = buildRingArcPath(battMidR,  0, pastEndHour);
-    const battTrackFuture   = buildRingArcPath(battMidR,  pastEndHour, 24);
+    const prodTrackPast     = data.hasPv      ? buildRingArcPath(prodMidR, 0, pastEndHour) : '';
+    const prodTrackFuture   = data.hasPv      ? buildRingArcPath(prodMidR, pastEndHour, 24) : '';
+    const battTrackPast     = data.hasBattery ? buildRingArcPath(battMidR, 0, pastEndHour) : '';
+    const battTrackFuture   = data.hasBattery ? buildRingArcPath(battMidR, pastEndHour, 24) : '';
 
     //Full-day production-forecast outline. The previous beta only drew the dashed forecast
     //outline for the FUTURE portion of the day, the user wants it visible over the past too so
     //they can compare the model's prediction against the realised production hour-by-hour.
-    const prodForecastOutlinePath = hourlyForecast.some(v => v !== null)
+    const prodForecastOutlinePath = data.hasPv && hourlyForecast.some(v => v !== null)
         ? buildRadialOutlinePath(hourlyForecast, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, 0, 24)
         : '';
 
@@ -715,10 +807,13 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         const battVal  = hourlyBatt[idx];
         const cloudVal = hourlyCloud[idx];
         const irrVal   = hourlyIrr[idx];
-        if (prodVal  !== null) { const r = interpRadius(hourlyProd,  prodScaleMax,  R_PROD_INNER, R_PROD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverProdDot  = { x, y }; }
+        //Equipment-gated dots: prod / batt dots only appear when the matching ring is present in
+        //the layout, so we don't paint a stray dot floating in the cloud / irradiance span when the
+        //user has no PV or no battery configured. Cloud + irradiance dots always render.
+        if (data.hasPv && prodVal !== null) { const r = interpRadius(hourlyProd,  prodScaleMax,  R_PROD_INNER, R_PROD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverProdDot  = { x, y }; }
         if (cloudVal !== null) { const r = interpRadius(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverCloudDot = { x, y }; }
         if (irrVal   !== null) { const r = interpRadius(hourlyIrr,   IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverIrrDot = { x, y }; }
-        if (battVal !== null)
+        if (data.hasBattery && battVal !== null)
         {
             //Show the dot at every hovered hour the curve has a sample for, even idle hours where
             //the battery is at 0. At 0 the dot lands on the ring's inner edge (the zero baseline
@@ -1243,6 +1338,9 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
                   :                                                 'dash-radial-badge-batt';
     }
 
+    //Equipment-gated chip strip. Production + Battery chips only appear when the matching equipment
+    //is configured. Cloud + Irradiance always render (they're weather data, not equipment-gated),
+    //so the strip never collapses to fewer than 2 chips on a card.
     return html`
         <div class="dash-radial-chip-strip">
             <ha-card class="dash-radial-badge dash-radial-badge-irr">
@@ -1259,20 +1357,24 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
                     <span class="dash-radial-badge-value">${cloudValue}</span>
                 </span>
             </ha-card>
-            <ha-card class="dash-radial-badge dash-radial-badge-prod">
-                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:solar-power"></ha-icon></span>
-                <span class="dash-radial-badge-stack">
-                    <span class="dash-radial-badge-label">${prodLabel}</span>
-                    <span class="dash-radial-badge-value">${prodValue}</span>
-                </span>
-            </ha-card>
-            <ha-card class="dash-radial-badge ${battCls}">
-                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:battery"></ha-icon></span>
-                <span class="dash-radial-badge-stack">
-                    <span class="dash-radial-badge-label">${battLabel}</span>
-                    <span class="dash-radial-badge-value">${battValue}</span>
-                </span>
-            </ha-card>
+            ${data.hasPv ? html`
+                <ha-card class="dash-radial-badge dash-radial-badge-prod">
+                    <span class="dash-radial-badge-chip"><ha-icon icon="mdi:solar-power"></ha-icon></span>
+                    <span class="dash-radial-badge-stack">
+                        <span class="dash-radial-badge-label">${prodLabel}</span>
+                        <span class="dash-radial-badge-value">${prodValue}</span>
+                    </span>
+                </ha-card>
+            ` : nothing}
+            ${data.hasBattery ? html`
+                <ha-card class="dash-radial-badge ${battCls}">
+                    <span class="dash-radial-badge-chip"><ha-icon icon="mdi:battery"></ha-icon></span>
+                    <span class="dash-radial-badge-stack">
+                        <span class="dash-radial-badge-label">${battLabel}</span>
+                        <span class="dash-radial-badge-value">${battValue}</span>
+                    </span>
+                </ha-card>
+            ` : nothing}
         </div>
     `;
 }
@@ -1461,13 +1563,15 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     let hoverX     = 0;
     let prodY      = -1;
     let forecastY  = -1;
+    let hoverProdW:     number | null = null;
+    let hoverForecastW: number | null = null;
     if (hoverActive)
     {
         hoverX = hourToX(hoverHour as number);
-        const pw = interpAtHour(data.hourlyProd,     hoverHour as number);
-        const fw = interpAtHour(data.hourlyForecast, hoverHour as number);
-        if (pw !== null) { prodY     = wattsToY(pw); }
-        if (fw !== null) { forecastY = wattsToY(fw); }
+        hoverProdW     = interpAtHour(data.hourlyProd,     hoverHour as number);
+        hoverForecastW = interpAtHour(data.hourlyForecast, hoverHour as number);
+        if (hoverProdW     !== null) { prodY     = wattsToY(hoverProdW); }
+        if (hoverForecastW !== null) { forecastY = wattsToY(hoverForecastW); }
     }
 
     //Pointer handlers, same shape as the radial dial. Drag / tap parks the cursor at the pointer's
@@ -1557,6 +1661,27 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                 style="left:${(hoverX / W * 100).toFixed(2)}%;top:${(prodY / H * 100).toFixed(2)}%"></div>` : nothing}
             ${hoverActive && forecastY >= 0 ? html`<div class="dash-graph-hover-dot dash-graph-hover-dot-forecast"
                 style="left:${(hoverX / W * 100).toFixed(2)}%;top:${(forecastY / H * 100).toFixed(2)}%"></div>` : nothing}
+            ${hoverActive && (hoverProdW !== null || hoverForecastW !== null) ? html`
+                <!-- Hover tooltip: icon + value rows for production / forecast where the cursor sits.
+                     Anchored ~14 % from the top of the chart so the cursor line stays visible above
+                     it (the line "cuts through" the tooltip rather than being hidden behind it). The
+                     ha-card-style background uses HA theme tokens so it follows light / dark themes
+                     automatically. pointer-events: none keeps hover on the SVG. -->
+                <div class="dash-graph-hover-tooltip" style="left:${(hoverX / W * 100).toFixed(2)}%">
+                    ${hoverProdW !== null ? html`
+                        <span class="dash-graph-hover-tooltip-row">
+                            <ha-icon icon="mdi:solar-power" class="dash-graph-hover-tooltip-icon dash-graph-hover-tooltip-icon-prod"></ha-icon>
+                            <span class="dash-graph-hover-tooltip-value">${formatW(host.hass, hoverProdW)}</span>
+                        </span>
+                    ` : nothing}
+                    ${hoverForecastW !== null ? html`
+                        <span class="dash-graph-hover-tooltip-row">
+                            <ha-icon icon="mdi:chart-bell-curve-cumulative" class="dash-graph-hover-tooltip-icon dash-graph-hover-tooltip-icon-forecast"></ha-icon>
+                            <span class="dash-graph-hover-tooltip-value">${formatW(host.hass, hoverForecastW)}</span>
+                        </span>
+                    ` : nothing}
+                </div>
+            ` : nothing}
         </ha-card>
     `;
 }

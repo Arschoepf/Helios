@@ -20,6 +20,7 @@ import
 } from './pv';
 import type { BatteryHost } from './battery';
 import { cloudCoverIcon } from './cloud-icons';
+import { hasPvConfigured } from './equipment';
 import { effectiveForecastRatio, type ChartHost } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
@@ -430,9 +431,13 @@ function renderCoverflowCard(
     const radialData = prepareRadialDayData(host, cardOffset);
 
 
-    //Shared view mode for every card in the stack. Click on the toggle in any card's bandeau flips the
-    //mode for the whole CoverFlow.
-    const viewMode      = host._dashViewMode ?? 'radial';
+    //Shared view mode for every card in the stack. Click on the toggle in any card's bandeau flips
+    //the mode for the whole CoverFlow. The graph view shows the production curve, so the toggle
+    //only makes sense (and only renders) when PV is configured. When the user has no PV wired the
+    //view is locked to radial regardless of the persisted mode, so a previously-saved 'graph'
+    //value doesn't strand the user on an empty chart after they remove their PV source.
+    const hasPv         = hasPvConfigured(host);
+    const viewMode      = hasPv ? (host._dashViewMode ?? 'radial') : 'radial';
     const nextViewMode  = viewMode === 'radial' ? 'graph' : 'radial';
     const viewToggleIcon  = viewMode === 'radial' ? 'mdi:radar' : 'mdi:chart-line';
     const viewToggleLabel = viewMode === 'radial'
@@ -458,7 +463,7 @@ function renderCoverflowCard(
                     <span class="dash-cf-card-weather-chip" aria-hidden="true">
                         <ha-icon icon="${weatherIcon}"></ha-icon>
                     </span>
-                    ${isFront ? html`
+                    ${isFront && hasPv ? html`
                         <button
                             class="dash-cf-view-toggle dash-cf-view-toggle-${viewMode}"
                             type="button"

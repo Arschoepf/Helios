@@ -898,6 +898,59 @@ export const heliosCardStyles = css`
         background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 55%, transparent);
     }
 
+    /*  Hover tooltip on the dashboard graph chart. HTML overlay sitting on top of the cursor line,
+        ~14 % down from the top of the chart so the cursor line stays visible above the tooltip and
+        reads as "cutting through" rather than disappearing behind. ha-card-style background + radius
+        + shadow + border use the HA theme tokens so the tooltip follows light + dark themes the same
+        way every other ha-card on the dashboard does. Icon + value pairs, no text label, one row per
+        available signal (production + forecast). Centered horizontally on the cursor, clamped via
+        max-content so the inline rows lay out tightly. */
+    .dash-graph-hover-tooltip
+    {
+        position: absolute;
+        top: 14%;
+        transform: translateX(-50%);
+        pointer-events: none;
+        z-index: 4;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 4px 8px;
+        background: var(--card-background-color, var(--ha-card-background, #ffffff));
+        color: var(--primary-text-color, #1a1a1a);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color, #1a1a1a) 14%, transparent);
+        border-radius: var(--ha-card-border-radius, 8px);
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+        font-size: 12px;
+        font-weight: 500;
+        line-height: 1.2;
+        white-space: nowrap;
+    }
+    .dash-graph-hover-tooltip-row
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+    }
+    .dash-graph-hover-tooltip-icon
+    {
+        --mdc-icon-size: 14px;
+        width: 14px;
+        height: 14px;
+    }
+    .dash-graph-hover-tooltip-icon-prod
+    {
+        color: var(--energy-solar-color, #ff9800);
+    }
+    .dash-graph-hover-tooltip-icon-forecast
+    {
+        color: color-mix(in srgb, var(--energy-solar-color, #ff9800) 70%, var(--primary-text-color, #1a1a1a) 30%);
+    }
+    .dash-graph-hover-tooltip-value
+    {
+        font-variant-numeric: tabular-nums;
+    }
+
     /*  Container queries on the OUTER ha-card width. Each CoverFlow card is 46 cqw wide (~46 % of the ha-card),
         which means a section view at the max 12 x 8 slot (~500 px ha-card) renders cards at ~230 px, where
         2 tiles side by side reduce to ~95 px each and the label "Production 0,0 kWh" no longer fits. So the
