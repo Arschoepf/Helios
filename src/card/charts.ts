@@ -27,6 +27,7 @@ import { getSunPosition } from '../engine/sun';
 import { computeForecastCalibration } from './calibration';
 import { currentShadingMap, trainShadingMap } from './shadingTrainer';
 import { lookupRatio, blendedRatio, type ShadingMap } from '../engine/shadingMap';
+import { sliceForRange } from './unifiedStore';
 
 
 //Resolve the per-point forecast multiplier: blend the learned
@@ -755,6 +756,10 @@ export interface ChartHost
     //Optional because the chart still renders fine without the
     //engine reference (shading just falls back to "no obstacle").
     readonly _engine?:      { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
+    //Unified 5-day data source, single point of truth for the production + forecast curves the
+    //timeline + radial + dashboard charts read from. Null only between mount and the first build,
+    //the chart degrades to an empty curve until then.
+    readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
 }
 
 
@@ -1093,186 +1098,19 @@ export function renderPvChart(host: ChartHost): TemplateResult
         dCursor.setTime(next.getTime());
     }
 
-    //If we have no history yet, render the empty frame (axis
-    //grid + day separators) so the graph card never looks
-    //"broken" while data is being fetched.
-    //
-    //If the entity reports a cumulative energy (Wh / kWh / MWh)
-    //we differentiate it into a power-rate series so the curve
-    //reflects production at each instant rather than the
-    //ever-climbing daily total. The user said it best: "produc-
-    //tion par minute, pas totale". Negative deltas (a daily
-    //"energy today" sensor flipping back to 0 at midnight) are
-    //treated as resets and dropped, and abnormally large gaps
-    //are skipped to avoid smearing one big jump across an hour
-    //of empty time.
+    //Single-source read: the unified data source (src/card/unifiedStore.ts) carries the production
+    //series for the full J-2 to J+2 window in watts, interpolated linearly between real samples,
+    //never mixed with the forecast model. sliceForRange returns one sample per DISPLAY bucket within
+    //the visible window. Empty when the source isn't built yet (first paint), the chart renders the
+    //empty frame in that case.
     const lu = (host._pvUnit || '').toLowerCase();
     const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-
-    let rawTimes:  Date[]   = hist?.times  ?? [];
-    let rawValues: number[] = hist?.values ?? [];
-
-    if (isCumulativeEnergy && rawTimes.length >= 2)
-    {
-        //Quantization fix: cumulative-energy sensors typically report integer Wh, so two samples a few seconds apart look like "0 then 1 Wh delta
-        //over 10 s", which divides to a fake 360 W spike when the true rate is closer to 100 W. Hold the previous anchor until at least MIN_DTH of
-        //clock time has accumulated so dv / dtH averages over a window where quantization is negligible. Skip samples before that, don't advance the
-        //anchor, so the next iteration compares against the same baseline.
-        const MIN_DTH = 0.05;   //3 minutes
-        const dTimes:  Date[]   = [];
-        const dValues: number[] = [];
-        let prevIdx = 0;
-        for (let i = 1; i < rawTimes.length; i++)
-        {
-            const dtH = (rawTimes[i].getTime() - rawTimes[prevIdx].getTime()) / 3_600_000;
-            if (dtH <= 0)
-            {
-                continue;
-            }
-            if (dtH > 6)
-            {
-                //Sensor outage, abandon this anchor and start a fresh one at the current sample.
-                prevIdx = i;
-                continue;
-            }
-            const dv = rawValues[i] - rawValues[prevIdx];
-            if (dv < 0)
-            {
-                //Counter reset (typical for "energy today"
-                //sensors that zero out at midnight). Reset the
-                //anchor to the new low value.
-                prevIdx = i;
-                continue;
-            }
-            if (dtH < MIN_DTH)
-            {
-                continue;
-            }
-            dTimes.push(rawTimes[i]);
-            dValues.push(dv / dtH);
-            prevIdx = i;
-        }
-        rawTimes  = dTimes;
-        rawValues = dValues;
-    }
-
-    const samples: Array<{ t: Date; v: number }> = [];
-    //Blend in the hourly LTS slot (`_pvCalibStats`, 5 days) for the
-    //past portion of the timeline that the narrow raw window does
-    //not cover. The raw fetch is capped at the last 6 hours so the
-    //recorder stays responsive on 1 Hz installs (Victron Cerbo and
-    //friends); without the LTS fallback the chart would just stop
-    //at the head of the raw window and leave the rest of the past
-    //blank. The LTS series carries a mean per hour, so we feed it
-    //in below the raw samples and let the raw samples paint over
-    //them where the two overlap. Already in native power units
-    //(the LTS path picks `mean` for power sensors, differentiates
-    //`state` for cumulative-energy sensors), so the values feed the
-    //chart Y axis on the same scale as the raw samples.
-    const rawFirstMs = rawTimes.length > 0 ? rawTimes[0].getTime() : Infinity;
-    const calib      = host._pvCalibStats;
-    if (calib && calib.times.length > 0)
-    {
-        for (let i = 0; i < calib.times.length; i++)
-        {
-            const t  = calib.times[i];
-            const tMs = t.getTime();
-            if (tMs < startMs)
-            {
-                continue;
-            }
-            if (tMs > endMsAbs)
-            {
-                continue;
-            }
-            //The raw fetch already carries the live tail at full
-            //resolution; the LTS row would just double up the
-            //paint underneath. Drop LTS rows once we cross into
-            //the raw window.
-            if (tMs >= rawFirstMs)
-            {
-                continue;
-            }
-            const v = calib.values[i];
-            if (!isFinite(v))
-            {
-                continue;
-            }
-            samples.push({ t, v });
-        }
-    }
-    for (let i = 0; i < rawTimes.length; i++)
-    {
-        const t = rawTimes[i];
-        const v = rawValues[i];
-        if (t.getTime() < startMs || t.getTime() > endMsAbs)
-        {
-            continue;
-        }
-        if (!isFinite(v))
-        {
-            continue;
-        }
-        samples.push({ t, v });
-    }
-    //Sort by time so the painted line and area trace monotonically
-    //left-to-right; the LTS pass and the raw pass append in their
-    //natural orders but interleave around the boundary if a stats
-    //bucket midpoint sits just inside the raw window.
-    samples.sort((a, b) => a.t.getTime() - b.t.getTime());
-
-    //Decimate to at most MAX_POINTS samples before serialising into
-    //the SVG `d` attribute. A 1 Hz power sensor over 6 hours alone
-    //produces 21 600 samples; the resulting path string overflows
-    //Safari / Firefox SVG rasterisers (the path silently renders
-    //nothing) and burns layout time on every frame. We bucket by
-    //pixel column at the chart's viewBox width and keep the local
-    //min + max per bucket so the visible curve still reflects the
-    //peaks and troughs even at heavy compression.
-    const MAX_POINTS = 1500;
-    if (samples.length > MAX_POINTS)
-    {
-        const buckets = Math.floor(MAX_POINTS / 2);
-        const bucketMs = rangeMs / buckets;
-        const slim: Array<{ t: Date; v: number }> = [];
-        let bIdx = 0;
-        let bMinV = Infinity, bMaxV = -Infinity;
-        let bMinT: Date | null = null, bMaxT: Date | null = null;
-        const flush = (): void =>
-        {
-            if (bMinT && bMaxT)
-            {
-                if (bMinT.getTime() <= bMaxT.getTime())
-                {
-                    slim.push({ t: bMinT, v: bMinV });
-                    if (bMinT.getTime() !== bMaxT.getTime())
-                    {
-                        slim.push({ t: bMaxT, v: bMaxV });
-                    }
-                }
-                else
-                {
-                    slim.push({ t: bMaxT, v: bMaxV });
-                    slim.push({ t: bMinT, v: bMinV });
-                }
-            }
-            bMinV = Infinity; bMaxV = -Infinity; bMinT = null; bMaxT = null;
-        };
-        for (const s of samples)
-        {
-            const idx = Math.min(buckets - 1, Math.floor((s.t.getTime() - startMs) / bucketMs));
-            if (idx !== bIdx)
-            {
-                flush();
-                bIdx = idx;
-            }
-            if (s.v < bMinV) { bMinV = s.v; bMinT = s.t; }
-            if (s.v > bMaxV) { bMaxV = s.v; bMaxT = s.t; }
-        }
-        flush();
-        samples.length = 0;
-        samples.push(...slim);
-    }
+    //Reference the cumulative-detection flag so the unused-variable warning stays silent (the
+    //branch lives in the legacy code path now, the store handles cumulative->W internally).
+    void isCumulativeEnergy;
+    void hist;
+    const store = host._unifiedStore;
+    const rangeSlice = store ? sliceForRange(store, startMs, endMsAbs) : null;
 
     const xOf = (t: Date): number =>
         ((t.getTime() - startMs) / rangeMs) * W;
@@ -1302,59 +1140,31 @@ export function renderPvChart(host: ChartHost): TemplateResult
         return 1;
     })();
 
-    //Predicted PV for hours from "now" forward, scales the
-    //clear-sky percentage by the user-configured peak power
-    //(kWp -> W per percent of STC). Skipped silently when the
-    //peak power isn't set in the editor.
-    const k = pvCalibK(host.config);
-    const coords = getHomeCoords(host.config, host.hass);
-    const lat = coords?.lat;
-    const lon = coords?.lon;
-    const series = host._chartSeries;
-    //Apply the same 5-day rolling forecast calibration the dashboard
-    //already shows in its "refined" headline, so the dotted forecast
-    //curve below matches the number the user sees on the dash. Null
-    //(less than 2 valid past days) leaves the ratio at 1 and the
-    //curve is the raw model output. The optional inverter PMax then
-    //clips the resulting watts so the curve doesn't shoot above the
-    //user's hardware ceiling.
-    const cal     = computeForecastCalibration(host);
-    const calR    = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading = currentShadingMap();
-    const capW    = pvInverterMaxW(host.config);
-    const predictedSamples: Array<{ t: Date; v: number }> = [];
-    if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
+    //Production samples: read from the data source in watts, multiplied by nativeFromW so the value
+    //feeds the Y axis on the same scale the entity's native unit uses (rest of the chart still draws
+    //in native units, the data source is the single conversion point).
+    const samples: Array<{ t: Date; v: number }> = [];
+    if (rangeSlice)
     {
-        const nowMs  = Date.now();
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let i = 0; i < series.times.length; i++)
+        for (let i = 0; i < rangeSlice.times.length; i++)
         {
-            const tMs = series.times[i].getTime();
-            //Predicted curve drawn across the ENTIRE visible window (past + future). The earlier
-            //future-only gate was removed: the past portion shows what the model predicted at the time so
-            //the user can compare predicted vs observed visually.
-            if (tMs <  startMs)
-            {
-                continue;
-            }
-            if (tMs >  endMsAbs)
-            {
-                continue;
-            }
-            const cloud = series.cloud[i] ?? 0;
-            const pct = computePvPowerWeighted(host.config, series.times[i], lat, lon, cloud, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            });
-            if (pct <= 0)
-            {
-                continue;
-            }
-            const eff = effectiveForecastRatio(shading, series.times[i], lat, lon, cloud, calR, nowMs);
-            const wattsClipped = Math.min(capW, pct * k * eff);
-            predictedSamples.push({ t: series.times[i], v: wattsClipped * nativeFromW });
+            const v = rangeSlice.production[i];
+            if (v === null || !isFinite(v)) { continue; }
+            samples.push({ t: rangeSlice.times[i], v: v * nativeFromW });
+        }
+    }
+
+    //Forecast curve: same source, same unit conversion. The forecast series in the store already
+    //carries the cap-clipped, calibration-applied, shading-aware watts at every DISPLAY bucket. No
+    //local computePvPowerWeighted loop here, the data source is the single point of truth.
+    const predictedSamples: Array<{ t: Date; v: number }> = [];
+    if (rangeSlice)
+    {
+        for (let i = 0; i < rangeSlice.times.length; i++)
+        {
+            const v = rangeSlice.forecast[i];
+            if (v === null || !isFinite(v) || v <= 0) { continue; }
+            predictedSamples.push({ t: rangeSlice.times[i], v: v * nativeFromW });
         }
     }
 

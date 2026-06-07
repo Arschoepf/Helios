@@ -1,27 +1,39 @@
-//Unified 5-day data store. Single source of truth for every per-time signal the dashboard cards,
+//Unified 5-day data source. Single source of truth for every per-time signal the dashboard cards,
 //the radial sundial, the graph view and the main UI timeline read from. Replaces the per-card / per-
 //consumer bucketization passes that used to walk the raw history arrays + the weather series at every
-//render: the store is built ONCE after the underlying fetches land, cached on the host, sliced /
-//interpolated by every downstream consumer at look-up time. Live numeric chips deliberately stay on
+//render: the source is built ONCE after the underlying fetches land, cached on the host, sliced and
+//re-sampled by every downstream consumer at look-up time. Live numeric chips deliberately stay on
 //the direct hass.states path (no extra layer between the live entity value and the chip text), every
-//other surface that draws or hovers a curve uses the store.
+//other surface that draws or hovers a curve uses the source.
 //
-//Window: J-2 to J+2 at 15 min granularity = 5 days × 96 buckets / day = 480 buckets per series.
-//Step:   STORE_STEP_MS = 15 × 60 × 1000 = 900 000 ms.
-//Origin: storeStartMs = midnight (local time) of (today - 2 days), so bucket 0 sits at the J-2 day
-//        start and bucket 192 is today's midnight.
+//Two cadence knobs, both modifiable at a single place:
+//  1. DATA_BUCKETS_PER_HOUR  controls how dense the data source is. Every real sample (LTS hourly,
+//     raw push, weather hourly, battery push) lands into a bucket of HOUR_MS / DATA_BUCKETS_PER_HOUR
+//     duration. Buckets that didn't receive a real sample are filled with a linear interpolation
+//     between the two surrounding real samples (never with a model fallback): the data source is
+//     never lying about the actual sensor.
+//  2. DISPLAY_BUCKETS_PER_HOUR controls how every graph (radial dial, timeline today, dashboard
+//     chart) reads the source. sliceForDay() resamples each per-day slice to that rate. If the two
+//     constants are equal the graph reads the source as is (same values as the storage cadence),
+//     otherwise a linear resample bridges the two.
 //
-//Each series in the store is an array of length STORE_BUCKETS. null marks "no data" for that bucket;
-//consumers either skip it visually (curve collapses to baseline) or interpolate over it via
-//valueAt(). The series carry:
+//Window: J-2 to J+2 = 5 days × (24 × DATA_BUCKETS_PER_HOUR) buckets per series. Origin: storeStartMs
+//= midnight (local time) of (today - 2 days), so bucket 0 sits at the J-2 day start.
+//
+//Series carried (every one is an array of length STORE_BUCKETS, null marks "no real data and no
+//surrounding real samples to interpolate between"):
 //  - irradiance W/m² (weather model, interpolated between hourly samples)
 //  - cloud %        (weather model, interpolated between hourly samples)
-//  - production W   (HA Energy stat_energy_from / stat_rate, past actual)
-//  - forecast W     (computePvPowerWeighted × calibration × shading map, every bucket)
-//  - battery W      (signed, charging positive, history-driven, past only)
-//  - batterySoc %   (history-driven, past only)
-//  - gridImport W   (slope of cumulative kWh meter, past only)
-//  - gridExport W   (slope of cumulative kWh meter, past only)
+//  - production W   (PV LTS + raw history, interpolated between samples, no forecast mixed in)
+//  - forecast W     (computePvPowerWeighted × calibration × shading map, every bucket, INDEPENDENT)
+//  - battery W      (signed, history-driven, interpolated between samples)
+//  - batterySoc %   (live observation only at the current bucket)
+//  - gridImport W   (slope of cumulative kWh meter, interpolated between samples)
+//  - gridExport W   (slope of cumulative kWh meter, interpolated between samples)
+//
+//Forecast is a peer of production, not a fallback for it. The radial dial overlays the forecast
+//curve as a dashed line on top of the production fill; the two series are never mixed inside a
+//single value.
 
 import type { HeliosConfig } from '../helios-config';
 import type { ChartSeries } from './charts';
@@ -36,13 +48,26 @@ import { getHomeCoords } from './init';
 const HOUR_MS = 3_600_000;
 const DAY_MS  = 24 * HOUR_MS;
 
-export const BUCKETS_PER_HOUR = 4;
-export const BUCKETS_PER_DAY  = 24 * BUCKETS_PER_HOUR;     // 96
-export const STORE_STEP_MS    = HOUR_MS / BUCKETS_PER_HOUR; // 900 000
+//Storage cadence: how many real-sample slots the data source keeps per hour. Every per-time signal
+//(production, forecast, weather, battery, grid) is held at this granularity. Change this value and
+//every downstream consumer rescales automatically. Default 4 = 15 min slots, dense enough that the
+//radial dial and the dashboard chart read as smooth curves without burning CPU on every render.
+export const DATA_BUCKETS_PER_HOUR    = 4;
+
+//Display cadence: how many slots per hour every graph (radial dial, dashboard chart, timeline today)
+//reads back from the data source. If equal to DATA_BUCKETS_PER_HOUR, sliceForDay returns the slice
+//unchanged (every graph reads the exact storage values). If different, sliceForDay resamples
+//linearly between the bracketing storage buckets so the graph stays a continuous curve. Change this
+//value and every graph rescales together; the storage cadence is unaffected.
+export const DISPLAY_BUCKETS_PER_HOUR = 4;
+
 export const STORE_DAYS_PAST  = 2;
 export const STORE_DAYS_AHEAD = 2;
-export const STORE_DAYS       = STORE_DAYS_PAST + 1 + STORE_DAYS_AHEAD; // 5
-export const STORE_BUCKETS    = STORE_DAYS * BUCKETS_PER_DAY;            // 480
+export const STORE_DAYS       = STORE_DAYS_PAST + 1 + STORE_DAYS_AHEAD;
+export const STORE_BUCKETS_PER_DAY = 24 * DATA_BUCKETS_PER_HOUR;
+export const STORE_BUCKETS         = STORE_DAYS * STORE_BUCKETS_PER_DAY;
+export const STORE_STEP_MS         = HOUR_MS / DATA_BUCKETS_PER_HOUR;
+export const DISPLAY_BUCKETS_PER_DAY = 24 * DISPLAY_BUCKETS_PER_HOUR;
 
 
 export interface UnifiedDataStore
@@ -216,11 +241,12 @@ function buildCloud(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: nu
 }
 
 
-//Production = past actual + null for future (the forecast series carries the predicted curve). Past
-//actual reads from the LTS calib stats first (cumulative kWh slope OR direct W samples depending on
-//the entity unit), falls back to the per-minute raw history for the most recent slice that LTS hasn't
-//caught up to yet.
-function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number, forecast: ReadonlyArray<number | null>): (number | null)[]
+//Production = past actual only, no model fallback. Reads the LTS calib stats first (cumulative kWh
+//slope OR direct W samples depending on the entity unit), then the per-minute raw history for the
+//most recent slice that LTS hasn't caught up to yet. Buckets without a real sample are filled by
+//linear interpolation between the bracketing real samples; the data source never blends a forecast
+//value into a "real" series. Future buckets stay null (the forecast series owns the future curve).
+function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number): (number | null)[]
 {
     const out = new Array<number | null>(STORE_BUCKETS).fill(null);
     const sums   = new Array<number>(STORE_BUCKETS).fill(0);
@@ -277,15 +303,16 @@ function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndM
     {
         if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
     }
-    //Past bucket without a real sample: borrow the modelled W from the forecast at the same time, so
-    //the production curve reads as a continuous day instead of dropping to zero between LTS samples.
-    //If the forecast itself has no value (before sunrise, after sunset, no weather series), fall back
-    //to 0 as the meaningful "no production happening here" value. Future buckets stay null, the
-    //radial / timeline forecast curve owns the future-half of the screen.
-    for (let h = 0; h < STORE_BUCKETS; h++)
+    //Restrict interpolation to the PAST half of the store. Past gaps between LTS samples (typically 3
+    //buckets out of 4 at 4 / hour with 1 LTS row per hour) get filled with a value that lives strictly
+    //between two real readings: the curve stays continuous AND honest. Future buckets stay null so
+    //the forecast series stays the only thing the dial draws on the future half.
+    const pastEnd = Math.min(STORE_BUCKETS, bucketForMs(storeStartMs, nowMs) + 1);
+    if (pastEnd > 0)
     {
-        const mid = bucketMidMs(storeStartMs, h);
-        if (out[h] === null && mid < nowMs) { out[h] = forecast[h] ?? 0; }
+        const pastSlice = out.slice(0, pastEnd);
+        interpolateNullGaps(pastSlice);
+        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
     }
     return out;
 }
@@ -366,6 +393,14 @@ function buildBattery(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: 
     {
         if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
     }
+    //Interpolate the past slice only, future stays null (battery has no model forecast).
+    const pastEnd = Math.min(STORE_BUCKETS, bucketForMs(storeStartMs, nowMs) + 1);
+    if (pastEnd > 0)
+    {
+        const pastSlice = out.slice(0, pastEnd);
+        interpolateNullGaps(pastSlice);
+        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
+    }
     return out;
 }
 
@@ -441,6 +476,15 @@ function buildGridSlope(
     {
         if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
     }
+    //Interpolate past gaps between samples. Cumulative kWh meters publish at most every few minutes,
+    //the store packs 4 buckets / hour, so gaps are common; linear interp keeps the slope curve smooth.
+    const pastEnd = Math.min(STORE_BUCKETS, bucketForMs(storeStartMs, nowMs) + 1);
+    if (pastEnd > 0)
+    {
+        const pastSlice = out.slice(0, pastEnd);
+        interpolateNullGaps(pastSlice);
+        for (let h = 0; h < pastEnd; h++) { out[h] = pastSlice[h]; }
+    }
     return out;
 }
 
@@ -474,13 +518,12 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs);
     const cloud        = buildCloud(host, storeStartMs, storeEndMs);
-    //Forecast is computed BEFORE production so the production builder can borrow the modelled W at any
-    //past bucket where the recorder didn't land a sample. The LTS calib stats publish 1 sample / hour
-    //while the store packs 4 buckets / hour, so without that fallback 3 buckets out of 4 in the past
-    //would read as a hard zero and the radial dial production fill would draw as a sawtooth between
-    //samples instead of as a continuous day curve.
+    //Production reads ONLY real sensor samples (LTS + raw history), interpolating linearly between
+    //them in the past slice. It never borrows from the forecast: keeping the two series strictly
+    //separated is the whole point of the unified source. Forecast is computed in parallel as its own
+    //series, the dial / chart layer them as two distinct curves at render time.
+    const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs);
     const forecast     = buildForecast(host, storeStartMs, storeEndMs, cloud);
-    const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, forecast);
     const battery      = buildBattery(host, storeStartMs, storeEndMs, nowMs);
     const batterySoc   = buildBatterySoc(host, storeStartMs, nowMs);
     const gridImport   = buildGridSlope(host._gridImportSamples, host._gridImportUnits, storeStartMs, storeEndMs, nowMs);
@@ -542,19 +585,56 @@ export function dayBucketRange(store: UnifiedDataStore, dayOffset: number): { st
 {
     const dayStartMs = store.storeStartMs + (STORE_DAYS_PAST + dayOffset) * DAY_MS;
     const startBucket = Math.max(0, bucketForMs(store.storeStartMs, dayStartMs));
-    const endBucket   = Math.min(STORE_BUCKETS, startBucket + BUCKETS_PER_DAY);
+    const endBucket   = Math.min(STORE_BUCKETS, startBucket + STORE_BUCKETS_PER_DAY);
     return { start: startBucket, end: endBucket };
 }
 
 
-//Slice the per-day arrays for the card at `dayOffset`. Returns BUCKETS_PER_DAY-length series that
-//drop straight into the dashboard radial / graph view in place of the legacy prepareRadialDayData
-//bucketization.
+//Resample a length-srcLen series to a length-dstLen series using linear interpolation between
+//bracketing source buckets. Both arrays sit on the same time window (so position i in src and
+//position j in dst map to the same time when (i + 0.5) / srcLen == (j + 0.5) / dstLen). Null source
+//buckets stay null in the dst when both bracketing values are null; otherwise the non-null side
+//carries through. dstLen == srcLen returns a copy.
+function resampleLinear(src: ReadonlyArray<number | null>, dstLen: number): (number | null)[]
+{
+    const srcLen = src.length;
+    if (dstLen === srcLen)
+    {
+        return src.slice() as (number | null)[];
+    }
+    const out = new Array<number | null>(dstLen).fill(null);
+    if (srcLen === 0)
+    {
+        return out;
+    }
+    for (let j = 0; j < dstLen; j++)
+    {
+        //Centre of dst bucket j in normalised [0, srcLen] coordinates.
+        const srcF = (j + 0.5) * srcLen / dstLen - 0.5;
+        const i0 = Math.max(0, Math.min(srcLen - 1, Math.floor(srcF)));
+        const i1 = Math.max(0, Math.min(srcLen - 1, i0 + 1));
+        const v0 = src[i0];
+        const v1 = src[i1];
+        if (v0 === null && v1 === null) { continue; }
+        if (v0 === null) { out[j] = v1; continue; }
+        if (v1 === null) { out[j] = v0; continue; }
+        const f = Math.max(0, Math.min(1, srcF - i0));
+        out[j] = v0 + (v1 - v0) * f;
+    }
+    return out;
+}
+
+
+//Slice the per-day arrays for the card at `dayOffset`. Returns DISPLAY_BUCKETS_PER_DAY-length series
+//resampled from the storage cadence so every graph reads at the same DISPLAY rate. If
+//DISPLAY_BUCKETS_PER_HOUR == DATA_BUCKETS_PER_HOUR the resample is a straight copy and the graphs
+//read the storage values verbatim, otherwise a linear resample bridges the two cadences.
 export interface DaySlice
 {
     dayStartMs:  number;
     dayEndMs:    number;
     pastEndHour: number;
+    //All arrays have length DISPLAY_BUCKETS_PER_DAY.
     hourlyIrradiance: ReadonlyArray<number | null>;
     hourlyCloud:      ReadonlyArray<number | null>;
     hourlyProd:       ReadonlyArray<number | null>;
@@ -574,17 +654,63 @@ export function sliceForDay(store: UnifiedDataStore, dayOffset: number): DaySlic
                       : dayStartMs >= nowMs ? 0
                       : (nowMs - dayStartMs) / HOUR_MS;
     const { start, end } = dayBucketRange(store, dayOffset);
+    const N = DISPLAY_BUCKETS_PER_DAY;
     return {
         dayStartMs,
         dayEndMs,
         pastEndHour,
-        hourlyIrradiance: store.irradiance.slice(start, end),
-        hourlyCloud:      store.cloud.slice(start, end),
-        hourlyProd:       store.production.slice(start, end),
-        hourlyForecast:   store.forecast.slice(start, end),
-        hourlyBatt:       store.battery.slice(start, end),
-        hourlyBattSoc:    store.batterySoc.slice(start, end),
-        hourlyGridIn:     store.gridImport.slice(start, end),
-        hourlyGridOut:    store.gridExport.slice(start, end),
+        hourlyIrradiance: resampleLinear(store.irradiance.slice(start, end), N),
+        hourlyCloud:      resampleLinear(store.cloud.slice(start, end),      N),
+        hourlyProd:       resampleLinear(store.production.slice(start, end), N),
+        hourlyForecast:   resampleLinear(store.forecast.slice(start, end),   N),
+        hourlyBatt:       resampleLinear(store.battery.slice(start, end),    N),
+        hourlyBattSoc:    resampleLinear(store.batterySoc.slice(start, end), N),
+        hourlyGridIn:     resampleLinear(store.gridImport.slice(start, end), N),
+        hourlyGridOut:    resampleLinear(store.gridExport.slice(start, end), N),
     };
+}
+
+
+//Per-bucket samples covering an arbitrary [startMs, endMs] sub-window of the store. Used by the
+//main timeline chart which renders the production + forecast curves across the visible 5-day window.
+//Returns one entry per DISPLAY bucket whose centre falls inside the requested window; null entries
+//indicate "no data" for that bucket. Out-of-store time stamps are clipped to the store window so
+//the caller never gets samples outside the data source.
+export interface RangeSlice
+{
+    times:      Date[];
+    production: (number | null)[];
+    forecast:   (number | null)[];
+    cloud:      (number | null)[];
+    irradiance: (number | null)[];
+}
+
+export function sliceForRange(store: UnifiedDataStore, startMs: number, endMs: number): RangeSlice
+{
+    const lo = Math.max(store.storeStartMs, startMs);
+    const hi = Math.min(store.storeEndMs,   endMs);
+    if (hi <= lo)
+    {
+        return { times: [], production: [], forecast: [], cloud: [], irradiance: [] };
+    }
+    const stepMs = HOUR_MS / DISPLAY_BUCKETS_PER_HOUR;
+    //Snap lo to the centre of the nearest DISPLAY bucket and walk by stepMs until hi. Each emitted
+    //sample carries the time at the bucket centre, matching the convention every consumer uses.
+    const firstBucketIdx = Math.floor((lo - store.storeStartMs) / stepMs);
+    const firstMid = store.storeStartMs + firstBucketIdx * stepMs + stepMs / 2;
+    const times:      Date[]            = [];
+    const production: (number | null)[] = [];
+    const forecast:   (number | null)[] = [];
+    const cloud:      (number | null)[] = [];
+    const irradiance: (number | null)[] = [];
+    for (let mid = firstMid; mid < hi; mid += stepMs)
+    {
+        if (mid < lo) { continue; }
+        times.push(new Date(mid));
+        production.push(valueAt(store.production, store, mid));
+        forecast.push(  valueAt(store.forecast,   store, mid));
+        cloud.push(     valueAt(store.cloud,      store, mid));
+        irradiance.push(valueAt(store.irradiance, store, mid));
+    }
+    return { times, production, forecast, cloud, irradiance };
 }

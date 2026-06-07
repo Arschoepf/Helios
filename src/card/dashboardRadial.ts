@@ -28,7 +28,7 @@ import { getSunPosition } from '../engine/sun';
 import { getHomeCoords } from './init';
 import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
-import { sliceForDay } from './unifiedStore';
+import { sliceForDay, DISPLAY_BUCKETS_PER_HOUR } from './unifiedStore';
 
 
 //Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
@@ -76,11 +76,12 @@ const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2.5;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
-//Per-day visual granularity. The unified store (src/card/unifiedStore.ts) feeds 96 buckets of 15 min
-//per day, so the dial path builders walk that same length. The hour-fraction units that every public
-//helper (interpAtHour, pastEndHour, polarPt, sun rise / set crossings) consumes stay in [0, 24); the
-//few internal call sites that walk the bucket arrays convert via STEPS_PER_HOUR.
-const STEPS_PER_HOUR           = 4;
+//Per-day visual granularity, driven by the data source's DISPLAY_BUCKETS_PER_HOUR constant so every
+//graph (radial + dashboard chart + timeline today) reads at the same display rate. The hour-fraction
+//units that every public helper (interpAtHour, pastEndHour, polarPt, sun rise / set crossings)
+//consumes stay in [0, 24); the few internal call sites that walk the bucket arrays convert via
+//STEPS_PER_HOUR.
+const STEPS_PER_HOUR           = DISPLAY_BUCKETS_PER_HOUR;
 const STEPS_PER_DAY            = 24 * STEPS_PER_HOUR;
 
 //Fixed irradiance scale for the radial cloud-ring overlay. A clear-sky summer noon peaks around 1100

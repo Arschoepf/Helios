@@ -33,15 +33,48 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
-### Hot-fix , production curve sawtooth on the radial dial (#210)
+### Data source rework, two cadence knobs, every graph plugs into it (#210)
 
-Beta.70 shipped the unified store with a `buildProduction` that filled every past bucket without a
-recorder sample with 0. With `_pvCalibStats` publishing 1 LTS row per hour and the store packing
-4 buckets per hour, that meant 3 buckets out of 4 in the past read as 0 between samples and the
-radial dial's production fill drew as a sawtooth instead of a continuous day curve. The fix borrows
-the modelled forecast W at the same bucket as the past-null fallback (still 0 when the forecast is
-itself null, e.g. before sunrise or after sunset), so the production fill reads as a continuous
-curve again. Same behaviour the pre-refactor `computeHourlyProduction` had.
+The previous beta filled past production gaps with the forecast model so the radial dial curve
+read as continuous between LTS samples. The user reported (rightly) that the curve was lying about
+the sensor: 3 buckets out of 4 in the past were showing modelled watts dressed up as real
+production. This release reworks the data source to be strictly honest about what is measured vs.
+what is modelled.
+
+**Two cadence constants, single place each:**
+
+- `DATA_BUCKETS_PER_HOUR` controls how dense the data source itself is. Every real sample (LTS
+  hourly, PV raw push, weather hourly, battery, grid) lands into a bucket of `HOUR_MS /
+  DATA_BUCKETS_PER_HOUR`. Past buckets that didn't receive a sample are filled by linear
+  interpolation between the two surrounding REAL samples, never by a model fallback. The data
+  source is never lying about the sensor.
+- `DISPLAY_BUCKETS_PER_HOUR` controls how every graph (radial dial, timeline production curve)
+  reads the source. When equal to the data cadence, graphs read the stored values verbatim;
+  otherwise `sliceForDay` / `sliceForRange` resample linearly between bracketing storage buckets.
+
+**Production and forecast are peers, never mixed:**
+
+- Production carries the LTS calib stats + raw PV history, bucketed and linearly interpolated in
+  the past slice. Future buckets stay null.
+- Forecast is its own series: `computePvPowerWeighted × calibration × shading map × cap clip` at
+  every DISPLAY bucket across the full 5-day window.
+- The radial dial overlays them as two distinct curves (production fill + dashed forecast outline).
+  The dashboard timeline now also reads both from the same source via `sliceForRange`.
+
+**What changes in renderPvChart (timeline production curve):**
+
+- The local samples-merge pass (cumulative-energy differentiation + raw + LTS interleave + sort +
+  1500-point decimation) is gone, the chart reads the production array directly from the data
+  source at DISPLAY rate.
+- The local forecast loop (`computePvPowerWeighted` per `_chartSeries` sample) is gone, the chart
+  reads `store.forecast` instead. The watts-to-native unit conversion stays as the single bridge
+  between the source (always watts) and the chart Y axis (entity-native unit).
+- The cloud + irradiance chart `renderChart` is unchanged: it draws point-to-point on the raw
+  Open-Meteo samples, which already meets the "real data only, no forecast mix" contract.
+
+The radial dial migration that landed in beta.70/71 stays in place but the upstream production
+series no longer borrows the forecast at past-null buckets; gaps are linearly interpolated between
+real LTS rows, so the visible curve reflects the sensor and only the sensor.
 
 ### Unified 5-day data store, radial dial migrated (#210)
 
