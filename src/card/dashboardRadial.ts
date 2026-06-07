@@ -79,6 +79,16 @@ const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2.5;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
+//Time resolution of the day's hourly aggregations and forecast pass. Every per-day array (production,
+//forecast, battery, cloud, irradiance) carries STEPS_PER_DAY = 288 buckets of 5 minutes each, so the
+//graph + radial curves resolve at the granularity HA's Long-Term Statistics recorder publishes (1
+//sample / 5 min) rather than the previous 1 / hour aggregation that read as a stepped polyline. The
+//hour-fraction units that every public helper (interpAtHour, pastEndHour, polarPt, sun rise / set
+//crossings) consumes stay in [0, 24), STEPS_PER_HOUR = 12 converts between the two on the few internal
+//call sites that walk the bucket arrays.
+const STEPS_PER_HOUR           = 12;
+const STEPS_PER_DAY            = 24 * STEPS_PER_HOUR;
+const STEP_MS                  = HOUR_MS / STEPS_PER_HOUR;
 
 //Fixed irradiance scale for the radial cloud-ring overlay. A clear-sky summer noon peaks around 1100
 //W / m² at temperate latitudes, picking this as the radial scale max means the curve uses ~90 % of
@@ -97,36 +107,31 @@ function polarPt(hour: number, radius: number, cx: number = CENTER, cy: number =
 
 
 //Annulus fill path bounded between the inner edge (fixed at innerRadius) and a variable outer
-//curve that traces the per-hour data values. Emits two subpaths so SVG fill-rule="evenodd" carves
+//curve that traces the per-step data values. Emits two subpaths so SVG fill-rule="evenodd" carves
 //out the area between them; the inner circle alone would have made the fill spill all the way to
-//the centre, the earlier "closed polygon from the centre" recipe likewise. Sub-hour interpolation
-//(3 vertices per hour gap) keeps the variable curve visually smooth without paying for a true spline.
+//the centre, the earlier "closed polygon from the centre" recipe likewise. Input array length is
+//arbitrary (24 buckets / 1 h, 96 / 15 min, 288 / 5 min etc.), one path vertex per bucket so the
+//curve resolves at the bucket granularity directly; no sub-bucket smoothing layer on top.
 function buildRadialAnnulusPath(
-    perHourValues: ReadonlyArray<number | null>,
+    perStepValues: ReadonlyArray<number | null>,
     scaleMax:      number,
     innerRadius:   number,
     outerRadius:   number,
 ): string
 {
-    if (perHourValues.length !== 24 || scaleMax <= 0)
+    const N = perStepValues.length;
+    if (N < 4 || scaleMax <= 0)
     {
         return '';
     }
     let d = '';
-    //Outer curve, variable per hour.
-    for (let h = 0; h < 24; h++)
+    for (let i = 0; i < N; i++)
     {
-        const v     = perHourValues[h];
+        const v     = perStepValues[i];
         const r     = v === null ? innerRadius : innerRadius + Math.max(0, Math.min(1, v / scaleMax)) * (outerRadius - innerRadius);
-        const next  = perHourValues[(h + 1) % 24];
-        const rNext = next === null ? innerRadius : innerRadius + Math.max(0, Math.min(1, next / scaleMax)) * (outerRadius - innerRadius);
-        for (const f of [0, 1/3, 2/3])
-        {
-            const hour = h + f;
-            const ri   = r + (rNext - r) * f;
-            const [x, y] = polarPt(hour, ri);
-            d += (d === '' ? 'M ' : ' L ') + x.toFixed(2) + ' ' + y.toFixed(2);
-        }
+        const hour  = (i / N) * 24;
+        const [x, y] = polarPt(hour, r);
+        d += (d === '' ? 'M ' : ' L ') + x.toFixed(2) + ' ' + y.toFixed(2);
     }
     d += ' Z';
     //Inner edge: fixed circle at innerRadius. 48 vertices for a visually smooth fill boundary.
@@ -167,7 +172,7 @@ function buildRingArcPath(midR: number, fromHour: number, toHour: number): strin
 
 //Open radial outline path (no Z close). Used for the past portion when slicing by current hour.
 function buildRadialOutlinePath(
-    perHourValues: ReadonlyArray<number | null>,
+    perStepValues: ReadonlyArray<number | null>,
     scaleMax:      number,
     baseRadius:    number,
     outerRadius:   number,
@@ -175,22 +180,23 @@ function buildRadialOutlinePath(
     toHour:        number,
 ): string
 {
-    if (scaleMax <= 0 || toHour <= fromHour)
+    const N = perStepValues.length;
+    if (N < 4 || scaleMax <= 0 || toHour <= fromHour)
     {
         return '';
     }
     let d = '';
-    const stepHours = 1 / 3;
-    for (let hour = fromHour; hour <= toHour + 1e-6; hour += stepHours)
+    //Walk the bucket array between the fractional hour bounds, one path vertex per bucket whose
+    //centre falls inside the window. iStart / iEnd round outward so a fromHour / toHour that lands
+    //mid-bucket still produces a continuous polyline up to the boundary.
+    const iStart = Math.max(0, Math.floor((fromHour / 24) * N));
+    const iEnd   = Math.min(N - 1, Math.ceil((toHour / 24) * N));
+    for (let i = iStart; i <= iEnd; i++)
     {
-        const hWhole = Math.floor(hour) % 24;
-        const f      = hour - Math.floor(hour);
-        const v      = perHourValues[hWhole];
-        const next   = perHourValues[(hWhole + 1) % 24];
-        const r      = v === null ? baseRadius : baseRadius + Math.max(0, Math.min(1, v / scaleMax)) * (outerRadius - baseRadius);
-        const rNext  = next === null ? baseRadius : baseRadius + Math.max(0, Math.min(1, next / scaleMax)) * (outerRadius - baseRadius);
-        const ri     = r + (rNext - r) * f;
-        const [x, y] = polarPt(hour, ri);
+        const v    = perStepValues[i];
+        const r    = v === null ? baseRadius : baseRadius + Math.max(0, Math.min(1, v / scaleMax)) * (outerRadius - baseRadius);
+        const hour = (i / N) * 24;
+        const [x, y] = polarPt(hour, r);
         d += (d === '' ? 'M ' : ' L ') + x.toFixed(2) + ' ' + y.toFixed(2);
     }
     return d;
@@ -201,7 +207,7 @@ function buildRadialOutlinePath(
 //weather-model forecast through computePvPowerWeighted (same path the timeline forecast curve uses).
 function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (number | null)[]
 {
-    const values: (number | null)[] = new Array(24).fill(null);
+    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
     const nowMs                     = Date.now();
 
     const calib = host._pvCalibStats;
@@ -209,13 +215,13 @@ function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (numb
     const unit  = (host._pvUnit || '').toLowerCase();
     const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
 
-    const sums   = new Array(24).fill(0) as number[];
-    const counts = new Array(24).fill(0) as number[];
+    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
+    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
     const ingestPower = (tMs: number, w: number): void =>
     {
         if (!Number.isFinite(w) || w < 0) { return; }
         if (tMs < dayStartMs || tMs >= dayStartMs + DAY_MS) { return; }
-        const h = Math.floor((tMs - dayStartMs) / HOUR_MS);
+        const h = Math.floor((tMs - dayStartMs) / STEP_MS);
         sums[h]   += w;
         counts[h] += 1;
     };
@@ -253,7 +259,7 @@ function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (numb
             ingestPower(hist.times[i].getTime(), pvNormalizeToWatts(hist.values[i], host._pvUnit));
         }
     }
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < STEPS_PER_DAY; h++)
     {
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
@@ -275,10 +281,10 @@ function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (numb
     if (series && coords && k !== null)
     {
         const raster = host._engine?.getLidarRaster() ?? null;
-        for (let h = 0; h < 24; h++)
+        for (let h = 0; h < STEPS_PER_DAY; h++)
         {
-            const hourMs    = dayStartMs + h * HOUR_MS;
-            const hourMidMs = hourMs + HOUR_MS / 2;
+            const hourMs    = dayStartMs + h * STEP_MS;
+            const hourMidMs = hourMs + STEP_MS / 2;
             if (hourMidMs < nowMs && values[h] !== null) { continue; }
             let bestIdx = -1;
             let bestDt  = Infinity;
@@ -309,10 +315,10 @@ function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (numb
             }
         }
     }
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < STEPS_PER_DAY; h++)
     {
-        const hourMs = dayStartMs + h * HOUR_MS;
-        if (values[h] === null && hourMs + HOUR_MS / 2 < nowMs)
+        const hourMs = dayStartMs + h * STEP_MS;
+        if (values[h] === null && hourMs + STEP_MS / 2 < nowMs)
         {
             values[h] = 0;
         }
@@ -327,12 +333,12 @@ function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (numb
 //forecast model. Sign convention matches computeBatteryToday in battery.ts (kwh > 0 ⇒ charging).
 function computeHourlyBattery(host: DashboardHost, dayStartMs: number): (number | null)[]
 {
-    const values: (number | null)[] = new Array(24).fill(null);
+    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
     const hist                      = host._batteryPowerHistory;
     if (!hist || hist.times.length === 0) { return values; }
     const nowMs                     = Date.now();
-    const sums   = new Array(24).fill(0) as number[];
-    const counts = new Array(24).fill(0) as number[];
+    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
+    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
     for (let i = 0; i < hist.times.length; i++)
     {
         const tMs = hist.times[i].getTime();
@@ -340,11 +346,11 @@ function computeHourlyBattery(host: DashboardHost, dayStartMs: number): (number 
         if (tMs > nowMs) { break; }
         const w = pvNormalizeToWatts(hist.values[i], host._batteryPowerUnit);
         if (!Number.isFinite(w)) { continue; }
-        const h = Math.floor((tMs - dayStartMs) / HOUR_MS);
+        const h = Math.floor((tMs - dayStartMs) / STEP_MS);
         sums[h]   += w;
         counts[h] += 1;
     }
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < STEPS_PER_DAY; h++)
     {
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
@@ -359,7 +365,7 @@ function computeHourlyBattery(host: DashboardHost, dayStartMs: number): (number 
 //uses, so the dial outline matches the headline forecast number on every day.
 function computeHourlyProductionForecast(host: DashboardHost, dayStartMs: number): (number | null)[]
 {
-    const values: (number | null)[] = new Array(24).fill(null);
+    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
     if (!series || !coords || series.times.length === 0) { return values; }
@@ -372,9 +378,9 @@ function computeHourlyProductionForecast(host: DashboardHost, dayStartMs: number
     const shading = currentShadingMap();
     const nowMs  = Date.now();
     const raster = host._engine?.getLidarRaster() ?? null;
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < STEPS_PER_DAY; h++)
     {
-        const hourMidMs = dayStartMs + h * HOUR_MS + HOUR_MS / 2;
+        const hourMidMs = dayStartMs + h * STEP_MS + STEP_MS / 2;
         let bestIdx = -1;
         let bestDt  = Infinity;
         for (let i = 0; i < series.times.length; i++)
@@ -412,22 +418,22 @@ function computeHourlyProductionForecast(host: DashboardHost, dayStartMs: number
 //hovered hour's value. Returns Watts per square metre per hour.
 function computeHourlyIrradiance(host: DashboardHost, dayStartMs: number): (number | null)[]
 {
-    const values: (number | null)[] = new Array(24).fill(null);
+    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
     const series = host._chartSeries;
     if (!series || series.times.length === 0) { return values; }
-    const sums   = new Array(24).fill(0) as number[];
-    const counts = new Array(24).fill(0) as number[];
+    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
+    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
     for (let i = 0; i < series.times.length; i++)
     {
         const t = series.times[i].getTime();
         if (t < dayStartMs || t >= dayStartMs + DAY_MS) { continue; }
         const v = series.irradiance?.[i];
         if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) { continue; }
-        const h = Math.floor((t - dayStartMs) / HOUR_MS);
+        const h = Math.floor((t - dayStartMs) / STEP_MS);
         sums[h]   += v;
         counts[h] += 1;
     }
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < STEPS_PER_DAY; h++)
     {
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
@@ -439,22 +445,22 @@ function computeHourlyIrradiance(host: DashboardHost, dayStartMs: number): (numb
 //past 30 d + forecast 2 d, so cloud is uniformly available for past + future. Returns 0..100.
 function computeHourlyCloud(host: DashboardHost, dayStartMs: number): (number | null)[]
 {
-    const values: (number | null)[] = new Array(24).fill(null);
+    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
     const series = host._chartSeries;
     if (!series || series.times.length === 0) { return values; }
-    const sums   = new Array(24).fill(0) as number[];
-    const counts = new Array(24).fill(0) as number[];
+    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
+    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
     for (let i = 0; i < series.times.length; i++)
     {
         const t = series.times[i].getTime();
         if (t < dayStartMs || t >= dayStartMs + DAY_MS) { continue; }
         const v = series.cloud[i];
         if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
-        const h = Math.floor((t - dayStartMs) / HOUR_MS);
+        const h = Math.floor((t - dayStartMs) / STEP_MS);
         sums[h]   += Math.max(0, Math.min(100, v));
         counts[h] += 1;
     }
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < STEPS_PER_DAY; h++)
     {
         if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
     }
@@ -765,19 +771,21 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 
     //Slice the arrays by the past / future boundary. Past hours feed the solid fills, future hours
     //feed the dashed outlines. Consumption has no future data so its future portion is always empty.
-    const ceilPastH = Math.ceil(pastEndHour);
-    const floorPastH = Math.floor(pastEndHour);
+    //The past-end index is in bucket units now (288 / day), the fractional pastEndHour stays in
+    //hours and converts to a bucket cutoff via STEPS_PER_HOUR.
+    const ceilPastSteps  = Math.ceil(pastEndHour * STEPS_PER_HOUR);
+    const floorPastH     = Math.floor(pastEndHour);
     const prodPastPath = pastEndHour > 0
-        ? buildRadialAnnulusPath(hourlyProd.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
+        ? buildRadialAnnulusPath(hourlyProd.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
         : '';
     const battChargePath = pastEndHour > 0
-        ? buildRadialAnnulusPath(hourlyBattCharge.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
+        ? buildRadialAnnulusPath(hourlyBattCharge.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
         : '';
     const battDischargePath = pastEndHour > 0
-        ? buildRadialAnnulusPath(hourlyBattDischarge.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
+        ? buildRadialAnnulusPath(hourlyBattDischarge.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), battScaleMax, R_BATT_INNER, R_BATT_OUTER)
         : '';
     const cloudPastPath = pastEndHour > 0
-        ? buildRadialAnnulusPath(hourlyCloud.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
+        ? buildRadialAnnulusPath(hourlyCloud.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
         : '';
     const cloudFuturePath = pastEndHour < 24
         ? buildRadialOutlinePath(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
@@ -789,7 +797,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //reads consistently across past + future cards: a sunny day occupies most of the ring, a fully
     //overcast day collapses to the inner edge.
     const irrPastPath = pastEndHour > 0
-        ? buildRadialAnnulusPath(hourlyIrr.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER)
+        ? buildRadialAnnulusPath(hourlyIrr.slice(0, ceilPastSteps).concat(new Array(STEPS_PER_DAY - ceilPastSteps).fill(null)), IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER)
         : '';
     const irrFuturePath = pastEndHour < 24
         ? buildRadialOutlinePath(hourlyIrr, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
@@ -810,13 +818,13 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //at reduced opacity so the past / future boundary reads directly off the fill contrast and
     //the dedicated "now" cursor can stay dropped.
     const prodFutureFillPath = pastEndHour < 24
-        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyForecast.slice(ceilPastH, 24)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
+        ? buildRadialAnnulusPath(new Array(ceilPastSteps).fill(null).concat(hourlyForecast.slice(ceilPastSteps, STEPS_PER_DAY)), prodScaleMax, R_PROD_INNER, R_PROD_OUTER)
         : '';
     const cloudFutureFillPath = pastEndHour < 24
-        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyCloud.slice(ceilPastH, 24)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
+        ? buildRadialAnnulusPath(new Array(ceilPastSteps).fill(null).concat(hourlyCloud.slice(ceilPastSteps, STEPS_PER_DAY)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
         : '';
     const irrFutureFillPath = pastEndHour < 24
-        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyIrr.slice(ceilPastH, 24)), IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER)
+        ? buildRadialAnnulusPath(new Array(ceilPastSteps).fill(null).concat(hourlyIrr.slice(ceilPastSteps, STEPS_PER_DAY)), IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER)
         : '';
 
     //Per-ring track arcs split into past + future segments. The not-yet-elapsed half of each ring
@@ -846,18 +854,18 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //edge. SMIL animates the d attribute from the collapsed string to the real string, the visual
     //is each curve growing within its OWN annulus from inner to outer instead of the previous
     //scale-from-centre puff (which expanded everything from a single point and looked rough).
-    const zeroArr24: (number | null)[] = new Array(24).fill(0);
-    const fromProdPast            = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
-    const fromProdFutureFill      = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
-    const fromProdForecastOutline = prodForecastOutlinePath ? buildRadialOutlinePath(zeroArr24, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER,  0, 24) : '';
-    const fromBattCharge          = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
-    const fromBattDischarge       = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
-    const fromCloudPast           = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
-    const fromCloudFutureFill     = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
-    const fromCloudFuture         = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
-    const fromIrrPast             = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
-    const fromIrrFutureFill       = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
-    const fromIrrFuture           = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
+    const zeroArrSteps: (number | null)[] = new Array(STEPS_PER_DAY).fill(0);
+    const fromProdPast            = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArrSteps, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
+    const fromProdFutureFill      = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArrSteps, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER)  : '';
+    const fromProdForecastOutline = prodForecastOutlinePath ? buildRadialOutlinePath(zeroArrSteps, prodScaleMax,  R_PROD_INNER,  R_PROD_OUTER,  0, 24) : '';
+    const fromBattCharge          = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArrSteps, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
+    const fromBattDischarge       = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArrSteps, battScaleMax,  R_BATT_INNER,  R_BATT_OUTER)  : '';
+    const fromCloudPast           = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArrSteps, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromCloudFutureFill     = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArrSteps, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromCloudFuture         = pastEndHour < 24 ? buildRadialOutlinePath(zeroArrSteps, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
+    const fromIrrPast             = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArrSteps, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromIrrFutureFill       = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArrSteps, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromIrrFuture           = pastEndHour < 24 ? buildRadialOutlinePath(zeroArrSteps, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
     const ANIM_DUR = '700ms';
 
     //Hover cursor: only on the front card AND only when the host carries a hover hour set by the
@@ -901,10 +909,12 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //flat-disc look of a plain <circle> + solid fill.
     const interpRadius = (values: ReadonlyArray<number | null>, scaleMax: number, innerR: number, outerR: number, hour: number): number =>
     {
-        const hWhole = Math.floor(hour) % 24;
-        const f      = hour - Math.floor(hour);
-        const v      = values[hWhole];
-        const next   = values[(hWhole + 1) % 24];
+        const N      = values.length;
+        const step   = hour * N / 24;
+        const iWhole = Math.floor(step) % N;
+        const f      = step - Math.floor(step);
+        const v      = values[iWhole];
+        const next   = values[(iWhole + 1) % N];
         const r      = v === null    ? innerR : innerR + Math.max(0, Math.min(1, v    / scaleMax)) * (outerR - innerR);
         const rNext  = next === null ? innerR : innerR + Math.max(0, Math.min(1, next / scaleMax)) * (outerR - innerR);
         return r + (rNext - r) * f;
@@ -916,7 +926,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     if (hoverActive)
     {
         const hf  = hoverHour as number;
-        const idx = Math.max(0, Math.min(23, Math.floor(hf)));
+        const idx = Math.max(0, Math.min(STEPS_PER_DAY - 1, Math.floor(hf * STEPS_PER_HOUR)));
         const prodVal  = hourlyProd[idx];
         const battVal  = hourlyBatt[idx];
         const cloudVal = hourlyCloud[idx];
@@ -968,7 +978,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //positions land on the same circle the SVG ticks anchor to.
     const labelRadiusPct = (R_HOUR_LABEL / VIEWBOX) * 100;
     const hourLabelsHtml: TemplateResult[] = [];
-    for (let h = 0; h < 24; h++)
+    for (let h = 0; h < STEPS_PER_DAY; h++)
     {
         const alpha = ((h - 12) / 12) * Math.PI;
         const leftPct = 50 + labelRadiusPct * Math.sin(alpha);
@@ -1268,10 +1278,13 @@ function interpAtHour(arr: ReadonlyArray<number | null>, hf: number): number | n
 {
     if (hf < 0) { hf = 0; }
     if (hf > 23.9999) { hf = 23.9999; }
-    const h0 = Math.floor(hf);
-    const f  = hf - h0;
-    const v0 = arr[h0];
-    const v1 = arr[Math.min(23, h0 + 1)];
+    const N    = arr.length;
+    if (N < 2) { return arr[0] ?? null; }
+    const step = hf * N / 24;
+    const i0   = Math.floor(step);
+    const f    = step - i0;
+    const v0 = arr[i0];
+    const v1 = arr[Math.min(N - 1, i0 + 1)];
     if (v0 === null && v1 === null) { return null; }
     if (v0 === null) { return v1; }
     if (v1 === null) { return v0; }
@@ -1311,7 +1324,11 @@ function dailyEnergyKwh(arr: ReadonlyArray<number | null>): number | null
 {
     let s = 0, hasData = false;
     for (const v of arr) { if (v !== null) { s += v; hasData = true; } }
-    return hasData ? s / 1000 : null;
+    //Each bucket carries the mean power over a STEP_MS window. Total Wh = sum of bucket-means times
+    //the bucket length in hours. At 1-bucket-per-hour (STEPS_PER_HOUR = 1) the divisor is 1 and the
+    //legacy `s / 1000` legacy expression directly returned kWh, at finer buckets divide by the same
+    //factor so the day's kWh stays invariant to the bucket size.
+    return hasData ? s / STEPS_PER_HOUR / 1000 : null;
 }
 
 
@@ -1437,13 +1454,15 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     const forecastLabel = t.detail.dashForecastLabel     ?? 'Forecast';
 
     //Build a "past-actual only" production array. computeHourlyProduction in prepareRadialDayData
-    //returns hourlyProd as "past actual hours + future forecast values" so the radial dial can draw
-    //one continuous curve from realised history into the model. The graph view wants the production
-    //area to ONLY carry actual past data (the forecast belongs to the dotted line below), otherwise
-    //J+1 / J+2 cards draw an area that's actually the forecast and the dotted forecast line gets
-    //masked underneath. Cut the array at the past-end boundary; the area collapses to null on every
-    //future hour and the area path goes flat on those hours.
-    const hourlyProdPastOnly = data.hourlyProd.map((v, h) => (h < data.pastEndHour ? v : null));
+    //returns hourlyProd as "past actual buckets + future forecast values" so the radial dial can
+    //draw one continuous curve from realised history into the model. The graph view wants the
+    //production area to ONLY carry actual past data (the forecast belongs to the dotted line below),
+    //otherwise J+1 / J+2 cards draw an area that's actually the forecast and the dotted forecast
+    //line gets masked underneath. Cut the array at the past-end boundary; pastEndHour is in fractional
+    //hours, the bucket index threshold is pastEndHour * STEPS_PER_HOUR (each bucket = 1 / STEPS_PER_HOUR
+    //of an hour). The area collapses to null on every future bucket and the area path goes flat there.
+    const pastEndBucket = data.pastEndHour * STEPS_PER_HOUR;
+    const hourlyProdPastOnly = data.hourlyProd.map((v, i) => (i < pastEndBucket ? v : null));
     //Hover-or-daily values for the two mini-cards. Production reads as the day's total kWh by default,
     //flips to the hovered hour's instantaneous W while the cursor is parked. Forecast follows the same
     //recipe against the pv-arrays modelled curve.
@@ -1480,29 +1499,23 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     };
 
     //Build the production area path (line + close to baseline + close to start) and the forecast line
-    //path. Sub-hour smoothing at thirds so the curves read as continuous rather than stepped, mirrors
-    //the radial dial's variable-curve recipe.
+    //path. One vertex per data bucket directly, no sub-bucket smoothing because the input arrays now
+    //resolve at STEPS_PER_DAY granularity (5 min per bucket) so the curve looks continuous from the
+    //bucket density alone.
     const buildLinePath = (values: ReadonlyArray<number | null>): string =>
     {
+        const N = values.length;
+        if (N < 2) { return ''; }
         let d = '';
-        for (let h = 0; h < 24; h++)
+        for (let i = 0; i < N; i++)
         {
-            const v0 = values[h];
-            const v1 = values[(h + 1) % 24];
-            for (const f of [0, 1/3, 2/3])
-            {
-                const hour = h + f;
-                const v    = v0 === null || v1 === null
-                    ? (v0 === null ? v1 : v0)
-                    : v0 + ((v1 ?? 0) - v0) * f;
-                const x    = hourToX(hour);
-                const y    = wattsToY(v ?? null);
-                d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + y.toFixed(1);
-            }
+            const x = hourToX((i / N) * 24);
+            const y = wattsToY(values[i] ?? null);
+            d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + y.toFixed(1);
         }
-        //Last vertex at x = W so the curve runs the whole canvas, otherwise the last hour gets dropped.
-        const last = values[23];
-        d += ' L ' + W.toFixed(1) + ' ' + wattsToY(last ?? null).toFixed(1);
+        //Last vertex anchored at x = W so the curve runs the whole canvas, otherwise the last bucket
+        //gets dropped from the visual.
+        d += ' L ' + W.toFixed(1) + ' ' + wattsToY(values[N - 1] ?? null).toFixed(1);
         return d;
     };
     //Production area path. Closes to the BOTTOM of the chart (y = H) instead of the production-zero
@@ -1524,16 +1537,13 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     {
         //All-zero "from" version for the day-load grow animation. Same vertex count as buildAreaPath
         //so SMIL interpolates without segment count mismatches. Collapsed shape is a flat strip from
-        //y = BASELINE_Y down to y = H (the start state matches the visual "production = 0" floor that
-        //slides up into the real curve on day load).
+        //y = BASELINE_Y down to y = H, the start state matches the "production = 0" floor that slides
+        //up into the real curve on day load.
         let d = '';
-        for (let h = 0; h < 24; h++)
+        for (let i = 0; i < STEPS_PER_DAY; i++)
         {
-            for (const f of [0, 1/3, 2/3])
-            {
-                const hour = h + f;
-                d += (d === '' ? 'M ' : ' L ') + hourToX(hour).toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
-            }
+            const x = hourToX((i / STEPS_PER_DAY) * 24);
+            d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
         }
         d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
         d += ' L ' + W.toFixed(1) + ' ' + H.toFixed(1)
@@ -1544,13 +1554,10 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     {
         //Collapsed counterpart for the line / forecast paths: flat horizontal at y = BASELINE_Y.
         let d = '';
-        for (let h = 0; h < 24; h++)
+        for (let i = 0; i < STEPS_PER_DAY; i++)
         {
-            for (const f of [0, 1/3, 2/3])
-            {
-                const hour = h + f;
-                d += (d === '' ? 'M ' : ' L ') + hourToX(hour).toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
-            }
+            const x = hourToX((i / STEPS_PER_DAY) * 24);
+            d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
         }
         d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
         return d;
