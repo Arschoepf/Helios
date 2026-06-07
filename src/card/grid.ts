@@ -2,24 +2,22 @@
 //hass.states and the past-scrub derivation from the rolling buffer
 //backed by HA recorder history.
 //
-//grid-import-entity and grid-export-entity can be wired as a single
-//entity (string) OR as an array of entities. The array form is the
-//only sane way to model time-of-use installs where the cumulative
-//meter is split across two indexes (heures pleines / creuses in
-//France, peak / off-peak elsewhere). Crucially, those indexes are
-//MUTUALLY EXCLUSIVE: only one is incrementing at any given moment
-//(the active tariff), so the chip displays the value of the entity
-//that changed MOST RECENTLY. No averaging, no summing: the last-
-//updated entity wins.
+//Entity resolution is 100 % HA Energy dashboard (config/energy global
+//settings): the card pulls the cumulative kWh meters from
+//`stat_energy_from` (import) / `stat_energy_to` (export) and the live
+//signed-power sensors from `stat_rate` / `power_config.stat_rate`. A
+//multi-source install (split tariffs, separate phase meters, multiple
+//grid connections) is summed at consumer side: every meter declared
+//on every grid source in HA Energy contributes; the last-updated
+//meter wins on the live chip, every meter's bracketed slope sums on
+//the scrub path.
 //
-//grid-power-entity is the third wiring: a single COMBINED signed
-//sensor (Fronius P_Grid, Shelly EM, P1 net power, ...) whose sign
-//encodes the direction. When it is set it owns both chips and the
-//directional slots above are ignored: readCombined derives the net
-//signed watts (a power sensor's value, or a net-energy sensor's
-//signed slope), applies the optional grid-power-invert flip, then
-//routes a non-negative net to the IMPORT chip and a negative net to
-//the EXPORT chip so only the active direction is ever shown.
+//Per-source sign inversion is honoured via HA Energy's own
+//`power_config.stat_rate_inverted` switch, surfaced through
+//`invertedRateEntities[]` on the EnergyDefaults snapshot. The card
+//applies the flip at sample time so downstream consumers (chip,
+//leader, scrub buffer) see the canonical "positive = import"
+//convention regardless of how the user wired the source.
 //
 //Both live and past-scrub derivations share one bracketed-slope
 //helper. The bracket is chosen so that the time span across the two
@@ -29,7 +27,6 @@
 //samples landed 5 s apart, while still using the natural sample
 //cadence on sparse meters (Linky 30 min, Shelly 60 s).
 
-import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
 import type { EnergyDefaults } from './energy-prefs';
@@ -50,8 +47,10 @@ const _historyFetched   = new Map<string, number>();
 //to the load.
 const _historyFailedUntil = new Map<string, number>();
 const _historyInflight  = new Set<string>();
-//24 h refresh cadence: re-issue the 72 h backfill once a day so the buffer head stays fresh on long-uptime sessions.
-const GRID_FETCH_REFRESH_MS = 24 * 60 * 60_000;
+//Refresh cadence: re-issue the backfill once per hour so the buffer head stays fresh on long-uptime sessions. The old 24 h cadence
+//combined with the empty-result fetch-marker bug below would lock a card out of the recorder for a full day after a single empty
+//response, which made past-scrub chips read blank until the editor's reset button was pressed.
+const GRID_FETCH_REFRESH_MS = 60 * 60_000;
 //2 min cooldown after a `WsTimeoutError`, prevents the per-tick retry storm.
 const GRID_FETCH_COOLDOWN_MS = 2 * 60_000;
 
@@ -109,7 +108,6 @@ const SCRUB_EDGE_TOLERANCE_MS = 10 * 60_000;
 
 export interface GridHost extends LoadingTrackerHost
 {
-    readonly config: HeliosConfig | undefined;
     readonly hass:   any;
     //Optional snapshot of HA Energy dashboard defaults, populated by
     //`card/energy-prefs.ts` via a long-running subscription. When the
@@ -141,12 +139,6 @@ export interface GridHost extends LoadingTrackerHost
     //updated" entity when the slot has several entities wired.
     _gridImportLastDerived: Map<string, { watts: number; t: number }>;
     _gridExportLastDerived: Map<string, { watts: number; t: number }>;
-    //Combined signed grid-power slot (grid-power-entity). One buffer
-    //+ unit per wired source; the per-entity signed slopes / powers
-    //sum to the net grid watts, whose sign routes the value to the
-    //import (>=0) or export (<0) chip.
-    _gridCombinedSamples: Map<string, Sample[]>;
-    _gridCombinedUnits:   Map<string, string>;
 }
 
 
@@ -359,8 +351,14 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                 h._lastRefreshTimeRangeRef      = undefined;
                 h._lastRefreshEnergyDefaultsRef = undefined;
                 host.requestUpdate();
+                _historyFetched.set(entity, Date.now());
             }
-            _historyFetched.set(entity, Date.now());
+            //Only mark this entity as fetched when we actually got rows back. The previous version set the
+            //flag unconditionally on the success path, so a cold recorder (HA just restarted, entity created
+            //less than 5 days ago, transient LTS gap) treated as a "successful" empty fetch locked us out of
+            //the next backfill for the full GRID_FETCH_REFRESH_MS window. The user could not scrub more than
+            //~10 min into the past because the buffer never got beyond the live samples accumulated since
+            //then, and the refresh button did not bust the flag, only the editor reset path did.
             _historyFailedUntil.delete(entity);
         }
         catch (e)
@@ -433,19 +431,10 @@ export function refreshGrid(host: GridHost): void
         return;
     }
 
-    //A user-wired combined signed entity owns both chips outright
-    //and the two directional slots are ignored. Highest priority,
-    //the user picked this explicitly.
-    if (resolveEntities(host, 'combined').length > 0)
-    {
-        readCombined(host);
-        return;
-    }
-
     //Directional slots run unconditionally so the scrub + chart
-    //past-derivation buffers stay warm. They consume the user's
-    //grid-import-entity / grid-export-entity (typically cumulative
-    //kWh) and own the past-derivation path.
+    //past-derivation buffers stay warm. They consume the HA Energy
+    //dashboard's `stat_energy_from` / `stat_energy_to` cumulative
+    //kWh meters and own the past-derivation path.
     readSlot(host, 'import');
     readSlot(host, 'export');
 
@@ -464,23 +453,16 @@ export function refreshGrid(host: GridHost): void
 }
 
 
-//Mirror of HA `hui-power-sankey-card`'s live grid read. Sums the
-//signed power across every `stat_rate` entity collected from the
-//Energy dashboard prefs, applies the optional `grid-power-invert`
-//flip, then routes the net through `applyCombinedSplit` exactly
-//like the user-explicit combined path does: a non-negative net
-//shows on IMPORT only, a negative net on EXPORT only.
+//Mirror of HA `hui-power-sankey-card`'s live grid read. Sums the signed power across every `stat_rate` entity collected
+//from the HA Energy dashboard prefs, then routes the net through `applyCombinedSplit`: a non-negative net shows on
+//IMPORT only, a negative net on EXPORT only.
 //
-//No slope, no integration. The chip value reads whatever the
-//signed power sensor reports right now, normalised by SI prefix
-//on the unit (k -> *1000, M -> *1e6, etc.) the same way the
-//official Energy dashboard does it.
+//No slope, no integration. The chip value reads whatever the signed power sensor reports right now, normalised by SI
+//prefix on the unit (k -> *1000, M -> *1e6, etc.) the same way the official Energy dashboard does it.
 //
-//Bails out silently when no rate sensor produced a usable value,
-//leaving the directional readSlot results from this same refresh
-//cycle as the displayed LIVE values. That preserves the legacy
-//behaviour for users running an older HA without `stat_rate` on
-//their Energy dashboard sources.
+//Bails out silently when no rate sensor produced a usable value, leaving the directional readSlot results from this same
+//refresh cycle as the displayed LIVE values. That preserves the cumulative-kWh fallback for users whose HA Energy grid
+//sources do not declare a stat_rate.
 function readStatRates(host: GridHost, rates: string[]): void
 {
     let signedWatts = 0;
@@ -515,75 +497,27 @@ function readStatRates(host: GridHost, rates: string[]): void
     {
         return;
     }
-    if (gridPowerInvert(host.config))
-    {
-        signedWatts = -signedWatts;
-    }
     applyCombinedSplit(host, signedWatts);
 }
 
 
-//Config key backing each slot.
-function slotKey(slot: 'import' | 'export' | 'combined'): string
+//Resolve every entity wired for a slot from the HA Energy dashboard snapshot. v1.8.3 dropped the legacy YAML overrides
+//(grid-import-entity / grid-export-entity / grid-power-entity / grid-power-invert), the card now reads grid wiring
+//exclusively from the HA Energy dashboard global settings (Settings -> Dashboards -> Energy). A user with an existing
+//card YAML carrying those keys gets a persistent migration notification + the editor strips them on the next save; the
+//runtime treats them as absent.
+function resolveEntities(host: GridHost, slot: 'import' | 'export'): string[]
 {
+    const ed = host._energyDefaults;
+    if (!ed)
+    {
+        return [];
+    }
     if (slot === 'import')
     {
-        return 'grid-import-entity';
+        return [...ed.gridStatEnergyFroms];
     }
-    if (slot === 'export')
-    {
-        return 'grid-export-entity';
-    }
-    return 'grid-power-entity';
-}
-
-
-//Resolve every entity wired for a slot. Accepts both:
-//  - "sensor.foo"          (single entity)
-//  - ["sensor.foo", "sensor.bar"]  (multi-entity)
-//Empty / missing entities are silently dropped.
-//
-//Two layers in order of precedence:
-//  1. Explicit card YAML slot (`grid-import-entity` / `grid-export-entity` / `grid-power-entity`). Pre-#184 configs
-//     and the few hidden YAML overrides still flow through this path so an existing dashboard keeps working unchanged.
-//  2. HA Energy dashboard defaults parsed from `energy/get_prefs`. v1.8.3+ installs configure their grid wiring from
-//     HA Energy and have nothing in the card YAML; without this fallback the sample buffers stayed empty and the
-//     past-scrub chips on import / export read blank.
-function resolveEntities(host: GridHost, slot: 'import' | 'export' | 'combined'): string[]
-{
-    const key = slotKey(slot);
-    const raw = (host.config as Record<string, unknown> | undefined)?.[key];
-    if (Array.isArray(raw))
-    {
-        const list = (raw as unknown[])
-            .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
-            .map(s => s.trim());
-        if (list.length > 0)
-        {
-            return list;
-        }
-    }
-    else if (typeof raw === 'string' && raw.trim() !== '')
-    {
-        return [raw.trim()];
-    }
-    //Fall back only on the directional slots. The combined slot stays YAML-only so the display logic in
-    //helios-card.ts (which mirrors `isGridCombined(config)` to decide whether to render a single net chip vs a
-    //directional split) keeps the same decision tree as before. v1.8.3 grid wirings stream through directional
-    //here and pick up the HA Energy `stat_rate` mirror via `readStatRates` for the LIVE chip value separately.
-    const ed = host._energyDefaults;
-    if (ed)
-    {
-        if (slot === 'import')
-        {
-            return [...ed.gridStatEnergyFroms];
-        }
-        if (slot === 'export')
-        {
-            return [...ed.gridStatEnergyTos];
-        }
-    }
-    return [];
+    return [...ed.gridStatEnergyTos];
 }
 
 
@@ -734,109 +668,6 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
 
     const outUnit = unitIsEnergy(unitForOutput) ? 'W' : (unitForOutput || 'W');
     applyValue(host, slot, bestWatts, outUnit);
-}
-
-
-//Read the combined signed grid-power slot. Each wired entity
-//contributes its signed live watts (a power sensor's value, or a
-//net-energy sensor's bracketed slope, both of which carry the
-//import / export sign); the contributions sum to the net grid power.
-//The optional grid-power-invert flips that sign once. A non-negative
-//net routes to the IMPORT chip (EXPORT hides), a negative net routes
-//to the EXPORT chip (IMPORT hides), so only the active direction
-//shows, never both at once.
-function readCombined(host: GridHost): void
-{
-    const entities = resolveEntities(host, 'combined');
-    const bufMap   = host._gridCombinedSamples;
-    const unitsMap = host._gridCombinedUnits;
-
-    //Drop buffers / units for entities removed from the config.
-    for (const key of Array.from(bufMap.keys()))   if (!entities.includes(key))
-    {
-        bufMap.delete(key);
-    }
-    for (const key of Array.from(unitsMap.keys())) if (!entities.includes(key))
-    {
-        unitsMap.delete(key);
-    }
-
-    let signedWatts = 0;
-    let sawAny      = false;
-    const nowMs     = Date.now();
-
-    for (const entity of entities)
-    {
-        //Same recorder backfill as the directional slots so the
-        //past-scrub bracket is populated even when the live state is
-        //slow to push.
-        ensureHistoryFetched(host, entity, bufMap);
-
-        const stateObj = host.hass.states?.[entity];
-        if (!stateObj)
-        {
-            continue;
-        }
-        const raw  = stateObj.state;
-        const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable')
-        {
-            continue;
-        }
-        const num = parseNumericState(raw);
-        if (num === null)
-        {
-            continue;
-        }
-
-        const u = unit.toLowerCase();
-        unitsMap.set(entity, u);
-
-        const stateTs = parseTimestamp(stateObj.last_updated)
-                     ?? parseTimestamp(stateObj.last_changed)
-                     ?? nowMs;
-
-        //Every form records a sample so the scrub path can re-derive
-        //the signed watts at a past instant from the same buffer.
-        recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
-
-        if (u === 'wh' || u === 'kwh' || u === 'mwh')
-        {
-            //Signed net-energy meter: its running total can fall while
-            //exporting, so the bracketed slope already carries the sign.
-            const out = bracketedSlopeWatts(bufMap.get(entity), u, nowMs, LIVE_SLOPE_LOOKBACK_MS);
-            if (out !== null)
-            {
-                signedWatts += out.watts;
-                sawAny = true;
-            }
-        }
-        else if (u === 'w' || u === 'kw' || u === 'mw')
-        {
-            //Signed power sensor: the value IS the signed watts.
-            signedWatts += pvNormalizeToWatts(num, unit);
-            sawAny = true;
-        }
-        else
-        {
-            //Unknown unit: forward the raw signed value untouched.
-            signedWatts += num;
-            sawAny = true;
-        }
-    }
-
-    if (!sawAny)
-    {
-        //No live derivation yet (states unavailable or buffers still
-        //warming). Leave the chips as-is rather than flashing a fake 0.
-        return;
-    }
-
-    if (gridPowerInvert(host.config))
-    {
-        signedWatts = -signedWatts;
-    }
-    applyCombinedSplit(host, signedWatts);
 }
 
 
@@ -1208,45 +1039,6 @@ export function gridWattsAtTime(
         anyHit = true;
     }
     return anyHit ? total : null;
-}
-
-
-//True when the user wired a combined signed grid-power entity, which
-//then owns both chips and supersedes the separate import / export
-//slots. Used by the card to pick the right scrub derivation and by
-//the editor to collapse the directional pickers.
-export function isGridCombined(config: HeliosConfig | undefined): boolean
-{
-    const raw = (config as Record<string, unknown> | undefined)?.['grid-power-entity'];
-    if (Array.isArray(raw))
-    {
-        return (raw as unknown[]).some(s => typeof s === 'string' && s.trim() !== '');
-    }
-    return typeof raw === 'string' && raw.trim() !== '';
-}
-
-
-//Sign-convention flag for the combined slot. Default false means
-//positive = import; true flips it so positive = export.
-export function gridPowerInvert(config: HeliosConfig | undefined): boolean
-{
-    return (config as Record<string, unknown> | undefined)?.['grid-power-invert'] === true;
-}
-
-
-//Past-scrub derivation for the combined slot: the net signed watts
-//flowing at `targetMs`, summed across every wired source and flipped
-//by grid-power-invert. The caller splits the sign into the import /
-//export chips exactly as the live path does. Returns null when no
-//buffer can bracket the target.
-export function gridCombinedWattsAtTime(host: GridHost, targetMs: number): number | null
-{
-    const signed = gridWattsAtTime(host._gridCombinedSamples, host._gridCombinedUnits, targetMs);
-    if (signed === null)
-    {
-        return null;
-    }
-    return gridPowerInvert(host.config) ? -signed : signed;
 }
 
 

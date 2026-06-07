@@ -31,18 +31,11 @@ export interface HeliosConfig
     //as "more" regardless of the chosen colour.
     'sun-color'?:             unknown;
     'cloud-color'?:           unknown;
-    //Optional photovoltaic production overlay.
-    //  pv-power-entity : Home Assistant entity id of a numeric sensor
-    //                    representing solar production (instantaneous
-    //                    power in W/kW for an impact-readable curve,
-    //                    or cumulative daily energy for a saw-tooth
-    //                    accumulation curve). When unset, the whole
-    //                    PV overlay (chip below the home, dedicated
-    //                    timeline graph) is hidden.
-    //  pv-color        : single colour used everywhere PV appears
-    //                    (chip icon tint, dedicated graph fill /
-    //                    stroke). Defaults to a vivid green chosen
-    //                    to read cleanly on the white chart card.
+    //Optional photovoltaic production overlay. The PV entity itself is no longer wired here, the card resolves the
+    //solar source from the HA Energy dashboard global settings (Settings -> Dashboards -> Energy) directly. Only the
+    //tint stays as a per-card YAML setting.
+    //  pv-color : single colour used everywhere PV appears (chip icon tint, dedicated graph fill / stroke). Defaults
+    //             to a vivid green chosen to read cleanly on the white chart card.
     'pv-color'?:              unknown;
     //Inverter clipping cap in kW (kilowatts of AC). Optional; when
     //set, the forecast tops out at this value so an oversized DC
@@ -94,92 +87,26 @@ export interface HeliosConfig
     //pitch roofs, and any other install where panels don't all
     //face the same way.
     'pv-arrays'?:             unknown;
-    //Optional home-battery overlay. A single chip below the
-    //home shows the battery State-of-Charge (%) and the live signed
-    //power draw (positive while charging, negative while discharging),
-    //mirroring the PV chip above the home. Either entity is optional;
-    //the chip renders as long as at least one is set, with a leader
-    //line whose flow direction follows the sign of the power.
-    //  battery-soc-entity   : Home Assistant entity id of a numeric
-    //                         sensor in % (typical: device_class
-    //                         "battery", or unit "%"). Out-of-range
-    //                         values are clamped to [0, 100].
-    //  battery-power-entity : Home Assistant entity id of a numeric
-    //                         power sensor in W or kW. Sign convention
-    //                         follows the entity itself; positive is
-    //                         interpreted as charging.
-    //  battery-color        : single colour used everywhere battery
-    //                         appears (chip text, border, leader,
-    //                         flow arrow). Defaults to a vivid purple.
-    //Optional. Multi-bank battery support. When present, takes
-    //precedence over the flat battery-soc-entity / battery-power-
-    //entity / battery-power-invert keys above (which become a
-    //single-bank legacy fallback). Each entry:
-    //  - name        : optional, free text, used in the editor row
-    //                  header. Defaults to "Battery N".
-    //  - soc-entity  : required, HA entity id, % (0-100, clamped).
-    //  - power-entity: required, HA entity id, W or kW. Signed.
-    //  - power-invert: optional bool, flips the sign at ingest
-    //                  (per-bank). Default false.
-    //  - capacity-kwh: optional weight used to aggregate the
-    //                  banks' SoC into the single chip painted on
-    //                  the card (capacity-weighted average). Default
-    //                  1, meaning equal weight: leave unset when all
-    //                  banks are the same size. Set it explicitly
-    //                  when bank sizes differ so the displayed SoC
-    //                  reflects the real stored-energy ratio rather
-    //                  than a flat unweighted mean.
-    //Aggregation rules:
-    //  - SoC chip = Σ(soc_i × capacity_i) / Σ(capacity_i)
-    //  - Power chip = Σ(power_i)  (each bank inverted per its own
-    //                              power-invert flag first)
-    //  - inverter-cutoff-soc-pct: skips the trainer bucket when
-    //    ALL banks are at or above the threshold (min SoC across
-    //    banks ≥ cutoff), so a half-full bank correctly trains
-    //    even while a sibling bank is full.
-    //Optional. When true, the live and historical battery power
-    //readings are multiplied by -1 before being stored. Use this
-    //when the upstream entity reports charging as negative and
-    //discharging as positive (some GivEnergy / GivTCP setups), so
-    //Helios's internal "positive = charging" convention keeps
-    //holding without a template sensor in front. Default false.
-    //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops feeding the battery and clamps PV
-    //output (almost no production from the panels even when the sun is up). When set AND `battery-soc-entity` is also configured, the shading map
-    //trainer skips every observation bucket where the battery SoC reached or exceeded this value. Without the skip, those zero-production buckets
-    //get interpreted as 100 % shading at the matching sun azimuth / altitude / cloud bin and pollute the shading map for the next ~60 days of half-
-    //life decay. Threshold varies per inverter model (some cut at 95, some at 98, some at 100); the user configures their own. Leave unset to keep
-    //the legacy behaviour where every bucket trains.
+    //Optional home-battery overlay. A single chip below the home shows the battery State-of-Charge (%) and the live
+    //signed power draw (positive charging, negative discharging), mirroring the PV chip above the home. Battery
+    //entities (SoC, power, per-bank sign inversion, multi-bank aggregation) are resolved exclusively from the HA
+    //Energy dashboard, no per-card entity slot. Only the tint stays as a per-card YAML setting.
+    //  battery-color : single colour used everywhere battery appears (chip text, border, leader, flow arrow).
+    //                  Defaults to a vivid purple.
+    //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops
+    //feeding the battery and clamps PV output (almost no production from the panels even when the sun is up). When
+    //set AND HA Energy has at least one battery SoC source declared, the shading map trainer skips every observation
+    //bucket where the SoC reached or exceeded this value. Without the skip those zero-production buckets get
+    //interpreted as 100 % shading at the matching sun azimuth / altitude / cloud bin and pollute the shading map for
+    //the next ~60 days of half-life decay. Threshold varies per inverter model (some cut at 95, some at 98, some at
+    //100); the user configures their own. Leave unset to train on every bucket.
     'inverter-cutoff-soc-pct'?: unknown;
     'battery-color'?:         unknown;
-    //Optional. HA entity ids for the grid import / grid export
-    //meters the user already exposes through a sensor (or the HA
-    //Energy dashboard). The card reads the live values, the
-    //visual placement of the readouts is being reworked.
-    //Optional. Single COMBINED grid power/energy entity whose sign
-    //encodes the direction: many smart meters and inverters expose
-    //one signed sensor (Fronius P_Grid, Shelly EM, P1 net power,
-    //...) instead of two separate import / export indexes. When set,
-    //this entity drives BOTH chips: the card reads its sign and
-    //routes a positive value to the IMPORT chip and a negative value
-    //to the EXPORT chip (one direction at a time, the other chip is
-    //hidden). It takes precedence over grid-import-entity /
-    //grid-export-entity, which are ignored while it is configured.
-    //
-    //Accepts a power sensor (W / kW / MW, the value IS the signed
-    //watts) or a signed net-energy sensor (Wh / kWh / MWh whose
-    //running total can go down when exporting, the slope IS the
-    //signed watts). An array is summed (e.g. three signed per-phase
-    //power sensors -> net grid power).
-    //
-    //Default sign convention: positive = import (drawing from the
-    //grid), negative = export (feeding the grid), matching the most
-    //common meter / inverter convention. Flip it with
-    //grid-power-invert when the upstream sensor reports the opposite.
-    //Optional boolean. When true, the combined grid-power-entity sign
-    //is flipped at ingest so a positive reading is treated as EXPORT
-    //and a negative reading as IMPORT. Use it when the meter reports
-    //grid feed-in as positive. Default false. Ignored when
-    //grid-power-entity is not set.
+    //Grid import / export wiring is resolved exclusively from the HA Energy dashboard global settings: every grid
+    //source's `stat_energy_from` feeds the IMPORT scrub buffer, every `stat_energy_to` feeds the EXPORT scrub
+    //buffer, and the optional `stat_rate` / `power_config.stat_rate` overrides the live chip with HA's own
+    //signed-power read. No per-card grid entity slot, no per-card invert flag, the sign convention is honoured via
+    //HA Energy's own `power_config.stat_rate_inverted` switch on each source.
     //Picks the OpenFreeMap base style. 'streets' (default) renders
     //the full-colour Liberty style with street / POI labels suited to
     //urban areas; 'minimal' renders the muted-grey Positron style for
