@@ -61,11 +61,13 @@ const R_DIAL_OUTER             = 192;
 //dial. The HTML overlay reads the same percent of the viewBox so the digits anchor on the centre line
 //of the ring at any container size.
 const R_HOUR_LABEL             = (R_DIAL_INNER + R_DIAL_OUTER) / 2;
-//Hover cursor endpoints. Anchored at the outer edge of the irradiance reference rim (= sun
-//disc) and ending at the outer edge of the dial annulus, matching the 3D card's solar-ray
-//leader: a sun-coloured dashed line radiating outward from the sun toward its target.
+//Hover cursor endpoints. Anchored at the outer edge of the irradiance reference rim (= sun disc) and
+//ending at the outer tip of the longest dial graduation (the hour tick) so the ray crosses every data
+//ring but stops short of the dial annulus's outer half + the digits, keeping the hour read-out fully
+//legible behind the cursor. The outer endpoint is bound directly to R_TICK_INNER_HOUR so any future
+//tweak to the hour-tick reach automatically rescales the cursor without a second edit.
 const R_CURSOR_INNER           = R_SUN_REF;
-const R_CURSOR_OUTER           = R_DIAL_OUTER;
+const R_CURSOR_OUTER           = R_DIAL_INNER + 7;
 //Subdivision ticks. Painted near the INNER edge of the annulus, the digit at the centre keeps the eye
 //on the hour while the ticks fan out below toward the inner border for the 15 min granularity. Three
 //lengths so the eye snaps to the hour ticks first (bold + longest), then the half, then the quarter
@@ -794,7 +796,11 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         ? buildRadialOutlinePath(hourlyIrr, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
         : '';
 
-    const sunFillR = R_SUN_REF * (ratioPct / 100);
+    //Sun disc fill radius. Defaults to the daily mean irradiance ratio (computeDailyIrradianceRatio
+    //compares the day's mean Wm² to the latitude-aware clear-sky reference), gets overridden below
+    //to the hovered hour's instantaneous irradiance when the user is hovering the dial, so the
+    //central sun reads as the LIVE value at the cursor instead of the day's overall summary.
+    let sunFillRatio = Math.max(0, Math.min(1, ratioPct / 100));
 
     //Sunrise / sunset feeds the night-zone arc painted in the dial annulus so the user sees at a
     //glance how much of the day was dark. Sunrise + sunset values themselves come from the shared
@@ -860,6 +866,20 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //two read as a layered pair when the user hovers over the live day.
     const hoverHour = isFront ? host._dashRadialHoverHour : null;
     const hoverActive = (hoverHour !== null && hoverHour !== undefined);
+    //Sun disc tracks the hovered hour while hovering. Use the same fixed IRR_SCALE_MAX_WM2 scale as
+    //the cloud-ring overlay so the radius the user sees on the central disc lines up consistently
+    //with the irradiance curve on the ring (a noon clear-sky hour drives both to ~90 % of their
+    //ring, an overcast hour collapses both to near zero). Null sample (recorder gap on a past
+    //card, future hour beyond the forecast horizon) falls back to the daily mean already in
+    //sunFillRatio.
+    if (hoverActive)
+    {
+        const hoveredIrrW = interpAtHour(hourlyIrr, hoverHour as number);
+        if (hoveredIrrW !== null)
+        {
+            sunFillRatio = Math.max(0, Math.min(1, hoveredIrrW / IRR_SCALE_MAX_WM2));
+        }
+    }
     const hoverCursor = hoverActive
         ? `M ${polarPt(hoverHour as number, R_CURSOR_INNER)[0].toFixed(2)} ${polarPt(hoverHour as number, R_CURSOR_INNER)[1].toFixed(2)} L ${polarPt(hoverHour as number, R_CURSOR_OUTER)[0].toFixed(2)} ${polarPt(hoverHour as number, R_CURSOR_OUTER)[1].toFixed(2)}`
         : '';
@@ -1021,12 +1041,14 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         ? formatHoverClock(hoverHour as number, host.hass)
         : formatHoverClock(currentHourFraction(), host.hass);
 
-    //Irradiance halo: a soft sun-coloured glow centred on the sun disc. The halo's outer radius
-    //tracks the irradiance ratio: at 0 % the halo collapses to the rim (invisible behind the disc),
-    //at 100 % it reaches R_SUN_HALO_MAX which is the pre-shrink sun-disc envelope. A radial
-    //gradient fades the glow to fully transparent at the outer edge so it blends into the cloud
-    //ring instead of cutting a hard circle.
-    const haloR = R_SUN_REF + (R_SUN_HALO_MAX - R_SUN_REF) * (ratioPct / 100);
+    //Irradiance halo + fill: their radii track sunFillRatio, the daily-mean ratio when no hover is
+    //active and the hovered hour's instantaneous irradiance ratio when the user is over the dial.
+    //At 0 % the halo collapses to the rim (invisible behind the disc), at 100 % it reaches
+    //R_SUN_HALO_MAX which is the pre-shrink sun-disc envelope. A radial gradient fades the glow to
+    //fully transparent at the outer edge so it blends into the cloud ring instead of cutting a
+    //hard circle.
+    const haloR    = R_SUN_REF + (R_SUN_HALO_MAX - R_SUN_REF) * sunFillRatio;
+    const sunFillR = R_SUN_REF * sunFillRatio;
     //Per-card gradient id so multiple CoverFlow cards on the same page never collide.
     const haloGradId = `dash-radial-sun-halo-${cardOffset}`;
 
@@ -1138,13 +1160,17 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      fill animates inside it as the day's irradiance reading flowing toward the
                      reference. -->
                 <circle class="dash-radial-sun-halo" cx="${CENTER}" cy="${CENTER}" r="${haloR.toFixed(2)}" fill="url(#${haloGradId})">
-                    <animate attributeName="r" from="0" to="${haloR.toFixed(2)}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                    <animate attributeName="r" from="0" to="${haloR.toFixed(2)}" dur="${ANIM_DUR}" begin="0s" fill="remove"/>
                 </circle>
                 <circle class="dash-radial-sun-bg" cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}">
                     <animate attributeName="r" from="0" to="${R_SUN_REF}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </circle>
+                <!-- fill="remove" on the halo + the irradiance fill so the day-load grow animation
+                     hands control back to the static r attribute when it ends, and subsequent hover
+                     updates can re-target the radius to the hovered hour's irradiance. The sun-bg
+                     ref disc keeps fill="freeze" because its radius never changes after mount. -->
                 <circle class="dash-radial-sun-fill" cx="${CENTER}" cy="${CENTER}" r="${sunFillR.toFixed(2)}">
-                    <animate attributeName="r" from="0" to="${sunFillR.toFixed(2)}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                    <animate attributeName="r" from="0" to="${sunFillR.toFixed(2)}" dur="${ANIM_DUR}" begin="0s" fill="remove"/>
                 </circle>
                 <circle class="dash-radial-sun-rim" cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}" fill="none"/>
 

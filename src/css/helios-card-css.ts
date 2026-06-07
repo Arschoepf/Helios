@@ -1266,23 +1266,23 @@ export const heliosCardStyles = css`
     {
         stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
         stroke-width: 2.5;
-        stroke-dasharray: 5 5;
-        stroke-opacity: 0.85;
+        stroke-opacity: 0.95;
         stroke-linecap: round;
         fill: none;
         pointer-events: none;
     }
-    /*  Outline halo painted UNDER the cursor stroke in the HA primary text colour. Same dasharray as
-        the sun-coloured stroke on top so the two align dash-for-dash, just 1.5 SVG units thicker so
-        the halo peeks out 0.75 unit on each edge of the lead, framing the sun colour against any
-        data fill underneath. Theme-aware via --primary-text-color (white on dark theme, black on
-        light theme) so the lead reads against both card backgrounds. */
+    /*  Outline halo painted UNDER the cursor stroke in the HA primary text colour. Solid stroke just
+        1.5 SVG units thicker than the sun-coloured lead on top so the halo peeks out 0.75 unit on
+        each edge of the lead, framing the sun colour against any data fill underneath. Theme-aware
+        via --primary-text-color (white on dark theme, black on light theme) so the lead reads
+        against both card backgrounds. The cursor strokes are intentionally NOT dashed: a dashed lead
+        wrapped by a dashed outline reads as visually smudged when the outline gaps don't perfectly
+        align with the lead gaps at every zoom level. */
     .dash-radial-cursor-outline
     {
         stroke: var(--primary-text-color, #ffffff);
         stroke-width: 4;
-        stroke-dasharray: 5 5;
-        stroke-opacity: 0.65;
+        stroke-opacity: 0.75;
         stroke-linecap: round;
         fill: none;
         pointer-events: none;
