@@ -79,14 +79,15 @@ const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2.5;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
-//Time resolution of the day's hourly aggregations and forecast pass. Every per-day array (production,
-//forecast, battery, cloud, irradiance) carries STEPS_PER_DAY = 288 buckets of 5 minutes each, so the
-//graph + radial curves resolve at the granularity HA's Long-Term Statistics recorder publishes (1
-//sample / 5 min) rather than the previous 1 / hour aggregation that read as a stepped polyline. The
-//hour-fraction units that every public helper (interpAtHour, pastEndHour, polarPt, sun rise / set
-//crossings) consumes stay in [0, 24), STEPS_PER_HOUR = 12 converts between the two on the few internal
-//call sites that walk the bucket arrays.
-const STEPS_PER_HOUR           = 12;
+//Time resolution of the day's per-bucket aggregations and forecast pass. Every per-day array
+//(production, forecast, battery, cloud, irradiance) carries STEPS_PER_DAY = 96 buckets of 15 minutes
+//each. The bucket density is a compromise: a v1.8.3-beta.67 attempt at 288 buckets / 5 min produced
+//visibly jagged curves AND ~150 ms per-render compute cost (the forecast inner loop calls computePv
+//PowerWeighted once per future bucket, that scales linearly), 96 keeps 4x the precision of the
+//pre-bump 1 / hour resolution at one third the cost. The hour-fraction units that every public helper
+//(interpAtHour, pastEndHour, polarPt, sun rise / set crossings) consumes stay in [0, 24); the few
+//internal call sites that walk the bucket arrays convert via STEPS_PER_HOUR.
+const STEPS_PER_HOUR           = 4;
 const STEPS_PER_DAY            = 24 * STEPS_PER_HOUR;
 const STEP_MS                  = HOUR_MS / STEPS_PER_HOUR;
 
@@ -719,6 +720,25 @@ export interface RadialDayData
 }
 
 
+//Memo cache for prepareRadialDayData. Keyed per (host, cache-key); each card render hits the cache on
+//every Lit re-render that doesn't actually change the underlying data sources, so the dominant cost
+//(STEPS_PER_DAY forecast computations, hourly aggregations across a few hundred recorder samples)
+//only fires once per data-change event, not on every hover / scrub / mode switch. WeakMap on the host
+//key auto-cleans up on dashboard teardown, the inner Map is bounded at MAX_CACHE_ENTRIES so a multi-
+//hour session never accumulates indefinitely. Cache key encodes the live data dependencies (sample
+//counts, pastEndHour rounded to the bucket boundary) so any genuine data refresh invalidates.
+const _radialDayDataCache = new WeakMap<DashboardHost, Map<string, RadialDayData>>();
+const MAX_CACHE_ENTRIES   = 30;
+
+function buildRadialCacheKey(host: DashboardHost, cardOffset: number, dayStartMs: number, pastEndHourBucket: number): string
+{
+    const pvHistLen   = host._pvHistory?.times.length    ?? 0;
+    const pvCalibLen  = host._pvCalibStats?.times.length ?? 0;
+    const battHistLen = host._batteryPowerHistory?.times.length ?? 0;
+    const seriesLen   = host._chartSeries?.times.length  ?? 0;
+    return `${cardOffset}|${dayStartMs}|${pastEndHourBucket}|${pvHistLen}|${pvCalibLen}|${battHistLen}|${seriesLen}`;
+}
+
 export function prepareRadialDayData(host: DashboardHost, cardOffset: number): RadialDayData
 {
     const dayStartMs = dayStartMsFor(cardOffset);
@@ -729,6 +749,22 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     if (dayEndMs <= nowMs)        { pastEndHour = 24; }
     else if (dayStartMs >= nowMs) { pastEndHour = 0;  }
     else                          { pastEndHour = (nowMs - dayStartMs) / HOUR_MS; }
+
+    //Cache lookup. pastEndHour rounded to the bucket boundary so the cache stays warm within a single
+    //15-min window, recomputing only when the live now boundary actually crosses into the next bucket.
+    const pastEndHourBucket = Math.floor(pastEndHour * STEPS_PER_HOUR);
+    const cacheKey          = buildRadialCacheKey(host, cardOffset, dayStartMs, pastEndHourBucket);
+    let hostCache = _radialDayDataCache.get(host);
+    if (!hostCache)
+    {
+        hostCache = new Map();
+        _radialDayDataCache.set(host, hostCache);
+    }
+    const cached = hostCache.get(cacheKey);
+    if (cached)
+    {
+        return cached;
+    }
 
     const hourlyProd     = computeHourlyProduction(host, dayStartMs);
     const hourlyForecast = computeHourlyProductionForecast(host, dayStartMs);
@@ -752,7 +788,16 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     const sunRiseSet = homeCoords ? findSunriseSunset(dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
     const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
 
-    return { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
+    const result: RadialDayData = { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
+    //Evict the oldest entry when the cache hits its cap. The insertion order on a Map is preserved, so
+    //keys().next().value is the earliest one in (= the longest-untouched cache row).
+    if (hostCache.size >= MAX_CACHE_ENTRIES)
+    {
+        const oldest = hostCache.keys().next().value;
+        if (oldest !== undefined) { hostCache.delete(oldest); }
+    }
+    hostCache.set(cacheKey, result);
+    return result;
 }
 
 
@@ -978,7 +1023,10 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //positions land on the same circle the SVG ticks anchor to.
     const labelRadiusPct = (R_HOUR_LABEL / VIEWBOX) * 100;
     const hourLabelsHtml: TemplateResult[] = [];
-    for (let h = 0; h < STEPS_PER_DAY; h++)
+    //Hour labels around the dial: one per HOUR (not per bucket). The bucket bump took the underlying
+    //data resolution from 1 / hour to 1 / 5 min, but the dial chrome is still a 24-position analog
+    //clock face, so this loop has to stay at 24 regardless of STEPS_PER_DAY.
+    for (let h = 0; h < 24; h++)
     {
         const alpha = ((h - 12) / 12) * Math.PI;
         const leftPct = 50 + labelRadiusPct * Math.sin(alpha);
