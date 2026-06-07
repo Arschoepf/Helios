@@ -29,6 +29,8 @@ import { getHomeCoords } from './init';
 import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
 import { sliceForDay, DISPLAY_BUCKETS_PER_HOUR } from './unifiedStore';
+import { pvValueAtTime, interpAt, type ChartHost } from './charts';
+import { pvNormalizeToWatts } from './pv';
 
 
 //Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
@@ -1047,6 +1049,52 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 }
 
 
+//Scrub-time chip readers. The chip strips show LIVE values for the entity behind each tile: when
+//the user parks the cursor at a past instant, the chip MUST show what Home Assistant actually
+//recorded at that instant, not what the data source interpolated for that bucket. The store is
+//never lying (gaps are filled between real samples), but a chip is an entity readout and the user
+//expects it to track the sensor directly. So these readers go straight to the raw HA history
+//(_pvHistory + _pvCalibStats for production, _batteryPowerHistory for battery, _chartSeries for
+//Open-Meteo weather), bypassing the store entirely. Future instants resolve to null since the raw
+//sources have no future samples; the chip renders "—" in that case.
+function chipScrubProductionW(host: DashboardHost, targetMs: number): number | null
+{
+    //Reuse the timeline tooltip's HA-direct PV reader (raw window + LTS fallback) and reject the
+    //forecast fallback branch so the chip never blends a modelled W into a "real production" value.
+    const r = pvValueAtTime(host as unknown as ChartHost, targetMs);
+    if (r.isPredicted || !isFinite(r.value)) { return null; }
+    //pvValueAtTime returns the value in the entity's native unit (kW, W, MW); the chip strip's
+    //formatW helper expects W, so convert back via pvNormalizeToWatts with the entity unit. The
+    //isCumulative branch in pvValueAtTime already differentiated to power, the unit string carries
+    //the resulting unit (kW for kWh, W for Wh, etc.).
+    const unitForNormalize = r.unit || host._pvUnit || '';
+    const w = pvNormalizeToWatts(r.value, unitForNormalize);
+    return isFinite(w) ? w : null;
+}
+
+function chipScrubBatteryW(host: DashboardHost, targetMs: number): number | null
+{
+    const hist = host._batteryPowerHistory;
+    if (!hist || hist.times.length < 2) { return null; }
+    const firstMs = hist.times[0].getTime();
+    const lastMs  = hist.times[hist.times.length - 1].getTime();
+    if (targetMs < firstMs || targetMs > lastMs) { return null; }
+    const v = interpAt(hist.times, hist.values, targetMs);
+    if (!isFinite(v)) { return null; }
+    const w = pvNormalizeToWatts(v, host._batteryPowerUnit);
+    return isFinite(w) ? w : null;
+}
+
+function chipScrubWeather(host: DashboardHost, field: 'cloud' | 'irradiance', targetMs: number): number | null
+{
+    const series = host._chartSeries;
+    if (!series || series.times.length < 2) { return null; }
+    const arr = field === 'cloud' ? series.cloud : series.irradiance;
+    const v   = interpAt(series.times, arr, targetMs);
+    return isFinite(v) ? v : null;
+}
+
+
 //Linear interpolation between adjacent hourly samples, indexed by hour fraction. Returns null
 //when neither neighbour has a sample so the calling badge can fall back to its label rather than
 //show a stray zero. Used by the chip strips so the hovered value flows smoothly between hourly
@@ -1124,10 +1172,16 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
     const isFront     = cardOffset === activeOffset;
     const hoverHour   = isFront ? host._dashRadialHoverHour : null;
     const hoverActive = hoverHour !== null && hoverHour !== undefined;
-    const irrW        = hoverActive ? interpAtHour(data.hourlyIrr,   hoverHour as number) : null;
-    const cloudP      = hoverActive ? interpAtHour(data.hourlyCloud, hoverHour as number) : null;
-    const prodW       = hoverActive ? interpAtHour(data.hourlyProd,  hoverHour as number) : null;
-    const battW       = hoverActive ? interpAtHour(data.hourlyBatt,  hoverHour as number) : null;
+    //Chips read DIRECTLY from the Home Assistant raw history (and Open-Meteo for cloud / irradiance)
+    //when the cursor is parked, never from the unified data source. The store is honest about gaps
+    //(linearly interpolated between real samples), but the chip is an entity readout and must follow
+    //the sensor itself: at instant t the chip shows what HA recorded at t, no store smoothing layer
+    //in between. The store still drives the curve geometry on the dial, the chip is a separate path.
+    const hoverMs     = hoverActive ? data.dayStartMs + (hoverHour as number) * HOUR_MS : 0;
+    const irrW        = hoverActive ? chipScrubWeather(host, 'irradiance', hoverMs) : null;
+    const cloudP      = hoverActive ? chipScrubWeather(host, 'cloud',      hoverMs) : null;
+    const prodW       = hoverActive ? chipScrubProductionW(host, hoverMs)           : null;
+    const battW       = hoverActive ? chipScrubBatteryW(host,    hoverMs)           : null;
     const t           = pickTranslations(host.hass?.language);
 
     const irrLabel   = t.detail.radialIrradianceLabel ?? 'Irradiance';
@@ -1241,10 +1295,13 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     const hourlyProdPastOnly = data.hourlyProd.map((v, i) => (i < pastEndBucket ? v : null));
     //Hover-or-daily values for the two mini-cards. Production reads as the day's total kWh by default,
     //flips to the hovered hour's instantaneous W while the cursor is parked. Forecast follows the same
-    //recipe against the pv-arrays modelled curve.
+    //recipe against the pv-arrays modelled curve. The production chip on hover goes to HA-direct
+    //(same contract as the 4-badge strip above); the forecast chip stays on the modelled series since
+    //it has no Home Assistant source to read from.
     const prodDailyKwh     = dailyEnergyKwh(hourlyProdPastOnly);
     const forecastDailyKwh = dailyEnergyKwh(data.hourlyForecast);
-    const prodW            = hoverActive ? interpAtHour(hourlyProdPastOnly,  hoverHour as number) : null;
+    const hoverMs          = hoverActive ? data.dayStartMs + (hoverHour as number) * HOUR_MS : 0;
+    const prodW            = hoverActive ? chipScrubProductionW(host, hoverMs)              : null;
     const forecastW        = hoverActive ? interpAtHour(data.hourlyForecast, hoverHour as number) : null;
     const prodValue = hoverActive
         ? (prodW === null     ? '—' : formatW(host.hass, prodW))

@@ -33,6 +33,24 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Dashboard chips at scrub: HA-direct readout, never store-derived (#210)
+
+When the user parks the cursor on the radial dial, the four chips above it (Irradiance, Cloud,
+Production, Battery) now read from Home Assistant directly at the cursor instant, never from the
+unified data source. The store still drives the curve geometry on the dial, but a chip is an
+entity readout and the user expects it to track the sensor: at instant `t` the chip shows what HA
+recorded at `t`, with no interpolation layer in between.
+
+Reader paths:
+- Production: same path the timeline tooltip already used (`pvValueAtTime` on `_pvHistory` raw +
+  `_pvCalibStats` LTS), forecast fallback rejected so the chip never blends a modelled W.
+- Battery: linear interp on `_batteryPowerHistory` raw.
+- Cloud / Irradiance: linear interp on the Open-Meteo `_chartSeries`.
+
+Future instants and gaps outside the raw sources resolve to `—` (no synthetic value). The bottom
+mini-card pair (`renderCardChartBlock`) follows the same rule for its Production chip; the
+Forecast chip in that pair has no HA source so it keeps reading the modelled series.
+
 ### Data source rework, two cadence knobs, every graph plugs into it (#210)
 
 The previous beta filled past production gaps with the forecast model so the radial dial curve

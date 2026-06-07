@@ -313,7 +313,7 @@ export function pvSourceColor(index: number, total: number): string
 }
 
 
-function pvValueAtTime(
+export function pvValueAtTime(
     host: ChartHost,
     targetMs: number,
     //Optional per-source history override. When supplied, the function reads from this series instead of the
@@ -770,7 +770,7 @@ export interface ChartHost
 //Used by the hover tooltip + dot positions across the irradiance,
 //cloud and PV curves so all three readouts share the same
 //interpolation contract.
-function interpAt(times: Date[], values: number[], targetMs: number): number
+export function interpAt(times: Date[], values: number[], targetMs: number): number
 {
     const n = Math.min(times.length, values.length);
     if (n === 0)
