@@ -66,13 +66,15 @@ const R_HOUR_LABEL             = (R_DIAL_INNER + R_DIAL_OUTER) / 2;
 //leader: a sun-coloured dashed line radiating outward from the sun toward its target.
 const R_CURSOR_INNER           = R_SUN_REF;
 const R_CURSOR_OUTER           = R_DIAL_OUTER;
-//Subdivision ticks live only near the inner edge of the annulus now that the digits occupy its centre
-//and the outer edge needs to stay clean (the hour digits already mark the hour positions, no
-//redundant tick required). The half + quarter ticks stay so the eye can still snap to 15 min
-//granularity below the digits.
+//Subdivision ticks. Painted near the INNER edge of the annulus, the digit at the centre keeps the eye
+//on the hour while the ticks fan out below toward the inner border for the 15 min granularity. Three
+//lengths so the eye snaps to the hour ticks first (bold + longest), then the half, then the quarter
+//marks. Hour ticks are visibly longer than the rest so the user reads the hour anchor without
+//confusing it with a quarter mark right next to a digit.
 const R_TICK_INNER_END         = R_DIAL_INNER + 1;
-const R_TICK_INNER_HALF        = R_DIAL_INNER + 3.5;
-const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2;
+const R_TICK_INNER_HOUR        = R_DIAL_INNER + 7;
+const R_TICK_INNER_HALF        = R_DIAL_INNER + 4;
+const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2.5;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
@@ -915,23 +917,23 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         }
     }
 
-    //Sub-hour subdivision ticks. 96 positions around the dial (15 min step). Now that the hour digits
-    //live inside the annulus the hour ticks are redundant with the digits themselves, only the half +
-    //quarter ticks render so the dial keeps a sense of 15 min granularity below the digits without
-    //fighting them. All ticks live near the INNER edge of the annulus, the outer edge stays clean to
-    //give the digits clearance.
+    //Sub-hour subdivision ticks. 96 positions around the dial (15 min step). Three lengths so the eye
+    //snaps to the hour ticks first (longest + bolder), then the halves, then the quarters. All ticks
+    //live near the INNER edge of the annulus, the outer edge stays clean to give the digits clearance.
+    //Hour ticks sit just below the digit at the same angular position, the digit + tick read as one
+    //paired hour anchor.
     const tickLines: TemplateResult[] = [];
     for (let q = 0; q < 96; q++)
     {
-        const isHour = q % 4 === 0;
-        if (isHour)
-        {
-            continue;
-        }
         const hour   = q / 4;
-        const isHalf = q % 2 === 0;
-        const innerInnerR = isHalf ? R_TICK_INNER_HALF : R_TICK_INNER_QUARTER;
-        const cls = isHalf ? 'dash-radial-tick-half' : 'dash-radial-tick-quarter';
+        const isHour = q % 4 === 0;
+        const isHalf = !isHour && q % 2 === 0;
+        const innerInnerR = isHour ? R_TICK_INNER_HOUR
+                          : isHalf ? R_TICK_INNER_HALF
+                          :          R_TICK_INNER_QUARTER;
+        const cls = isHour ? 'dash-radial-tick-hour'
+                  : isHalf ? 'dash-radial-tick-half'
+                  :          'dash-radial-tick-quarter';
         const [ix1, iy1] = polarPt(hour, R_TICK_INNER_END);
         const [ix2, iy2] = polarPt(hour, innerInnerR);
         tickLines.push(svg`<line class="${cls}" x1="${ix1.toFixed(2)}" y1="${iy1.toFixed(2)}" x2="${ix2.toFixed(2)}" y2="${iy2.toFixed(2)}"/>`);
@@ -966,16 +968,27 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     //hover would otherwise rebuild the whole template; here we set the host's hover hour and call
     //requestUpdate so Lit batches the render at the next microtask, which is fast enough at the
     //single-svg granularity to feel live.
-    const onPointerMove = isFront ? (e: PointerEvent) =>
+    const setHoverFromEvent = (e: PointerEvent): void =>
     {
         const svgEl = (e.currentTarget as SVGSVGElement | null);
         if (!svgEl) { return; }
         const hf = pointerToHourFraction(svgEl, e.clientX, e.clientY);
         host._dashRadialHoverHour = hf;
         host.requestUpdate();
-    } : undefined;
-    const onPointerLeave = isFront ? () =>
+    };
+    const onPointerMove = isFront ? (e: PointerEvent) => setHoverFromEvent(e) : undefined;
+    //Touch + pen taps fire pointerdown without a prior pointermove, on a phone the user needs the
+    //cursor to land where the finger tapped without having to drag. Mouse pointerdown also lands
+    //here and behaves the same (clicking inside the dial parks the hover ray at that hour), which
+    //is a useful affordance even on desktop.
+    const onPointerDown = isFront ? (e: PointerEvent) => setHoverFromEvent(e) : undefined;
+    //pointerleave on touch fires the instant the finger lifts off the screen, which would clear the
+    //hover the user just set by tapping. Gate the clear on mouse pointers only so a touch tap leaves
+    //the cursor in place after the finger leaves the surface. Mouse drift off the dial keeps clearing
+    //the cursor as before.
+    const onPointerLeave = isFront ? (e: PointerEvent) =>
     {
+        if (e.pointerType !== 'mouse') { return; }
         host._dashRadialHoverHour = null;
         host.requestUpdate();
     } : undefined;
@@ -1035,6 +1048,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 class="dash-radial-svg"
                 viewBox="0 0 ${VIEWBOX} ${VIEWBOX}"
                 preserveAspectRatio="xMidYMid meet"
+                @pointerdown="${onPointerDown}"
                 @pointermove="${onPointerMove}"
                 @pointerleave="${onPointerLeave}"
             >
@@ -1174,7 +1188,14 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      5-5 dash, opacity 0.55) so the rays read as a paired set, the now cursor
                      anchors the current wall-clock hour and the hover cursor tracks the pointer
                      when present. -->
+                <!-- Cursor rays. Each ray paints TWO stacked paths: an outline path FIRST that
+                     reads in the theme's primary text colour (white on dark theme, black on light) at
+                     low alpha, then the sun-coloured dashed stroke on top. The outline halo gives the
+                     dashed sun ray a guaranteed contrast against any data fill underneath without
+                     drowning out the sun colour itself. -->
+                ${nowCursor ? svg`<path class="dash-radial-cursor-outline dash-radial-cursor-outline-now" d="${nowCursor}"/>` : nothing}
                 ${nowCursor ? svg`<path class="dash-radial-cursor-hover dash-radial-cursor-now" d="${nowCursor}"/>` : nothing}
+                ${hoverCursor ? svg`<path class="dash-radial-cursor-outline" d="${hoverCursor}"/>` : nothing}
                 ${hoverCursor ? svg`<path class="dash-radial-cursor-hover" d="${hoverCursor}"/>` : nothing}
 
                 <!-- Hover dots: one per data ring at the hover-hour value. Top layer so they are

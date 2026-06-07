@@ -520,6 +520,36 @@ export const heliosCardStyles = css`
             page jumping around. */
         touch-action: none;
     }
+    /*  Light-theme shadow override for the CoverFlow stack. The default rules above use heavy
+        rgba(0, 0, 0, 0.22-0.35) shadows that sit well on a dark theme card background but read as a
+        floating 3D layer when the active HA theme is light, the look does not match the rest of the
+        HA frontend whose default ha-card shadow is much softer. Re-bind the shadow on light themes to
+        the same low-alpha pattern HA uses on its own cards so the CoverFlow stack reads as part of
+        the surrounding dashboard, not as a separate elevated panel. */
+    ha-card:not(.theme-dark) .dash-cf-card
+    {
+        box-shadow:
+            0 1px 2px rgba(0, 0, 0, 0.06),
+            0 4px 12px rgba(0, 0, 0, 0.06);
+    }
+    ha-card:not(.theme-dark) .dash-cf-card-front
+    {
+        box-shadow:
+            0 2px 6px rgba(0, 0, 0, 0.10),
+            0 8px 20px rgba(0, 0, 0, 0.08);
+    }
+    /*  Inner mini-cards on light theme: drop the global Material-elevation drop shadow inherited
+        from the Helios outer ha-card rule. On a light-theme card background the Material shadow
+        reads as a heavy floating offset that doesn't match the modern flat-card look most HA
+        frontend themes go for (Mushroom, the HA default, the community flat themes), the user
+        explicitly flagged the 3D look as off-brand. The 1 px hairline border the outer rule
+        already paints keeps the cards visibly delimited without the shadow. */
+    ha-card:not(.theme-dark) ha-card.dash-cf-card-bandeau,
+    ha-card:not(.theme-dark) ha-card.dash-radial-badge,
+    ha-card:not(.theme-dark) ha-card.dash-radial-wrap
+    {
+        box-shadow: none;
+    }
     /*  Bottom-fade mask removed. mask-image forces the card into a compositor layer which the browser
         then rasterises, the side effect was a subtle blur on the card content. The user can still scroll
         the card via touch / wheel; the hint that there is more content below is now implicit. */
@@ -1198,15 +1228,15 @@ export const heliosCardStyles = css`
         stroke-width: 1.4;
     }
 
-    /*  Thin annulus border lines. Drawn at each ring's inner + outer edges so a curve collapsing
-        to the inner radius (a 0-value hour) reads as touching the boundary rather than spilling
-        across it. Opacity bumped from 22 % to 40 % so the lines have enough contrast against the
-        card background in BOTH dark + light themes, the previous opacity made the borders
-        invisible in light themes and just barely visible in dark ones. */
+    /*  Thin annulus border lines. Drawn at each ring's inner + outer edges so the user reads each
+        ring as a clearly delimited band rather than a fuzzy gradient. Stroke in the HA frontend's
+        primary text colour at moderate opacity, the borders track the active theme (white-ish on a
+        dark theme, dark on a light theme) and stay visibly contoured against the card background
+        either way. */
     .dash-radial-ring-border
     {
-        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 40%, transparent);
-        stroke-width: 0.4;
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 70%, transparent);
+        stroke-width: 0.6;
     }
 
     /*  Night arc inside the dial annulus, from sunset clockwise through midnight to sunrise.
@@ -1237,7 +1267,22 @@ export const heliosCardStyles = css`
         stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
         stroke-width: 2.5;
         stroke-dasharray: 5 5;
-        stroke-opacity: 0.6;
+        stroke-opacity: 0.85;
+        stroke-linecap: round;
+        fill: none;
+        pointer-events: none;
+    }
+    /*  Outline halo painted UNDER the cursor stroke in the HA primary text colour. Same dasharray as
+        the sun-coloured stroke on top so the two align dash-for-dash, just 1.5 SVG units thicker so
+        the halo peeks out 0.75 unit on each edge of the lead, framing the sun colour against any
+        data fill underneath. Theme-aware via --primary-text-color (white on dark theme, black on
+        light theme) so the lead reads against both card backgrounds. */
+    .dash-radial-cursor-outline
+    {
+        stroke: var(--primary-text-color, #ffffff);
+        stroke-width: 4;
+        stroke-dasharray: 5 5;
+        stroke-opacity: 0.65;
         stroke-linecap: round;
         fill: none;
         pointer-events: none;
@@ -1249,7 +1294,12 @@ export const heliosCardStyles = css`
     .dash-radial-cursor-now
     {
         stroke-width: 3.5;
-        stroke-opacity: 0.95;
+        stroke-opacity: 1;
+    }
+    .dash-radial-cursor-outline-now
+    {
+        stroke-width: 5;
+        stroke-opacity: 0.8;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
