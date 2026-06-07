@@ -711,11 +711,17 @@ export const heliosCardStyles = css`
         space is left between the strips above and below it. */
     ha-card.dash-radial-wrap
     {
+        /*  Display: grid with one cell + place-items: center so the SVG and the HTML hour-labels
+            overlay (both grid-area: 1 / 1 below) share the EXACT same centring and sizing inside
+            the wrap. The previous flex parent + absolute-positioned hour-labels recipe drifted
+            apart in panel-view dashboards when max-height kicked in on the wider-than-tall
+            wrap, the SVG was flex-centred in the content box while the absolute overlay landed
+            on the padding box, the labels then sat slightly above the annulus they belonged to. */
         position: relative;
         flex: 1 1 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: grid;
+        grid-template: 1fr / 1fr;
+        place-items: center;
         padding: 6px;
         min-height: 0;
         height: auto;
@@ -866,6 +872,18 @@ export const heliosCardStyles = css`
         align-items: center;
         line-height: 0;
     }
+    /*  Hide the back-to-live button on pointing devices that have a real hover (= mouse, trackpad,
+        stylus on a desktop). On those the pointerleave handler already clears the hover cursor when
+        the pointer drifts off the dial, the button is redundant chrome. Keep the button visible on
+        coarse-pointer / no-hover devices (phones, tablets) where the tap-to-set affordance has no
+        symmetric "tap-off-to-clear" gesture. */
+    @media (hover: hover) and (pointer: fine)
+    {
+        .dash-radial-back-to-live
+        {
+            display: none;
+        }
+    }
     /*  HA-frontend tile-card-style badge: ha-card host (chrome from HA frontend) with a circular
         tinted icon chip on the left and a two-line text stack on the right (entity LABEL on top,
         live VALUE below). Padding + gap mirror the HA tile-card the user shared (Lave-vaisselle /
@@ -978,7 +996,10 @@ export const heliosCardStyles = css`
             without crowding the side gutters. Height caps at the available space, the aspect ratio
             stays 1 / 1 so the dial is always a true circle. touch-action: none disables the
             browser's default scroll / pan / zoom gestures inside the dial so a finger drag for the
-            hover cursor on mobile no longer scrolls the page underneath. */
+            hover cursor on mobile no longer scrolls the page underneath. grid-area pins the SVG to
+            the same cell as the HTML hour-labels overlay so the two layers can share centring +
+            sizing inside the wrap. */
+        grid-area:  1 / 1;
         width:      min(100%, 92%);
         height:     auto;
         max-height: 100%;
@@ -1006,12 +1027,14 @@ export const heliosCardStyles = css`
     {
         vector-effect: none;
     }
-    /*  Hover dots. Plain coloured disc per curve, thin contrasting stroke so the dot stays legible
-        on both the filled area and the dashed forecast outline. */
+    /*  Hover dots. Plain coloured disc per curve, thin primary-text-color stroke so the dot reads as
+        a circled marker on both themes (the previous card-background stroke vanished against the
+        track in the same colour family). Same colour token as the ring borders + the sun-rim outer
+        contour so every theme-aware delimiter on the dial agrees. */
     .dash-radial-dot
     {
         pointer-events: none;
-        stroke: var(--ha-card-background, var(--card-background-color, #1c1c1c));
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 70%, transparent);
         stroke-width: 0.6;
     }
     .dash-radial-dot-cloud         { fill: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.75)) 95%, transparent); }
@@ -1188,13 +1211,15 @@ export const heliosCardStyles = css`
         orientation the SVG used. */
     .dash-radial-hour-labels
     {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: min(100%, 92%);
+        /*  Same grid cell + same sizing recipe as .dash-radial-svg so the HTML labels overlay
+            ALWAYS lines up with the SVG annulus, regardless of how panel-view vs section-view
+            dashboards reshape the wrap. position: relative is required so the labels inside the
+            container can absolute-position by percentage off this square. */
+        grid-area:  1 / 1;
+        position:   relative;
+        width:      min(100%, 92%);
         aspect-ratio: 1 / 1;
         max-height: 100%;
-        transform: translate(-50%, -50%);
         pointer-events: none;
         z-index: 2;
     }
@@ -1671,13 +1696,12 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
 
-    /*  Per-curve hover dot, anchored at the interpolated Y of
-        each series. Stroked in card colour so the dot stays
-        legible whether it lands on a filled area or on the
-        background.                                                  */
+    /*  Per-curve hover dot, anchored at the interpolated Y of each series. Stroked in the HA
+        primary text colour so the dot reads as a circled marker on both themes (white on dark,
+        black on light), matching the radial dial's hover dots. */
     .hc-hover-dot
     {
-        stroke: var(--card-background-color, #ffffff);
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 70%, transparent);
         stroke-width: 1;
         vector-effect: non-scaling-stroke;
         pointer-events: none;
@@ -1697,7 +1721,7 @@ export const heliosCardStyles = css`
         width: 9px;
         height: 9px;
         border-radius: 50%;
-        border: 1.5px solid var(--card-background-color, #ffffff);
+        border: 1.5px solid color-mix(in srgb, var(--primary-text-color, #ffffff) 70%, transparent);
         box-sizing: border-box;
         transform: translate(-50%, -50%);
         pointer-events: none;

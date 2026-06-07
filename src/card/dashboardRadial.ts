@@ -1085,7 +1085,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 @pointerdown="${(e: Event) => e.stopPropagation()}"
                 aria-label="${backToLiveLabel}"
                 title="${backToLiveLabel}"
-            ><ha-icon icon="mdi:clock-fast"></ha-icon><span>${backToLiveLabel}</span></button>` : nothing}
+            ><ha-icon icon="mdi:clock-fast"></ha-icon><span>Live</span></button>` : nothing}
             ${sunriseText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunrise"><ha-icon icon="mdi:weather-sunset-up"></ha-icon><span>${sunriseText}</span></span>` : nothing}
             ${sunsetText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunset"><ha-icon icon="mdi:weather-sunset-down"></ha-icon><span>${sunsetText}</span></span>` : nothing}
             <div class="dash-radial-hour-labels" aria-hidden="true">${hourLabelsHtml}</div>
@@ -1196,6 +1196,10 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                     <animate attributeName="r" from="0" to="${sunFillR.toFixed(2)}" dur="${ANIM_DUR}" begin="0s" fill="remove"/>
                 </circle>
                 <circle class="dash-radial-sun-rim" cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF}" fill="none"/>
+                <!-- Theme-text outline circle just outside the irradiance reference rim. Same colour
+                     family as the data-ring borders so the sun-disc edge reads as a delimited
+                     boundary instead of bleeding into the cloud + irradiance fills around it. -->
+                <circle class="dash-radial-ring-border" cx="${CENTER}" cy="${CENTER}" r="${R_SUN_REF + 0.4}" fill="none"/>
 
                 <!-- Sunrise / sunset bars: a sun-coloured radial stroke spanning the full width
                      of the dial annulus at the exact hour of sun crossing. Drawn AFTER the night
