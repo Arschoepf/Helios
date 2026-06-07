@@ -33,6 +33,18 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Dashboard graph styling aligned on the timeline chart (#210)
+
+The mini graph at the bottom of the radial dashboard card now shares the timeline PV chart's
+visual recipe so the two surfaces read as one composed instrument:
+- Curve and fill colour come from the user-configurable `pv-color` card option (instead of the
+  `--energy-solar-color` theme token), so every chart in the card honours the same setting.
+- Production area drops from 35 % to 25 % alpha to match the timeline area.
+- Forecast curve uses the same theme-aware lerp (pvColor blended toward black on light themes,
+  toward white on dark) as the timeline.
+- Night-zone hatch shrinks from 8 px / 1.5 px stroke to 6 px / 1.5 px stroke at 45 deg with the
+  same rgba(0,0,0,0.12) light / rgba(255,255,255,0.18) dark alphas the timeline uses.
+
 ### Dashboard chips at scrub: HA-direct readout, never store-derived (#210)
 
 When the user parks the cursor on the radial dial, the four chips above it (Irradiance, Cloud,

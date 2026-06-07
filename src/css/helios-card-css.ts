@@ -801,11 +801,18 @@ export const heliosCardStyles = css`
         height: 100%;
         touch-action: none;
     }
+    /*  Night-zone hatch on the dashboard graph SVG. Stroke colour and density match the timeline
+        chart's .hc-night-zone repeating-linear-gradient recipe: 1.5 px stroke / 6 px period at 45
+        deg, rgba(0, 0, 0, 0.12) on light, rgba(255, 255, 255, 0.18) on dark. Stays a thin layer of
+        background furniture, the underlying curves stay legible. */
     .dash-graph-night-hatch-line
     {
-        stroke: var(--secondary-text-color, rgba(0, 0, 0, 0.5));
+        stroke: rgba(0, 0, 0, 0.12);
         stroke-width: 1.5;
-        stroke-opacity: 0.18;
+    }
+    ha-card.theme-dark .dash-graph-night-hatch-line
+    {
+        stroke: rgba(255, 255, 255, 0.18);
     }
     .dash-graph-day-separator
     {
@@ -815,15 +822,16 @@ export const heliosCardStyles = css`
         vector-effect: non-scaling-stroke;
         fill: none;
     }
+    /*  Production area + line + forecast line: colour comes from the inline fill / stroke attribute
+        set in renderCardChartBlock so the dashboard chart reads in the same user-configured pvColor
+        as the timeline chart. Only the geometric properties live in CSS here. */
     .dash-graph-prod-area
     {
-        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 35%, transparent);
         stroke: none;
     }
     .dash-graph-prod-line
     {
         fill: none;
-        stroke: var(--energy-solar-color, #ff9800);
         stroke-width: 2;
         stroke-linejoin: round;
         stroke-linecap: round;
@@ -832,7 +840,6 @@ export const heliosCardStyles = css`
     .dash-graph-forecast-line
     {
         fill: none;
-        stroke: var(--energy-solar-color, #ff9800);
         stroke-width: 1.5;
         stroke-dasharray: 4 3;
         stroke-linecap: round;

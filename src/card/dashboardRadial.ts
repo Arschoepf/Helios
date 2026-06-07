@@ -31,6 +31,8 @@ import { pickTranslations } from '../i18n';
 import { sliceForDay, DISPLAY_BUCKETS_PER_HOUR } from './unifiedStore';
 import { pvValueAtTime, interpAt, type ChartHost } from './charts';
 import { pvNormalizeToWatts } from './pv';
+import { cfgHex, lerpHexToward } from './format';
+import { DEFAULT_PV_COLOR_HEX } from '../helios-config';
 
 
 //Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
@@ -1425,6 +1427,17 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     const sunset    = data.sunRiseSet.sunset;
     const patternId = `dash-graph-night-${cardOffset}`;
 
+    //Colours aligned on the timeline chart so the two surfaces read as one composed instrument:
+    //pvColor comes from the user-configurable card config (DEFAULT_PV_COLOR_HEX fallback) and applies
+    //to both the production area + the production line; the dashed forecast curve uses the same
+    //theme-aware lerp the timeline does (pvColor blended toward black on light theme, toward white
+    //on dark theme) so the forecast line stays readable on either background.
+    const pvColor          = cfgHex(host.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
+    const isDarkTheme      = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
+    const predictedPvColor = isDarkTheme
+        ? lerpHexToward(pvColor, '#ffffff', 0.55)
+        : lerpHexToward(pvColor, '#000000', 0.35);
+
     //Hover cursor + dots. The dots are HTML overlays positioned by percent of the chart bounding box
     //so they stay perfectly round (the SVG itself stretches via preserveAspectRatio: none, embedded
     //SVG circles would render as ovals on the chart's non-square aspect ratio).
@@ -1489,11 +1502,12 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                 @pointerleave="${onPointerLeave}"
             >
                 <defs>
-                    <!-- Diagonal hatch pattern painted into the night zones. Stroke colour uses the
-                         theme secondary text token so the hatching reads as background furniture on
-                         both light and dark themes. -->
-                    <pattern id="${patternId}" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
-                        <line x1="0" y1="0" x2="0" y2="8" class="dash-graph-night-hatch-line"/>
+                    <!-- Diagonal hatch pattern painted into the night zones. Same recipe as the
+                         timeline night-zone overlay (6 px period, 1.5 px stroke, 45 deg) so the two
+                         surfaces read as the same instrument; colour goes through the theme-aware
+                         CSS class so light + dark themes share a consistent alpha. -->
+                    <pattern id="${patternId}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="6" class="dash-graph-night-hatch-line"/>
                     </pattern>
                 </defs>
                 ${sunrise !== null
@@ -1510,16 +1524,17 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                     : nothing}
                 <!-- Production fill: closed shape from the curve down to the chart bottom, no stroke
                      so the visual reads as a continuous wash from the curve to the card edge with no
-                     separator line at y = BASELINE_Y. -->
-                <path class="dash-graph-prod-area" d="${prodAreaPath}">
+                     separator line at y = BASELINE_Y. Colour + opacity match the timeline PV chart
+                     (pvColor at 0.25 alpha) so the two surfaces read uniformly. -->
+                <path class="dash-graph-prod-area" d="${prodAreaPath}" fill="${pvColor}" fill-opacity="0.25">
                     <animate attributeName="d" from="${fromProdArea}" to="${prodAreaPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>
                 <!-- Production curve: open path (curve only, no verticals + no bottom), traces the
                      edge of the area fill as a solid stroke without painting the surrounding shape. -->
-                <path class="dash-graph-prod-line" d="${prodLinePath}">
+                <path class="dash-graph-prod-line" d="${prodLinePath}" stroke="${pvColor}">
                     <animate attributeName="d" from="${fromProdLine}" to="${prodLinePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>
-                <path class="dash-graph-forecast-line" d="${forecastLinePath}">
+                <path class="dash-graph-forecast-line" d="${forecastLinePath}" stroke="${predictedPvColor}">
                     <animate attributeName="d" from="${fromForecastLine}" to="${forecastLinePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>
                 ${hoverActive
