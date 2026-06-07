@@ -220,7 +220,7 @@ function buildCloud(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: nu
 //actual reads from the LTS calib stats first (cumulative kWh slope OR direct W samples depending on
 //the entity unit), falls back to the per-minute raw history for the most recent slice that LTS hasn't
 //caught up to yet.
-function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number): (number | null)[]
+function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number, forecast: ReadonlyArray<number | null>): (number | null)[]
 {
     const out = new Array<number | null>(STORE_BUCKETS).fill(null);
     const sums   = new Array<number>(STORE_BUCKETS).fill(0);
@@ -277,12 +277,15 @@ function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndM
     {
         if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
     }
-    //Fill past buckets without data with 0, so the day-total kWh and the production curve treat "no
-    //recorder data at that time" as "no production". Buckets in the future stay null.
+    //Past bucket without a real sample: borrow the modelled W from the forecast at the same time, so
+    //the production curve reads as a continuous day instead of dropping to zero between LTS samples.
+    //If the forecast itself has no value (before sunrise, after sunset, no weather series), fall back
+    //to 0 as the meaningful "no production happening here" value. Future buckets stay null, the
+    //radial / timeline forecast curve owns the future-half of the screen.
     for (let h = 0; h < STORE_BUCKETS; h++)
     {
         const mid = bucketMidMs(storeStartMs, h);
-        if (out[h] === null && mid < nowMs) { out[h] = 0; }
+        if (out[h] === null && mid < nowMs) { out[h] = forecast[h] ?? 0; }
     }
     return out;
 }
@@ -471,8 +474,13 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const nowMs        = Date.now();
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs);
     const cloud        = buildCloud(host, storeStartMs, storeEndMs);
-    const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs);
+    //Forecast is computed BEFORE production so the production builder can borrow the modelled W at any
+    //past bucket where the recorder didn't land a sample. The LTS calib stats publish 1 sample / hour
+    //while the store packs 4 buckets / hour, so without that fallback 3 buckets out of 4 in the past
+    //would read as a hard zero and the radial dial production fill would draw as a sawtooth between
+    //samples instead of as a continuous day curve.
     const forecast     = buildForecast(host, storeStartMs, storeEndMs, cloud);
+    const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, forecast);
     const battery      = buildBattery(host, storeStartMs, storeEndMs, nowMs);
     const batterySoc   = buildBatterySoc(host, storeStartMs, nowMs);
     const gridImport   = buildGridSlope(host._gridImportSamples, host._gridImportUnits, storeStartMs, storeEndMs, nowMs);

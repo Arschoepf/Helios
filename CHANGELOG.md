@@ -33,6 +33,16 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Hot-fix , production curve sawtooth on the radial dial (#210)
+
+Beta.70 shipped the unified store with a `buildProduction` that filled every past bucket without a
+recorder sample with 0. With `_pvCalibStats` publishing 1 LTS row per hour and the store packing
+4 buckets per hour, that meant 3 buckets out of 4 in the past read as 0 between samples and the
+radial dial's production fill drew as a sawtooth instead of a continuous day curve. The fix borrows
+the modelled forecast W at the same bucket as the past-null fallback (still 0 when the forecast is
+itself null, e.g. before sunrise or after sunset), so the production fill reads as a continuous
+curve again. Same behaviour the pre-refactor `computeHourlyProduction` had.
+
 ### Unified 5-day data store, radial dial migrated (#210)
 
 The dashboard had been growing every per-time signal (irradiance, cloud cover, production, forecast,
