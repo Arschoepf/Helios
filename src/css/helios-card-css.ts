@@ -826,6 +826,46 @@ export const heliosCardStyles = css`
     {
         color: var(--helios-sun-color, var(--amber-color, #f59e0b));
     }
+    /*  "Back to live" button sits in the TOP-RIGHT corner of the radial card, mirroring the
+        top-left clock overlay so the four corners read as a paired set: clock = the hovered or
+        live time, back-to-live = reset to live (only visible while a hover cursor is parked),
+        sunrise + sunset = horizon crossings on the bottom row. Typography matches the clock chip
+        so the visual weight stays balanced across all four overlays. */
+    .dash-radial-back-to-live
+    {
+        position: absolute;
+        top: 6px;
+        right: 10px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-family: var(--ha-font-family-body, inherit);
+        font-size: var(--ha-font-size-s, 12px);
+        font-weight: var(--ha-font-weight-medium, 500);
+        font-variant-numeric: tabular-nums;
+        color: var(--primary-text-color, #ffffff);
+        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 12%, transparent);
+        border: 1px solid color-mix(in srgb, var(--primary-text-color, #ffffff) 25%, transparent);
+        border-radius: 999px;
+        padding: 4px 10px 4px 8px;
+        cursor: pointer;
+        line-height: 1;
+        z-index: 3;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+    }
+    .dash-radial-back-to-live:hover
+    {
+        background: color-mix(in srgb, var(--primary-text-color, #ffffff) 18%, transparent);
+        border-color: color-mix(in srgb, var(--primary-text-color, #ffffff) 40%, transparent);
+    }
+    .dash-radial-back-to-live ha-icon
+    {
+        --mdc-icon-size: 14px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+        line-height: 0;
+    }
     /*  HA-frontend tile-card-style badge: ha-card host (chrome from HA frontend) with a circular
         tinted icon chip on the left and a two-line text stack on the right (entity LABEL on top,
         live VALUE below). Padding + gap mirror the HA tile-card the user shared (Lave-vaisselle /
@@ -1264,42 +1304,25 @@ export const heliosCardStyles = css`
         reads as a radial ray from the sun across the data rings out to the dial perimeter. */
     .dash-radial-cursor-hover
     {
-        stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
-        stroke-width: 2.5;
-        stroke-opacity: 0.95;
-        stroke-linecap: round;
-        fill: none;
-        pointer-events: none;
-    }
-    /*  Outline halo painted UNDER the cursor stroke in the HA primary text colour. Solid stroke just
-        1.5 SVG units thicker than the sun-coloured lead on top so the halo peeks out 0.75 unit on
-        each edge of the lead, framing the sun colour against any data fill underneath. Theme-aware
-        via --primary-text-color (white on dark theme, black on light theme) so the lead reads
-        against both card backgrounds. The cursor strokes are intentionally NOT dashed: a dashed lead
-        wrapped by a dashed outline reads as visually smudged when the outline gaps don't perfectly
-        align with the lead gaps at every zoom level. */
-    .dash-radial-cursor-outline
-    {
+        /*  Thin solid line in the HA frontend's primary text colour, theme-aware (white on dark
+            themes, black on light) so it reads against both card backgrounds without needing a
+            secondary outline halo. Hover variant stays subtle, the now variant below pushes the
+            stroke + opacity up. */
         stroke: var(--primary-text-color, #ffffff);
-        stroke-width: 4;
-        stroke-opacity: 0.75;
+        stroke-width: 1.4;
+        stroke-opacity: 0.55;
         stroke-linecap: round;
         fill: none;
         pointer-events: none;
     }
     /*  The "now" cursor on today's card carries more weight than a passing hover ray, it anchors the
-        current wall-clock hour and the user needs to spot it instantly at a glance. Same sun colour
+        current wall-clock hour and the user needs to spot it instantly at a glance. Same colour
         family as the hover variant, just a bolder stroke and higher opacity so the live cursor reads
         as the primary pointer and the hover variant as the secondary one. */
     .dash-radial-cursor-now
     {
-        stroke-width: 3.5;
-        stroke-opacity: 1;
-    }
-    .dash-radial-cursor-outline-now
-    {
-        stroke-width: 5;
-        stroke-opacity: 0.8;
+        stroke-width: 2;
+        stroke-opacity: 0.95;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous

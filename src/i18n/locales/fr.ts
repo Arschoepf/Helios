@@ -27,6 +27,7 @@ export const fr: Translations = {
         radialBatteryLabel:    'Batterie',
         radialCloudLabel:      'Nuages',
         radialIrradianceLabel: 'Irradiance',
+        radialBackToLive:      'Retour au direct',
     },
 
     editor:

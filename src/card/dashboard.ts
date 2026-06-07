@@ -474,6 +474,11 @@ export function navigateDashDay(host: DashboardHost, nextOffset: number): void
         return;
     }
     host._dashDayOffset = next;
+    //Drop the hover hour on every card change. Without this, a cursor parked on the previous day's
+    //radial would bleed onto the next card and read as "this hour" until the user moves the pointer
+    //again, which is especially confusing on touch where there's no implicit pointermove to clear
+    //the stale hover.
+    host._dashRadialHoverHour = null;
     (host as unknown as { requestUpdate(): void }).requestUpdate();
 }
 

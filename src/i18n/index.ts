@@ -47,6 +47,10 @@ export interface Translations
         radialBatteryLabel?:    string; //'Battery'
         radialCloudLabel?:      string; //'Cloud'
         radialIrradianceLabel?: string; //'Irradiance'
+        //Aria label + visible text on the "back to live" button that appears in the top-right corner
+        //of the radial card while a hover cursor is parked on the dial. Tapping it clears the cursor
+        //and snaps the dial back to its live read-out.
+        radialBackToLive?:      string; //'Back to live'
     };
 
     editor:

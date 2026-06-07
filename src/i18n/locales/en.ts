@@ -30,6 +30,7 @@ export const en: Translations = {
         radialBatteryLabel:    'Battery',
         radialCloudLabel:      'Cloud',
         radialIrradianceLabel: 'Irradiance',
+        radialBackToLive:      'Back to live',
     },
 
     editor:

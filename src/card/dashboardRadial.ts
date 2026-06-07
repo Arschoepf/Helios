@@ -62,12 +62,11 @@ const R_DIAL_OUTER             = 192;
 //of the ring at any container size.
 const R_HOUR_LABEL             = (R_DIAL_INNER + R_DIAL_OUTER) / 2;
 //Hover cursor endpoints. Anchored at the outer edge of the irradiance reference rim (= sun disc) and
-//ending at the outer tip of the longest dial graduation (the hour tick) so the ray crosses every data
-//ring but stops short of the dial annulus's outer half + the digits, keeping the hour read-out fully
-//legible behind the cursor. The outer endpoint is bound directly to R_TICK_INNER_HOUR so any future
-//tweak to the hour-tick reach automatically rescales the cursor without a second edit.
+//ending at the inner border of the dial annulus, the ray crosses every data ring and the tick band
+//but stops short of the dial annulus + the hour digits, so the hour read-out stays fully legible
+//behind the cursor at every angle.
 const R_CURSOR_INNER           = R_SUN_REF;
-const R_CURSOR_OUTER           = R_DIAL_INNER + 7;
+const R_CURSOR_OUTER           = R_DIAL_INNER;
 //Subdivision ticks. Painted near the INNER edge of the annulus, the digit at the centre keeps the eye
 //on the hour while the ticks fan out below toward the inner border for the 15 min granularity. Three
 //lengths so the eye snaps to the hour ticks first (bold + longest), then the half, then the quarter
@@ -1060,9 +1059,33 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const sunriseText = sunRiseSet.sunrise !== null ? formatHoverClock(sunRiseSet.sunrise, host.hass) : '';
     const sunsetText  = sunRiseSet.sunset  !== null ? formatHoverClock(sunRiseSet.sunset,  host.hass) : '';
 
+    //"Back to live" button. Shown only on the front card when a hover hour is parked (the cursor on
+    //touch screens has no implicit "move away to clear" gesture, so a tap target is the only way out).
+    //Sits top-right, mirroring the top-left clock chip, bottom-left sunrise and bottom-right sunset
+    //overlays so the four corners read as a paired set. Clearing the hover and requesting an update
+    //here is enough, the next render naturally drops the cursor + hover dots and rolls the chip strip
+    //back to its live values.
+    const tDial            = pickTranslations(host.hass?.language);
+    const backToLiveLabel  = tDial.detail.radialBackToLive ?? 'Back to live';
+    const showBackToLive   = isFront && hoverActive;
+    const onBackToLiveClick = (e: Event): void =>
+    {
+        e.stopPropagation();
+        host._dashRadialHoverHour = null;
+        host.requestUpdate();
+    };
+
     return html`
         <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
             ${showHour ? html`<span class="dash-radial-hour-text"><ha-icon icon="mdi:clock-outline"></ha-icon><span>${hourText}</span></span>` : nothing}
+            ${showBackToLive ? html`<button
+                class="dash-radial-back-to-live"
+                type="button"
+                @click="${onBackToLiveClick}"
+                @pointerdown="${(e: Event) => e.stopPropagation()}"
+                aria-label="${backToLiveLabel}"
+                title="${backToLiveLabel}"
+            ><ha-icon icon="mdi:clock-fast"></ha-icon><span>${backToLiveLabel}</span></button>` : nothing}
             ${sunriseText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunrise"><ha-icon icon="mdi:weather-sunset-up"></ha-icon><span>${sunriseText}</span></span>` : nothing}
             ${sunsetText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunset"><ha-icon icon="mdi:weather-sunset-down"></ha-icon><span>${sunsetText}</span></span>` : nothing}
             <div class="dash-radial-hour-labels" aria-hidden="true">${hourLabelsHtml}</div>
@@ -1214,14 +1237,10 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      5-5 dash, opacity 0.55) so the rays read as a paired set, the now cursor
                      anchors the current wall-clock hour and the hover cursor tracks the pointer
                      when present. -->
-                <!-- Cursor rays. Each ray paints TWO stacked paths: an outline path FIRST that
-                     reads in the theme's primary text colour (white on dark theme, black on light) at
-                     low alpha, then the sun-coloured dashed stroke on top. The outline halo gives the
-                     dashed sun ray a guaranteed contrast against any data fill underneath without
-                     drowning out the sun colour itself. -->
-                ${nowCursor ? svg`<path class="dash-radial-cursor-outline dash-radial-cursor-outline-now" d="${nowCursor}"/>` : nothing}
+                <!-- Cursor rays. Thin solid lines in the HA primary text colour (white on dark
+                     theme, black on light), the now cursor at slightly higher stroke-width + opacity
+                     so it carries more weight than a passing hover ray. -->
                 ${nowCursor ? svg`<path class="dash-radial-cursor-hover dash-radial-cursor-now" d="${nowCursor}"/>` : nothing}
-                ${hoverCursor ? svg`<path class="dash-radial-cursor-outline" d="${hoverCursor}"/>` : nothing}
                 ${hoverCursor ? svg`<path class="dash-radial-cursor-hover" d="${hoverCursor}"/>` : nothing}
 
                 <!-- Hover dots: one per data ring at the hover-hour value. Top layer so they are
