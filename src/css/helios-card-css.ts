@@ -801,18 +801,37 @@ export const heliosCardStyles = css`
         height: 100%;
         touch-action: none;
     }
-    /*  Night-zone hatch on the dashboard graph SVG. Stroke colour and density match the timeline
-        chart's .hc-night-zone repeating-linear-gradient recipe: 1.5 px stroke / 6 px period at 45
-        deg, rgba(0, 0, 0, 0.12) on light, rgba(255, 255, 255, 0.18) on dark. Stays a thin layer of
-        background furniture, the underlying curves stay legible. */
-    .dash-graph-night-hatch-line
+    /*  Night-zone hatch overlay on the dashboard graph. Absolutely-positioned HTML divs sized via
+        percent of the chart card (left + width). The diagonal stripes live in CSS pixel space, NOT
+        in the SVG user-coordinate space, so the 45 deg angle stays honest regardless of the SVG
+        viewport stretch (the chart uses preserveAspectRatio="none" which would warp an SVG
+        pattern). Same recipe as .hc-night-zone in the timeline: 1.5 px stroke at 6 px period.
+        z-index sits above the SVG fill / line paths but below the hover cursor + dots (z-index 5).
+        pointer-events: none so hover stays on the SVG. */
+    .dash-graph-night-zone
     {
-        stroke: rgba(0, 0, 0, 0.12);
-        stroke-width: 1.5;
+        position: absolute;
+        top: 0;
+        bottom: 0;
+        pointer-events: none;
+        z-index: 3;
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(0, 0, 0, 0.12) 0,
+            rgba(0, 0, 0, 0.12) 1.5px,
+            transparent         1.5px,
+            transparent         6px
+        );
     }
-    ha-card.theme-dark .dash-graph-night-hatch-line
+    ha-card.theme-dark .dash-graph-night-zone
     {
-        stroke: rgba(255, 255, 255, 0.18);
+        background-image: repeating-linear-gradient(
+            45deg,
+            rgba(255, 255, 255, 0.18) 0,
+            rgba(255, 255, 255, 0.18) 1.5px,
+            transparent              1.5px,
+            transparent              6px
+        );
     }
     .dash-graph-day-separator
     {

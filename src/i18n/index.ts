@@ -84,6 +84,12 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
+        //Data display section: per-card knob that controls how dense the unified data source is
+        //(buckets per hour, 1-60). Single slider, one hint. Sits above the PV install section so
+        //the user sees the precision / cost knob before the install-level config.
+        dataDisplaySection:           string;
+        displayUpdateFrequency:       string;
+        displayUpdateFrequencyHelp:   string;
         //Single section for the user's PV install. Bundles the inverter cap, the per-row panel orientation, the inverter-cutoff
         //SoC guard and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy
         //dashboard equivalent.

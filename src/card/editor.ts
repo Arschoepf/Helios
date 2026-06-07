@@ -8,6 +8,9 @@ import
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_LIDAR_PRECISION,
     DEFAULT_SHADOW_OPACITY,
+    DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
+    MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
+    MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR,
 } from '../helios-config';
 import { pickTranslations, type Translations } from '../i18n';
 import { renderShadingMapSection } from './shadingMapView';
@@ -872,6 +875,25 @@ export class HeliosCardEditor extends LitElement
                     ${renderShadingMapSection({ hass: this.hass, onAfterChange: () => this.requestUpdate() })}
                 </details>
 
+                </details>
+
+                <details class="advanced-section" ?open="${this._openSection === 'dataDisplay'}" @toggle="${(e: Event) => this._onSectionToggle('dataDisplay', e)}">
+                    <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:chart-timeline-variant"></ha-icon>${t.editor.dataDisplaySection}</summary>
+                <label class="field">
+                    <span class="label">${t.editor.displayUpdateFrequency}</span>
+                    <div class="slider-row">
+                        <input
+                            type="range"
+                            min="${MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}"
+                            max="${MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR}"
+                            step="1"
+                            .value="${String(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR)}"
+                            @input="${(e: Event) => this._numSlider('display-update-frequency-per-hour', e)}"
+                        />
+                        <span class="slider-value">${this._fmtNum(Number(c['display-update-frequency-per-hour'] ?? DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR), 1)} / h</span>
+                    </div>
+                </label>
+                <div class="field-help">${t.editor.displayUpdateFrequencyHelp}</div>
                 </details>
 
                 <details class="advanced-section" ?open="${this._openSection === 'installation'}" @toggle="${(e: Event) => this._onSectionToggle('installation', e)}">

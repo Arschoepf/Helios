@@ -87,6 +87,13 @@ export interface HeliosConfig
     //pitch roofs, and any other install where panels don't all
     //face the same way.
     'pv-arrays'?:             unknown;
+    //Display update frequency, in buckets per hour. Controls both the storage cadence of the unified
+    //data source (production / cloud / irradiance / battery / grid) and the rendering cadence of every
+    //graph that reads from it (radial dial, dashboard chart, timeline today). Range 1-60. Default 4 =
+    //15 min slots. Higher values give more precise curves at the cost of CPU per rebuild + memory per
+    //series. Forecast curve is independent: it always runs at the weather sample rate (hourly), then
+    //gets interpolated into the storage buckets.
+    'display-update-frequency-per-hour'?: unknown;
     //Optional home-battery overlay. A single chip below the home shows the battery State-of-Charge (%) and the live
     //signed power draw (positive charging, negative discharging), mirroring the PV chip above the home. Battery
     //entities (SoC, power, per-bank sign inversion, multi-bank aggregation) are resolved exclusively from the HA
@@ -318,6 +325,29 @@ export const DISPLAY_FADE_DELTA_M = 50;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
+
+//Default and allowed range for the user-facing display update frequency (buckets per hour). 4 = a
+//bucket every 15 minutes, the sweet spot between visible curve precision and rebuild CPU cost. The
+//editor slider clamps to [1, 60] (1 = hourly, 60 = one per minute).
+export const DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR = 4;
+export const MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 1;
+export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 60;
+
+//Resolve the bucket cadence (buckets per hour) the data source and every graph reads from. Reads
+//the user-facing config key, clamps to the allowed range, falls back to the default for missing /
+//invalid values. Same helper used by the store builder + by every consumer that needs the cadence
+//(SVG path builders, chart aspect ratio, etc.) so the value reaches every surface from a single
+//source of truth.
+export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['display-update-frequency-per-hour'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    const r = Math.round(n);
+    if (r < MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    if (r > MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    return r;
+}
 
 
 //Shadow precision levels. Each level is a multiplier on the active provider's native cell pitch:

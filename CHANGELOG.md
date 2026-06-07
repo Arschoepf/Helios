@@ -33,6 +33,38 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Update frequency knob, hatch fix, faster grow animation (#210)
+
+**New editor section "Data display" (above PV install)**, containing a single slider:
+
+- "Update frequency" (1-60 per hour), default 4 = a value every 15 minutes. Drives both the data
+  source storage cadence and the rendering cadence of every graph that reads from it. Higher
+  values give more precise curves at the cost of CPU per rebuild + memory per series.
+
+The previous twin constants (`DATA_BUCKETS_PER_HOUR` + `DISPLAY_BUCKETS_PER_HOUR`) collapse into
+this single user-facing setting. `displayUpdateFrequencyPerHour(config)` reads + clamps the value
+from the user config; the unified store carries `bucketsPerHour / bucketsPerDay / bucketsTotal /
+stepMs` fields the read-side accessors consume, so the cadence flows from a single source through
+every consumer (radial dial, dashboard chart, timeline production curve).
+
+**Forecast cadence stays locked at the weather model's hourly rate.** No point computing the
+predicted W per minute when the cloud-cover input only refreshes once an hour, and the forecast
+loop is the heaviest pass in the build. `buildForecast` now runs internally at 1 bucket / hour
+(120 buckets across the 5-day window) and linearly resamples the result into the storage cadence,
+keeping the rebuild cost constant regardless of the user-chosen frequency.
+
+**Dashboard chart visual fixes:**
+
+- Night-zone hatch now leans at a true 45 deg regardless of the chart's runtime aspect ratio.
+  The previous SVG `<pattern>` lived in the SVG's user-coordinate space, which the chart stretches
+  via `preserveAspectRatio="none"`; the hatch is now an HTML overlay div with a CSS
+  `repeating-linear-gradient` (same recipe as the timeline night zone) sitting in CSS pixel space.
+- Grow animation drops from 700 ms to 400 ms, snappier and aligned with the HA Energy forecast
+  chart timing.
+
+i18n: EN + FR strings shipped for the new section. 61 other locales received the EN placeholder
+strings to keep the type-check happy, to be translated in the final beta phase.
+
 ### Past production now reads 5-min LTS, not hourly (#210)
 
 End-to-end audit revealed the data source's production builder was missing its densest input:

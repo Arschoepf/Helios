@@ -28,7 +28,7 @@ import { getSunPosition } from '../engine/sun';
 import { getHomeCoords } from './init';
 import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
-import { sliceForDay, DISPLAY_BUCKETS_PER_HOUR } from './unifiedStore';
+import { sliceForDay, displayUpdateFrequencyPerHour } from './unifiedStore';
 import { pvValueAtTime, interpAt, type ChartHost } from './charts';
 import { pvNormalizeToWatts } from './pv';
 import { cfgHex, lerpHexToward } from './format';
@@ -80,13 +80,11 @@ const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2.5;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
-//Per-day visual granularity, driven by the data source's DISPLAY_BUCKETS_PER_HOUR constant so every
-//graph (radial + dashboard chart + timeline today) reads at the same display rate. The hour-fraction
-//units that every public helper (interpAtHour, pastEndHour, polarPt, sun rise / set crossings)
-//consumes stay in [0, 24); the few internal call sites that walk the bucket arrays convert via
-//STEPS_PER_HOUR.
-const STEPS_PER_HOUR           = DISPLAY_BUCKETS_PER_HOUR;
-const STEPS_PER_DAY            = 24 * STEPS_PER_HOUR;
+//Per-day visual granularity is driven by the user-configured cadence (display-update-frequency-per
+//-hour, 1-60). Every render function reads the cadence from `data.bucketsPerHour` (carried through
+//the DaySlice the unified store produces) and derives STEPS_PER_HOUR + STEPS_PER_DAY locally. The
+//hour-fraction units every public helper (interpAtHour, pastEndHour, polarPt, sun rise / set
+//crossings) consumes stay in [0, 24) regardless of the cadence.
 
 //Fixed irradiance scale for the radial cloud-ring overlay. A clear-sky summer noon peaks around 1100
 //W / m² at temperate latitudes, picking this as the radial scale max means the curve uses ~90 % of
@@ -439,6 +437,9 @@ export interface RadialDayData
     dayStartMs:     number;
     dayEndMs:       number;
     pastEndHour:    number;
+    //Per-day bucket cadence captured from the unified data source so each render call derives
+    //STEPS_PER_HOUR / STEPS_PER_DAY without re-reading the user config from the host.
+    bucketsPerHour: number;
     hourlyProd:     (number | null)[];
     hourlyForecast: (number | null)[];
     hourlyBatt:     (number | null)[];
@@ -455,7 +456,7 @@ export interface RadialDayData
 //Empty per-card data when the unified store hasn't been built yet (first render after card mount,
 //before the initial fetches lifted). Every series is all-null so the radial dial + graph view render
 //cleanly with empty curves until the first refresh lands the real data, no crash, no flicker.
-function emptyRadialDayData(cardOffset: number): RadialDayData
+function emptyRadialDayData(host: DashboardHost, cardOffset: number): RadialDayData
 {
     const dayStartMs = dayStartMsFor(cardOffset);
     const dayEndMs   = dayStartMs + DAY_MS;
@@ -463,11 +464,13 @@ function emptyRadialDayData(cardOffset: number): RadialDayData
     const pastEndHour = dayEndMs <= nowMs ? 24
                       : dayStartMs >= nowMs ? 0
                       : (nowMs - dayStartMs) / HOUR_MS;
-    const empty: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
+    const bucketsPerHour = displayUpdateFrequencyPerHour(host.config);
+    const empty: (number | null)[] = new Array(24 * bucketsPerHour).fill(null);
     return {
         dayStartMs,
         dayEndMs,
         pastEndHour,
+        bucketsPerHour,
         hourlyProd:     empty.slice(),
         hourlyForecast: empty.slice(),
         hourlyBatt:     empty.slice(),
@@ -491,7 +494,7 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     const store = host._unifiedStore;
     if (!store)
     {
-        return emptyRadialDayData(cardOffset);
+        return emptyRadialDayData(host, cardOffset);
     }
     const slice = sliceForDay(store, cardOffset);
     const hourlyProd     = slice.hourlyProd.slice();
@@ -520,6 +523,7 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
         dayStartMs:     slice.dayStartMs,
         dayEndMs:       slice.dayEndMs,
         pastEndHour:    slice.pastEndHour,
+        bucketsPerHour: slice.bucketsPerHour,
         hourlyProd,
         hourlyForecast,
         hourlyBatt,
@@ -540,7 +544,9 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 {
     const isFront    = cardOffset === activeOffset;
 
-    const { dayStartMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
+    const { dayStartMs, pastEndHour, bucketsPerHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
+    const STEPS_PER_HOUR = bucketsPerHour;
+    const STEPS_PER_DAY  = 24 * STEPS_PER_HOUR;
 
     //Split the signed battery curve into charge (positive) and discharge (positive absolute) per-
     //hour arrays so two annulus paths can paint inside the same ring with their own colours.
@@ -549,8 +555,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 
     //Slice the arrays by the past / future boundary. Past hours feed the solid fills, future hours
     //feed the dashed outlines. Consumption has no future data so its future portion is always empty.
-    //The past-end index is in bucket units now (288 / day), the fractional pastEndHour stays in
-    //hours and converts to a bucket cutoff via STEPS_PER_HOUR.
+    //The past-end index is in bucket units, the fractional pastEndHour stays in hours and converts
+    //to a bucket cutoff via STEPS_PER_HOUR.
     const ceilPastSteps  = Math.ceil(pastEndHour * STEPS_PER_HOUR);
     const floorPastH     = Math.floor(pastEndHour);
     const prodPastPath = pastEndHour > 0
@@ -1151,10 +1157,12 @@ function dailyEnergyKwh(arr: ReadonlyArray<number | null>): number | null
 {
     let s = 0, hasData = false;
     for (const v of arr) { if (v !== null) { s += v; hasData = true; } }
-    //Each bucket carries the mean power over a 1 / STEPS_PER_HOUR-hour window. Total Wh = sum of
+    //Each bucket carries the mean power over a (24 / arr.length)-hour window. Total Wh = sum of
     //bucket-means times the bucket length in hours, divide by 1000 for kWh. Stays invariant to the
-    //bucket size: the day's kWh is unchanged whether the underlying granularity is 1 / hour or 4 / hour.
-    return hasData ? s / STEPS_PER_HOUR / 1000 : null;
+    //cadence: the day's kWh is unchanged whether the underlying granularity is 1 / hour or 60 / hour.
+    if (!hasData || arr.length === 0) { return null; }
+    const stepsPerHour = arr.length / 24;
+    return s / stepsPerHour / 1000;
 }
 
 
@@ -1293,6 +1301,8 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     //line gets masked underneath. Cut the array at the past-end boundary; pastEndHour is in fractional
     //hours, the bucket index threshold is pastEndHour * STEPS_PER_HOUR (each bucket = 1 / STEPS_PER_HOUR
     //of an hour). The area collapses to null on every future bucket and the area path goes flat there.
+    const STEPS_PER_HOUR = data.bucketsPerHour;
+    const STEPS_PER_DAY  = 24 * STEPS_PER_HOUR;
     const pastEndBucket = data.pastEndHour * STEPS_PER_HOUR;
     const hourlyProdPastOnly = data.hourlyProd.map((v, i) => (i < pastEndBucket ? v : null));
     //Hover-or-daily values for the two mini-cards. Production reads as the day's total kWh by default,
@@ -1419,13 +1429,20 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     const fromProdLine     = buildCollapsedLinePath();
     const forecastLinePath = buildLinePath(data.hourlyForecast);
     const fromForecastLine = buildCollapsedLinePath();
-    const ANIM_DUR = '700ms';
+    //Grow animation aligned on the HA Energy forecast chart (snappy ~400 ms ease-out). 700 ms was
+    //the previous value and felt sluggish next to the rest of the HA UI surfaces.
+    const ANIM_DUR = '400ms';
 
     //Night zones + day separators painted in the chart background. Sunrise and sunset are fractional
     //hours of the local day (e.g. 7.5 = 7:30 am). null on polar day / polar night, skip the markers.
-    const sunrise   = data.sunRiseSet.sunrise;
-    const sunset    = data.sunRiseSet.sunset;
-    const patternId = `dash-graph-night-${cardOffset}`;
+    //Night-zone hatch is rendered as HTML overlay divs (NOT an SVG pattern) so the diagonal stays at
+    //a true 45 deg regardless of the chart's runtime aspect ratio. The SVG above uses
+    //preserveAspectRatio="none" which stretches anything painted in user-space; the HTML overlay
+    //lives in CSS pixel space and the gradient angle stays honest.
+    const sunrise         = data.sunRiseSet.sunrise;
+    const sunset          = data.sunRiseSet.sunset;
+    const sunriseLeftPct  = sunrise !== null ? Math.max(0, Math.min(100, sunrise / 24 * 100)) : null;
+    const sunsetLeftPct   = sunset  !== null ? Math.max(0, Math.min(100, sunset  / 24 * 100)) : null;
 
     //Colours aligned on the timeline chart so the two surfaces read as one composed instrument:
     //pvColor comes from the user-configurable card config (DEFAULT_PV_COLOR_HEX fallback) and applies
@@ -1493,6 +1510,16 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
             </ha-card>
         </div>
         <ha-card class="dash-cf-card-graph-block">
+            <!-- Night-zone hatch overlays: HTML divs in CSS-pixel space so the 45 deg stripes never
+                 stretch with the SVG aspect ratio (same recipe as renderTimelineNightZones in the
+                 main timeline). One div for the morning night (midnight -> sunrise), one for the
+                 evening night (sunset -> midnight). -->
+            ${sunriseLeftPct !== null && sunriseLeftPct > 0 ? html`
+                <div class="dash-graph-night-zone" style="left:0%;width:${sunriseLeftPct.toFixed(2)}%"></div>
+            ` : nothing}
+            ${sunsetLeftPct !== null && sunsetLeftPct < 100 ? html`
+                <div class="dash-graph-night-zone" style="left:${sunsetLeftPct.toFixed(2)}%;width:${(100 - sunsetLeftPct).toFixed(2)}%"></div>
+            ` : nothing}
             ${keyed(isFront ? `f-${data.dayStartMs}` : `b-${cardOffset}`, html`<svg
                 class="dash-graph-svg"
                 viewBox="0 0 ${W} ${H}"
@@ -1501,21 +1528,6 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                 @pointermove="${onPointerMove}"
                 @pointerleave="${onPointerLeave}"
             >
-                <defs>
-                    <!-- Diagonal hatch pattern painted into the night zones. Same recipe as the
-                         timeline night-zone overlay (6 px period, 1.5 px stroke, 45 deg) so the two
-                         surfaces read as the same instrument; colour goes through the theme-aware
-                         CSS class so light + dark themes share a consistent alpha. -->
-                    <pattern id="${patternId}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(-45)">
-                        <line x1="0" y1="0" x2="0" y2="6" class="dash-graph-night-hatch-line"/>
-                    </pattern>
-                </defs>
-                ${sunrise !== null
-                    ? svg`<rect x="0" y="0" width="${hourToX(sunrise).toFixed(1)}" height="${H}" fill="url(#${patternId})"/>`
-                    : nothing}
-                ${sunset !== null
-                    ? svg`<rect x="${hourToX(sunset).toFixed(1)}" y="0" width="${(W - hourToX(sunset)).toFixed(1)}" height="${H}" fill="url(#${patternId})"/>`
-                    : nothing}
                 ${sunrise !== null
                     ? svg`<line class="dash-graph-day-separator" x1="${hourToX(sunrise).toFixed(1)}" y1="0" x2="${hourToX(sunrise).toFixed(1)}" y2="${H}"/>`
                     : nothing}
