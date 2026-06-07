@@ -33,6 +33,15 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Hatch inclination fix + 60-bucket perf-test build (#210)
+
+- Dashboard graph night-zone hatch now leans the same way as the timeline (`/`, 45 deg upward-right
+  instead of `\`); the SVG `patternTransform` switched from `rotate(45)` to `rotate(-45)`.
+- PERF TEST: `DATA_BUCKETS_PER_HOUR` and `DISPLAY_BUCKETS_PER_HOUR` both bumped from 4 to 60 (= 1
+  bucket per minute) for performance observation on the user's instance. Series length goes from
+  480 to 7200 buckets per signal; per-render display slice from 96 to 1440. Forecast builder loop
+  scales linearly with the storage cadence (×15 cost on each rebuild). Revert to 4 after the test.
+
 ### Dashboard graph styling aligned on the timeline chart (#210)
 
 The mini graph at the bottom of the radial dashboard card now shares the timeline PV chart's

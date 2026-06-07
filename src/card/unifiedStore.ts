@@ -52,14 +52,16 @@ const DAY_MS  = 24 * HOUR_MS;
 //(production, forecast, weather, battery, grid) is held at this granularity. Change this value and
 //every downstream consumer rescales automatically. Default 4 = 15 min slots, dense enough that the
 //radial dial and the dashboard chart read as smooth curves without burning CPU on every render.
-export const DATA_BUCKETS_PER_HOUR    = 4;
+//PERF TEST: temporarily set to 60 (1 / minute) so the user can observe the rebuild + render cost.
+export const DATA_BUCKETS_PER_HOUR    = 60;
 
 //Display cadence: how many slots per hour every graph (radial dial, dashboard chart, timeline today)
 //reads back from the data source. If equal to DATA_BUCKETS_PER_HOUR, sliceForDay returns the slice
 //unchanged (every graph reads the exact storage values). If different, sliceForDay resamples
 //linearly between the bracketing storage buckets so the graph stays a continuous curve. Change this
 //value and every graph rescales together; the storage cadence is unaffected.
-export const DISPLAY_BUCKETS_PER_HOUR = 4;
+//PERF TEST: same 60 as the storage cadence so the user can observe the matching-rate path.
+export const DISPLAY_BUCKETS_PER_HOUR = 60;
 
 export const STORE_DAYS_PAST  = 2;
 export const STORE_DAYS_AHEAD = 2;

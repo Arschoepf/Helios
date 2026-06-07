@@ -1506,7 +1506,7 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                          timeline night-zone overlay (6 px period, 1.5 px stroke, 45 deg) so the two
                          surfaces read as the same instrument; colour goes through the theme-aware
                          CSS class so light + dark themes share a consistent alpha. -->
-                    <pattern id="${patternId}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)">
+                    <pattern id="${patternId}" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(-45)">
                         <line x1="0" y1="0" x2="0" y2="6" class="dash-graph-night-hatch-line"/>
                     </pattern>
                 </defs>
