@@ -33,6 +33,25 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Past production now reads 5-min LTS, not hourly (#210)
+
+End-to-end audit revealed the data source's production builder was missing its densest input:
+
+- `_pvHistory` (raw HA history): the 6-h fetch was removed weeks ago, so this slot starts empty and
+  is only extended with live state pushes since session start, never carrying the full past day.
+- `_pvCalibStats` (hourly LTS): 1 sample per hour over 5 days, ~120 rows. This is what the store
+  was reading from. At any storage cadence (4 b/h, 60 b/h, anything) the past curve was 1 real
+  sample per hour with linear interpolation between hours, producing a smooth hourly shape that did
+  not change with the bucket count.
+- `_pvTrainerStats` (5-min LTS): 12 samples per hour over 30 days, ~8.6k rows. Already fetched on
+  idle for the shading-map trainer. Carries the sub-hourly variability the HA Energy dashboard
+  shows on the same entity. Was NOT plugged into the data source.
+
+This release wires `_pvTrainerStats` as the primary past-production source. `_pvCalibStats` stays
+as a fallback for the few installs where the trainer hasn't landed yet. The bucket cadence now
+actually matters: at 60 buckets / h the curve carries the 5-minute peaks the sensor recorded; at
+4 buckets / h the curve averages over 15 min but still reflects the trainer-resolution shape.
+
 ### Production curve precision: differentiate raw cumulative history (#210)
 
 The data source's production builder ingested the raw `_pvHistory` only for power entities (W).

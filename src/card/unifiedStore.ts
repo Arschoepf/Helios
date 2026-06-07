@@ -105,6 +105,12 @@ export interface UnifiedStoreHost
     readonly _chartSeries:            ChartSeries | null;
     readonly _pvHistory:              PvHistory | null;
     readonly _pvCalibStats:           PvHistory | null;
+    //5-minute long-term-statistics series, 30-day rolling window. Same payload shape as
+    //_pvCalibStats but at 12 samples per hour instead of 1, fetched on idle for the shading-map
+    //trainer. We pull it as the primary past-production source so the production curve carries the
+    //sensor's sub-hourly variability instead of the smooth hourly LTS shape. Null until the deferred
+    //fetch lands, in which case the builder degrades to _pvCalibStats only.
+    readonly _pvTrainerStats:         PvHistory | null;
     readonly _pvUnit:                 string;
     readonly _batteryPowerHistory:    { times: Date[]; values: number[] } | null;
     readonly _batteryPowerUnit:       string;
@@ -266,33 +272,45 @@ function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndM
         counts[h] += 1;
     };
 
-    const calib = host._pvCalibStats;
-    if (calib && calib.times.length >= 2)
+    //LTS ingester: reads a stats series (5-min trainer or hourly calib) into the bucket sums. For
+    //cumulative-energy entities the values are bucket-end lifetime counters, so we differentiate
+    //adjacent pairs to dv / dtH (with the typical 6 h outage cap + monotonic reset guard). For
+    //power entities the values are already bucket-mean watts and feed straight in.
+    const ingestLts = (lts: PvHistory): void =>
     {
+        if (lts.times.length < 2) { return; }
         if (isCum)
         {
+            const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
             let prevIdx = 0;
-            for (let i = 1; i < calib.times.length; i++)
+            for (let i = 1; i < lts.times.length; i++)
             {
-                const t1  = calib.times[i].getTime();
-                const t0  = calib.times[prevIdx].getTime();
+                const t1  = lts.times[i].getTime();
+                const t0  = lts.times[prevIdx].getTime();
                 const dtH = (t1 - t0) / HOUR_MS;
                 if (dtH <= 0 || dtH > 6) { prevIdx = i; continue; }
-                const dv = calib.values[i] - calib.values[prevIdx];
+                const dv = lts.values[i] - lts.values[prevIdx];
                 prevIdx = i;
                 if (dv < 0) { continue; }
-                const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
                 ingestPower(t1, (dv / dtH) * factor);
             }
         }
         else
         {
-            for (let i = 0; i < calib.times.length; i++)
+            for (let i = 0; i < lts.times.length; i++)
             {
-                ingestPower(calib.times[i].getTime(), pvNormalizeToWatts(calib.values[i], host._pvUnit));
+                ingestPower(lts.times[i].getTime(), pvNormalizeToWatts(lts.values[i], host._pvUnit));
             }
         }
-    }
+    };
+
+    //Trainer first (5-min granularity, 30-day window): primary past source, dense enough that the
+    //production curve reflects the sensor's sub-hourly variability instead of an hourly smooth.
+    if (host._pvTrainerStats) { ingestLts(host._pvTrainerStats); }
+    //Calib stats (hourly, 5-day window): kept as fallback for installs where the trainer hasn't
+    //landed yet or doesn't carry 5-min LTS. On installs where both are present the calib samples
+    //co-locate with one trainer sample per hour and average cleanly inside the bucket.
+    if (host._pvCalibStats)   { ingestLts(host._pvCalibStats); }
     const hist = host._pvHistory;
     if (hist && hist.times.length > 0)
     {
@@ -524,16 +542,17 @@ function buildGridSlope(
 //catches every refresh path the card runs today.
 function computeDataVersion(host: UnifiedStoreHost): string
 {
-    const seriesLen   = host._chartSeries?.times.length ?? 0;
-    const pvHistLen   = host._pvHistory?.times.length   ?? 0;
-    const pvCalibLen  = host._pvCalibStats?.times.length ?? 0;
-    const battHistLen = host._batteryPowerHistory?.times.length ?? 0;
+    const seriesLen     = host._chartSeries?.times.length ?? 0;
+    const pvHistLen     = host._pvHistory?.times.length   ?? 0;
+    const pvCalibLen    = host._pvCalibStats?.times.length ?? 0;
+    const pvTrainerLen  = host._pvTrainerStats?.times.length ?? 0;
+    const battHistLen   = host._batteryPowerHistory?.times.length ?? 0;
     let gridImpLen = 0;
     host._gridImportSamples.forEach(arr => { gridImpLen += arr.length; });
     let gridExpLen = 0;
     host._gridExportSamples.forEach(arr => { gridExpLen += arr.length; });
     const socLive = host._batterySoc ?? '';
-    return `${seriesLen}|${pvHistLen}|${pvCalibLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
+    return `${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvTrainerLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
 }
 
 
