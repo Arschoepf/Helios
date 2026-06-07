@@ -711,18 +711,21 @@ export const heliosCardStyles = css`
         space is left between the strips above and below it. */
     ha-card.dash-radial-wrap
     {
-        /*  Display: grid with one cell + place-items: center so the SVG and the HTML hour-labels
-            overlay (both grid-area: 1 / 1 below) share the EXACT same centring and sizing inside
-            the wrap. The previous flex parent + absolute-positioned hour-labels recipe drifted
-            apart in panel-view dashboards when max-height kicked in on the wider-than-tall
-            wrap, the SVG was flex-centred in the content box while the absolute overlay landed
-            on the padding box, the labels then sat slightly above the annulus they belonged to. */
+        /*  No padding on the wrap. With a padding > 0 the in-flow flex-centred SVG resolves its
+            max-height: 100% against the wrap's CONTENT box (excludes padding) while the absolute-
+            positioned hour-labels overlay resolves the same expression against the PADDING box
+            (includes padding), and the two reference rectangles drift apart by 2 * padding when
+            max-height kicks in on a wider-than-tall panel-view wrap. The labels then sit slightly
+            above the annulus they belong to. Setting padding to 0 collapses the two reference
+            rectangles onto the same box so the two layers stay aligned at every aspect ratio.
+            Corner overlays (clock TL, back-to-live TR, sunrise BL, sunset BR) still get their 6 /
+            10 px breathing room from their own top / right / bottom / left offsets. */
         position: relative;
         flex: 1 1 0;
-        display: grid;
-        grid-template: 1fr / 1fr;
-        place-items: center;
-        padding: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0;
         min-height: 0;
         height: auto;
         width: auto;
@@ -839,8 +842,13 @@ export const heliosCardStyles = css`
         so the visual weight stays balanced across all four overlays. */
     .dash-radial-back-to-live
     {
+        /*  Box metrics chosen so the visual centre of the button matches the visual centre of the
+            top-left .dash-radial-hour-text chip. The chip's effective height is icon-driven (14 px
+            mdc icon + line-height: 1 text), the button adds 2 px symmetric padding + a 1 px border
+            for a total of 20 px against the chip's 14 px, top: 3px shifts the button up so both
+            chips visually align on the horizontal centre line of the top-corners row. */
         position: absolute;
-        top: 6px;
+        top: 3px;
         right: 10px;
         display: inline-flex;
         align-items: center;
@@ -853,7 +861,7 @@ export const heliosCardStyles = css`
         background: color-mix(in srgb, var(--primary-text-color, #ffffff) 12%, transparent);
         border: 1px solid color-mix(in srgb, var(--primary-text-color, #ffffff) 25%, transparent);
         border-radius: 999px;
-        padding: 4px 10px 4px 8px;
+        padding: 2px 10px 2px 8px;
         cursor: pointer;
         line-height: 1;
         z-index: 3;
@@ -996,10 +1004,7 @@ export const heliosCardStyles = css`
             without crowding the side gutters. Height caps at the available space, the aspect ratio
             stays 1 / 1 so the dial is always a true circle. touch-action: none disables the
             browser's default scroll / pan / zoom gestures inside the dial so a finger drag for the
-            hover cursor on mobile no longer scrolls the page underneath. grid-area pins the SVG to
-            the same cell as the HTML hour-labels overlay so the two layers can share centring +
-            sizing inside the wrap. */
-        grid-area:  1 / 1;
+            hover cursor on mobile no longer scrolls the page underneath. */
         width:      min(100%, 92%);
         height:     auto;
         max-height: 100%;
@@ -1211,15 +1216,13 @@ export const heliosCardStyles = css`
         orientation the SVG used. */
     .dash-radial-hour-labels
     {
-        /*  Same grid cell + same sizing recipe as .dash-radial-svg so the HTML labels overlay
-            ALWAYS lines up with the SVG annulus, regardless of how panel-view vs section-view
-            dashboards reshape the wrap. position: relative is required so the labels inside the
-            container can absolute-position by percentage off this square. */
-        grid-area:  1 / 1;
-        position:   relative;
-        width:      min(100%, 92%);
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: min(100%, 92%);
         aspect-ratio: 1 / 1;
         max-height: 100%;
+        transform: translate(-50%, -50%);
         pointer-events: none;
         z-index: 2;
     }
