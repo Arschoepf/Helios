@@ -33,6 +33,31 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather mode UI polish (#210)
+
+Five follow-ups on beta.80 from the user-facing pass:
+
+- **Zoom out actually fires now.** The base map locks zoom to 18 (minZoom = maxZoom = 18) so the
+  user can't wander off the designed altitude. The weather-mode easeTo target was getting clamped
+  back to 18 silently. `enterWeatherCamera` now widens the envelope to [10, 18] before the easeTo
+  and `exitWeatherCamera` restores the original clamps after the return animation lands. The
+  target zoom drops from 18 to 12 for the satellite-style overview.
+- **Rotation lock during weather mode.** The camera locks the moment we enter the mode regardless
+  of the user's current preference so a stray drag doesn't pan the overhead view out of frame.
+  The pre-enter lock state is captured + restored on exit, so a user who had rotation free stays
+  free on the way back, and a locked user stays locked.
+- **Timeline stays visible in weather mode.** Chips / leaders / arcs still hide behind the
+  overlay mask, but the bottom timeline tracks the cursor so the user can scrub through the day
+  and the cloud overlay will follow once the raster lands. CSS adds a `:not(.mode-weather)`
+  qualifier on the timeline slide-out rule.
+- **Cloud-cover toggle button retired.** The previous chip-toggle was a discoverability dead-end:
+  most users never realised the cloud icon was clickable. The button is gone. The three per-
+  altitude chips (high / mid / low) now auto-reveal whenever the weather mode is active, and
+  collapse back to the aggregate icon otherwise. The `helios:cloud-mode` localStorage key + the
+  related per-card state are dropped.
+- **Loading banner CSS restored.** The block was accidentally swept with the shading-dome CSS
+  purge in beta.80, so the loading text rendered as unstyled raw text in the top-left corner.
+
 ### Big shift: shading map retired, weather mode foundation (#210)
 
 **The card is no longer a niche PV-enthusiast tool.** Helios now positions itself as a universal

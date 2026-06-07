@@ -304,13 +304,18 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
     /*  Timeline slides below the card edge for any non-base mode + the dashboard dive (overlay-masked
-        is set for both, see the card-side render comment). */
-    ha-card.overlay-masked .time-bar
+        is set for both, see the card-side render comment). EXCEPTION: weather mode keeps the timeline
+        in view so the user can scrub through the day and the cloud raster tracks the cursor; the
+        :not(.mode-weather) qualifier opts weather out of the slide-out. */
+    ha-card.overlay-masked:not(.mode-weather) .time-bar
     {
         transform: translateY(140%);
         pointer-events: none;
     }
-    ha-card.overlay-masked .overlay-top-left
+    /*  Same weather-mode exception on the top-left cluster: the cloud cover anchor + the per-layer
+        chips need to stay legible so the user reads the current low / mid / high coverage values
+        without leaving the overlay. */
+    ha-card.overlay-masked:not(.mode-weather) .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
@@ -2450,60 +2455,30 @@ export const heliosCardStyles = css`
         the HA dashboard toolbar buttons so a Helios card dropped
         into a HA Energy dashboard reads as part of the toolbar
         family. */
-    .cloud-cover-toggle
+    /*  Cloud cover icon, top-left. Plain anchor for the aggregate weather glyph; the per-layer
+        chips (high / mid / low) auto-reveal in weather mode beside it. No longer interactive (the
+        weather-mode click handler in the mode bar replaces the old chip-toggle pattern). */
+    .cloud-cover-anchor
     {
-        appearance: none;
-        -webkit-appearance: none;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         width:  40px;
         height: 40px;
         box-sizing: border-box;
-        padding: 0;
-        background-color: transparent;
-        background-clip: padding-box;
         color: var(--primary-text-color, #212121);
-        border: 0;
-        outline: 0 !important;
-        outline-offset: 0;
         border-radius: 50%;
-        overflow: hidden;
-        cursor: pointer;
-        pointer-events: auto;
         position: relative;
         z-index: 50;
-        opacity: 1;
-        -webkit-tap-highlight-color: transparent;
-        transition: background-color 0.15s, color 0.15s;
+        pointer-events: none;
     }
-    .cloud-cover-toggle:hover,
-    .cloud-cover-toggle:focus,
-    .cloud-cover-toggle:focus-visible,
-    .cloud-cover-toggle:active
-    {
-        outline: 0 !important;
-        box-shadow: none !important;
-    }
-    .cloud-cover-toggle:hover  { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.08); }
-    .cloud-cover-toggle:active { background-color: rgba(var(--rgb-primary-text-color, 33, 33, 33), 0.16); }
-    .cloud-cover-toggle ha-icon
+    .cloud-cover-anchor ha-icon
     {
         --mdc-icon-size: 22px;
         color: inherit;
         display: inline-flex;
         align-items: center;
-        pointer-events: none;
     }
-    /*  Active toggle: brand-blue pastille behind the icon, white
-        glyph on top. Same on-primary recipe HA toolbars use. */
-    .cloud-cover-toggle.is-on
-    {
-        background: var(--primary-color, #03a9f4);
-        color: var(--text-on-primary-color, #ffffff);
-    }
-    .cloud-cover-toggle.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
-    .cloud-cover-toggle.is-on:active { background: var(--darker-primary-color, #01579b); }
 
     /*  Mode bar (Layer / LiDAR / Shading). Vertical column of three
         icon-only toggles, anchored top-right, no backplate so the
@@ -2787,11 +2762,74 @@ export const heliosCardStyles = css`
         align-items: center;
         margin-bottom: 2px;
     }
-    /*  LiDAR View opacity slider. Painted at the bottom of the card
-        while the LiDAR view is active. Same capsule pill as the dome
-        cloud picker for visual consistency between the two modes;
-        ungated (continuous, no ticks) because opacity is a free
-        analog tune, not a binned pick.                              */
+
+    /*  Loading banner. Shown at the top of the card while the first hydration wave of data fetches
+        is still in flight (PV, battery, grid, solar radiation, daily totals, weather, buildings,
+        LiDAR). Retires for the rest of the card lifetime once every started phase has finished
+        once, so routine background refreshes (mode switches, scrub, time tick) do NOT bring it
+        back. Rounded card, themed bg + border + shadow so the user reads it as part of the rest
+        of the HUD chrome. Slide-in from the top + opacity, slide-out downwards via the same pure
+        CSS transition pattern (no keyframes, no animation: forwards). Sits above the timeline +
+        mode bar at z-index 60. */
+    .loading-banner
+    {
+        position: absolute;
+        top: 12px;
+        left: 16px;
+        right: 16px;
+        max-width: 260px;
+        margin: 0 auto;
+        padding: 6px 12px 8px;
+        background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
+        color: var(--primary-text-color, #ffffff);
+        border: 1px solid var(--divider-color, rgba(255, 255, 255, 0.15));
+        border-radius: 16px;
+        font-size: var(--ha-font-size-s, 12px);
+        line-height: 1.4;
+        z-index: 60;
+        opacity: 0;
+        transform: translateY(-60px);
+        pointer-events: none;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+        transition: opacity 0.35s ease, transform 0.35s ease;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .loading-banner.is-visible
+    {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    .loading-banner-label
+    {
+        font-weight: var(--ha-font-weight-medium, 500);
+        opacity: 0.85;
+        text-align: center;
+    }
+    .loading-banner-bar
+    {
+        position: relative;
+        width: 100%;
+        height: 6px;
+        background: var(--divider-color, rgba(255, 255, 255, 0.15));
+        border-radius: 999px;
+        overflow: hidden;
+    }
+    .loading-banner-bar-fill
+    {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        background: var(--primary-color, #03a9f4);
+        border-radius: 999px;
+        transition: width 0.35s ease;
+    }
+
+    /*  LiDAR View opacity slider. Painted at the bottom of the card while the LiDAR view is
+        active. Continuous capsule pill, ungated (no ticks) because opacity is a free analog tune,
+        not a binned pick. */
 
     .lidar-view-opacity-slider
     {

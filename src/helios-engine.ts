@@ -809,28 +809,55 @@ export class HeliosEngine
 
     //Pre-weather-mode camera pose snapshot. Captured when enterWeatherCamera() fires so the symmetric
     //exit (exitWeatherCamera) restores EXACTLY the pose the user was on, bypassing the default
-    //easeTo target which would otherwise drag them back to the boot pose.
-    private _preWeatherPose: { bearing: number; pitch: number; zoom: number; center: [number, number] } | null = null;
+    //easeTo target which would otherwise drag them back to the boot pose. Also stashes the
+    //pre-enter camera-locked state so the exit returns to the rotation behaviour the user had set
+    //(locked stays locked, free stays free), and the zoom min/max so the temporary expansion we
+    //apply for the satellite-style overview reverts on the way back.
+    private _preWeatherPose: {
+        bearing: number;
+        pitch:   number;
+        zoom:    number;
+        center:  [number, number];
+        locked:  boolean;
+        minZoom: number;
+        maxZoom: number;
+    } | null = null;
 
-    //Weather mode camera transition: zoom out + tilt down to top-down view so the cloud-cover overlay
-    //reads as a meteorological satellite plan. Snapshot the pre-enter pose so the matching exit
-    //animation restores the user's pre-mode framing on the way back. ~1200 ms easeTo for a
-    //deliberate "stepping back to look at the weather" feel.
+    //Weather mode camera transition: tilt down to top-down + zoom out so the cloud-cover overlay
+    //reads as a meteorological satellite plan. Three knobs have to give for this to work:
+    //  1. Zoom min/max are locked to 18 in the base map init so the user can't wander off the
+    //     designed altitude. We temporarily widen [minZoom, maxZoom] to [10, 18] for the duration of
+    //     weather mode and restore the lock on exit.
+    //  2. Rotation gets locked the moment we enter so a stray drag doesn't pan the overhead view
+    //     out of frame. The pre-enter lock state is captured so the exit restores it verbatim.
+    //  3. easeTo carries the pose change on a 1200 ms cubic easing so the transition reads as a
+    //     deliberate "stepping back" rather than a jump cut.
     public enterWeatherCamera(): void
     {
         if (!this.map) { return; }
+        const prevLocked = this.isCameraLocked();
         this._preWeatherPose = {
             bearing: this.map.getBearing(),
             pitch:   this.map.getPitch(),
             zoom:    this.map.getZoom(),
             center:  [this.homeLon, this.homeLat],
+            locked:  prevLocked,
+            minZoom: this.map.getMinZoom(),
+            maxZoom: this.map.getMaxZoom(),
         };
+        //Widen the zoom envelope BEFORE the easeTo so the target zoom is accepted instead of
+        //clamped back to the resting 18.
+        this.map.setMinZoom(10);
+        this.map.setMaxZoom(18);
+        //Force the rotation lock on. setCameraLocked persists the new state to localStorage; we'll
+        //restore the original on exit so the user's preference comes back exactly as it was.
+        if (!prevLocked) { this.setCameraLocked(true); }
         this.map.stop();
         this.map.easeTo({
             center:   [this.homeLon, this.homeLat],
             bearing:  0,
             pitch:    0,
-            zoom:     Math.max(8, this.map.getZoom() - 5),
+            zoom:     12,
             duration: 1200,
         });
     }
@@ -849,6 +876,20 @@ export class HeliosEngine
             zoom:     pose.zoom,
             duration: 1200,
         });
+        //Restore the rotation-lock state the user had before entering. setCameraLocked also writes
+        //the state back to localStorage so the next reload still sees the user's preference.
+        if (this.isCameraLocked() !== pose.locked) { this.setCameraLocked(pose.locked); }
+        //Re-tighten the zoom envelope. We DON'T re-clamp during the easeTo so the animation can run
+        //its course; the new bounds take effect from the next user / programmatic camera action.
+        const tighten = (): void =>
+        {
+            if (!this.map) { return; }
+            this.map.setMinZoom(pose.minZoom);
+            this.map.setMaxZoom(pose.maxZoom);
+        };
+        //Defer past the easeTo duration so the animation lands cleanly before the new clamps kick
+        //in. 50 ms buffer over the 1200 ms ease covers MapLibre's onMoveEnd delivery.
+        window.setTimeout(tighten, 1250);
     }
 
     //Public read of the low / mid / high cloud-cover percentages at an arbitrary time. Wraps the

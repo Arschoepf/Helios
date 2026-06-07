@@ -619,12 +619,6 @@ export class HeliosCard extends LitElement
     _weatherFadeOutStartMs: number | null = null;
     _weatherFadeRaf?:       number;
 
-    //Cloud-cover dome overlay state. Mutually exclusive with the
-    //LiDAR view and the shading dome (click handlers below close
-    //any other active mode before opening this one). Initial value
-    //comes from localStorage so the per-layer chip view sticks across
-    //page reloads.
-    @state() _cloudMode = HeliosCard._readCloudModePref();
 
     private _timer?:           number;
     _lastHomeKey       = '';
@@ -1215,7 +1209,6 @@ export class HeliosCard extends LitElement
                 this._overlayMaskActive  = false;
                 this._lidarLayerActive   = false;
                 this._weatherOverlayVisible = false;
-                this._cloudMode          = false;
                 this._detailMode         = false;
                 //New home means a fresh hydration wave, surface the loading banner again.
                 this._loadingPhases       = new Map();
@@ -1943,7 +1936,10 @@ export class HeliosCard extends LitElement
         //mask LAGS the _cardMode flip on lidar -> base so the HUD does not pop back through the still-
         //visible dot cloud (see _handleCardModeChange + the LiDAR fade loop completion handler), AND
         //is unconditionally ON while detail mode is on so the same chip + timeline transitions fire
-        //when the user opens / closes the dashboard via a home click.
+        //when the user opens / closes the dashboard via a home click. The weather mode is an
+        //exception: chips / leaders / arcs hide but the BOTTOM TIMELINE STAYS VISIBLE so the user
+        //can scrub through the day and the weather overlay tracks the cursor. CSS opts the timeline
+        //out of the mask via a `mode-weather` exception (see helios-card-css.ts).
         const overlayMasked = this._overlayMaskActive || this._detailMode;
         const cardClasses = [
             cardThemeClass,
@@ -2164,26 +2160,25 @@ export class HeliosCard extends LitElement
                 ` : nothing}
 
                 ${hasHomeCoords && this._cloudCover >= 0 ? html`
+                    <!-- Cloud cover area, top-left. The aggregate cloud icon is the always-visible
+                         anchor; the per-altitude chips (high / mid / low) auto-reveal whenever the
+                         weather mode is active so the user reads the breakdown at a glance without
+                         a manual toggle. The previous explicit chip-toggle button is retired since
+                         the weather mode now drives that reveal automatically. -->
                     <div class="overlay-top-left overlay-top-left--cloud">
-                        <button
-                            type="button"
-                            class="cloud-cover-toggle ${this._cloudMode ? 'is-on' : ''}"
-                            aria-pressed="${this._cloudMode ? 'true' : 'false'}"
-                            aria-label="Per-layer cloud cover"
-                            @click="${this._onCloudChipToggle}"
-                        >
+                        <div class="cloud-cover-anchor">
                             <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
-                        </button>
-                        ${this._cloudScene ? html`
-                            <div class="cloud-layer-chip cloud-layer-chip--high ${this._cloudMode ? 'is-on' : ''}">
+                        </div>
+                        ${this._cloudScene && this._cardMode === 'weather' ? html`
+                            <div class="cloud-layer-chip cloud-layer-chip--high is-on">
                                 <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
                                 <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
                             </div>
-                            <div class="cloud-layer-chip cloud-layer-chip--mid ${this._cloudMode ? 'is-on' : ''}">
+                            <div class="cloud-layer-chip cloud-layer-chip--mid is-on">
                                 <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
                                 <span>${Math.round(this._cloudScene.cloudMid)}%</span>
                             </div>
-                            <div class="cloud-layer-chip cloud-layer-chip--low ${this._cloudMode ? 'is-on' : ''}">
+                            <div class="cloud-layer-chip cloud-layer-chip--low is-on">
                                 <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
                                 <span>${Math.round(this._cloudScene.cloudLow)}%</span>
                             </div>
@@ -2782,59 +2777,16 @@ export class HeliosCard extends LitElement
     {
         this._exitScrubMode();
         this._cardMode = 'base';
-        //Restore the user's cloud-mode preference when returning to the Layer view. _onModeLidar and
-        //_onModeShadingDome force _cloudMode = false to keep the full-screen modes visually clean,
-        //but do NOT write to localStorage so the user's underlying preference survives. Re-read it
-        //here so the per-layer chips come back automatically when the user lands on Layer.
-        this._cloudMode = HeliosCard._readCloudModePref();
     };
-    //Cloud cover detail toggle. ON reveals 3 chips (low / mid /
-    //high) under the central cloud chip; OFF leaves only the
-    //aggregate cloud chip. The aggregate chip itself doubles as the
-    //toggle button (see render block + _onCloudChipToggle below).
-    private _onCloudChipToggle = (): void =>
-    {
-        this._cloudMode = !this._cloudMode;
-        HeliosCard._writeCloudModePref(this._cloudMode);
-    };
-    private static _CLOUD_MODE_STORAGE_KEY = 'helios:cloud-mode';
-    private static _readCloudModePref(): boolean
-    {
-        try
-        {
-            return window.localStorage.getItem(HeliosCard._CLOUD_MODE_STORAGE_KEY) === '1';
-        }
-        catch
-        {
-            return false;
-        }
-    }
-    private static _writeCloudModePref(on: boolean): void
-    {
-        try
-        {
-            window.localStorage.setItem(HeliosCard._CLOUD_MODE_STORAGE_KEY, on ? '1' : '0');
-        }
-        catch
-        {
-            //Disabled storage / quota / private windows: silently
-            //degrade to per-tab state.
-        }
-    }
     private _onModeLidar = (): void =>
     {
         this._exitScrubMode();
-        //LiDAR + ShadingDome replace the whole HUD: force the cloud mode OFF so the per-layer chips do
-        //not leak through. Mode-bar handlers do NOT write to localStorage so the user's underlying
-        //cloud-mode preference survives, see _onModeLayer for the restore.
-        this._cloudMode = false;
-        this._cardMode  = 'lidar';
+        this._cardMode = 'lidar';
     };
     private _onModeWeather = (): void =>
     {
         this._exitScrubMode();
-        this._cloudMode = false;
-        this._cardMode  = 'weather';
+        this._cardMode = 'weather';
     };
     //Mode-transition state machine. Called from updated() when _cardMode changed. Single switch on
     //the (prev, next) pair drives:
