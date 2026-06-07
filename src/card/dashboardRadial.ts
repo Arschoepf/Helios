@@ -1436,12 +1436,20 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     const prodLabel     = t.detail.radialProductionLabel ?? 'Production';
     const forecastLabel = t.detail.dashForecastLabel     ?? 'Forecast';
 
+    //Build a "past-actual only" production array. computeHourlyProduction in prepareRadialDayData
+    //returns hourlyProd as "past actual hours + future forecast values" so the radial dial can draw
+    //one continuous curve from realised history into the model. The graph view wants the production
+    //area to ONLY carry actual past data (the forecast belongs to the dotted line below), otherwise
+    //J+1 / J+2 cards draw an area that's actually the forecast and the dotted forecast line gets
+    //masked underneath. Cut the array at the past-end boundary; the area collapses to null on every
+    //future hour and the area path goes flat on those hours.
+    const hourlyProdPastOnly = data.hourlyProd.map((v, h) => (h < data.pastEndHour ? v : null));
     //Hover-or-daily values for the two mini-cards. Production reads as the day's total kWh by default,
     //flips to the hovered hour's instantaneous W while the cursor is parked. Forecast follows the same
     //recipe against the pv-arrays modelled curve.
-    const prodDailyKwh     = dailyEnergyKwh(data.hourlyProd);
+    const prodDailyKwh     = dailyEnergyKwh(hourlyProdPastOnly);
     const forecastDailyKwh = dailyEnergyKwh(data.hourlyForecast);
-    const prodW            = hoverActive ? interpAtHour(data.hourlyProd,     hoverHour as number) : null;
+    const prodW            = hoverActive ? interpAtHour(hourlyProdPastOnly,  hoverHour as number) : null;
     const forecastW        = hoverActive ? interpAtHour(data.hourlyForecast, hoverHour as number) : null;
     const prodValue = hoverActive
         ? (prodW === null     ? '—' : formatW(host.hass, prodW))
@@ -1497,6 +1505,11 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
         d += ' L ' + W.toFixed(1) + ' ' + wattsToY(last ?? null).toFixed(1);
         return d;
     };
+    //Production area path. Closes to the BOTTOM of the chart (y = H) instead of the production-zero
+    //baseline so the fill flows continuously from the curve down to the card edge, the strip below
+    //y = BASELINE_Y reads as part of the production wash rather than as a band of empty card behind a
+    //visible 0-line. Paired with a separate line path (curve only, no verticals, no bottom) so the
+    //fill carries no visible "separator" stroke between the area and the zone below.
     const buildAreaPath = (values: ReadonlyArray<number | null>): string =>
     {
         const line = buildLinePath(values);
@@ -1504,12 +1517,15 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
         {
             return '';
         }
-        return line + ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1)
-                    + ' L 0 ' + BASELINE_Y.toFixed(1) + ' Z';
+        return line + ' L ' + W.toFixed(1) + ' ' + H.toFixed(1)
+                    + ' L 0 ' + H.toFixed(1) + ' Z';
     };
-    const buildCollapsedPath = (closed: boolean): string =>
+    const buildCollapsedAreaPath = (): string =>
     {
-        //All-zero "from" version for the day-load grow animation. Same vertex count as the real path.
+        //All-zero "from" version for the day-load grow animation. Same vertex count as buildAreaPath
+        //so SMIL interpolates without segment count mismatches. Collapsed shape is a flat strip from
+        //y = BASELINE_Y down to y = H (the start state matches the visual "production = 0" floor that
+        //slides up into the real curve on day load).
         let d = '';
         for (let h = 0; h < 24; h++)
         {
@@ -1520,18 +1536,32 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
             }
         }
         d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
-        if (closed)
+        d += ' L ' + W.toFixed(1) + ' ' + H.toFixed(1)
+           + ' L 0 ' + H.toFixed(1) + ' Z';
+        return d;
+    };
+    const buildCollapsedLinePath = (): string =>
+    {
+        //Collapsed counterpart for the line / forecast paths: flat horizontal at y = BASELINE_Y.
+        let d = '';
+        for (let h = 0; h < 24; h++)
         {
-            d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1)
-               + ' L 0 ' + BASELINE_Y.toFixed(1) + ' Z';
+            for (const f of [0, 1/3, 2/3])
+            {
+                const hour = h + f;
+                d += (d === '' ? 'M ' : ' L ') + hourToX(hour).toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
+            }
         }
+        d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
         return d;
     };
 
-    const prodAreaPath     = buildAreaPath(data.hourlyProd);
-    const fromProdArea     = buildCollapsedPath(true);
+    const prodAreaPath     = buildAreaPath(hourlyProdPastOnly);
+    const prodLinePath     = buildLinePath(hourlyProdPastOnly);
+    const fromProdArea     = buildCollapsedAreaPath();
+    const fromProdLine     = buildCollapsedLinePath();
     const forecastLinePath = buildLinePath(data.hourlyForecast);
-    const fromForecastLine = buildCollapsedPath(false);
+    const fromForecastLine = buildCollapsedLinePath();
     const ANIM_DUR = '700ms';
 
     //Night zones + day separators painted in the chart background. Sunrise and sunset are fractional
@@ -1623,8 +1653,16 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
                 ${sunset !== null
                     ? svg`<line class="dash-graph-day-separator" x1="${hourToX(sunset).toFixed(1)}" y1="0" x2="${hourToX(sunset).toFixed(1)}" y2="${H}"/>`
                     : nothing}
+                <!-- Production fill: closed shape from the curve down to the chart bottom, no stroke
+                     so the visual reads as a continuous wash from the curve to the card edge with no
+                     separator line at y = BASELINE_Y. -->
                 <path class="dash-graph-prod-area" d="${prodAreaPath}">
                     <animate attributeName="d" from="${fromProdArea}" to="${prodAreaPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                </path>
+                <!-- Production curve: open path (curve only, no verticals + no bottom), traces the
+                     edge of the area fill as a solid stroke without painting the surrounding shape. -->
+                <path class="dash-graph-prod-line" d="${prodLinePath}">
+                    <animate attributeName="d" from="${fromProdLine}" to="${prodLinePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>
                 <path class="dash-graph-forecast-line" d="${forecastLinePath}">
                     <animate attributeName="d" from="${fromForecastLine}" to="${forecastLinePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>

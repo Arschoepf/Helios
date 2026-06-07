@@ -818,9 +818,15 @@ export const heliosCardStyles = css`
     .dash-graph-prod-area
     {
         fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 35%, transparent);
+        stroke: none;
+    }
+    .dash-graph-prod-line
+    {
+        fill: none;
         stroke: var(--energy-solar-color, #ff9800);
         stroke-width: 2;
         stroke-linejoin: round;
+        stroke-linecap: round;
         vector-effect: non-scaling-stroke;
     }
     .dash-graph-forecast-line
