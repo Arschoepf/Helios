@@ -25,13 +25,10 @@ import { keyed } from 'lit/directives/keyed.js';
 import type { DashboardHost } from './dashboard';
 import { navigateDashDay } from './dashboard';
 import { getSunPosition } from '../engine/sun';
-import { pvInverterMaxW, pvNormalizeToWatts, computePvPowerWeighted, pvCalibK } from './pv';
 import { getHomeCoords } from './init';
 import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
-import { effectiveForecastRatio } from './charts';
-import { computeForecastCalibration } from './calibration';
-import { trainShadingMap, currentShadingMap } from './shadingTrainer';
+import { sliceForDay } from './unifiedStore';
 
 
 //Tighter geometry than the V1 prototype: outer dial shrunk from 195 to 165 viewBox units (15 %
@@ -79,17 +76,12 @@ const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2.5;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
-//Time resolution of the day's per-bucket aggregations and forecast pass. Every per-day array
-//(production, forecast, battery, cloud, irradiance) carries STEPS_PER_DAY = 96 buckets of 15 minutes
-//each. The bucket density is a compromise: a v1.8.3-beta.67 attempt at 288 buckets / 5 min produced
-//visibly jagged curves AND ~150 ms per-render compute cost (the forecast inner loop calls computePv
-//PowerWeighted once per future bucket, that scales linearly), 96 keeps 4x the precision of the
-//pre-bump 1 / hour resolution at one third the cost. The hour-fraction units that every public helper
-//(interpAtHour, pastEndHour, polarPt, sun rise / set crossings) consumes stay in [0, 24); the few
-//internal call sites that walk the bucket arrays convert via STEPS_PER_HOUR.
+//Per-day visual granularity. The unified store (src/card/unifiedStore.ts) feeds 96 buckets of 15 min
+//per day, so the dial path builders walk that same length. The hour-fraction units that every public
+//helper (interpAtHour, pastEndHour, polarPt, sun rise / set crossings) consumes stay in [0, 24); the
+//few internal call sites that walk the bucket arrays convert via STEPS_PER_HOUR.
 const STEPS_PER_HOUR           = 4;
 const STEPS_PER_DAY            = 24 * STEPS_PER_HOUR;
-const STEP_MS                  = HOUR_MS / STEPS_PER_HOUR;
 
 //Fixed irradiance scale for the radial cloud-ring overlay. A clear-sky summer noon peaks around 1100
 //W / m² at temperate latitudes, picking this as the radial scale max means the curve uses ~90 % of
@@ -97,18 +89,6 @@ const STEP_MS                  = HOUR_MS / STEPS_PER_HOUR;
 //when the user swipes between past + future cards (per-day relative scaling would re-stretch the
 //curve and break the "compare two days at a glance" affordance).
 const IRR_SCALE_MAX_WM2        = 1100;
-//Native sample interval of the weather model (Open-Meteo publishes hourly). With STEPS_PER_HOUR > 1
-//each hour of weather data lands in a SINGLE bucket and leaves STEPS_PER_HOUR - 1 empty buckets
-//between every consecutive sample; the path builders then draw those empty buckets at the inner edge
-//(null = baseline) and the curve reads as a series of vertical spikes. WEATHER_INTERP_STEP_MS = STEP_MS
-//tells the interpolator to fill every empty sub-bucket between two hourly samples with a linear blend,
-//so the cloud + irradiance curves render as the smooth hourly progression the user expects, at the
-//STEPS_PER_DAY visual granularity the rest of the pipeline already runs at.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const WEATHER_INTERP_STEP_MS    = STEP_MS;
-//Silence the unused-variable warning, this constant is here for documentation. The actual interp
-//logic uses STEP_MS directly via interpolateNullGaps which walks any-length arrays.
-void WEATHER_INTERP_STEP_MS;
 
 
 //Polar -> Cartesian helper. Angle convention is documented at the top of the file.
@@ -213,320 +193,6 @@ function buildRadialOutlinePath(
         d += (d === '' ? 'M ' : ' L ') + x.toFixed(2) + ' ' + y.toFixed(2);
     }
     return d;
-}
-
-
-//Hourly PV production (W). Past hours from the LTS / history merge, future hours from the
-//weather-model forecast through computePvPowerWeighted (same path the timeline forecast curve uses).
-function computeHourlyProduction(host: DashboardHost, dayStartMs: number): (number | null)[]
-{
-    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
-    const nowMs                     = Date.now();
-
-    const calib = host._pvCalibStats;
-    const hist  = host._pvHistory;
-    const unit  = (host._pvUnit || '').toLowerCase();
-    const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-
-    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
-    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
-    const ingestPower = (tMs: number, w: number): void =>
-    {
-        if (!Number.isFinite(w) || w < 0) { return; }
-        if (tMs < dayStartMs || tMs >= dayStartMs + DAY_MS) { return; }
-        const h = Math.floor((tMs - dayStartMs) / STEP_MS);
-        sums[h]   += w;
-        counts[h] += 1;
-    };
-
-    if (calib && calib.times.length >= 2)
-    {
-        if (isCum)
-        {
-            let prevIdx = 0;
-            for (let i = 1; i < calib.times.length; i++)
-            {
-                const t1  = calib.times[i].getTime();
-                const t0  = calib.times[prevIdx].getTime();
-                const dtH = (t1 - t0) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) { prevIdx = i; continue; }
-                const dv = calib.values[i] - calib.values[prevIdx];
-                prevIdx = i;
-                if (dv < 0) { continue; }
-                const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
-                ingestPower(t1, (dv / dtH) * factor);
-            }
-        }
-        else
-        {
-            for (let i = 0; i < calib.times.length; i++)
-            {
-                ingestPower(calib.times[i].getTime(), pvNormalizeToWatts(calib.values[i], host._pvUnit));
-            }
-        }
-    }
-    if (hist && hist.times.length > 0 && !isCum)
-    {
-        for (let i = 0; i < hist.times.length; i++)
-        {
-            ingestPower(hist.times[i].getTime(), pvNormalizeToWatts(hist.values[i], host._pvUnit));
-        }
-    }
-    for (let h = 0; h < STEPS_PER_DAY; h++)
-    {
-        if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
-    }
-
-    //Forecast pass. Same path the timeline forecast curve uses: raw computePvPowerWeighted output
-    //multiplied by the per-config calibration constant k (pvCalibK) AND the per-time effective
-    //ratio (shading map look-up blended with the 5-day rolling calR). Without the k * eff factor
-    //the radial dial drew the theoretical model output, which on most installs sat well below
-    //what the timeline showed (the timeline applies both factors), and the user reported the
-    //dashboard forecast curve as "very low" compared to the timeline.
-    const series = host._chartSeries;
-    const coords = getHomeCoords(host.config, host.hass);
-    const cap    = pvInverterMaxW(host.config);
-    const k      = pvCalibK(host.config);
-    const cal    = computeForecastCalibration(host);
-    const calR   = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading = currentShadingMap();
-    if (series && coords && k !== null)
-    {
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let h = 0; h < STEPS_PER_DAY; h++)
-        {
-            const hourMs    = dayStartMs + h * STEP_MS;
-            const hourMidMs = hourMs + STEP_MS / 2;
-            if (hourMidMs < nowMs && values[h] !== null) { continue; }
-            let bestIdx = -1;
-            let bestDt  = Infinity;
-            for (let i = 0; i < series.times.length; i++)
-            {
-                const dt = Math.abs(series.times[i].getTime() - hourMidMs);
-                if (dt < bestDt) { bestDt = dt; bestIdx = i; }
-            }
-            if (bestIdx < 0 || bestDt > HOUR_MS) { continue; }
-            const cloud = series.cloud[bestIdx] ?? 0;
-            const wRaw  = computePvPowerWeighted(
-                host.config,
-                series.times[bestIdx],
-                coords.lat,
-                coords.lon,
-                cloud,
-                {
-                    airTempC: series.temperature?.[bestIdx],
-                    windMs:   series.windSpeed?.[bestIdx],
-                    raster,
-                }
-            );
-            const eff   = effectiveForecastRatio(shading, series.times[bestIdx], coords.lat, coords.lon, cloud, calR, nowMs);
-            const w     = wRaw * k * eff;
-            if (Number.isFinite(w))
-            {
-                values[h] = Math.min(cap, Math.max(0, w));
-            }
-        }
-    }
-    for (let h = 0; h < STEPS_PER_DAY; h++)
-    {
-        const hourMs = dayStartMs + h * STEP_MS;
-        if (values[h] === null && hourMs + STEP_MS / 2 < nowMs)
-        {
-            values[h] = 0;
-        }
-    }
-    return values;
-}
-
-
-//Hourly battery power (W), signed positive while the battery is charging and negative while it is
-//discharging. Aggregates the BatteryHost power history into 24 hourly buckets using a per-bucket
-//mean of the in-range samples. Past only; future hours stay null because the battery has no
-//forecast model. Sign convention matches computeBatteryToday in battery.ts (kwh > 0 ⇒ charging).
-function computeHourlyBattery(host: DashboardHost, dayStartMs: number): (number | null)[]
-{
-    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
-    const hist                      = host._batteryPowerHistory;
-    if (!hist || hist.times.length === 0) { return values; }
-    const nowMs                     = Date.now();
-    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
-    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
-    for (let i = 0; i < hist.times.length; i++)
-    {
-        const tMs = hist.times[i].getTime();
-        if (tMs < dayStartMs || tMs >= dayStartMs + DAY_MS) { continue; }
-        if (tMs > nowMs) { break; }
-        const w = pvNormalizeToWatts(hist.values[i], host._batteryPowerUnit);
-        if (!Number.isFinite(w)) { continue; }
-        const h = Math.floor((tMs - dayStartMs) / STEP_MS);
-        sums[h]   += w;
-        counts[h] += 1;
-    }
-    for (let h = 0; h < STEPS_PER_DAY; h++)
-    {
-        if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
-    }
-    return values;
-}
-
-
-//Hourly production from the FORECAST model for every hour of the day, regardless of past /
-//future. The radial dial overlays this as a dashed line on top of the past actual fill so the
-//user can compare the model's prediction against the realised production for the same hour. Same
-//computePvPowerWeighted * pvCalibK * effectiveForecastRatio pipeline the timeline forecast curve
-//uses, so the dial outline matches the headline forecast number on every day.
-function computeHourlyProductionForecast(host: DashboardHost, dayStartMs: number): (number | null)[]
-{
-    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
-    const series = host._chartSeries;
-    const coords = getHomeCoords(host.config, host.hass);
-    if (!series || !coords || series.times.length === 0) { return values; }
-    const cap    = pvInverterMaxW(host.config);
-    const k      = pvCalibK(host.config);
-    if (k === null) { return values; }
-    const cal    = computeForecastCalibration(host);
-    const calR   = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading = currentShadingMap();
-    const nowMs  = Date.now();
-    const raster = host._engine?.getLidarRaster() ?? null;
-    for (let h = 0; h < STEPS_PER_DAY; h++)
-    {
-        const hourMidMs = dayStartMs + h * STEP_MS + STEP_MS / 2;
-        let bestIdx = -1;
-        let bestDt  = Infinity;
-        for (let i = 0; i < series.times.length; i++)
-        {
-            const dt = Math.abs(series.times[i].getTime() - hourMidMs);
-            if (dt < bestDt) { bestDt = dt; bestIdx = i; }
-        }
-        if (bestIdx < 0 || bestDt > HOUR_MS) { continue; }
-        const cloud = series.cloud[bestIdx] ?? 0;
-        const wRaw  = computePvPowerWeighted(
-            host.config,
-            series.times[bestIdx],
-            coords.lat,
-            coords.lon,
-            cloud,
-            {
-                airTempC: series.temperature?.[bestIdx],
-                windMs:   series.windSpeed?.[bestIdx],
-                raster,
-            }
-        );
-        const eff = effectiveForecastRatio(shading, series.times[bestIdx], coords.lat, coords.lon, cloud, calR, nowMs);
-        const w   = wRaw * k * eff;
-        if (Number.isFinite(w))
-        {
-            values[h] = Math.min(cap, Math.max(0, w));
-        }
-    }
-    return values;
-}
-
-
-//Fill the null gaps between two non-null entries with linear interpolation. Used downstream of the
-//weather bucketization passes (cloud, irradiance) where the source series only has one sample per
-//hour but the target array carries STEPS_PER_DAY buckets, so most buckets are empty between hourly
-//samples. Linear interpolation smooths the per-bucket value across the hourly window, the curve
-//then draws as a continuous progression instead of a series of spikes at every hour mark. Edge
-//gaps (before the first non-null, after the last non-null) carry the nearest non-null forward /
-//backward so the curve runs the full day window even when the data is incomplete at the bounds.
-function interpolateNullGaps(arr: (number | null)[]): (number | null)[]
-{
-    const N = arr.length;
-    const out: (number | null)[] = arr.slice();
-    let i = 0;
-    while (i < N)
-    {
-        if (out[i] !== null) { i++; continue; }
-        let j = i;
-        while (j < N && out[j] === null) { j++; }
-        const prev = i > 0 ? out[i - 1] : null;
-        const next = j < N ? out[j]     : null;
-        if (prev === null && next === null) { break; }
-        if (prev === null)
-        {
-            for (let k = i; k < j; k++) { out[k] = next; }
-        }
-        else if (next === null)
-        {
-            for (let k = i; k < N; k++) { out[k] = prev; }
-            break;
-        }
-        else
-        {
-            const span = j - i + 1;
-            for (let k = i; k < j; k++)
-            {
-                const t = (k - i + 1) / span;
-                out[k] = prev + (next - prev) * t;
-            }
-        }
-        i = j;
-    }
-    return out;
-}
-
-
-//Hourly mean irradiance (W / m²) over the day window. Pulled from the weather-model series, same
-//path as the dial's central irradiance ratio but bucketed hourly so the chip strip can show the
-//hovered hour's value. Returns Watts per square metre per hour.
-function computeHourlyIrradiance(host: DashboardHost, dayStartMs: number): (number | null)[]
-{
-    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
-    const series = host._chartSeries;
-    if (!series || series.times.length === 0) { return values; }
-    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
-    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
-    for (let i = 0; i < series.times.length; i++)
-    {
-        const t = series.times[i].getTime();
-        if (t < dayStartMs || t >= dayStartMs + DAY_MS) { continue; }
-        const v = series.irradiance?.[i];
-        if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) { continue; }
-        const h = Math.floor((t - dayStartMs) / STEP_MS);
-        sums[h]   += v;
-        counts[h] += 1;
-    }
-    for (let h = 0; h < STEPS_PER_DAY; h++)
-    {
-        if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
-    }
-    //Weather series is hourly, only 1 bucket in every STEPS_PER_HOUR ends up populated. Linearly
-    //fill the gaps so the curve renders as a smooth progression across the day at WEATHER_INTERP_STEP_MS
-    //granularity, matching the rest of the pipeline.
-    return interpolateNullGaps(values);
-}
-
-
-//Hourly cloud cover (%) over the day window. Pulled from the weather-model series which covers
-//past 30 d + forecast 2 d, so cloud is uniformly available for past + future. Returns 0..100.
-function computeHourlyCloud(host: DashboardHost, dayStartMs: number): (number | null)[]
-{
-    const values: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
-    const series = host._chartSeries;
-    if (!series || series.times.length === 0) { return values; }
-    const sums   = new Array(STEPS_PER_DAY).fill(0) as number[];
-    const counts = new Array(STEPS_PER_DAY).fill(0) as number[];
-    for (let i = 0; i < series.times.length; i++)
-    {
-        const t = series.times[i].getTime();
-        if (t < dayStartMs || t >= dayStartMs + DAY_MS) { continue; }
-        const v = series.cloud[i];
-        if (typeof v !== 'number' || !Number.isFinite(v)) { continue; }
-        const h = Math.floor((t - dayStartMs) / STEP_MS);
-        sums[h]   += Math.max(0, Math.min(100, v));
-        counts[h] += 1;
-    }
-    for (let h = 0; h < STEPS_PER_DAY; h++)
-    {
-        if (counts[h] > 0) { values[h] = sums[h] / counts[h]; }
-    }
-    //Same hourly-to-15-min interpolation as the irradiance pass above so the cloud curve doesn't
-    //read as a series of vertical spikes at each hourly weather sample.
-    return interpolateNullGaps(values);
 }
 
 
@@ -781,22 +447,53 @@ export interface RadialDayData
 }
 
 
-export function prepareRadialDayData(host: DashboardHost, cardOffset: number): RadialDayData
+//Empty per-card data when the unified store hasn't been built yet (first render after card mount,
+//before the initial fetches lifted). Every series is all-null so the radial dial + graph view render
+//cleanly with empty curves until the first refresh lands the real data, no crash, no flicker.
+function emptyRadialDayData(cardOffset: number): RadialDayData
 {
     const dayStartMs = dayStartMsFor(cardOffset);
     const dayEndMs   = dayStartMs + DAY_MS;
     const nowMs      = Date.now();
+    const pastEndHour = dayEndMs <= nowMs ? 24
+                      : dayStartMs >= nowMs ? 0
+                      : (nowMs - dayStartMs) / HOUR_MS;
+    const empty: (number | null)[] = new Array(STEPS_PER_DAY).fill(null);
+    return {
+        dayStartMs,
+        dayEndMs,
+        pastEndHour,
+        hourlyProd:     empty.slice(),
+        hourlyForecast: empty.slice(),
+        hourlyBatt:     empty.slice(),
+        hourlyCloud:    empty.slice(),
+        hourlyIrr:      empty.slice(),
+        prodScaleMax:   500,
+        battScaleMax:   500,
+        cloudScaleMax:  100,
+        sunRiseSet:     { sunrise: null, sunset: null },
+        ratioPct:       0,
+    };
+}
 
-    let pastEndHour: number;
-    if (dayEndMs <= nowMs)        { pastEndHour = 24; }
-    else if (dayStartMs >= nowMs) { pastEndHour = 0;  }
-    else                          { pastEndHour = (nowMs - dayStartMs) / HOUR_MS; }
 
-    const hourlyProd     = computeHourlyProduction(host, dayStartMs);
-    const hourlyForecast = computeHourlyProductionForecast(host, dayStartMs);
-    const hourlyBatt     = computeHourlyBattery(host, dayStartMs);
-    const hourlyCloud    = computeHourlyCloud(host, dayStartMs);
-    const hourlyIrr      = computeHourlyIrradiance(host, dayStartMs);
+export function prepareRadialDayData(host: DashboardHost, cardOffset: number): RadialDayData
+{
+    //Read from the unified 5-day store: every per-time signal already lives in pre-bucketized form.
+    //sliceForDay carves out the 96 buckets for this card's calendar day, the only per-day work that
+    //stays here is the scale max derivation (depends on the slice) and the sun rise / set + daily
+    //irradiance ratio which need the home coordinates.
+    const store = host._unifiedStore;
+    if (!store)
+    {
+        return emptyRadialDayData(cardOffset);
+    }
+    const slice = sliceForDay(store, cardOffset);
+    const hourlyProd     = slice.hourlyProd.slice();
+    const hourlyForecast = slice.hourlyForecast.slice();
+    const hourlyBatt     = slice.hourlyBatt.slice();
+    const hourlyCloud    = slice.hourlyCloud.slice();
+    const hourlyIrr      = slice.hourlyIrradiance.slice();
 
     //Scale max accounts for BOTH the realised + forecast curves so the past fill and the forecast
     //outline share the same radial space, the forecast line at peak hour reads at the same height
@@ -811,10 +508,24 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     const cloudScaleMax = 100;
 
     const homeCoords = getHomeCoords(host.config, host.hass);
-    const sunRiseSet = homeCoords ? findSunriseSunset(dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
-    const { ratioPct } = computeDailyIrradianceRatio(host, dayStartMs);
+    const sunRiseSet = homeCoords ? findSunriseSunset(slice.dayStartMs, homeCoords.lat, homeCoords.lon) : { sunrise: null, sunset: null };
+    const { ratioPct } = computeDailyIrradianceRatio(host, slice.dayStartMs);
 
-    return { dayStartMs, dayEndMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct };
+    return {
+        dayStartMs:     slice.dayStartMs,
+        dayEndMs:       slice.dayEndMs,
+        pastEndHour:    slice.pastEndHour,
+        hourlyProd,
+        hourlyForecast,
+        hourlyBatt,
+        hourlyCloud,
+        hourlyIrr,
+        prodScaleMax,
+        battScaleMax,
+        cloudScaleMax,
+        sunRiseSet,
+        ratioPct,
+    };
 }
 
 
@@ -1389,10 +1100,9 @@ function dailyEnergyKwh(arr: ReadonlyArray<number | null>): number | null
 {
     let s = 0, hasData = false;
     for (const v of arr) { if (v !== null) { s += v; hasData = true; } }
-    //Each bucket carries the mean power over a STEP_MS window. Total Wh = sum of bucket-means times
-    //the bucket length in hours. At 1-bucket-per-hour (STEPS_PER_HOUR = 1) the divisor is 1 and the
-    //legacy `s / 1000` legacy expression directly returned kWh, at finer buckets divide by the same
-    //factor so the day's kWh stays invariant to the bucket size.
+    //Each bucket carries the mean power over a 1 / STEPS_PER_HOUR-hour window. Total Wh = sum of
+    //bucket-means times the bucket length in hours, divide by 1000 for kWh. Stays invariant to the
+    //bucket size: the day's kWh is unchanged whether the underlying granularity is 1 / hour or 4 / hour.
     return hasData ? s / STEPS_PER_HOUR / 1000 : null;
 }
 

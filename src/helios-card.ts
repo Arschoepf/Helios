@@ -89,6 +89,7 @@ import {
     refreshShadingDomeScene,
 } from './card/shadingDome';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
+import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
     computeConfigSig,
@@ -572,6 +573,13 @@ export class HeliosCard extends LitElement
     //the change applies to every card simultaneously. Default radial keeps the historical chip strip +
     //sundial layout that landed in v1.8.3.
     @state() _dashViewMode:         'radial' | 'graph' = 'radial';
+    //Unified 5-day data store. Populated after the initial weather + PV + battery + grid fetches
+    //land, rebuilt every time any of those refresh, sliced / interpolated by the radial dial, the
+    //graph view AND the main UI timeline. Live numeric chips deliberately stay on the direct
+    //hass.states path: the store carries bucketed historical and forecast curves, the chips show
+    //sample-accurate live values that would lose precision if forced through a 15 min bucket
+    //aggregation.
+    @state() _unifiedStore: import('./card/unifiedStore').UnifiedDataStore | null = null;
     //Single source of truth for which mode the card is in. Drives every transition (slider slide-in
     /// slide-out, chip + leader + arc fade, timeline slide, WebGL dot-cloud fade-in / out, ShadingDome
     //SVG fade-in / out). Set imperatively by the mode-bar click handlers, reacted to by
@@ -1072,6 +1080,14 @@ export class HeliosCard extends LitElement
     //dashboard editor.
     protected updated(_changedProperties: PropertyValues): void
     {
+        //Unified data store refresh. Walks the lengths of every underlying source and rebuilds the
+        //store whenever any of them changed since the last build, so the radial dial + graph view +
+        //timeline always read the latest data without needing per-consumer cache invalidation. Cheap
+        //when nothing changed (one hash compare returns early), measurable but bounded when a real
+        //refresh lands (~50 ms for a full 480 × 7 bucketization + forecast pass on the v1.8.3 vintage
+        //compute budget).
+        this._maybeRebuildUnifiedStore();
+
         //Mode-transition state machine. When the user clicks a different mode on the mode-bar,
         //_onModeLayer / _onModeLidar / _onModeShadingDome set _cardMode directly; the click handler
         //does nothing else. The rest of the transition (engine fade-in / fade-out kick, overlay mask
@@ -2850,6 +2866,21 @@ export class HeliosCard extends LitElement
     //
     //CSS animations (slider slide-in / slide-out, chip + leader + arc fade, timeline slide) run on
     //their own classes (.is-active on the sliders, .overlay-masked on ha-card) which derive directly
+    //Unified store refresh check. Called from updated() on every Lit cycle: short-circuits when the
+    //store already on the host matches the current data version (cheap hash compare of array lengths),
+    //rebuilds otherwise and assigns to the @state so the next render picks up the new bucketization.
+    //Setting the @state during updated() schedules a follow-up render but does NOT loop because the
+    //rebuild result has the same dataVersion, so the next isStoreFresh check short-circuits.
+    private _maybeRebuildUnifiedStore(): void
+    {
+        const host = this as unknown as UnifiedStoreHost;
+        if (isStoreFresh(host, this._unifiedStore))
+        {
+            return;
+        }
+        this._unifiedStore = buildUnifiedStore(host);
+    }
+
     //from _cardMode / _overlayMaskActive in the render output. No keyframes, no animation: forwards,
     //no rAF defers, just transitions on the CSS rule's base style that fire on class change.
     private _handleCardModeChange(prev: CardMode, next: CardMode): void

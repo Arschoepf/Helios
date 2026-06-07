@@ -33,6 +33,26 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Unified 5-day data store, radial dial migrated (#210)
+
+The dashboard had been growing every per-time signal (irradiance, cloud cover, production, forecast,
+battery, grid import / export) as its own per-render bucketization pass; the radial dial, the timeline
+and the graph view each walked the same raw sources and produced subtly different bucket alignments,
+so hover spheres on the radial did not land exactly on the same hour as the timeline. This release
+introduces a single source of truth for everything from J-2 to J+2: 480 buckets of 15 min granularity
+held on the card instance, rebuilt only when the source array hashes change so idle frames cost nothing.
+
+The radial dial migration ships in this beta. `prepareRadialDayData` is now a thin wrapper around
+`sliceForDay(store, cardOffset)` that carves the 96 buckets for the requested calendar day out of the
+5-day store, instead of running five independent compute loops per render. Five per-day compute helpers
+(production, forecast, battery, cloud, irradiance) and the linear gap-fill helper are deleted (-310
+lines). Timeline + graph view migration land in the next beta, the first card to consume the unified
+store sets the contract for the rest.
+
+Live chips intentionally stay off the store and keep reading `hass.states[entity]` directly; bucketing
+live values would either bloat the store with one bucket per WS push or lose the per-second precision
+the chips need.
+
 ### Drop raw history fetch + boot loading overlay
 
 Two complementary cleanups now that the card is wired to the HA Energy dashboard end-to-end:

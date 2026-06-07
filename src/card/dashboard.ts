@@ -75,6 +75,10 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //bandeau on the front card, the flip applies to every card simultaneously so the user reads the
     //same vocabulary on yesterday + today + tomorrow at every swipe.
     _dashViewMode:         'radial' | 'graph';
+    //Unified 5-day data store. Source of truth for every per-time signal the dashboard reads. Built
+    //by the card on every Lit update cycle when the underlying source arrays change, sliced here per
+    //card via the unifiedStore.sliceForDay helper.
+    readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
     //Per-entity grid sample buffers populated by refreshGrid (in grid.ts) so the dashboard's grid chart
     //can read raw import / export samples for today's curve. Maps are keyed by HA entity id.
     readonly _gridImportSamples: Map<string, Array<{ t: number; v: number }>>;
