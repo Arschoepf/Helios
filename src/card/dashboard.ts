@@ -70,6 +70,11 @@ export interface DashboardHost extends ChartHost, BatteryHost
     //phase flips to 'idle' and the cards sit at their inline-style resting transforms.
     _dashAnimPhase:        'idle' | 'entering' | 'exiting';
     _dashAnimTimer?:       number;
+    //Shared view mode across every CoverFlow card. 'radial' keeps the historical chip strip + radial
+    //sundial layout, 'graph' replaces both with a single full-height graph block. Toggled from the
+    //bandeau on the front card, the flip applies to every card simultaneously so the user reads the
+    //same vocabulary on yesterday + today + tomorrow at every swipe.
+    _dashViewMode:         'radial' | 'graph';
     //Per-entity grid sample buffers populated by refreshGrid (in grid.ts) so the dashboard's grid chart
     //can read raw import / export samples for today's curve. Maps are keyed by HA entity id.
     readonly _gridImportSamples: Map<string, Array<{ t: number; v: number }>>;
@@ -421,9 +426,24 @@ function renderCoverflowCard(
     const radialData = prepareRadialDayData(host, cardOffset);
 
 
+    //Shared view mode for every card in the stack. Click on the toggle in any card's bandeau flips the
+    //mode for the whole CoverFlow.
+    const viewMode      = host._dashViewMode ?? 'radial';
+    const nextViewMode  = viewMode === 'radial' ? 'graph' : 'radial';
+    const viewToggleIcon  = viewMode === 'radial' ? 'mdi:radar' : 'mdi:chart-line';
+    const viewToggleLabel = viewMode === 'radial'
+        ? (t.detail.dashViewRadialLabel ?? 'Radial view')
+        : (t.detail.dashViewGraphLabel  ?? 'Graph view');
+    const onToggleView = (e: Event): void =>
+    {
+        e.stopPropagation();
+        host._dashViewMode = nextViewMode;
+        host.requestUpdate();
+    };
+
     return html`
         <article
-            class="dash-cf-card ${isFront ? 'dash-cf-card-front' : ''}"
+            class="dash-cf-card ${isFront ? 'dash-cf-card-front' : ''} dash-cf-view-${viewMode}"
             style="${style}"
             data-day-offset="${cardOffset}"
             data-delta="${deltaAttr}"
@@ -439,23 +459,53 @@ function renderCoverflowCard(
                     <span class="dash-cf-card-date dash-cf-card-date-short">${dateLabelShort}</span>
                     <span class="dash-cf-card-day-chip">${friendlyLabel}</span>
                 </span>
-                ${isFront ? html`
-                    <button
-                        class="dash-cf-close-btn"
-                        @click="${(e: Event) => handleExitDetail(host, e)}"
-                        aria-label="${t.detail.exitHint}"
-                    >
-                        <ha-icon icon="mdi:close"></ha-icon>
-                    </button>
-                ` : html`
-                    <span class="dash-cf-card-bandeau-spacer" aria-hidden="true"></span>
-                `}
+                <span class="dash-cf-card-bandeau-trailing">
+                    ${isFront ? html`
+                        <button
+                            class="dash-cf-view-toggle dash-cf-view-toggle-${viewMode}"
+                            type="button"
+                            @click="${onToggleView}"
+                            aria-label="${viewToggleLabel}"
+                            title="${viewToggleLabel}"
+                        >
+                            <ha-icon icon="${viewToggleIcon}"></ha-icon>
+                        </button>
+                        <button
+                            class="dash-cf-close-btn"
+                            @click="${(e: Event) => handleExitDetail(host, e)}"
+                            aria-label="${t.detail.exitHint}"
+                        >
+                            <ha-icon icon="mdi:close"></ha-icon>
+                        </button>
+                    ` : html`
+                        <span class="dash-cf-card-bandeau-spacer" aria-hidden="true"></span>
+                    `}
+                </span>
             </ha-card>
 
-            ${renderDashCardChipStrip(host, cardOffset, activeOffset, radialData)}
-            ${renderRadialDial(host, cardOffset, activeOffset, radialData)}
+            ${viewMode === 'radial' ? html`
+                ${renderDashCardChipStrip(host, cardOffset, activeOffset, radialData)}
+                ${renderRadialDial(host, cardOffset, activeOffset, radialData)}
+            ` : html`
+                ${renderGraphBlock(host, cardOffset, activeOffset, radialData)}
+            `}
         </article>
     `;
+}
+
+
+//Graph view block. Replaces the chip strip + radial dial pair with a single full-height container
+//that the future iteration will fill with a per-day chart. Empty placeholder for now so the toggle is
+//wired end-to-end and the rest of the layout (bandeau, transitions, swipe nav) keeps working while we
+//iterate on the chart content.
+function renderGraphBlock(
+    _host:         DashboardHost,
+    _cardOffset:   number,
+    _activeOffset: number,
+    _data:         ReturnType<typeof prepareRadialDayData>
+): TemplateResult
+{
+    return html`<ha-card class="dash-cf-card-graph-block"></ha-card>`;
 }
 
 

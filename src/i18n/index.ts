@@ -51,6 +51,10 @@ export interface Translations
         //of the radial card while a hover cursor is parked on the dial. Tapping it clears the cursor
         //and snaps the dial back to its live read-out.
         radialBackToLive?:      string; //'Back to live'
+        //Aria label + title on the view-mode toggle in the CoverFlow card bandeau. The visible icon
+        //is a glyph (radar dial vs chart line), the title carries the human-readable mode name.
+        dashViewRadialLabel?:   string; //'Radial view'
+        dashViewGraphLabel?:    string; //'Graph view'
     };
 
     editor:

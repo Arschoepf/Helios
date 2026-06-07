@@ -568,6 +568,10 @@ export class HeliosCard extends LitElement
     //animations per card.
     @state() _dashAnimPhase:        'idle' | 'entering' | 'exiting' = 'idle';
     _dashAnimTimer?:                number;
+    //Shared view mode across every CoverFlow card. Flipped from the bandeau toggle on the front card,
+    //the change applies to every card simultaneously. Default radial keeps the historical chip strip +
+    //sundial layout that landed in v1.8.3.
+    @state() _dashViewMode:         'radial' | 'graph' = 'radial';
     //Single source of truth for which mode the card is in. Drives every transition (slider slide-in
     /// slide-out, chip + leader + arc fade, timeline slide, WebGL dot-cloud fade-in / out, ShadingDome
     //SVG fade-in / out). Set imperatively by the mode-bar click handlers, reacted to by

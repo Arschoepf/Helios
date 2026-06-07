@@ -31,6 +31,8 @@ export const en: Translations = {
         radialCloudLabel:      'Cloud',
         radialIrradianceLabel: 'Irradiance',
         radialBackToLive:      'Back to live',
+        dashViewRadialLabel:   'Radial view',
+        dashViewGraphLabel:    'Graph view',
     },
 
     editor:

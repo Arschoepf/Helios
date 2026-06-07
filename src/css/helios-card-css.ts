@@ -546,7 +546,8 @@ export const heliosCardStyles = css`
         already paints keeps the cards visibly delimited without the shadow. */
     ha-card:not(.theme-dark) ha-card.dash-cf-card-bandeau,
     ha-card:not(.theme-dark) ha-card.dash-radial-badge,
-    ha-card:not(.theme-dark) ha-card.dash-radial-wrap
+    ha-card:not(.theme-dark) ha-card.dash-radial-wrap,
+    ha-card:not(.theme-dark) ha-card.dash-cf-card-graph-block
     {
         box-shadow: none;
     }
@@ -571,7 +572,8 @@ export const heliosCardStyles = css`
         would resolve against the inner mini-card width and mis-fire). */
     ha-card.dash-cf-card-bandeau,
     ha-card.dash-radial-badge,
-    ha-card.dash-radial-wrap
+    ha-card.dash-radial-wrap,
+    ha-card.dash-cf-card-graph-block
     {
         background:   var(--ha-card-background, var(--card-background-color, #1c1c1c));
         min-height:   0;
@@ -671,13 +673,86 @@ export const heliosCardStyles = css`
         white-space: nowrap;
         flex-shrink: 0;
     }
-    /*  Right-side slot. Either the close button (front card) or an invisible 30 px spacer so the grid keeps
-        the centre column properly centred on every card. */
+    /*  Right-side slot. Holds either the view-mode toggle + close button stack on the front card OR an
+        invisible spacer of matching width on the side cards, so the centre column stays vertically aligned
+        on every card regardless of which one sits at the front. */
+    .dash-cf-card-bandeau-trailing
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+    }
     .dash-cf-card-bandeau-spacer
     {
         display: inline-block;
-        width: 30px;
+        /*  Matches the trailing footprint on the front card, view-toggle 32 px + gap 6 px + close 30 px,
+            so the centre column lands at the exact same pixel column when the user swipes between cards. */
+        width: 68px;
         height: 30px;
+    }
+    /*  View-mode toggle in the bandeau. Round 32 px chip mirroring the weather chip on the left, with a
+        mode-coloured tint so the user reads the active mode at a glance. Two colour families: the radial
+        mode picks up --energy-solar-color (warm orange, ties to the sundial visual), the graph mode
+        picks up --primary-color (HA blue, ties to the chart vocabulary). Tap flips the mode for every
+        card in the stack at once. */
+    .dash-cf-view-toggle
+    {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        border: none;
+        cursor: pointer;
+        line-height: 0;
+        padding: 0;
+        transition: background 0.15s, color 0.15s, transform 0.1s;
+    }
+    .dash-cf-view-toggle:active
+    {
+        transform: scale(0.94);
+    }
+    .dash-cf-view-toggle ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+    .dash-cf-view-toggle-radial
+    {
+        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 22%, transparent);
+        color: var(--energy-solar-color, #ff9800);
+    }
+    .dash-cf-view-toggle-radial:hover
+    {
+        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 36%, transparent);
+    }
+    .dash-cf-view-toggle-graph
+    {
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
+        color: var(--primary-color, #03a9f4);
+    }
+    .dash-cf-view-toggle-graph:hover
+    {
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 36%, transparent);
+    }
+    /*  Graph view block. Full-height ha-card that replaces the chip strip + radial dial in the dashboard
+        CoverFlow when the view mode is 'graph'. Empty placeholder for now, the iteration to fill it with
+        the per-day chart follows in a later commit. */
+    ha-card.dash-cf-card-graph-block
+    {
+        flex: 1 1 0;
+        min-height: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 8px;
     }
 
     /*  Container queries on the OUTER ha-card width. Each CoverFlow card is 46 cqw wide (~46 % of the ha-card),

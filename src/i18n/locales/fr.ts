@@ -28,6 +28,8 @@ export const fr: Translations = {
         radialCloudLabel:      'Nuages',
         radialIrradianceLabel: 'Irradiance',
         radialBackToLive:      'Retour au direct',
+        dashViewRadialLabel:   'Vue radiale',
+        dashViewGraphLabel:    'Vue graphique',
     },
 
     editor:

@@ -822,10 +822,6 @@ function foo()
 
 Y compris pour les bodies single-line et les blocks vides. C'est imposé pour cohérence.
 
-### Pas d'em-dash
-
-Le caractère em-dash `—` n'apparait pas dans les commentaires ou la doc parce qu'il "fait" généré par IA. Toujours remplacé par une virgule ou un colon.
-
 ### Pas de version dans les commentaires
 
 Les commentaires décrivent le code COURANT. Pas de "since beta.12", pas de "previous behavior was...". L'historique vit dans les commits.
