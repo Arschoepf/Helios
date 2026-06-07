@@ -25,7 +25,7 @@ import { computeForecastCalibration } from './calibration';
 import { currentShadingMap } from './shadingTrainer';
 import type { SunScene } from './overlays';
 import { getHomeCoords } from './init';
-import { renderRadialDial, renderDashCardChipStrip, prepareRadialDayData } from './dashboardRadial';
+import { renderRadialDial, renderDashCardChipStrip, renderDashCardGraphView, prepareRadialDayData } from './dashboardRadial';
 
 
 //Structural surface the host card exposes to this module. Includes
@@ -450,16 +450,10 @@ function renderCoverflowCard(
             @click="${(e: Event) => { if (!isFront) { e.stopPropagation(); navigateDashDay(host, cardOffset); } }}"
         >
             <ha-card class="dash-cf-card-bandeau">
-                <span class="dash-cf-card-weather-chip" aria-hidden="true">
-                    <ha-icon icon="${weatherIcon}"></ha-icon>
-                </span>
-                <span class="dash-cf-card-bandeau-center">
-                    <ha-icon class="dash-cf-card-cal-icon" icon="mdi:calendar"></ha-icon>
-                    <span class="dash-cf-card-date dash-cf-card-date-long">${dateLabelLong}</span>
-                    <span class="dash-cf-card-date dash-cf-card-date-short">${dateLabelShort}</span>
-                    <span class="dash-cf-card-day-chip">${friendlyLabel}</span>
-                </span>
-                <span class="dash-cf-card-bandeau-trailing">
+                <span class="dash-cf-card-bandeau-leading">
+                    <span class="dash-cf-card-weather-chip" aria-hidden="true">
+                        <ha-icon icon="${weatherIcon}"></ha-icon>
+                    </span>
                     ${isFront ? html`
                         <button
                             class="dash-cf-view-toggle dash-cf-view-toggle-${viewMode}"
@@ -470,42 +464,37 @@ function renderCoverflowCard(
                         >
                             <ha-icon icon="${viewToggleIcon}"></ha-icon>
                         </button>
-                        <button
-                            class="dash-cf-close-btn"
-                            @click="${(e: Event) => handleExitDetail(host, e)}"
-                            aria-label="${t.detail.exitHint}"
-                        >
-                            <ha-icon icon="mdi:close"></ha-icon>
-                        </button>
                     ` : html`
-                        <span class="dash-cf-card-bandeau-spacer" aria-hidden="true"></span>
+                        <span class="dash-cf-view-toggle-spacer" aria-hidden="true"></span>
                     `}
                 </span>
+                <span class="dash-cf-card-bandeau-center">
+                    <ha-icon class="dash-cf-card-cal-icon" icon="mdi:calendar"></ha-icon>
+                    <span class="dash-cf-card-date dash-cf-card-date-long">${dateLabelLong}</span>
+                    <span class="dash-cf-card-date dash-cf-card-date-short">${dateLabelShort}</span>
+                    <span class="dash-cf-card-day-chip">${friendlyLabel}</span>
+                </span>
+                ${isFront ? html`
+                    <button
+                        class="dash-cf-close-btn"
+                        @click="${(e: Event) => handleExitDetail(host, e)}"
+                        aria-label="${t.detail.exitHint}"
+                    >
+                        <ha-icon icon="mdi:close"></ha-icon>
+                    </button>
+                ` : html`
+                    <span class="dash-cf-card-bandeau-spacer" aria-hidden="true"></span>
+                `}
             </ha-card>
 
             ${viewMode === 'radial' ? html`
                 ${renderDashCardChipStrip(host, cardOffset, activeOffset, radialData)}
                 ${renderRadialDial(host, cardOffset, activeOffset, radialData)}
             ` : html`
-                ${renderGraphBlock(host, cardOffset, activeOffset, radialData)}
+                ${renderDashCardGraphView(host, cardOffset, activeOffset, radialData)}
             `}
         </article>
     `;
-}
-
-
-//Graph view block. Replaces the chip strip + radial dial pair with a single full-height container
-//that the future iteration will fill with a per-day chart. Empty placeholder for now so the toggle is
-//wired end-to-end and the rest of the layout (bandeau, transitions, swipe nav) keeps working while we
-//iterate on the chart content.
-function renderGraphBlock(
-    _host:         DashboardHost,
-    _cardOffset:   number,
-    _activeOffset: number,
-    _data:         ReturnType<typeof prepareRadialDayData>
-): TemplateResult
-{
-    return html`<ha-card class="dash-cf-card-graph-block"></ha-card>`;
 }
 
 

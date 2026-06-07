@@ -673,22 +673,31 @@ export const heliosCardStyles = css`
         white-space: nowrap;
         flex-shrink: 0;
     }
-    /*  Right-side slot. Holds either the view-mode toggle + close button stack on the front card OR an
-        invisible spacer of matching width on the side cards, so the centre column stays vertically aligned
-        on every card regardless of which one sits at the front. */
-    .dash-cf-card-bandeau-trailing
+    /*  Left-side group. Holds the weather chip plus the view-mode toggle (front card) or an invisible
+        spacer of matching width (side cards), so the centre column stays vertically aligned on every
+        card regardless of which one sits at the front. */
+    .dash-cf-card-bandeau-leading
     {
         display: inline-flex;
         align-items: center;
         gap: 6px;
         flex-shrink: 0;
     }
+    .dash-cf-view-toggle-spacer
+    {
+        /*  32 px placeholder that matches the toggle width on the front card so the bandeau-leading
+            group keeps the same overall width on every card and the centre column never shifts on
+            swipe. Held by aria-hidden, no visual chrome. */
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+    }
+    /*  Right-side slot. Either the close button (front card) or an invisible 30 px spacer of matching
+        width on the side cards. */
     .dash-cf-card-bandeau-spacer
     {
         display: inline-block;
-        /*  Matches the trailing footprint on the front card, view-toggle 32 px + gap 6 px + close 30 px,
-            so the centre column lands at the exact same pixel column when the user swipes between cards. */
-        width: 68px;
+        width: 30px;
         height: 30px;
     }
     /*  View-mode toggle in the bandeau. Round 32 px chip mirroring the weather chip on the left, with a
@@ -743,16 +752,118 @@ export const heliosCardStyles = css`
         background: color-mix(in srgb, var(--primary-color, #03a9f4) 36%, transparent);
     }
     /*  Graph view block. Full-height ha-card that replaces the chip strip + radial dial in the dashboard
-        CoverFlow when the view mode is 'graph'. Empty placeholder for now, the iteration to fill it with
-        the per-day chart follows in a later commit. */
+        CoverFlow when the view mode is 'graph'. Hosts a stretched SVG chart (preserveAspectRatio: none)
+        + HTML hover dot overlays. position: relative so the overlays anchor on the block edges, and
+        padding: 0 so the dot percentages align with SVG content space (breathing room comes from the
+        SVG's internal TOP_MARGIN_Y + BASELINE_Y offsets, not from the wrap padding). */
     ha-card.dash-cf-card-graph-block
     {
+        position: relative;
         flex: 1 1 0;
         min-height: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 8px;
+        display: block;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    /*  Pair-mode grid override for the mini-card strip in graph view. The base rule is 1fr 1fr at
+        narrow widths and repeat(4, 1fr) at >=640 px containers; graph mode only has 2 cards (production
+        + forecast) so we lock it to 2 columns at every width so the cards never end up squished into a
+        quarter-row with empty cells. */
+    .dash-radial-chip-strip.dash-radial-chip-strip-pair
+    {
+        grid-template-columns: 1fr 1fr;
+    }
+    @container (min-width: 640px)
+    {
+        .dash-radial-chip-strip.dash-radial-chip-strip-pair
+        {
+            grid-template-columns: 1fr 1fr;
+        }
+    }
+    /*  Forecast mini-card: same chrome as the production / battery / cloud / irradiance ones, just in
+        the HA primary blue family so the two graph-mode chips read as a paired set against the
+        production-orange + forecast-blue split the chart uses underneath. */
+    .dash-radial-badge-forecast .dash-radial-badge-chip
+    {
+        background: color-mix(in srgb, var(--primary-color, #03a9f4) 22%, transparent);
+        color: var(--primary-color, #03a9f4);
+    }
+
+    /*  Graph view chart. SVG stretches edge-to-edge via preserveAspectRatio: none so the area + line
+        paths fill the full block width and height; HTML hover dots overlay on top via percentages of
+        the block bounding box, which keeps them perfectly round (SVG circles would render as ovals
+        under the chart's non-square aspect ratio). */
+    .dash-graph-svg
+    {
+        display: block;
+        width: 100%;
+        height: 100%;
+        touch-action: none;
+    }
+    .dash-graph-night-hatch-line
+    {
+        stroke: var(--secondary-text-color, rgba(0, 0, 0, 0.5));
+        stroke-width: 1.5;
+        stroke-opacity: 0.18;
+    }
+    .dash-graph-day-separator
+    {
+        stroke: color-mix(in srgb, var(--primary-text-color, #ffffff) 45%, transparent);
+        stroke-width: 1;
+        stroke-dasharray: 3 3;
+        vector-effect: non-scaling-stroke;
+        fill: none;
+    }
+    .dash-graph-prod-area
+    {
+        fill: color-mix(in srgb, var(--energy-solar-color, #ff9800) 35%, transparent);
+        stroke: var(--energy-solar-color, #ff9800);
+        stroke-width: 2;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-graph-forecast-line
+    {
+        fill: none;
+        stroke: var(--energy-solar-color, #ff9800);
+        stroke-width: 1.5;
+        stroke-dasharray: 4 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        vector-effect: non-scaling-stroke;
+    }
+    .dash-graph-cursor
+    {
+        stroke: var(--primary-text-color, #ffffff);
+        stroke-width: 1.5;
+        stroke-opacity: 0.7;
+        vector-effect: non-scaling-stroke;
+        fill: none;
+    }
+    /*  Hover dots, HTML overlays anchored via percent of the block bounding box (the SVG fills 100 %
+        so the SVG content space matches the percent space). Same colour vocabulary as the chart curves
+        underneath, primary-text-color outline matches the radial dial + main timeline hover dots so the
+        delimitation reads consistently across every chart surface in the card. */
+    .dash-graph-hover-dot
+    {
+        position: absolute;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        border: 1.5px solid color-mix(in srgb, var(--primary-text-color, #ffffff) 70%, transparent);
+        box-sizing: border-box;
+        transform: translate(-50%, -50%);
+        pointer-events: none;
+        z-index: 5;
+    }
+    .dash-graph-hover-dot-prod
+    {
+        background: var(--energy-solar-color, #ff9800);
+    }
+    .dash-graph-hover-dot-forecast
+    {
+        background: color-mix(in srgb, var(--energy-solar-color, #ff9800) 55%, transparent);
     }
 
     /*  Container queries on the OUTER ha-card width. Each CoverFlow card is 46 cqw wide (~46 % of the ha-card),

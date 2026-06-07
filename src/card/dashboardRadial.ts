@@ -1421,3 +1421,222 @@ export function renderDashCardChipStrip(host: DashboardHost, cardOffset: number,
 }
 
 
+//Graph view: a 2-mini-card strip (production + forecast) on top of a single chart that draws the day's
+//actual production vs forecast, hatched night zones on either side of the daylight window, and a hover
+//cursor with HTML dots overlaying both curves so the chart stays cosmetically uniform with the timeline
+//hover dots in the main UI. Sits inside the dash-cf-card-graph-block ha-card on every CoverFlow card
+//while host._dashViewMode === 'graph'.
+export function renderDashCardGraphView(host: DashboardHost, cardOffset: number, activeOffset: number, data: RadialDayData): TemplateResult
+{
+    const isFront     = cardOffset === activeOffset;
+    const hoverHour   = isFront ? host._dashRadialHoverHour : null;
+    const hoverActive = hoverHour !== null && hoverHour !== undefined;
+    const t           = pickTranslations(host.hass?.language);
+
+    const prodLabel     = t.detail.radialProductionLabel ?? 'Production';
+    const forecastLabel = t.detail.dashForecastLabel     ?? 'Forecast';
+
+    //Hover-or-daily values for the two mini-cards. Production reads as the day's total kWh by default,
+    //flips to the hovered hour's instantaneous W while the cursor is parked. Forecast follows the same
+    //recipe against the pv-arrays modelled curve.
+    const prodDailyKwh     = dailyEnergyKwh(data.hourlyProd);
+    const forecastDailyKwh = dailyEnergyKwh(data.hourlyForecast);
+    const prodW            = hoverActive ? interpAtHour(data.hourlyProd,     hoverHour as number) : null;
+    const forecastW        = hoverActive ? interpAtHour(data.hourlyForecast, hoverHour as number) : null;
+    const prodValue = hoverActive
+        ? (prodW === null     ? '—' : formatW(host.hass, prodW))
+        : formatKwh(host.hass, prodDailyKwh);
+    const forecastValue = hoverActive
+        ? (forecastW === null ? '—' : formatW(host.hass, forecastW))
+        : formatKwh(host.hass, forecastDailyKwh);
+
+    //Chart geometry, stretched to fill the ha-card via preserveAspectRatio: none. Y axis goes 0 (top)
+    //to H (bottom), the production baseline sits a bit above the bottom edge so the area curve never
+    //touches the card border (mirrors the HA Energy dashboard chart convention).
+    const W            = 1000;
+    const H            = 200;
+    const BASELINE_Y   = H - 18;
+    const TOP_MARGIN_Y = 14;
+    //Combined scale max across actual + forecast so both curves land at the same scale (the forecast
+    //might legitimately overshoot the realised production on cloudy days, the scale max captures both).
+    const dataScale = Math.max(1, data.prodScaleMax);
+    const hourToX = (h: number): number => (h / 24) * W;
+    const wattsToY = (w: number | null): number =>
+    {
+        if (w === null)
+        {
+            return BASELINE_Y;
+        }
+        const r = Math.max(0, w) / dataScale;
+        return BASELINE_Y - r * (BASELINE_Y - TOP_MARGIN_Y);
+    };
+
+    //Build the production area path (line + close to baseline + close to start) and the forecast line
+    //path. Sub-hour smoothing at thirds so the curves read as continuous rather than stepped, mirrors
+    //the radial dial's variable-curve recipe.
+    const buildLinePath = (values: ReadonlyArray<number | null>): string =>
+    {
+        let d = '';
+        for (let h = 0; h < 24; h++)
+        {
+            const v0 = values[h];
+            const v1 = values[(h + 1) % 24];
+            for (const f of [0, 1/3, 2/3])
+            {
+                const hour = h + f;
+                const v    = v0 === null || v1 === null
+                    ? (v0 === null ? v1 : v0)
+                    : v0 + ((v1 ?? 0) - v0) * f;
+                const x    = hourToX(hour);
+                const y    = wattsToY(v ?? null);
+                d += (d === '' ? 'M ' : ' L ') + x.toFixed(1) + ' ' + y.toFixed(1);
+            }
+        }
+        //Last vertex at x = W so the curve runs the whole canvas, otherwise the last hour gets dropped.
+        const last = values[23];
+        d += ' L ' + W.toFixed(1) + ' ' + wattsToY(last ?? null).toFixed(1);
+        return d;
+    };
+    const buildAreaPath = (values: ReadonlyArray<number | null>): string =>
+    {
+        const line = buildLinePath(values);
+        if (line === '')
+        {
+            return '';
+        }
+        return line + ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1)
+                    + ' L 0 ' + BASELINE_Y.toFixed(1) + ' Z';
+    };
+    const buildCollapsedPath = (closed: boolean): string =>
+    {
+        //All-zero "from" version for the day-load grow animation. Same vertex count as the real path.
+        let d = '';
+        for (let h = 0; h < 24; h++)
+        {
+            for (const f of [0, 1/3, 2/3])
+            {
+                const hour = h + f;
+                d += (d === '' ? 'M ' : ' L ') + hourToX(hour).toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
+            }
+        }
+        d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1);
+        if (closed)
+        {
+            d += ' L ' + W.toFixed(1) + ' ' + BASELINE_Y.toFixed(1)
+               + ' L 0 ' + BASELINE_Y.toFixed(1) + ' Z';
+        }
+        return d;
+    };
+
+    const prodAreaPath     = buildAreaPath(data.hourlyProd);
+    const fromProdArea     = buildCollapsedPath(true);
+    const forecastLinePath = buildLinePath(data.hourlyForecast);
+    const fromForecastLine = buildCollapsedPath(false);
+    const ANIM_DUR = '700ms';
+
+    //Night zones + day separators painted in the chart background. Sunrise and sunset are fractional
+    //hours of the local day (e.g. 7.5 = 7:30 am). null on polar day / polar night, skip the markers.
+    const sunrise   = data.sunRiseSet.sunrise;
+    const sunset    = data.sunRiseSet.sunset;
+    const patternId = `dash-graph-night-${cardOffset}`;
+
+    //Hover cursor + dots. The dots are HTML overlays positioned by percent of the chart bounding box
+    //so they stay perfectly round (the SVG itself stretches via preserveAspectRatio: none, embedded
+    //SVG circles would render as ovals on the chart's non-square aspect ratio).
+    let hoverX     = 0;
+    let prodY      = -1;
+    let forecastY  = -1;
+    if (hoverActive)
+    {
+        hoverX = hourToX(hoverHour as number);
+        const pw = interpAtHour(data.hourlyProd,     hoverHour as number);
+        const fw = interpAtHour(data.hourlyForecast, hoverHour as number);
+        if (pw !== null) { prodY     = wattsToY(pw); }
+        if (fw !== null) { forecastY = wattsToY(fw); }
+    }
+
+    //Pointer handlers, same shape as the radial dial. Drag / tap parks the cursor at the pointer's
+    //hour, finger lift on touch keeps the parked cursor (cleared via the "back to live" pill at the
+    //top-right of the radial card OR by swiping to another day).
+    const setHoverFromEvent = (e: PointerEvent): void =>
+    {
+        const svgEl = e.currentTarget as SVGSVGElement | null;
+        if (!svgEl) { return; }
+        const rect = svgEl.getBoundingClientRect();
+        if (rect.width <= 0) { return; }
+        const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        host._dashRadialHoverHour = frac * 24;
+        host.requestUpdate();
+    };
+    const onPointerMove = isFront ? (e: PointerEvent) => setHoverFromEvent(e) : undefined;
+    const onPointerDown = isFront ? (e: PointerEvent) => setHoverFromEvent(e) : undefined;
+    const onPointerLeave = isFront ? (e: PointerEvent) =>
+    {
+        if (e.pointerType !== 'mouse') { return; }
+        host._dashRadialHoverHour = null;
+        host.requestUpdate();
+    } : undefined;
+
+    return html`
+        <div class="dash-radial-chip-strip dash-radial-chip-strip-pair">
+            <ha-card class="dash-radial-badge dash-radial-badge-prod">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:solar-power"></ha-icon></span>
+                <span class="dash-radial-badge-stack">
+                    <span class="dash-radial-badge-label">${prodLabel}</span>
+                    <span class="dash-radial-badge-value">${prodValue}</span>
+                </span>
+            </ha-card>
+            <ha-card class="dash-radial-badge dash-radial-badge-forecast">
+                <span class="dash-radial-badge-chip"><ha-icon icon="mdi:chart-bell-curve-cumulative"></ha-icon></span>
+                <span class="dash-radial-badge-stack">
+                    <span class="dash-radial-badge-label">${forecastLabel}</span>
+                    <span class="dash-radial-badge-value">${forecastValue}</span>
+                </span>
+            </ha-card>
+        </div>
+        <ha-card class="dash-cf-card-graph-block">
+            ${keyed(isFront ? `f-${data.dayStartMs}` : `b-${cardOffset}`, html`<svg
+                class="dash-graph-svg"
+                viewBox="0 0 ${W} ${H}"
+                preserveAspectRatio="none"
+                @pointerdown="${onPointerDown}"
+                @pointermove="${onPointerMove}"
+                @pointerleave="${onPointerLeave}"
+            >
+                <defs>
+                    <!-- Diagonal hatch pattern painted into the night zones. Stroke colour uses the
+                         theme secondary text token so the hatching reads as background furniture on
+                         both light and dark themes. -->
+                    <pattern id="${patternId}" patternUnits="userSpaceOnUse" width="8" height="8" patternTransform="rotate(45)">
+                        <line x1="0" y1="0" x2="0" y2="8" class="dash-graph-night-hatch-line"/>
+                    </pattern>
+                </defs>
+                ${sunrise !== null
+                    ? svg`<rect x="0" y="0" width="${hourToX(sunrise).toFixed(1)}" height="${H}" fill="url(#${patternId})"/>`
+                    : nothing}
+                ${sunset !== null
+                    ? svg`<rect x="${hourToX(sunset).toFixed(1)}" y="0" width="${(W - hourToX(sunset)).toFixed(1)}" height="${H}" fill="url(#${patternId})"/>`
+                    : nothing}
+                ${sunrise !== null
+                    ? svg`<line class="dash-graph-day-separator" x1="${hourToX(sunrise).toFixed(1)}" y1="0" x2="${hourToX(sunrise).toFixed(1)}" y2="${H}"/>`
+                    : nothing}
+                ${sunset !== null
+                    ? svg`<line class="dash-graph-day-separator" x1="${hourToX(sunset).toFixed(1)}" y1="0" x2="${hourToX(sunset).toFixed(1)}" y2="${H}"/>`
+                    : nothing}
+                <path class="dash-graph-prod-area" d="${prodAreaPath}">
+                    <animate attributeName="d" from="${fromProdArea}" to="${prodAreaPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                </path>
+                <path class="dash-graph-forecast-line" d="${forecastLinePath}">
+                    <animate attributeName="d" from="${fromForecastLine}" to="${forecastLinePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                </path>
+                ${hoverActive
+                    ? svg`<line class="dash-graph-cursor" x1="${hoverX.toFixed(1)}" y1="0" x2="${hoverX.toFixed(1)}" y2="${BASELINE_Y}"/>`
+                    : nothing}
+            </svg>`)}
+            ${hoverActive && prodY >= 0 ? html`<div class="dash-graph-hover-dot dash-graph-hover-dot-prod"
+                style="left:${(hoverX / W * 100).toFixed(2)}%;top:${(prodY / H * 100).toFixed(2)}%"></div>` : nothing}
+            ${hoverActive && forecastY >= 0 ? html`<div class="dash-graph-hover-dot dash-graph-hover-dot-forecast"
+                style="left:${(hoverX / W * 100).toFixed(2)}%;top:${(forecastY / H * 100).toFixed(2)}%"></div>` : nothing}
+        </ha-card>
+    `;
+}

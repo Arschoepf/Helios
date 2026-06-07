@@ -55,6 +55,9 @@ export interface Translations
         //is a glyph (radar dial vs chart line), the title carries the human-readable mode name.
         dashViewRadialLabel?:   string; //'Radial view'
         dashViewGraphLabel?:    string; //'Graph view'
+        //Mini-card label above the graph view's forecast value (kWh predicted for the day, OR the
+        //hovered hour's instantaneous W when the user parks the cursor on the chart).
+        dashForecastLabel?:     string; //'Forecast'
     };
 
     editor:

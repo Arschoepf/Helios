@@ -30,6 +30,7 @@ export const fr: Translations = {
         radialBackToLive:      'Retour au direct',
         dashViewRadialLabel:   'Vue radiale',
         dashViewGraphLabel:    'Vue graphique',
+        dashForecastLabel:     'Prévision',
     },
 
     editor:
