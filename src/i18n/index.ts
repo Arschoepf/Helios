@@ -131,14 +131,13 @@ export interface Translations
         pvArrayHeightHelp:        string;
         //Sun-tracking selector on each pv-arrays row. 'none' (default) is a fixed install, 'dual-axis'
         //has both tilt and azimuth following the sun, 'single-axis-h' keeps the azimuth fixed and tracks
-        //tilt only, 'single-axis-v' keeps the tilt fixed and tracks azimuth only. Optional, fall back to
-        //English when not translated.
-        pvArrayTracker?:          string;
-        pvArrayTrackerNone?:      string;
-        pvArrayTrackerDual?:      string;
-        pvArrayTrackerSingleH?:   string;
-        pvArrayTrackerSingleV?:   string;
-        pvArrayTrackerHelp?:      string;
+        //tilt only, 'single-axis-v' keeps the tilt fixed and tracks azimuth only.
+        pvArrayTracker:           string;
+        pvArrayTrackerNone:       string;
+        pvArrayTrackerDual:       string;
+        pvArrayTrackerSingleH:    string;
+        pvArrayTrackerSingleV:    string;
+        pvArrayTrackerHelp:       string;
         //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
         //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
         //train as phantom shadow.
