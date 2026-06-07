@@ -1627,9 +1627,20 @@ export function pvArrays(
                 ? Math.min(60, heightRaw)
                 : DEFAULT_PANEL_HEIGHT_M;
 
+            //Optional sun-tracking on this row. Accepts 'none' (default, fixed install), 'dual-axis'
+            //(both tilt + azimuth follow the sun), 'single-axis-h' (horizontal axis tracker, only the
+            //tilt follows), 'single-axis-v' (vertical axis tracker, only the azimuth follows). Any
+            //other value parses as 'none' so a typo in the YAML never silently changes the math.
+            const rawTracker = typeof e['tracker'] === 'string' ? (e['tracker'] as string).trim() : '';
+            const tracker: PanelOrientation['tracker'] | undefined =
+                rawTracker === 'dual-axis'     ? 'dual-axis'
+              : rawTracker === 'single-axis-h' ? 'single-axis-h'
+              : rawTracker === 'single-axis-v' ? 'single-axis-v'
+              : undefined;
             out.push({
                 tiltDeg:    Math.max(0, Math.min(90, tilt)),
-                azimuthDeg: azDeg
+                azimuthDeg: azDeg,
+                tracker
             });
             sh.push(share);
             co.push(coords);

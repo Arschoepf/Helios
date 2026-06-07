@@ -356,6 +356,7 @@ export class HeliosCardEditor extends LitElement
         latitude:  number | null;
         longitude: number | null;
         height:    number | null;
+        tracker:   string | null;
     }[]
     {
         const toNum = (v: unknown): number | null =>
@@ -393,6 +394,7 @@ export class HeliosCardEditor extends LitElement
                     latitude:  toNum(e['latitude']),
                     longitude: toNum(e['longitude']),
                     height:    toNum(e['height']),
+                    tracker:   toStr(e['tracker']),
                 };
             });
         }
@@ -401,7 +403,7 @@ export class HeliosCardEditor extends LitElement
         const legacyAz   = toNum(this._cfg?.['pv-azimuth']);
         if (legacyTilt !== null || legacyAz !== null)
         {
-            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null }];
+            return [{ name: null, tilt: legacyTilt, azimuth: legacyAz, share: 100, peakKwp: null, latitude: null, longitude: null, height: null, tracker: null }];
         }
         return [];
     }
@@ -421,6 +423,7 @@ export class HeliosCardEditor extends LitElement
         latitude:  number | null;
         longitude: number | null;
         height:    number | null;
+        tracker:   string | null;
     }[]): void
     {
         const next = { ...this._cfg } as Record<string, unknown>;
@@ -472,6 +475,12 @@ export class HeliosCardEditor extends LitElement
                 {
                     o['height']    = e.height;
                 }
+                if (e.tracker   !== null && e.tracker !== 'none')
+                {
+                    //'none' is the implicit default; we only persist explicit tracker types so the YAML
+                    //stays minimal and a row toggled back to "fixed" doesn't carry a dangling tracker key.
+                    o['tracker']   = e.tracker;
+                }
                 return o;
             });
         }
@@ -503,6 +512,24 @@ export class HeliosCardEditor extends LitElement
             }
             list[i] = { ...list[i], [key]: v };
         }
+        this._writePvArrays(list);
+    }
+
+    //Updates the tracker selection for row `i`. The value is one of 'none' (= fixed install, no
+    //tracker), 'dual-axis', 'single-axis-h', 'single-axis-v'. 'none' is persisted as null so the YAML
+    //stays minimal, the write-out branch in _writePvArrays then skips the key entirely.
+    private _arrayTracker(i: number, e: Event): void
+    {
+        const list = this._readPvArrays();
+        if (i < 0 || i >= list.length)
+        {
+            return;
+        }
+        const raw = (e.target as HTMLSelectElement).value;
+        const next = raw === 'dual-axis' || raw === 'single-axis-h' || raw === 'single-axis-v'
+            ? raw
+            : null;
+        list[i] = { ...list[i], tracker: next };
         this._writePvArrays(list);
     }
 
@@ -538,7 +565,7 @@ export class HeliosCardEditor extends LitElement
         {
             return;
         }
-        list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null });
+        list.push({ name: null, tilt: null, azimuth: null, share: null, peakKwp: null, latitude: null, longitude: null, height: null, tracker: null });
         //Open the newly added pan in the editor by default: the user just clicked to add it, so its body should be visible without requiring a second
         //click on the chevron. Existing pans keep their current open/closed state untouched.
         this._openArrayIndices = new Set([...this._openArrayIndices, list.length - 1]);
@@ -957,6 +984,20 @@ export class HeliosCardEditor extends LitElement
                                                 />
                                             </label>
                                             <div class="field-help">${t.editor.pvArrayAzimuthHelp}</div>
+                                            <label class="field">
+                                                <span class="label">${t.editor.pvArrayTracker}</span>
+                                                <select
+                                                    class="he-select"
+                                                    .value="${arr.tracker ?? 'none'}"
+                                                    @change="${(e: Event) => this._arrayTracker(i, e)}"
+                                                >
+                                                    <option value="none"          ?selected="${(arr.tracker ?? 'none') === 'none'}">${t.editor.pvArrayTrackerNone}</option>
+                                                    <option value="dual-axis"     ?selected="${arr.tracker === 'dual-axis'}">${t.editor.pvArrayTrackerDual}</option>
+                                                    <option value="single-axis-h" ?selected="${arr.tracker === 'single-axis-h'}">${t.editor.pvArrayTrackerSingleH}</option>
+                                                    <option value="single-axis-v" ?selected="${arr.tracker === 'single-axis-v'}">${t.editor.pvArrayTrackerSingleV}</option>
+                                                </select>
+                                            </label>
+                                            <div class="field-help">${t.editor.pvArrayTrackerHelp}</div>
                                             <label class="field">
                                                 <span class="label">${t.editor.pvArrayPeakKwp}</span>
                                                 <input

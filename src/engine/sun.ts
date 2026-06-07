@@ -96,9 +96,23 @@ export function getSunPosition(date: Date, lat: number, lon: number):
 //means this file never has to know about the config schema.
 export interface PanelOrientation
 {
-    tiltDeg:    number;   //0 = horizontal, 90 = vertical
-    azimuthDeg: number;   //compass bearing the panel faces, clockwise
-                          //from north (180 = south, 90 = east, etc.)
+    tiltDeg:    number;   //0 = horizontal, 90 = vertical. Ignored when `tracker` requests sun-following on
+                          //the elevation axis: the panel instantly normalises against the sun and the
+                          //configured tilt becomes the parked / rest position only.
+    azimuthDeg: number;   //compass bearing the panel faces, clockwise from north (180 = south, 90 = east).
+                          //Ignored when `tracker` requests sun-following on the azimuth axis.
+    //Optional sun-tracking behaviour. Default omitted = fixed panel (the historical Liu-Jordan path).
+    //  'dual-axis'      : both tilt + azimuth follow the sun, the panel normal stays pointed at the sun
+    //                     for as long as the sun is above the horizon. cos(θi) collapses to 1 in the
+    //                     beam term and the panel runs at its theoretical peak all day.
+    //  'single-axis-h'  : horizontal axis tracker (axis runs N-S, panel tilts E-W). Tilt follows sun
+    //                     azimuth, azimuth is the configured value. Approximated as a dual-axis panel
+    //                     constrained to the configured azimuth column, beam ratio R_b uses the angle
+    //                     between sun and the tracked tilt.
+    //  'single-axis-v'  : vertical axis tracker (axis runs vertical, panel rotates in azimuth). Azimuth
+    //                     follows sun, tilt is the configured value. Beam ratio uses the sun-aligned
+    //                     azimuth column.
+    tracker?:   'dual-axis' | 'single-axis-h' | 'single-axis-v';
 }
 
 //Optional context that refines the PV estimate. Every field is opt-in: caller passes only what it knows. Empty context preserves the original
@@ -152,7 +166,7 @@ export function computePvPower(
 
     //Horizontal panel (default): GHI already is the plane-of-array
     //irradiance, no transposition needed.
-    if (!panel || panel.tiltDeg <= 0)
+    if (!panel || (panel.tiltDeg <= 0 && !panel.tracker))
     {
         //A flat panel has no "beam blocked while diffuse still arrives" geometry: a shaded horizontal panel sees only the small ground reflection
         //from neighbouring lit ground. We approximate the shaded horizontal POA as 25 % of GHI, the typical clear-sky diffuse fraction.
@@ -161,9 +175,30 @@ export function computePvPower(
     else
     {
         //Tilted panel: project the direct beam onto the panel normal, add the isotropic-sky diffuse component, plus a small ground- reflected term
-        //scaled by the panel's exposure to the ground.
-        const beta = panel.tiltDeg * D;
-        const dAz  = (sun.azimuth - panel.azimuthDeg) * D;
+        //scaled by the panel's exposure to the ground. Tracker-equipped panels override the configured tilt and / or azimuth with the values that
+        //keep the panel normal pointed at the sun on the tracker's free axis: dual-axis tracks both, the two single-axis variants track only one.
+        let beta_deg = panel.tiltDeg;
+        let az_deg   = panel.azimuthDeg;
+        if (panel.tracker === 'dual-axis')
+        {
+            //Panel normal coincides with the sun direction, tilt complement of altitude, azimuth straight on the sun.
+            beta_deg = 90 - alt;
+            az_deg   = sun.azimuth;
+        }
+        else if (panel.tracker === 'single-axis-h')
+        {
+            //Horizontal-axis tracker: tilt rotates around the configured azimuth so the panel face still points down the column, only the elevation
+            //adjusts. Geometrically the panel normal projection on the configured-azimuth column equals the sun's projection on the same column.
+            beta_deg = 90 - alt;
+        }
+        else if (panel.tracker === 'single-axis-v')
+        {
+            //Vertical-axis tracker: panel rotates around the up axis so its azimuth tracks the sun, the tilt stays parked at the user-configured
+            //angle.
+            az_deg = sun.azimuth;
+        }
+        const beta = beta_deg * D;
+        const dAz  = (sun.azimuth - az_deg) * D;
         const altR = alt * D;
 
         const cosTheta = Math.sin(altR) * Math.cos(beta)
