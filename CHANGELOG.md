@@ -33,6 +33,20 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Production curve precision: differentiate raw cumulative history (#210)
+
+The data source's production builder ingested the raw `_pvHistory` only for power entities (W).
+For cumulative-energy entities (kWh, the typical HA Energy `stat_energy_from` shape), the raw
+push stream was silently dropped and the past production curve relied on the hourly LTS alone,
+producing a smooth shape regardless of how many buckets per hour the storage cadence kept. The
+sensor's actual variability stayed invisible.
+
+This release ports the differentiation pass the legacy `renderPvChart` used to do into the data
+source. Adjacent cumulative readings differentiate into a per-window watts-per-hour rate, with the
+same 3-minute anchor window (MIN_DTH = 0.05) to avoid integer-Wh quantization noise. Counter
+resets and outages reset the anchor. The resulting per-bucket production now mirrors the
+sub-hourly peaks + dips the HA Energy dashboard already shows on the same data.
+
 ### Hatch inclination fix + 60-bucket perf-test build (#210)
 
 - Dashboard graph night-zone hatch now leans the same way as the timeline (`/`, 45 deg upward-right

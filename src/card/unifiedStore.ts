@@ -294,11 +294,39 @@ function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndM
         }
     }
     const hist = host._pvHistory;
-    if (hist && hist.times.length > 0 && !isCum)
+    if (hist && hist.times.length > 0)
     {
-        for (let i = 0; i < hist.times.length; i++)
+        if (isCum)
         {
-            ingestPower(hist.times[i].getTime(), pvNormalizeToWatts(hist.values[i], host._pvUnit));
+            //Cumulative kWh sensor: every push is a counter reading, so we differentiate adjacent
+            //pairs into a slope (Wh per hour) the same way the legacy renderPvChart did. MIN_DTH = 3
+            //min holds the previous anchor until enough wall-clock time has passed for the dv / dt
+            //average to read meaningfully (integer-Wh quantization on short windows would otherwise
+            //paint fake spikes). Counter resets (negative dv) and outages (dtH > 6 h) reset the
+            //anchor without producing a sample.
+            const MIN_DTH = 0.05; //3 minutes
+            const factor  = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
+            let prevIdx = 0;
+            for (let i = 1; i < hist.times.length; i++)
+            {
+                const t1  = hist.times[i].getTime();
+                const t0  = hist.times[prevIdx].getTime();
+                const dtH = (t1 - t0) / HOUR_MS;
+                if (dtH <= 0) { continue; }
+                if (dtH > 6) { prevIdx = i; continue; }
+                const dv = hist.values[i] - hist.values[prevIdx];
+                if (dv < 0) { prevIdx = i; continue; }
+                if (dtH < MIN_DTH) { continue; }
+                ingestPower(t1, (dv / dtH) * factor);
+                prevIdx = i;
+            }
+        }
+        else
+        {
+            for (let i = 0; i < hist.times.length; i++)
+            {
+                ingestPower(hist.times[i].getTime(), pvNormalizeToWatts(hist.values[i], host._pvUnit));
+            }
         }
     }
     for (let h = 0; h < STORE_BUCKETS; h++)
