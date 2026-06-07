@@ -692,21 +692,6 @@ export const heliosCardStyles = css`
         width: auto;
         overflow: hidden;
     }
-    /*  Sky background painted BEHIND the dial. Fills the wrap edge-to-edge so the dial reads as
-        floating inside a stylised day-weather picture. preserveAspectRatio: slice on the inline SVG
-        scales the gradient + cloud puffs to cover the entire card regardless of aspect ratio, the
-        wrap's own overflow: hidden + border-radius from the ha-card host clip the sky to the rounded
-        corners. The dial SVG sits above it via a relative + z-index stacking context, so the colour
-        + clouds never compete with the rings + ticks. */
-    .dash-radial-sky
-    {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
-        z-index: 0;
-        pointer-events: none;
-    }
     /*  Badge strip: a transparent CSS grid containing four HA-tile-card-style badges (Irradiance,
         Cloud, Production, Battery in dial-radius order). The grid switches between 2 columns and
         4 columns at the .dash-cf-card container width breakpoint below, so the strip is always
@@ -923,11 +908,7 @@ export const heliosCardStyles = css`
             without crowding the side gutters. Height caps at the available space, the aspect ratio
             stays 1 / 1 so the dial is always a true circle. touch-action: none disables the
             browser's default scroll / pan / zoom gestures inside the dial so a finger drag for the
-            hover cursor on mobile no longer scrolls the page underneath. position: relative +
-            z-index: 1 places the dial above the sky background painted by .dash-radial-sky inside
-            the same wrap (positioned-vs-in-flow stacking would otherwise pull the sky to the front). */
-        position:   relative;
-        z-index:    1;
+            hover cursor on mobile no longer scrolls the page underneath. */
         width:      min(100%, 92%);
         height:     auto;
         max-height: 100%;
@@ -964,6 +945,7 @@ export const heliosCardStyles = css`
         stroke-width: 0.6;
     }
     .dash-radial-dot-cloud         { fill: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.75)) 95%, transparent); }
+    .dash-radial-dot-irr           { fill: var(--helios-sun-color, var(--amber-color, #f59e0b)); }
     .dash-radial-dot-prod          { fill: var(--energy-solar-color, #ff9800); }
     .dash-radial-dot-batt-charge   { fill: var(--energy-battery-in-color,  #5cba47); }
     .dash-radial-dot-batt-discharge{ fill: var(--energy-battery-out-color, #d8a657); }
@@ -1029,6 +1011,35 @@ export const heliosCardStyles = css`
     {
         fill: none;
         stroke: color-mix(in srgb, var(--secondary-text-color, rgba(255, 255, 255, 0.65)) 60%, transparent);
+        stroke-width: 1.2;
+        stroke-dasharray: 4 3;
+        stroke-linejoin: round;
+        stroke-linecap: round;
+    }
+    /*  Irradiance curve overlaid on the SAME cloud-ring annulus. Sun-coloured semi-transparent fill
+        so the cloud grey underneath shows through where both curves rise together (cloudy hour with
+        non-zero irradiance), the eye reads the hour as "sunny" when the warm tint dominates and
+        "cloudy" when the grey wins. Mirrors the timeline chart vocabulary where both signals share
+        the same axis at low alphas. */
+    .dash-radial-irr-fill
+    {
+        fill:   color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #f59e0b)) 40%, transparent);
+        stroke: color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #f59e0b)) 75%, transparent);
+        stroke-width: 1.1;
+        stroke-linejoin: round;
+    }
+    .dash-radial-irr-fill-future
+    {
+        /*  Future zone of the irradiance curve: same hue as the past zone at a lower opacity so the
+            forecast irradiance reads as a wash under the dashed contour. Same recipe as the cloud
+            future fill but in the sun colour. */
+        fill:   color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #f59e0b)) 18%, transparent);
+        stroke: none;
+    }
+    .dash-radial-irr-future
+    {
+        fill: none;
+        stroke: color-mix(in srgb, var(--helios-sun-color, var(--amber-color, #f59e0b)) 65%, transparent);
         stroke-width: 1.2;
         stroke-dasharray: 4 3;
         stroke-linejoin: round;
@@ -1127,11 +1138,6 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         line-height: 1;
         white-space: nowrap;
-        /*  Subtle dark halo so the digits stay readable when the dial annulus sits over the bright
-            half of the sky background (the horizon stop near the bottom of the gradient, or the
-            cumulus highlights on a partly cloudy day). Cheap drop-shadow simulation, opacity tuned
-            to read on both light and dark themes without painting a visible black ring on its own. */
-        text-shadow: 0 0 2px rgba(0, 0, 0, 0.55), 0 0 4px rgba(0, 0, 0, 0.35);
     }
     /*  Narrow CoverFlow cards: hide every non-cardinal hour numeral. The four cardinals (12 / 18
         / 0 / 6) stay so the dial keeps its top / right / bottom / left anchors. Same breakpoint

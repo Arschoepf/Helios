@@ -77,75 +77,12 @@ const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2;
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
 
-
-//Day-weather sky painted BEHIND the radial dial. Reads as a stylised picture of what the day's
-//meteorological window looks like, vivid azure on a clear day fading to muted blue-grey on a fully
-//overcast day, with a handful of procedurally placed cloud puffs whose count + opacity scale with
-//the day's average cloud cover. Purely visual furniture, no interaction, no accessibility role since
-//the cloud icon in the bandeau already conveys the same information textually.
-function renderRadialSky(cardKey: string, avgCloudPct: number): TemplateResult
-{
-    const t = Math.max(0, Math.min(1, avgCloudPct / 100));
-    const lerp3 = (a: readonly [number, number, number], b: readonly [number, number, number]): string =>
-    {
-        const r = Math.round(a[0] + (b[0] - a[0]) * t);
-        const g = Math.round(a[1] + (b[1] - a[1]) * t);
-        const bl = Math.round(a[2] + (b[2] - a[2]) * t);
-        return `rgb(${r}, ${g}, ${bl})`;
-    };
-    //Two-stop vertical gradient. Top is the deeper blue at zenith, bottom is the lighter horizon
-    //wash that hints at warm low-sun light. Both stops slide toward neutral grey as cloud cover
-    //grows so the whole canvas drifts toward "stormy" without flipping hue.
-    const topClear   = [74,  144, 226]  as const;
-    const topCloudy  = [108, 122, 138]  as const;
-    const horClear   = [174, 221, 255]  as const;
-    const horCloudy  = [180, 188, 198]  as const;
-    const topCol = lerp3(topClear, topCloudy);
-    const horCol = lerp3(horClear, horCloudy);
-    //Cloud puffs. Deterministic positions so every re-render of the same card hits the same layout
-    //(no jitter when the data refreshes), opacity ramps with cloud cover so the puffs fade in as
-    //the sky thickens rather than appearing and disappearing in a binary way. Each puff is a small
-    //cluster of three overlapping ellipses so the silhouette reads as a cumulus rather than a disc.
-    const puffsRaw = [
-        { cx: 22,  cy: 18, rx: 13, opacityFactor: 0.6 },
-        { cx: 70,  cy: 12, rx: 16, opacityFactor: 0.7 },
-        { cx: 48,  cy: 28, rx: 18, opacityFactor: 0.9 },
-        { cx: 84,  cy: 36, rx: 12, opacityFactor: 0.55 },
-        { cx: 30,  cy: 44, rx: 14, opacityFactor: 0.65 },
-        { cx: 64,  cy: 52, rx: 15, opacityFactor: 0.8 },
-    ];
-    const baseOpacity = 0.15 + 0.75 * t;
-    const visibleCount = Math.max(1, Math.round(1 + t * (puffsRaw.length - 1)));
-    const puffs: TemplateResult[] = [];
-    for (let i = 0; i < visibleCount; i++)
-    {
-        const p = puffsRaw[i];
-        const op = Math.min(1, baseOpacity * p.opacityFactor);
-        const rxSide = p.rx * 0.6;
-        const rySide = p.rx * 0.4;
-        const ryMid  = p.rx * 0.45;
-        puffs.push(svg`
-            <g fill="rgba(255, 255, 255, 0.95)" opacity="${op.toFixed(2)}">
-                <ellipse cx="${p.cx}"                       cy="${p.cy}"     rx="${p.rx}"                ry="${ryMid.toFixed(1)}"/>
-                <ellipse cx="${(p.cx - p.rx * 0.55).toFixed(1)}" cy="${(p.cy + 1).toFixed(1)}" rx="${rxSide.toFixed(1)}" ry="${rySide.toFixed(1)}"/>
-                <ellipse cx="${(p.cx + p.rx * 0.55).toFixed(1)}" cy="${(p.cy + 1).toFixed(1)}" rx="${rxSide.toFixed(1)}" ry="${rySide.toFixed(1)}"/>
-            </g>
-        `);
-    }
-    const gradId = `dash-radial-sky-grad-${cardKey}`;
-    return html`
-        <svg class="dash-radial-sky" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-            <defs>
-                <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%"   stop-color="${topCol}"/>
-                    <stop offset="100%" stop-color="${horCol}"/>
-                </linearGradient>
-            </defs>
-            <rect x="0" y="0" width="100" height="100" fill="url(#${gradId})"/>
-            ${puffs}
-        </svg>
-    `;
-}
+//Fixed irradiance scale for the radial cloud-ring overlay. A clear-sky summer noon peaks around 1100
+//W / m² at temperate latitudes, picking this as the radial scale max means the curve uses ~90 % of
+//the ring on a bright day and a meaningful sliver on an overcast one, and the visual stays consistent
+//when the user swipes between past + future cards (per-day relative scaling would re-stretch the
+//curve and break the "compare two days at a glance" affordance).
+const IRR_SCALE_MAX_WM2        = 1100;
 
 
 //Polar -> Cartesian helper. Angle convention is documented at the top of the file.
@@ -816,7 +753,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
 {
     const isFront    = cardOffset === activeOffset;
 
-    const { dayStartMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
+    const { dayStartMs, pastEndHour, hourlyProd, hourlyForecast, hourlyBatt, hourlyCloud, hourlyIrr, prodScaleMax, battScaleMax, cloudScaleMax, sunRiseSet, ratioPct } = data;
 
     //Split the signed battery curve into charge (positive) and discharge (positive absolute) per-
     //hour arrays so two annulus paths can paint inside the same ring with their own colours.
@@ -842,6 +779,18 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const cloudFuturePath = pastEndHour < 24
         ? buildRadialOutlinePath(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
         : '';
+    //Irradiance curve overlaid on the cloud ring, sun-coloured. Painted on top of the cloud fill so
+    //the eye reads the hour as "sunny" (sun-tint dominates) or "cloudy" (grey dominates) without
+    //extra chart real estate, mirrors what the main UI timeline does where both curves share the
+    //same X axis at semi-transparent alphas. Scale max is fixed (IRR_SCALE_MAX_WM2) so the curve
+    //reads consistently across past + future cards: a sunny day occupies most of the ring, a fully
+    //overcast day collapses to the inner edge.
+    const irrPastPath = pastEndHour > 0
+        ? buildRadialAnnulusPath(hourlyIrr.slice(0, ceilPastH).concat(new Array(24 - ceilPastH).fill(null)), IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER)
+        : '';
+    const irrFuturePath = pastEndHour < 24
+        ? buildRadialOutlinePath(hourlyIrr, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24)
+        : '';
 
     const sunFillR = R_SUN_REF * (ratioPct / 100);
 
@@ -858,6 +807,9 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         : '';
     const cloudFutureFillPath = pastEndHour < 24
         ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyCloud.slice(ceilPastH, 24)), cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER)
+        : '';
+    const irrFutureFillPath = pastEndHour < 24
+        ? buildRadialAnnulusPath(new Array(ceilPastH).fill(null).concat(hourlyIrr.slice(ceilPastH, 24)), IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER)
         : '';
 
     //Per-ring track arcs split into past + future segments. The not-yet-elapsed half of each ring
@@ -896,6 +848,9 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const fromCloudPast           = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
     const fromCloudFutureFill     = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
     const fromCloudFuture         = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
+    const fromIrrPast             = pastEndHour > 0  ? buildRadialAnnulusPath(zeroArr24, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromIrrFutureFill       = pastEndHour < 24 ? buildRadialAnnulusPath(zeroArr24, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER) : '';
+    const fromIrrFuture           = pastEndHour < 24 ? buildRadialOutlinePath(zeroArr24, IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, floorPastH, 24) : '';
     const ANIM_DUR = '700ms';
 
     //Hover cursor: only on the front card AND only when the host carries a hover hour set by the
@@ -936,6 +891,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     let hoverProdDot:  { x: number; y: number } | null = null;
     let hoverBattDot:  { x: number; y: number; charging: boolean } | null = null;
     let hoverCloudDot: { x: number; y: number } | null = null;
+    let hoverIrrDot:   { x: number; y: number } | null = null;
     if (hoverActive)
     {
         const hf  = hoverHour as number;
@@ -943,8 +899,10 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         const prodVal  = hourlyProd[idx];
         const battVal  = hourlyBatt[idx];
         const cloudVal = hourlyCloud[idx];
+        const irrVal   = hourlyIrr[idx];
         if (prodVal  !== null) { const r = interpRadius(hourlyProd,  prodScaleMax,  R_PROD_INNER, R_PROD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverProdDot  = { x, y }; }
         if (cloudVal !== null) { const r = interpRadius(hourlyCloud, cloudScaleMax, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverCloudDot = { x, y }; }
+        if (irrVal   !== null) { const r = interpRadius(hourlyIrr,   IRR_SCALE_MAX_WM2, R_CLOUD_INNER, R_CLOUD_OUTER, hf); const [x, y] = polarPt(hf, r); hoverIrrDot = { x, y }; }
         if (battVal !== null)
         {
             //Show the dot at every hovered hour the curve has a sample for, even idle hours where
@@ -1067,27 +1025,8 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const sunriseText = sunRiseSet.sunrise !== null ? formatHoverClock(sunRiseSet.sunrise, host.hass) : '';
     const sunsetText  = sunRiseSet.sunset  !== null ? formatHoverClock(sunRiseSet.sunset,  host.hass) : '';
 
-    //Average cloud cover across the day, drives the sky picture painted behind the dial. Null hours
-    //(no model sample available for a future card past the forecast horizon, or a past card with a
-    //recorder gap) are skipped so the average reads off the data we actually have rather than getting
-    //dragged toward zero. Fall back to 0 % (clear sky) when no sample is available at all.
-    let cloudSum = 0;
-    let cloudCount = 0;
-    for (const v of hourlyCloud)
-    {
-        if (v === null)
-        {
-            continue;
-        }
-        cloudSum += v;
-        cloudCount += 1;
-    }
-    const avgCloudPct = cloudCount > 0 ? cloudSum / cloudCount : 0;
-    const skyKey = isFront ? `f-${dayStartMs}` : `b-${cardOffset}`;
-
     return html`
         <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
-            ${renderRadialSky(skyKey, avgCloudPct)}
             ${showHour ? html`<span class="dash-radial-hour-text"><ha-icon icon="mdi:clock-outline"></ha-icon><span>${hourText}</span></span>` : nothing}
             ${sunriseText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunrise"><ha-icon icon="mdi:weather-sunset-up"></ha-icon><span>${sunriseText}</span></span>` : nothing}
             ${sunsetText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunset"><ha-icon icon="mdi:weather-sunset-down"></ha-icon><span>${sunsetText}</span></span>` : nothing}
@@ -1147,6 +1086,20 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                 </path>` : nothing}
                 ${cloudFuturePath ? svg`<path class="dash-radial-cloud-future" d="${cloudFuturePath}">
                     <animate attributeName="d" from="${fromCloudFuture}" to="${cloudFuturePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                </path>` : nothing}
+                <!-- Irradiance overlay on the SAME cloud ring annulus, sun-tinted so the eye reads
+                     "sunny" vs "cloudy" by hue. Painted AFTER the cloud layers so the sun tint sits
+                     on top, the semi-transparent fill lets the cloud grey show through where both
+                     curves rise together, matches the timeline UI where both curves share the same
+                     X axis at low alphas. -->
+                ${irrPastPath ? svg`<path class="dash-radial-irr-fill" fill-rule="evenodd" d="${irrPastPath}">
+                    <animate attributeName="d" from="${fromIrrPast}" to="${irrPastPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                </path>` : nothing}
+                ${irrFutureFillPath ? svg`<path class="dash-radial-irr-fill-future" fill-rule="evenodd" d="${irrFutureFillPath}">
+                    <animate attributeName="d" from="${fromIrrFutureFill}" to="${irrFutureFillPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
+                </path>` : nothing}
+                ${irrFuturePath ? svg`<path class="dash-radial-irr-future" d="${irrFuturePath}">
+                    <animate attributeName="d" from="${fromIrrFuture}" to="${irrFuturePath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
                 </path>` : nothing}
                 ${prodPastPath ? svg`<path class="dash-radial-prod-fill" fill-rule="evenodd" d="${prodPastPath}">
                     <animate attributeName="d" from="${fromProdPast}" to="${prodPastPath}" dur="${ANIM_DUR}" begin="0s" fill="freeze"/>
@@ -1228,6 +1181,7 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
                      always visible above the curves. Plain colored disc with a thin contrast stroke,
                      no gradient, just slightly thicker than the timeline hover dots. -->
                 ${hoverCloudDot ? svg`<circle class="dash-radial-dot dash-radial-dot-cloud" cx="${hoverCloudDot.x.toFixed(2)}" cy="${hoverCloudDot.y.toFixed(2)}" r="3"/>` : nothing}
+                ${hoverIrrDot   ? svg`<circle class="dash-radial-dot dash-radial-dot-irr"   cx="${hoverIrrDot.x.toFixed(2)}"   cy="${hoverIrrDot.y.toFixed(2)}"   r="3"/>` : nothing}
                 ${hoverProdDot  ? svg`<circle class="dash-radial-dot dash-radial-dot-prod"  cx="${hoverProdDot.x.toFixed(2)}"  cy="${hoverProdDot.y.toFixed(2)}"  r="3"/>` : nothing}
                 ${hoverBattDot  ? svg`<circle class="dash-radial-dot ${hoverBattDot.charging ? 'dash-radial-dot-batt-charge' : 'dash-radial-dot-batt-discharge'}" cx="${hoverBattDot.x.toFixed(2)}" cy="${hoverBattDot.y.toFixed(2)}" r="3"/>` : nothing}
             </svg>`)}
