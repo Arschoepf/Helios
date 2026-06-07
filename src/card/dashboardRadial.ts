@@ -53,28 +53,99 @@ const R_PROD_OUTER             = 118;
 const R_BATT_INNER             = 124;
 const R_BATT_OUTER             = 152;
 const R_DIAL_INNER             = 158;
-const R_DIAL_OUTER             = 176;   //all rings shifted inward by 7 SVG units vs v5 so the gap to R_HOUR_LABEL doubles (was 9, now 16), labels breathe in section-view dashboards as well as panel-view
-const R_HOUR_LABEL             = 192;   //hour labels sit OUTSIDE the dial outer edge with comfortable breathing room
+//Dial annulus is now twice as wide as before so the hour digits can live INSIDE the ring rather than
+//floating outside it. The freed perimeter space goes back to the dial itself, the dial reads as a
+//proper analog watch ring with the digits painted on it.
+const R_DIAL_OUTER             = 192;
+//Hour labels now sit at the mid-line of the annulus, centred between the inner and outer edges of the
+//dial. The HTML overlay reads the same percent of the viewBox so the digits anchor on the centre line
+//of the ring at any container size.
+const R_HOUR_LABEL             = (R_DIAL_INNER + R_DIAL_OUTER) / 2;
 //Hover cursor endpoints. Anchored at the outer edge of the irradiance reference rim (= sun
 //disc) and ending at the outer edge of the dial annulus, matching the 3D card's solar-ray
 //leader: a sun-coloured dashed line radiating outward from the sun toward its target.
 const R_CURSOR_INNER           = R_SUN_REF;
 const R_CURSOR_OUTER           = R_DIAL_OUTER;
-//Tick layout. Two endpoints per tick, one near the outer edge of the dial and one near the
-//inner edge. The hour / half / quarter triplet uses different lengths so the eye still snaps to
-//the hour cardinals, but every tick now stays well clear of the centre of the dial annulus so
-//the outer + inner halves never visually merge into a continuous radial line.
-const R_TICK_OUTER_END         = R_DIAL_OUTER - 1;
-const R_TICK_OUTER_HOUR        = R_DIAL_OUTER - 5;
-const R_TICK_OUTER_HALF        = R_DIAL_OUTER - 3.5;
-const R_TICK_OUTER_QUARTER     = R_DIAL_OUTER - 2;
+//Subdivision ticks live only near the inner edge of the annulus now that the digits occupy its centre
+//and the outer edge needs to stay clean (the hour digits already mark the hour positions, no
+//redundant tick required). The half + quarter ticks stay so the eye can still snap to 15 min
+//granularity below the digits.
 const R_TICK_INNER_END         = R_DIAL_INNER + 1;
-const R_TICK_INNER_HOUR        = R_DIAL_INNER + 5;
 const R_TICK_INNER_HALF        = R_DIAL_INNER + 3.5;
 const R_TICK_INNER_QUARTER     = R_DIAL_INNER + 2;
 
 const HOUR_MS                  = 3_600_000;
 const DAY_MS                   = 24 * HOUR_MS;
+
+
+//Day-weather sky painted BEHIND the radial dial. Reads as a stylised picture of what the day's
+//meteorological window looks like, vivid azure on a clear day fading to muted blue-grey on a fully
+//overcast day, with a handful of procedurally placed cloud puffs whose count + opacity scale with
+//the day's average cloud cover. Purely visual furniture, no interaction, no accessibility role since
+//the cloud icon in the bandeau already conveys the same information textually.
+function renderRadialSky(cardKey: string, avgCloudPct: number): TemplateResult
+{
+    const t = Math.max(0, Math.min(1, avgCloudPct / 100));
+    const lerp3 = (a: readonly [number, number, number], b: readonly [number, number, number]): string =>
+    {
+        const r = Math.round(a[0] + (b[0] - a[0]) * t);
+        const g = Math.round(a[1] + (b[1] - a[1]) * t);
+        const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+        return `rgb(${r}, ${g}, ${bl})`;
+    };
+    //Two-stop vertical gradient. Top is the deeper blue at zenith, bottom is the lighter horizon
+    //wash that hints at warm low-sun light. Both stops slide toward neutral grey as cloud cover
+    //grows so the whole canvas drifts toward "stormy" without flipping hue.
+    const topClear   = [74,  144, 226]  as const;
+    const topCloudy  = [108, 122, 138]  as const;
+    const horClear   = [174, 221, 255]  as const;
+    const horCloudy  = [180, 188, 198]  as const;
+    const topCol = lerp3(topClear, topCloudy);
+    const horCol = lerp3(horClear, horCloudy);
+    //Cloud puffs. Deterministic positions so every re-render of the same card hits the same layout
+    //(no jitter when the data refreshes), opacity ramps with cloud cover so the puffs fade in as
+    //the sky thickens rather than appearing and disappearing in a binary way. Each puff is a small
+    //cluster of three overlapping ellipses so the silhouette reads as a cumulus rather than a disc.
+    const puffsRaw = [
+        { cx: 22,  cy: 18, rx: 13, opacityFactor: 0.6 },
+        { cx: 70,  cy: 12, rx: 16, opacityFactor: 0.7 },
+        { cx: 48,  cy: 28, rx: 18, opacityFactor: 0.9 },
+        { cx: 84,  cy: 36, rx: 12, opacityFactor: 0.55 },
+        { cx: 30,  cy: 44, rx: 14, opacityFactor: 0.65 },
+        { cx: 64,  cy: 52, rx: 15, opacityFactor: 0.8 },
+    ];
+    const baseOpacity = 0.15 + 0.75 * t;
+    const visibleCount = Math.max(1, Math.round(1 + t * (puffsRaw.length - 1)));
+    const puffs: TemplateResult[] = [];
+    for (let i = 0; i < visibleCount; i++)
+    {
+        const p = puffsRaw[i];
+        const op = Math.min(1, baseOpacity * p.opacityFactor);
+        const rxSide = p.rx * 0.6;
+        const rySide = p.rx * 0.4;
+        const ryMid  = p.rx * 0.45;
+        puffs.push(svg`
+            <g fill="rgba(255, 255, 255, 0.95)" opacity="${op.toFixed(2)}">
+                <ellipse cx="${p.cx}"                       cy="${p.cy}"     rx="${p.rx}"                ry="${ryMid.toFixed(1)}"/>
+                <ellipse cx="${(p.cx - p.rx * 0.55).toFixed(1)}" cy="${(p.cy + 1).toFixed(1)}" rx="${rxSide.toFixed(1)}" ry="${rySide.toFixed(1)}"/>
+                <ellipse cx="${(p.cx + p.rx * 0.55).toFixed(1)}" cy="${(p.cy + 1).toFixed(1)}" rx="${rxSide.toFixed(1)}" ry="${rySide.toFixed(1)}"/>
+            </g>
+        `);
+    }
+    const gradId = `dash-radial-sky-grad-${cardKey}`;
+    return html`
+        <svg class="dash-radial-sky" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+            <defs>
+                <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%"   stop-color="${topCol}"/>
+                    <stop offset="100%" stop-color="${horCol}"/>
+                </linearGradient>
+            </defs>
+            <rect x="0" y="0" width="100" height="100" fill="url(#${gradId})"/>
+            ${puffs}
+        </svg>
+    `;
+}
 
 
 //Polar -> Cartesian helper. Angle convention is documented at the top of the file.
@@ -886,27 +957,23 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
         }
     }
 
-    //Sub-hour + hour ticks. 96 positions around the dial (15 min step). Each tick paints TWO line
-    //segments, one on the outer side of the dial annulus and one mirrored on the inner side (close
-    //to the centre of the SVG), so the user sees the markers no matter which edge of the dial they
-    //look at. The hour, half and quarter triplet uses three different lengths + opacities so the
-    //eye still snaps to the hour cardinals first, then the halves, then the quarters.
+    //Sub-hour subdivision ticks. 96 positions around the dial (15 min step). Now that the hour digits
+    //live inside the annulus the hour ticks are redundant with the digits themselves, only the half +
+    //quarter ticks render so the dial keeps a sense of 15 min granularity below the digits without
+    //fighting them. All ticks live near the INNER edge of the annulus, the outer edge stays clean to
+    //give the digits clearance.
     const tickLines: TemplateResult[] = [];
     for (let q = 0; q < 96; q++)
     {
-        const hour    = q / 4;
-        const isHour  = q % 4 === 0;
-        const isHalf  = !isHour && q % 2 === 0;
-        const innerInnerR = isHour ? R_TICK_INNER_HOUR : isHalf ? R_TICK_INNER_HALF : R_TICK_INNER_QUARTER;
-        const outerInnerR = isHour ? R_TICK_OUTER_HOUR : isHalf ? R_TICK_OUTER_HALF : R_TICK_OUTER_QUARTER;
-        const cls = isHour ? 'dash-radial-tick-hour'
-                  : isHalf ? 'dash-radial-tick-half'
-                  :          'dash-radial-tick-quarter';
-        //Outer side: anchored at R_TICK_OUTER_END (just inside the dial outer edge), extends inward.
-        const [ox1, oy1] = polarPt(hour, R_TICK_OUTER_END);
-        const [ox2, oy2] = polarPt(hour, outerInnerR);
-        tickLines.push(svg`<line class="${cls}" x1="${ox1.toFixed(2)}" y1="${oy1.toFixed(2)}" x2="${ox2.toFixed(2)}" y2="${oy2.toFixed(2)}"/>`);
-        //Inner side: anchored at R_TICK_INNER_END (just outside the dial inner edge), extends outward.
+        const isHour = q % 4 === 0;
+        if (isHour)
+        {
+            continue;
+        }
+        const hour   = q / 4;
+        const isHalf = q % 2 === 0;
+        const innerInnerR = isHalf ? R_TICK_INNER_HALF : R_TICK_INNER_QUARTER;
+        const cls = isHalf ? 'dash-radial-tick-half' : 'dash-radial-tick-quarter';
         const [ix1, iy1] = polarPt(hour, R_TICK_INNER_END);
         const [ix2, iy2] = polarPt(hour, innerInnerR);
         tickLines.push(svg`<line class="${cls}" x1="${ix1.toFixed(2)}" y1="${iy1.toFixed(2)}" x2="${ix2.toFixed(2)}" y2="${iy2.toFixed(2)}"/>`);
@@ -1000,8 +1067,27 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const sunriseText = sunRiseSet.sunrise !== null ? formatHoverClock(sunRiseSet.sunrise, host.hass) : '';
     const sunsetText  = sunRiseSet.sunset  !== null ? formatHoverClock(sunRiseSet.sunset,  host.hass) : '';
 
+    //Average cloud cover across the day, drives the sky picture painted behind the dial. Null hours
+    //(no model sample available for a future card past the forecast horizon, or a past card with a
+    //recorder gap) are skipped so the average reads off the data we actually have rather than getting
+    //dragged toward zero. Fall back to 0 % (clear sky) when no sample is available at all.
+    let cloudSum = 0;
+    let cloudCount = 0;
+    for (const v of hourlyCloud)
+    {
+        if (v === null)
+        {
+            continue;
+        }
+        cloudSum += v;
+        cloudCount += 1;
+    }
+    const avgCloudPct = cloudCount > 0 ? cloudSum / cloudCount : 0;
+    const skyKey = isFront ? `f-${dayStartMs}` : `b-${cardOffset}`;
+
     return html`
         <ha-card class="dash-radial-wrap" @wheel="${onWheel}">
+            ${renderRadialSky(skyKey, avgCloudPct)}
             ${showHour ? html`<span class="dash-radial-hour-text"><ha-icon icon="mdi:clock-outline"></ha-icon><span>${hourText}</span></span>` : nothing}
             ${sunriseText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunrise"><ha-icon icon="mdi:weather-sunset-up"></ha-icon><span>${sunriseText}</span></span>` : nothing}
             ${sunsetText ? html`<span class="dash-radial-hour-text dash-radial-hour-text-sunset"><ha-icon icon="mdi:weather-sunset-down"></ha-icon><span>${sunsetText}</span></span>` : nothing}

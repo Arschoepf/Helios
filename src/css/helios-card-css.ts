@@ -692,6 +692,21 @@ export const heliosCardStyles = css`
         width: auto;
         overflow: hidden;
     }
+    /*  Sky background painted BEHIND the dial. Fills the wrap edge-to-edge so the dial reads as
+        floating inside a stylised day-weather picture. preserveAspectRatio: slice on the inline SVG
+        scales the gradient + cloud puffs to cover the entire card regardless of aspect ratio, the
+        wrap's own overflow: hidden + border-radius from the ha-card host clip the sky to the rounded
+        corners. The dial SVG sits above it via a relative + z-index stacking context, so the colour
+        + clouds never compete with the rings + ticks. */
+    .dash-radial-sky
+    {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+        pointer-events: none;
+    }
     /*  Badge strip: a transparent CSS grid containing four HA-tile-card-style badges (Irradiance,
         Cloud, Production, Battery in dial-radius order). The grid switches between 2 columns and
         4 columns at the .dash-cf-card container width breakpoint below, so the strip is always
@@ -908,7 +923,11 @@ export const heliosCardStyles = css`
             without crowding the side gutters. Height caps at the available space, the aspect ratio
             stays 1 / 1 so the dial is always a true circle. touch-action: none disables the
             browser's default scroll / pan / zoom gestures inside the dial so a finger drag for the
-            hover cursor on mobile no longer scrolls the page underneath. */
+            hover cursor on mobile no longer scrolls the page underneath. position: relative +
+            z-index: 1 places the dial above the sky background painted by .dash-radial-sky inside
+            the same wrap (positioned-vs-in-flow stacking would otherwise pull the sky to the front). */
+        position:   relative;
+        z-index:    1;
         width:      min(100%, 92%);
         height:     auto;
         max-height: 100%;
@@ -1108,6 +1127,11 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
         line-height: 1;
         white-space: nowrap;
+        /*  Subtle dark halo so the digits stay readable when the dial annulus sits over the bright
+            half of the sky background (the horizon stop near the bottom of the gradient, or the
+            cumulus highlights on a partly cloudy day). Cheap drop-shadow simulation, opacity tuned
+            to read on both light and dark themes without painting a visible black ring on its own. */
+        text-shadow: 0 0 2px rgba(0, 0, 0, 0.55), 0 0 4px rgba(0, 0, 0, 0.35);
     }
     /*  Narrow CoverFlow cards: hide every non-cardinal hour numeral. The four cardinals (12 / 18
         / 0 / 6) stay so the dial keeps its top / right / bottom / left anchors. Same breakpoint
@@ -1205,12 +1229,21 @@ export const heliosCardStyles = css`
     .dash-radial-cursor-hover
     {
         stroke: var(--helios-sun-color, var(--amber-color, #f59e0b));
-        stroke-width: 1;
+        stroke-width: 2.5;
         stroke-dasharray: 5 5;
-        stroke-opacity: 0.55;
+        stroke-opacity: 0.6;
         stroke-linecap: round;
         fill: none;
         pointer-events: none;
+    }
+    /*  The "now" cursor on today's card carries more weight than a passing hover ray, it anchors the
+        current wall-clock hour and the user needs to spot it instantly at a glance. Same sun colour
+        family as the hover variant, just a bolder stroke and higher opacity so the live cursor reads
+        as the primary pointer and the hover variant as the secondary one. */
+    .dash-radial-cursor-now
+    {
+        stroke-width: 3.5;
+        stroke-opacity: 0.95;
     }
 
     /*  Close button anchored top-right of the focused card, not the panel. Mirrors the previous
