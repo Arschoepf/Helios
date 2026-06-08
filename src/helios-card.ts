@@ -2778,6 +2778,19 @@ export class HeliosCard extends LitElement
             }
             this._lidarViewOpacity = v;
             this._engine?.setLidarViewOpacity(v);
+            //Kick a Lit render so the picker's `${pct}%` text node updates through the normal
+            //Lit pipeline. The previous design did an imperative `span.textContent =` write to
+            //skip the re-render cost, which DESTROYED Lit's marker comments inside the span
+            //(textContent replaces every child node, including Lit's tracking markers). Once
+            //the markers were gone, the next Lit render of the card crashed with
+            //"null is not an object (evaluating 'this._$AA.nextSibling.data=ae')" and aborted
+            //updated() partway through. The aborted updated() then never reached
+            //_handleCardModeChange, which is why clicking the Layer / Weather button after
+            //touching the slider visually flipped the mode bar (the click handler ran fine,
+            //it's a separate code path) but never fired exitLidarView, so the dot cloud kept
+            //drawing. requestUpdate is rAF-coalesced upstream by the slider's own throttle
+            //so the render fires at most once per frame.
+            this.requestUpdate();
         });
     };
 

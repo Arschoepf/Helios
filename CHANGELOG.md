@@ -33,6 +33,45 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### LiDAR exit, REAL root cause: Lit marker corruption (#210)
+
+The Safari console finally gave up the bug. Every drag of the LiDAR opacity slider triggered:
+`TypeError: null is not an object (evaluating 'this._$AA.nextSibling.data=ae')`. The error
+cascade flooded the console + kept firing even after the user left the mode, which traced to
+Lit's internal text-node tracking being corrupted at a single specific spot.
+
+The slider's `@input` handler did an imperative
+`span.textContent = "${Math.round(v)}%"` write inside the LiDAR opacity slider's percentage
+readout to skip the re-render cost of coupling `_lidarViewOpacity` to a `@state`. The catch
+was that `textContent =` REMOVES every child node of the element and replaces them with a
+single new text node, including the marker comments that Lit places around interpolations
+like `<span>${pct}%</span>` to anchor its updates. Once the markers were gone, the NEXT Lit
+render of the card crashed inside its `performUpdate` because the cached marker reference
+pointed at a node that no longer existed. The crash aborted `updated()` partway through,
+which is the exact lifecycle method that calls `_handleCardModeChange`, which is the exact
+function that fires `exitLidarView`. So:
+
+- Click on Layer / Weather button -> click handler runs fine (it does not go through Lit's
+  template). `_cardMode` flips to base / weather, the mode-bar visual updates.
+- BUT Lit's render throws on the next update because of the corrupted markers.
+- updated() never reaches its `_handleCardModeChange` call.
+- exitLidarView is never invoked.
+- The LiDAR layer keeps drawing on the canvas, even though `_cardMode` is now base.
+- The LiDAR icon spins (the `is-spinning` class was applied) but stays on the harddisk /
+  satellite glyph instead of swapping to `mdi:loading` (the icon attribute update was the
+  step that threw, partway through).
+- The whole picture: mode bar updated, LiDAR view stayed.
+
+Fix:
+- Removed the imperative `span.textContent =` write inside the slider handler.
+- `_onLidarOpacityChange` now calls `this.requestUpdate()` after pushing the engine update.
+  Lit re-renders the picker template through its normal pipeline so the `${pct}%` text node
+  is updated via the marker-aware path. requestUpdate is rAF-coalesced upstream by the
+  slider's own throttle (only one rAF callback per frame), so the render cost stays at one
+  pass per frame max regardless of how fast the slider drags.
+- The earlier beta.106 fix (dropping the `_lidarLayerActive` guard around exitLidarView)
+  stays, it is a reasonable cleanup on its own.
+
 ### LiDAR exit fix round 3 + RainViewer luminance inversion (#210)
 
 - **LiDAR exit fade was conditional on a card-side flag that desync'd**: the

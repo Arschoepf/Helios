@@ -177,15 +177,15 @@ export function renderLidarViewOpacityPicker(
                        const input = e.target as HTMLInputElement;
                        const v = Number(input.value);
                        onChange(v / 100);
-                       //Imperative DOM write for the % readout, the host's `_lidarViewOpacity` is intentionally NOT a `@state`
-                       //(the slider fires ~50 input events / s and a state coupling would re-render the entire card on every
-                       //tick, see the field comment in helios-card.ts), so a Lit pass would never re-paint the value span on
-                       //its own. Mirror what the input.value already reflects natively.
-                       const span = input.parentElement?.querySelector('.lidar-view-opacity-value') as HTMLElement | null;
-                       if (span)
-                       {
-                           span.textContent = `${Math.round(v)}%`;
-                       }
+                       //The host's _onLidarOpacityChange triggers a Lit requestUpdate at the
+                       //rAF-coalesced cadence, which re-renders this picker template and updates
+                       //the percentage span through the normal Lit text-node pipeline. The
+                       //previous design did an imperative `span.textContent =` write here to
+                       //skip the re-render cost, but textContent replaces every child node of
+                       //the span, including Lit's tracking markers, which crashed Lit on the
+                       //next render of the card and aborted updated() partway through (the
+                       //aborted updated() then skipped _handleCardModeChange entirely, which
+                       //stranded the LiDAR layer on screen after a mode swap).
                    }}" />
             <ha-icon class="lidar-view-opacity-icon lidar-view-opacity-icon--high" icon="mdi:circle"></ha-icon>
             <span class="lidar-view-opacity-value">${pct}%</span>
