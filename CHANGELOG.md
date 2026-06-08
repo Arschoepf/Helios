@@ -243,6 +243,13 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Weather mode polish, beta.115
+
+Disc radius drops by 40 % (factor 0.40 -> 0.24 of the on-screen cell pitch) so the dot cloud
+reads as small punctuation rather than dense blobs. Per-band opacity tightens to 20 / 40 /
+60 % (low / mid / high) so even fully overlapping stacks stay legible without saturating the
+home + map context underneath.
+
 ### Weather mode polish, beta.114
 
 The cloud-cover overlay drops the connected-component polygon finder in favour of a per-point

@@ -7,7 +7,7 @@
 //
 //The dot-cloud encoding deliberately under-fills its cell so the basemap stays visible between
 //discs and the overall shape reads as a punctuated cloud cluster rather than a contiguous wash.
-//Per-band opacity grows from low (40 %) to high (80 %) so layered points naturally weight the
+//Per-band opacity grows from low (20 %) to high (60 %) so layered points naturally weight the
 //higher band heavier when more than one altitude reports cloud cover at the same grid sample.
 
 import { html, nothing, svg, type TemplateResult } from 'lit';
@@ -223,7 +223,7 @@ export function renderWeatherOverlay(host: WeatherModeHost): TemplateResult | ty
             {
                 pitch = Math.hypot(b.x - a.x, b.y - a.y) || pitch;
             }
-            const radius = Math.max(3, pitch * 0.40);
+            const radius = Math.max(2, pitch * 0.24);
             if (host._weatherShowHigh)
             {
                 bandHigh = renderCloudBand(projected, nLat, nLon, grid!.cloudHigh, nTimes, timeIdx, radius, 'weather-cloud-dot-high');

@@ -2905,8 +2905,8 @@ export const heliosCardStyles = css`
     /*  Per-point cloud dots. Every grid point with cloud cover over the threshold paints as one
         small filled disc with a thin contour, both in --primary-text-color so the cluster reads
         as a single HA-themed swarm regardless of the user's theme. Opacity grows with altitude
-        so a point covered on all three bands stacks low (40 %) under mid (60 %) under high
-        (80 %), the higher band carrying the most visual weight. Stroke is the same colour at
+        so a point covered on all three bands stacks low (20 %) under mid (40 %) under high
+        (60 %), the higher band carrying the most visual weight. Stroke is the same colour at
         the same opacity, just renders as a tighter rim because it is only 1 px wide.            */
     .weather-cloud-dot-low,
     .weather-cloud-dot-mid,
@@ -2917,9 +2917,9 @@ export const heliosCardStyles = css`
         stroke-width: 1;
         vector-effect: non-scaling-stroke;
     }
-    .weather-cloud-dot-low  { fill-opacity: 0.40; stroke-opacity: 0.40; }
-    .weather-cloud-dot-mid  { fill-opacity: 0.60; stroke-opacity: 0.60; }
-    .weather-cloud-dot-high { fill-opacity: 0.80; stroke-opacity: 0.80; }
+    .weather-cloud-dot-low  { fill-opacity: 0.20; stroke-opacity: 0.20; }
+    .weather-cloud-dot-mid  { fill-opacity: 0.40; stroke-opacity: 0.40; }
+    .weather-cloud-dot-high { fill-opacity: 0.60; stroke-opacity: 0.60; }
 
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +
