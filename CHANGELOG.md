@@ -243,6 +243,30 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Weather mode shader fixes: cloud carving + premultiplied alpha, beta.118 (#213)
+
+Fast follow on beta.117. The first cut shipped a flat-grey quad with no visible cloud structure
+because the density formula collapsed under the smoothstep at high coverage, and the fragment
+shader emitted non-premultiplied RGB while MapLibre's framebuffer expected premultiplied alpha,
+so the blend saturated to plain colour even when the alpha modulation worked.
+
+Three fixes:
+
+- Cloud carving rewritten on threshold logic. The FBM noise field is the "where clouds could
+  be" mask, and the per-pixel coverage shifts the smoothstep threshold (coverage 0 -> only the
+  highest noise peaks bleed, coverage 1 -> almost everything paints, in between the noise
+  carves organic shapes). Coverage no longer collapses to flat fill at 100 %.
+- Fragment output switched to premultiplied alpha (`rgb = color * alpha`, `alpha = alpha`) +
+  the host's blend func dropped to `gl.ONE / gl.ONE_MINUS_SRC_ALPHA`. Beta.117 was double-
+  blending against the basemap, which saturated everything to flat tints.
+- Per-band noise scale + phase decorrelation: high clouds get broader features (~14 cycles
+  per degree, cirrus-like sheets), mid stays in between, low gets tighter puffs (~28 cycles).
+  Each band offsets its noise field by a different phase so a fully overcast point shows three
+  distinct shapes rather than three identical greys layered.
+
+Soft alpha fade on the quad edges (smoothstep on the geographic UV) replaces the hard rim from
+beta.117 so the cloud field blends into the basemap rather than ending in a clean rectangle.
+
 ### Weather mode -> GPU shader overlay (3 quads + FBM noise), beta.117 (#213)
 
 SVG dots out, fragment-shader-driven custom MapLibre layer in. The cached cloud grid feeds an

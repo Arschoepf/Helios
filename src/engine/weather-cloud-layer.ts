@@ -52,9 +52,16 @@ void main()
 `;
 
 
-//Fragment shader. Bilinear-sampled coverage from the data texture, modulated by 4-octave simplex
-//FBM noise to add the shredded organic edge that the raw grid alone can't carry. Final colour is
-//a soft-edged shape in u_color with alpha = density * u_opacity.
+//Fragment shader. Threshold-based cloud carving: the FBM simplex noise field defines WHERE
+//clouds could be, the bilinear-sampled coverage from the data texture shifts the threshold
+//(low coverage -> very high threshold, only the strongest noise peaks bleed through; high
+//coverage -> very low threshold, almost everything paints; in between the noise carves the
+//organic shapes). Output is premultiplied alpha so MapLibre's framebuffer blends correctly.
+//
+//Per-band scale + phase so the three altitudes paint visibly different cloud signatures: high
+//bands get broader features (cirrus-like sheets), low bands get tighter features (cumulus
+//puffs). All three bands tint with --primary-text-color, the band identity comes from the
+//shape + opacity stack.
 //
 //Simplex noise: Ashima Arts' canonical 2D implementation, public domain.
 const FRAG_SRC = `
@@ -105,7 +112,7 @@ float fbm(vec2 p, float t)
     vec2  shift = vec2(100.0);
     for (int i = 0; i < 4; i++)
     {
-        v += a * snoise(p + t * 0.05);
+        v += a * snoise(p + t * 0.02);
         p  = p * 2.0 + shift;
         a *= 0.5;
         t *= 0.7;
@@ -115,8 +122,9 @@ float fbm(vec2 p, float t)
 
 void main()
 {
-    //Geographic UV inside the bbox. CLAMP_TO_EDGE on the data texture takes care of the
-    //rare overshoot at the very edges of the quad.
+    //Geographic UV inside the bbox. CLAMP_TO_EDGE on the data texture extends the edge cells
+    //past the bbox so the quad can be larger than the data extent (smoother edge fade) without
+    //a hard cut at the data boundary.
     vec2 uv = vec2(
         (v_geo.x - u_bbox.x) / (u_bbox.z - u_bbox.x),
         (v_geo.y - u_bbox.y) / (u_bbox.w - u_bbox.y)
@@ -127,21 +135,35 @@ void main()
                    : (u_bandIndex == 1) ? dataSample.g
                                         : dataSample.b;
 
-    //FBM in geographic degrees. ~8 cycles per degree gives features sized at ~12 km on the
-    //ground at mid latitudes, which reads as believable cumulus / stratus patches.
-    float noise = fbm(v_geo * 8.0, u_time);
-    noise = noise * 0.5 + 0.5; //remap [-1, 1] -> [0, 1]
+    //Per-band noise scale: high clouds spread as broad sheets (low frequency), low clouds
+    //break into tighter puffs (high frequency). The float-typed band index avoids the WebGL 1
+    //integer-precision pitfalls some mobile drivers have around ternary on int uniforms.
+    float bandF = float(u_bandIndex);
+    float scale = mix(28.0, 14.0, bandF * 0.5); //low=28, mid=21, high=14 cycles per degree
+    float phase = bandF * 137.5;                //decorrelate the three bands so they don't paint
+                                                //identical shapes when all three are visible
 
-    //Combine: coverage gates where the cloud sits, noise carves the shape inside. The 0.55 /
-    //0.45 split keeps the gross coverage readable when noise dips, while still letting the noise
-    //punch holes that read as breaks in the cloud field.
-    float density = coverage * (0.55 + 0.45 * noise);
+    float noise = fbm(v_geo * scale + vec2(phase), u_time);
+    noise = clamp(noise * 0.5 + 0.5, 0.0, 1.0);
 
-    //Soft edges. Threshold the bottom 20 %, ramp to full opacity by 70 %, so a cell at 25 %
-    //coverage paints as a faint wash and a cell at 80 % paints as a thick clump.
-    density = smoothstep(0.20, 0.70, density);
+    //Threshold-driven cloud carving. The coverage shifts the noise threshold so:
+    //  coverage = 0   -> threshold = 1.0   -> mostly empty (only the highest peaks bleed)
+    //  coverage = 0.5 -> threshold = 0.5   -> noise cleanly carves organic shapes
+    //  coverage = 1   -> threshold = 0.0   -> mostly full (everything paints)
+    //smoothstep on a narrow band around the threshold gives soft, photographic edges.
+    float threshold = 1.0 - coverage;
+    float density   = smoothstep(threshold - 0.05, threshold + 0.20, noise);
 
-    gl_FragColor = vec4(u_color, density * u_opacity);
+    //Quad edge fade. The quad geometry extends past the data bbox so the cloud field bleeds
+    //a bit beyond the strict 22 km box; fade alpha out near the quad rim so the boundary is
+    //invisible instead of a hard cut.
+    float edgeFade = smoothstep(0.0, 0.10, uv.x) * smoothstep(1.0, 0.90, uv.x)
+                   * smoothstep(0.0, 0.10, uv.y) * smoothstep(1.0, 0.90, uv.y);
+
+    float alpha = density * u_opacity * edgeFade;
+    //Premultiplied alpha for MapLibre's framebuffer. The blend func is gl.ONE / gl.ONE_MINUS_SRC_ALPHA
+    //in the host (see render()), so the rgb channel must already carry alpha.
+    gl_FragColor = vec4(u_color * alpha, alpha);
 }
 `;
 
@@ -254,7 +276,11 @@ export class WeatherCloudLayer implements CustomLayerInterface
         gl.uniform1f(this.uTime, (performance.now() - this.startMs) / 1000);
 
         gl.enable(gl.BLEND);
-        gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+        //Premultiplied alpha matches MapLibre's framebuffer; the fragment shader already
+        //multiplies u_color by alpha so the rgb channel carries the colour scaled by coverage.
+        //Using SRC_ALPHA / ONE_MINUS_SRC_ALPHA against a premultiplied source would double-blend
+        //and saturate to flat colour, which was the beta.117 artefact.
+        gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
         gl.disable(gl.DEPTH_TEST);
 
         //Paint order low -> mid -> high so the higher (more opaque) band sits on top, matching
