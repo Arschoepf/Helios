@@ -310,11 +310,12 @@ export const heliosCardStyles = css`
         opacity: 0;
         pointer-events: none;
     }
-    /*  Timeline slides below the card edge for any non-base mode + the dashboard dive (overlay-masked
-        is set for both, see the card-side render comment). Weather mode is no exception: the radar
-        overlay shows the live RainViewer frame only, no scrub, and the mode-bar handler resets the
-        card to live the moment the user toggles into weather, so the timeline disappearing matches
-        the actual time model rather than hinting at a scrub capability that no longer exists. */
+    /*  Timeline slides below the card edge for any non-base mode + the dashboard dive (overlay-
+        masked is set for both, see the card-side render comment). Weather mode is no exception:
+        the overlay is a live snapshot of the cloud field at the current instant, no scrub, and
+        the mode-bar handler resets the card to live the moment the user toggles into weather,
+        so the timeline disappearing matches the actual time model rather than hinting at a
+        scrub capability that no longer exists. */
     ha-card.overlay-masked .time-bar
     {
         transform: translateY(140%);
@@ -2908,6 +2909,30 @@ export const heliosCardStyles = css`
         color: rgba(255, 255, 255, 0.85);
         font-variant-numeric: tabular-nums;
     }
+
+    /*  Weather mode overlay. Transparent wrapper anchored over the map container that hosts the
+        per-altitude cloud SVG. Pointer-events stay off so the user can still drag / pinch the
+        basemap through the overlay (the cloud cells are read-only context, no interaction).    */
+    .weather-mode-overlay
+    {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        z-index: 4;
+    }
+    .weather-cloud-svg
+    {
+        width: 100%;
+        height: 100%;
+        display: block;
+        overflow: visible;
+    }
+    /*  Per-band stacking: high (most distant) paints first under mid, mid under low (the
+        physical altitude ordering). The over-compositing on the polygons handles the alpha mix
+        so a 100 % overcast cell still leaves the basemap partially visible underneath.        */
+    .weather-cloud-band--high { mix-blend-mode: normal; }
+    .weather-cloud-band--mid  { mix-blend-mode: normal; }
+    .weather-cloud-band--low  { mix-blend-mode: normal; }
 
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +

@@ -75,20 +75,45 @@ swipes through the three cards rather than scrolling them. Day-load grow animati
 cumulative production chart from the previous design is gone; the radial dial plus the peak-
 power-scaled production curve carry the same information at a glance.
 
-### Weather mode with live RainViewer precipitation radar (#210)
+### Weather mode with per-altitude SVG cloud overlay (#210)
 
 Top-right mode bar switches from `Layer / LiDAR / Dome` to `Layer / LiDAR / Weather`. Weather
-mode tilts the camera to a top-down framing around the home and overlays a live RainViewer
-precipitation radar tile source on the basemap. The Universal Blue palette is desaturated via
-`raster-saturation: -1` and the luminance ramp is inverted via `raster-brightness-min: 1` +
-`raster-brightness-max: 0`, so light rain (blue, low Y) reads as light grey and heavy rain
-(yellow / red, high Y) reads as dark grey. The visual matches the intensity reading.
+mode tilts the camera to a top-down framing around the home and overlays the modelled cloud
+coverage as three colour-coded translucent layers (high / mid / low) on top of the basemap.
+Each layer paints one polygon per grid cell with fill opacity tracking the local cloud cover
+for that altitude band; polygon corners reproject through MapLibre's camera transform on every
+move event so the overlay stays glued to the basemap.
 
-Refreshed every 5 minutes for as long as the mode stays on (RainViewer publishes a new frame
-every 10 min). Live-only, no scrub timeline: the value of the mode is "what is happening right
-now" rather than a forecast scrub the user cannot trust. The mode-bar handler resets the card
-to live on entry. Three cloud-layer chips (low / mid / high) appear under the mode bar so the
-per-altitude Open-Meteo coverage reads at a glance alongside the radar.
+The data feed is a single Open-Meteo POST per refresh tick (5 min cadence) carrying a 10 x 10
+grid of points covering a ~44 km bbox around the home. The request asks for
+`models=best_match` so the response includes the resolved numerical weather model name
+(AROME-France ~1.3 km, ICON-EU ~7 km, ECMWF IFS ~25 km, etc.); the grid pitch is sized so the
+overlay reads at a reasonable resolution against the underlying model's native cells. 100
+points per call x 12 calls per hour stays well under the per-IP daily quota (10 000 calls /
+day on the free tier) the previous 50 x 50 grid kept tripping.
+
+Drawing in SVG rather than rasterising into a MapLibre image source keeps every pixel crisp
+at the zoom 10 framing; the previous raster pipelines that downscaled + blurred a stitched
+canvas turned the layer into a muted grey wash that erased the per-altitude signal.
+
+The first cut paints in vivid debug colours (red for high, green for mid, yellow for low) so
+the per-band signal reads at a glance during testing. The palette collapses to a single muted
+hue once the rendering pipeline is validated.
+
+Three cloud-layer chips (low / mid / high) under the mode bar keep showing the per-altitude
+Open-Meteo coverage at the home for the precise numbers; the SVG overlay carries the spatial
+context around it.
+
+### RainViewer overlay retired (#210)
+
+The previous RainViewer precipitation-radar overlay is removed in favour of the cloud-cover
+SVG above. RainViewer encodes rainfall intensity (rain / snow / storm cells), not cloud
+cover, and the two are very different signals: a 100 % overcast sky with no rain registers
+as nothing on RainViewer, and a thin band of light rain across an otherwise clear sky reads
+as a heavy radar return. Solar production cares about cloud cover (sunlight attenuation),
+not active precipitation. Aligning the mode's data feed with what the rest of the card uses
+(Open-Meteo cloud_cover_low / mid / high) keeps weather mode coherent with the chips, the
+chart curves, the forecast model and the calibration ratio.
 
 ### Shading-map family fully retired (#210)
 
