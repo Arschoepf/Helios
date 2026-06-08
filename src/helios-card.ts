@@ -2112,6 +2112,45 @@ export class HeliosCard extends LitElement
                                     <ha-icon icon="${lockIcon}"></ha-icon>
                                 </button>
                             `}
+                            ${isWeather && this._cloudScene ? html`
+                                <!--  Per-altitude cloud band toggles. Vertical rail of three real buttons (high, mid,
+                                      low) only present while weather mode is active. Each button doubles as the layer's
+                                      live coverage readout (current home-point percentage) and the on/off switch for
+                                      its matching SVG band on the map. State does not persist across mode entries,
+                                      enterWeatherMode resets all three to ON. Same .mode-bar-seg footprint and idle /
+                                      active recipe as the mode bar in the top-right corner so the two rails read as
+                                      one family of controls.                                                          -->
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg cloud-layer-seg cloud-layer-seg--high ${this._weatherShowHigh ? 'is-on' : ''}"
+                                    aria-pressed="${this._weatherShowHigh ? 'true' : 'false'}"
+                                    aria-label="Toggle high cloud layer"
+                                    @click="${() => { this._weatherShowHigh = !this._weatherShowHigh; }}"
+                                >
+                                    <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
+                                    <span class="cloud-layer-pct">${Math.round(this._cloudScene.cloudHigh)}%</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg cloud-layer-seg cloud-layer-seg--mid ${this._weatherShowMid ? 'is-on' : ''}"
+                                    aria-pressed="${this._weatherShowMid ? 'true' : 'false'}"
+                                    aria-label="Toggle mid cloud layer"
+                                    @click="${() => { this._weatherShowMid = !this._weatherShowMid; }}"
+                                >
+                                    <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
+                                    <span class="cloud-layer-pct">${Math.round(this._cloudScene.cloudMid)}%</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="mode-bar-seg cloud-layer-seg cloud-layer-seg--low ${this._weatherShowLow ? 'is-on' : ''}"
+                                    aria-pressed="${this._weatherShowLow ? 'true' : 'false'}"
+                                    aria-label="Toggle low cloud layer"
+                                    @click="${() => { this._weatherShowLow = !this._weatherShowLow; }}"
+                                >
+                                    <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
+                                    <span class="cloud-layer-pct">${Math.round(this._cloudScene.cloudLow)}%</span>
+                                </button>
+                            ` : nothing}
                         </div>
                         <div class="overlay-top-right">
                             <div class="mode-bar" role="radiogroup" aria-label="View mode">
@@ -2147,44 +2186,6 @@ export class HeliosCard extends LitElement
                                     <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
                                 </button>
                             </div>
-                            ${isWeather && this._cloudScene ? html`
-                                <!-- Cloud-layer toggle chips. Appear below the mode bar (right
-                                     rail) the moment weather mode is active so the user reads
-                                     the three altitude bands at a glance without leaving the
-                                     overlay. Tap to toggle the matching SVG band on / off;
-                                     class is-off mutes the chip when its band is hidden so the
-                                     user knows what is on screen. -->
-                                <button
-                                    type="button"
-                                    class="cloud-layer-chip cloud-layer-chip--high ${this._weatherShowHigh ? 'is-on' : 'is-off'}"
-                                    aria-pressed="${this._weatherShowHigh ? 'true' : 'false'}"
-                                    aria-label="Toggle high cloud layer"
-                                    @click="${() => { this._weatherShowHigh = !this._weatherShowHigh; }}"
-                                >
-                                    <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
-                                    <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="cloud-layer-chip cloud-layer-chip--mid ${this._weatherShowMid ? 'is-on' : 'is-off'}"
-                                    aria-pressed="${this._weatherShowMid ? 'true' : 'false'}"
-                                    aria-label="Toggle mid cloud layer"
-                                    @click="${() => { this._weatherShowMid = !this._weatherShowMid; }}"
-                                >
-                                    <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
-                                    <span>${Math.round(this._cloudScene.cloudMid)}%</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    class="cloud-layer-chip cloud-layer-chip--low ${this._weatherShowLow ? 'is-on' : 'is-off'}"
-                                    aria-pressed="${this._weatherShowLow ? 'true' : 'false'}"
-                                    aria-label="Toggle low cloud layer"
-                                    @click="${() => { this._weatherShowLow = !this._weatherShowLow; }}"
-                                >
-                                    <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
-                                    <span>${Math.round(this._cloudScene.cloudLow)}%</span>
-                                </button>
-                            ` : nothing}
                         </div>
                     `;
                 })() : nothing}

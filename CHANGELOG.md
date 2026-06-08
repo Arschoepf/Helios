@@ -243,6 +243,26 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Weather mode polish, beta.112
+
+Final round of refinements on the cloud-cover overlay before the v1.8.3 ship:
+
+- The per-cell polygon rasterisation is replaced by a connected-component blob finder. Adjacent
+  cells that share the "covered" state (mean cloud cover >= 15 % on that band) merge into a
+  single SVG polygon walked along the union's outline, so the overlay reads as smooth shapes
+  rather than a 30 x 30 mosaic of individual squares.
+- The three altitude toggles (high / mid / low) move from the right rail under the mode bar to
+  the top-left corner as a vertical stack of real buttons. Same shape vocabulary as the mode
+  bar, just slightly taller so each button can stack a layer glyph above its current home-point
+  coverage percentage. State resets to all-on every time the user enters weather mode.
+- Band fills derive from `--primary-text-color` via `color-mix` (high = 100 %, mid = 55 %, low =
+  25 % blend toward the card background). No translucency: the contrast comes from the value
+  step between mixes so the three bands stay distinct on every HA theme.
+- The bottom timeline stays visible in weather mode and is fully scrubbable. The cloud-cover
+  grid is fetched once per refresh tick as a 5-day window (-2 days past + today + +2 days
+  forecast = 120 hourly slices); scrubbing the cursor picks the right slice out of the cached
+  Float32Array without any fresh HTTP round-trip.
+
 ### Dependencies refreshed
 
 - `vite` 8.0.14 → 8.0.16

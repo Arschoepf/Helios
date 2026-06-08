@@ -311,20 +311,20 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
     /*  Timeline slides below the card edge for any non-base mode + the dashboard dive (overlay-
-        masked is set for both, see the card-side render comment). Weather mode is no exception:
-        the overlay is a live snapshot of the cloud field at the current instant, no scrub, and
-        the mode-bar handler resets the card to live the moment the user toggles into weather,
-        so the timeline disappearing matches the actual time model rather than hinting at a
-        scrub capability that no longer exists. */
-    ha-card.overlay-masked .time-bar
+        masked is set for both, see the card-side render comment). Weather mode is the exception:
+        the cloud grid is fetched as a 5-day window (-2/+3 days) on entry, so scrubbing the time-
+        bar just walks the cached time slice without a fresh fetch. Keeping the timebar visible
+        means the user can replay the day's cloud cover or peek ahead at the forecast directly
+        from the weather view. */
+    ha-card.overlay-masked:not(.mode-weather) .time-bar
     {
         transform: translateY(140%);
         pointer-events: none;
     }
-    /*  Top-left cluster (lock chip) hides on every masked mode. Weather mode also hides it
-        because the card-side render returns nothing for the lock button when isWeather is true,
-        so the wrapper stays in the tree but is intentionally empty. */
-    ha-card.overlay-masked .overlay-top-left
+    /*  Top-left cluster (lock chip) hides on every masked mode EXCEPT weather: weather mode hosts
+        the per-altitude cloud band toggles in this rail and they need to stay interactive while
+        the rest of the HUD is faded out. */
+    ha-card.overlay-masked:not(.mode-weather) .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
@@ -2678,50 +2678,35 @@ export const heliosCardStyles = css`
         gap: 8px;
         pointer-events: none;
     }
-    /*  Per-altitude cloud cover discs. Three 40 px round chips stacked under the weather button
-        in the right rail (overlay-top-right) when weather mode is active. Only added to the DOM
-        while weather mode is on, so they pop in / pop out instantly with the mode flip rather
-        than fading through the previous animated cascade (the mode swap already animates the
-        button + the raster overlay, the chips share that single moment). */
-    .cloud-layer-chip
+    /*  Per-altitude cloud band toggles. Vertical stack of three real buttons in the top-left
+        rail while weather mode is active, mirroring the mode-bar vocabulary in the top-right
+        corner (.mode-bar-seg style is inherited, only the shape + content layout differ here).
+        Each button shows a layer glyph + the current home-point coverage percentage; tapping
+        toggles the matching SVG band off in the overlay. Buttons pop in / pop out with the mode
+        flip rather than animating in separately, so the cluster reads as one moment with the
+        rest of the weather UI swap. */
+    .cloud-layer-seg
     {
-        display: inline-flex;
         flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        width:  40px;
-        height: 40px;
-        background: transparent;
-        color: var(--primary-text-color, #212121);
-        border: none;
-        border-radius: 50%;
-        font-size: var(--ha-font-size-s, 12px);
+        width: 56px;
+        height: 56px;
+        border-radius: 18px;
+        gap: 2px;
+        padding: 4px 0;
+        pointer-events: auto;
+        font-size: var(--ha-font-size-xs, 11px);
         font-weight: 600;
         line-height: 1;
         font-variant-numeric: tabular-nums;
-        cursor: pointer;
-        padding: 0;
-        transition: opacity 0.18s ease, color 0.18s ease;
     }
-    .cloud-layer-chip ha-icon
+    .cloud-layer-seg ha-icon
     {
-        --mdc-icon-size: 14px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-        margin-bottom: 2px;
+        --mdc-icon-size: 20px;
     }
-    /*  is-off mutes the chip when its band has been toggled out of the SVG overlay, so the
-        user reads at a glance which layers are currently painted on screen. The colour ramp
-        + opacity drop tracks the mode-bar's own inactive-chip vocabulary.                  */
-    .cloud-layer-chip.is-off
+    .cloud-layer-seg .cloud-layer-pct
     {
-        opacity: 0.35;
-        color: var(--secondary-text-color, rgba(0, 0, 0, 0.55));
-    }
-    .cloud-layer-chip:hover
-    {
-        opacity: 1;
+        font-size: 11px;
+        opacity: 0.95;
     }
 
     /*  Loading banner. Shown at the top of the card while the first hydration wave of data fetches
@@ -2943,11 +2928,27 @@ export const heliosCardStyles = css`
         overflow: visible;
     }
     /*  Per-band stacking: high (most distant) paints first under mid, mid under low (the
-        physical altitude ordering). The over-compositing on the polygons handles the alpha mix
-        so a 100 % overcast cell still leaves the basemap partially visible underneath.        */
-    .weather-cloud-band--high { mix-blend-mode: normal; }
-    .weather-cloud-band--mid  { mix-blend-mode: normal; }
-    .weather-cloud-band--low  { mix-blend-mode: normal; }
+        physical altitude ordering). Fills are derived from --primary-text-color so the bands
+        stay legible on every HA theme without a per-theme palette: high paints with the full
+        text colour, mid is mixed half-way to the card background, low is muted further down so
+        the three bands keep distinct values even when layered over the same cell. No opacity,
+        the contrast comes entirely from the value step between the mixes so the user reads each
+        band as a flat shape rather than a translucent wash.                                     */
+    .weather-cloud-poly-high
+    {
+        fill: var(--primary-text-color, #212121);
+        stroke: none;
+    }
+    .weather-cloud-poly-mid
+    {
+        fill: color-mix(in srgb, var(--primary-text-color, #212121) 55%, var(--card-background-color, #ffffff));
+        stroke: none;
+    }
+    .weather-cloud-poly-low
+    {
+        fill: color-mix(in srgb, var(--primary-text-color, #212121) 25%, var(--card-background-color, #ffffff));
+        stroke: none;
+    }
 
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +

@@ -998,7 +998,12 @@ export class HeliosEngine
         nLon:      number;
         lats:      Float32Array;
         lons:      Float32Array;
-        //Cloud-cover percentages at the selected hour, row-major (latIdx * nLon + lonIdx).
+        //Hourly time axis the cloud arrays index along (5-day window: 2 past + today + 2
+        //forecast = 120 hourly slices). One fetch covers the full timeline so timeline scrub
+        //picks the right slice from cache without firing another HTTP round-trip.
+        times:     Date[];
+        //Cloud-cover percentages stored row-major: point index outer (latIdx * nLon + lonIdx),
+        //time index inner. Read via `values[pointIdx * nTimes + timeIdx]`. nTimes is times.length.
         cloudLow:  Float32Array;
         cloudMid:  Float32Array;
         cloudHigh: Float32Array;
@@ -1013,6 +1018,24 @@ export class HeliosEngine
     public getWeatherCloudGrid(): typeof this._weatherCloudGrid
     {
         return this._weatherCloudGrid;
+    }
+
+    //Resolve the time-axis index closest to the given timestamp. The grid covers a 5-day
+    //window, so this is cheap (~120 entries) and runs on every renderer pass. Returns -1 when
+    //the grid is empty.
+    public getWeatherCloudGridTimeIndex(t: Date): number
+    {
+        const g = this._weatherCloudGrid;
+        if (!g || g.times.length === 0) { return -1; }
+        const tMs = t.getTime();
+        let best = 0;
+        let bestDt = Math.abs(g.times[0].getTime() - tMs);
+        for (let i = 1; i < g.times.length; i++)
+        {
+            const dt = Math.abs(g.times[i].getTime() - tMs);
+            if (dt < bestDt) { bestDt = dt; best = i; }
+        }
+        return best;
     }
 
     //Fetch the weather-mode cloud grid. Idempotent: a second call while one is in flight short-
@@ -1059,11 +1082,15 @@ export class HeliosEngine
                 }
             }
 
+            //Fetch a 5-day hourly window in a single round-trip (2 past + today + 2 forecast)
+            //so the timeline scrub picks the right slice from cache without firing another
+            //HTTP round-trip on every cursor move. forecast_days=3 yields today + 2 future
+            //days; past_days=2 carries the timeline's two past days too.
             const body = 'latitude='   + flatLats.join(',')
                        + '&longitude=' + flatLons.join(',')
                        + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
                        + '&models=best_match'
-                       + '&forecast_days=1&past_days=0&timezone=UTC';
+                       + '&forecast_days=3&past_days=2&timezone=UTC';
             const resp = await fetch('https://api.open-meteo.com/v1/forecast', {
                 method:  'POST',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -1079,31 +1106,29 @@ export class HeliosEngine
             {
                 throw new Error('Open-Meteo cloud grid: empty payload');
             }
-            //Pick the time slice closest to the current wall clock; models report hourly so the
-            //slot we want is just the current hour rounded down.
             const timeStrs: string[] = results[0].hourly.time;
-            const times: number[] = timeStrs.map(s => new Date(s + 'Z').getTime());
-            const nowMs = Date.now();
-            let timeIdx = 0;
-            let bestDt = Math.abs(times[0] - nowMs);
-            for (let i = 1; i < times.length; i++)
-            {
-                const dt = Math.abs(times[i] - nowMs);
-                if (dt < bestDt) { bestDt = dt; timeIdx = i; }
-            }
+            const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
+            const nTimes = times.length;
 
-            const cloudLow  = new Float32Array(total);
-            const cloudMid  = new Float32Array(total);
-            const cloudHigh = new Float32Array(total);
-            for (let g = 0; g < total; g++)
+            //Pack the per-point hourly cloud series row-major: point outer, time inner. Cuts
+            //the renderer's per-cell read down to one indexed lookup per band without an
+            //intermediate slice copy on every scrub cursor move.
+            const cloudLow  = new Float32Array(total * nTimes);
+            const cloudMid  = new Float32Array(total * nTimes);
+            const cloudHigh = new Float32Array(total * nTimes);
+            for (let p = 0; p < total; p++)
             {
-                const r  = results[g];
+                const r  = results[p];
                 const lo = r?.hourly?.cloud_cover_low  ?? [];
                 const mi = r?.hourly?.cloud_cover_mid  ?? [];
                 const hi = r?.hourly?.cloud_cover_high ?? [];
-                cloudLow[g]  = lo[timeIdx] ?? 0;
-                cloudMid[g]  = mi[timeIdx] ?? 0;
-                cloudHigh[g] = hi[timeIdx] ?? 0;
+                const base = p * nTimes;
+                for (let t = 0; t < nTimes; t++)
+                {
+                    cloudLow[base + t]  = lo[t] ?? 0;
+                    cloudMid[base + t]  = mi[t] ?? 0;
+                    cloudHigh[base + t] = hi[t] ?? 0;
+                }
             }
 
             //Open-Meteo's response carries the resolved `model` per location; same model across
@@ -1117,6 +1142,7 @@ export class HeliosEngine
                 nLon:   N,
                 lats,
                 lons,
+                times,
                 cloudLow,
                 cloudMid,
                 cloudHigh,
