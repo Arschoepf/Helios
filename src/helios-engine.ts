@@ -1009,17 +1009,20 @@ export class HeliosEngine
         const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
         const lyrId = HeliosEngine._RAINVIEWER_LAYER_ID;
         //URL template: {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
-        //size 1024 (max free tier), color 0 (Black & White gradient: light grey light rain ->
-        //black storm; reads as a neutral cloud-mass overlay that contrasts on any basemap theme),
-        //smooth + snow on.
-        const url = `${frame.host}${frame.path}/1024/{z}/{x}/{y}/0/1_1.png`;
+        //size 512 (RainViewer free tier supports 256 + 512 only; 1024 falls back to a smaller
+        //default), color 2 (Universal Blue, the only scheme the public CDN respects in practice,
+        //the other colour numbers are silently ignored and serve the same Universal Blue tile),
+        //smooth + snow on. The black & white look is achieved client-side via the raster paint
+        //saturation -1 desaturation below, since the server-side palette swap does not work on
+        //this endpoint.
+        const url = `${frame.host}${frame.path}/512/{z}/{x}/{y}/2/1_1.png`;
         const existing = this.map.getSource(srcId) as any;
         if (!existing)
         {
             this.map.addSource(srcId, {
                 type:     'raster',
                 tiles:    [url],
-                tileSize: 1024,
+                tileSize: 512,
                 //Native data caps at z=7. Telling MapLibre maxzoom 7 keeps every tile request
                 //inside the server's native range; MapLibre handles the per-pixel upscale past
                 //that point. Saves the server a round of bilinear blow-up and keeps the radar
@@ -1030,7 +1033,21 @@ export class HeliosEngine
                 id:     lyrId,
                 type:   'raster',
                 source: srcId,
-                paint:  { 'raster-opacity': 0.80, 'raster-fade-duration': 0 },
+                paint:  {
+                    'raster-opacity':       0.80,
+                    //Desaturate the Universal Blue palette into a black & white gradient: light
+                    //rain (light blue) reads as light grey, heavy rain (red) reads as dark grey
+                    //or near black. Saturation -1 strips all hue; the resulting luminance ramp
+                    //matches the rainfall intensity ramp and reads as a neutral cloud-mass
+                    //overlay that contrasts on both light and dark HA themes without fighting
+                    //the basemap's own colour layer.
+                    'raster-saturation':    -1,
+                    //Mild contrast boost so the desaturated colours separate cleanly: without
+                    //it the luminance values bunch in the 100-200 grey range and the storm
+                    //cells stop reading as distinct from the light-rain background.
+                    'raster-contrast':      0.3,
+                    'raster-fade-duration': 0,
+                },
             });
         }
         else

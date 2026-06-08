@@ -33,14 +33,20 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
-### RainViewer palette + opacity tweak (#210)
+### RainViewer black & white look + tile size fix (#210)
 
-- **Palette swap**: RainViewer colour scheme 4 (Weather Channel: blue -> green -> yellow ->
-  red) replaced by scheme 0 (Black and White: light grey light rain -> black storm). Reads
-  as a neutral cloud-mass overlay that contrasts on both light and dark HA themes without
-  fighting the basemap's own colour layer.
-- **Raster opacity 0.85 -> 0.80**: half a notch softer so the underlying streets / districts
-  stay legible through dense rain cells.
+- **Server-side palette swap does not work**: tested every colour scheme number (0 through 8)
+  against the public weather-maps endpoint and the tiles come back byte-for-byte identical.
+  The CDN ignores the colour segment and always serves the Universal Blue palette. Switched
+  to a client-side desaturation instead via the raster paint properties.
+- **MapLibre raster desaturation**: `raster-saturation: -1` strips all hue from the tile so
+  light blue (light rain) reads as light grey and red (heavy storm) reads as dark grey, the
+  black & white look we were after. `raster-contrast: 0.3` keeps the storm cells separating
+  cleanly from the light-rain background after the desaturation flattens the luminance.
+- **Tile size 1024 -> 512**: RainViewer's free tier only supports 256 + 512 px. The earlier
+  1024 request was silently falling back to a default texture, which is why the tile size
+  bump did not show in practice. 512 px is now the requested size + matches the MapLibre
+  source tileSize so each tile maps directly to one MapLibre slot.
 
 ### Weather mode: Open-Meteo grid -> RainViewer radar (#210)
 
