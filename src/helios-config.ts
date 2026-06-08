@@ -23,20 +23,6 @@ export interface HeliosConfig
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
     'show-labels'?:           unknown;
-    //Fixed-colour design system. Each metric has one configurable
-    //colour reused everywhere it appears (timeline mirror chart +
-    //on-arc sun disc for sun, on-ground disc + timeline lower half
-    //for cloud). Intensity is conveyed by area / position rather than
-    //by hue interpolation, so a high cloud reading reads consistently
-    //as "more" regardless of the chosen colour.
-    'sun-color'?:             unknown;
-    'cloud-color'?:           unknown;
-    //Optional photovoltaic production overlay. The PV entity itself is no longer wired here, the card resolves the
-    //solar source from the HA Energy dashboard global settings (Settings -> Dashboards -> Energy) directly. Only the
-    //tint stays as a per-card YAML setting.
-    //  pv-color : single colour used everywhere PV appears (chip icon tint, dedicated graph fill / stroke). Defaults
-    //             to a vivid green chosen to read cleanly on the white chart card.
-    'pv-color'?:              unknown;
     //Inverter clipping cap in kW (kilowatts of AC). Optional; when
     //set, the forecast tops out at this value so an oversized DC
     //array hooked to a smaller inverter (e.g. 6.4 kWp panels behind a
@@ -97,9 +83,7 @@ export interface HeliosConfig
     //Optional home-battery overlay. A single chip below the home shows the battery State-of-Charge (%) and the live
     //signed power draw (positive charging, negative discharging), mirroring the PV chip above the home. Battery
     //entities (SoC, power, per-bank sign inversion, multi-bank aggregation) are resolved exclusively from the HA
-    //Energy dashboard, no per-card entity slot. Only the tint stays as a per-card YAML setting.
-    //  battery-color : single colour used everywhere battery appears (chip text, border, leader, flow arrow).
-    //                  Defaults to a vivid purple.
+    //Energy dashboard, no per-card entity slot.
     //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops
     //feeding the battery and clamps PV output (almost no production from the panels even when the sun is up). When
     //set AND HA Energy has at least one battery SoC source declared, calibration consumers can skip observation buckets
@@ -107,7 +91,6 @@ export interface HeliosConfig
     //true zeros and pollute the rolling calibration ratio. Threshold varies per inverter model (some cut at 95, some
     //at 98, some at 100); the user configures their own. Leave unset to feed every bucket into the calibration.
     'inverter-cutoff-soc-pct'?: unknown;
-    'battery-color'?:         unknown;
     //Grid import / export wiring is resolved exclusively from the HA Energy dashboard global settings: every grid
     //source's `stat_energy_from` feeds the IMPORT scrub buffer, every `stat_energy_to` feeds the EXPORT scrub
     //buffer, and the optional `stat_rate` / `power_config.stat_rate` overrides the live chip with HA's own
@@ -167,11 +150,6 @@ export interface HeliosConfig
     //to the main house from rendering as semi-transparent "neighbours".
     //Default 0 (legacy single-polygon home detection).
     'building-cluster-radius'?: unknown;
-    //Hex colour of every rendered building (home and surroundings
-    //share the same base tone, modulated by sun altitude). The
-    //surrounding extrusions remain visually distinct via opacity,
-    //not hue. Default neutral cool grey #d2d2d7.
-    'building-color'?:         unknown;
     //Pixel ratio override for the WebGL canvas. 'auto' (default)
     //uses the device's native devicePixelRatio (capped at 2 on
     //desktop, 1.25 on mobile to keep fragment work bounded). '1x'
@@ -269,14 +247,10 @@ export interface HeliosConfig
 //  - Sun: a warm amber (#EF9F27), clearly warm, high luminance,
 //Defaults aligned with Home Assistant's Energy dashboard palette
 //(--energy-solar-color / --energy-battery-out-color / --secondary-
-//text-color). A Helios card dropped into an HA dashboard now reads
-//as a first-party Energy tile by default, and any theme that
-//overrides the HA energy tokens (Catppuccin, Nord, etc.) flows
-//through automatically because the CSS rules consume the same
-//variables. The legacy per-config colour overrides
-//(sun-color / cloud-color / pv-color / battery-color in YAML) are
-//no longer read, those keys stay in the config type for backward
-//compatibility but the renderer ignores them.
+//text-color). A Helios card dropped into an HA dashboard reads
+//as a first-party Energy tile, and any theme that overrides the HA
+//energy tokens (Catppuccin, Nord, etc.) flows through automatically
+//because the CSS rules consume the same variables.
 //Sun identity (arc + ray + disc) takes the HA amber tone so it
 //reads as distinct from the PV production orange. Helios is named
 //for the sun, the live sun on screen must not be confused with

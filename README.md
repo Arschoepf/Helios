@@ -154,18 +154,6 @@ When a national provider covers your home (see [LiDAR coverage](#lidar-coverage)
 | `lidar-local-ndsm-min-lon` | number | - | Western edge, EPSG:4326 degrees. Required when the provider is enabled. |
 | `lidar-local-ndsm-max-lon` | number | - | Eastern edge, EPSG:4326 degrees. Required when the provider is enabled. |
 
-### LiDAR view appearance (YAML-only, no editor UI)
-
-The Weather mode + LiDAR mode mode-bar buttons read the in-card sliders for opacity. The following YAML keys override the point cloud styling beyond the slider:
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `lidar-view-point-color` | hex | `--primary-text-color` | Per-point dot colour. Default tracks the HA theme so dots read black on light theme and white on dark theme. |
-| `lidar-view-point-opacity` | 0–1 | `0.6` | Per-point alpha (live tunable in-card via the bottom slider; this key sets the initial value on every card mount). |
-| `lidar-view-wireframe` | boolean | `true` | Toggle the cell-edge wireframe that overlays the point cloud. |
-| `lidar-view-wireframe-color` | hex | `--primary-text-color` | Wireframe stroke colour. |
-| `lidar-view-wireframe-opacity` | 0–1 | `0.4` | Wireframe stroke alpha. |
-
 ### Home location override
 
 | Key | Type | Default | Description |
@@ -173,25 +161,17 @@ The Weather mode + LiDAR mode mode-bar buttons read the in-card sliders for opac
 | `home-latitude` | number | HA's home latitude | Optional override for the home latitude in decimal degrees. When BOTH `home-latitude` and `home-longitude` are set to valid coordinates, they take precedence over `hass.config.latitude` / `longitude` and the map recentres on the override. Useful when Home Assistant's configured home address isn't where you want the card centered (shared HA install, holiday home, mobile setup, privacy-conscious users who leave `hass.config` blank, or multiple cards on one dashboard each visualising a different place). Leave empty (default) to use HA's configured home. |
 | `home-longitude` | number | HA's home longitude | Optional override for the home longitude in decimal degrees. Only applied together with `home-latitude`; partial or out-of-range values are silently rejected and the card falls back to HA's configured home. |
 
-### Colour customisation (YAML-only)
-
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `sun-color` | hex | `#ffc107` | Sun disc + arc + timeline irradiance area. |
-| `cloud-color` | hex | `#727272` | Timeline cloud area + cloud-cover chip accent. |
-| `pv-color` | hex | `#ff9800` | PV chip border + text + leader + dedicated graph. |
-| `battery-color` | hex | `#4db6ac` | Battery chip border + text + leader. |
-| `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
-
 ### What is no longer configurable
 
 Several v1.7.x / v1.8.x keys are silently stripped on every editor save (the runtime treats them as absent). The migration paths are baked in:
 
 - **Entity wiring** (`pv-power-entity`, `grid-import-entity`, `grid-export-entity`, `grid-power-entity`, `grid-power-invert`, `battery-soc-entity`, `battery-power-entity`, `battery-power-invert`, `batteries`) → resolved from the HA Energy dashboard.
+- **Colour identity** (`sun-color`, `cloud-color`, `pv-color`, `battery-color`, `building-color`) → fixed by the HA Energy palette (`--energy-solar-color`, `--energy-battery-out-color`, ...) so the card reads as a first-party HA tile on any theme.
 - **Theme keys** (`card-theme`, `card-theme-light`, `card-theme-dark`) → resolved from `hass.themes.darkMode`.
 - **Timeline keys** (`timeline-enabled`, `timeline-width-pct`, `timeline-consumption-enabled`) → the timeline is always on, sized to the card width.
 - **Display formatting** (`date-format`, `time-format`) → the card reads the HA locale settings.
 - **WebGL knobs** (`pixel-ratio`, `building-radius`, `lidar-view-point-size`, `lidar-view-radius`) → derived from a single `DEFAULT_DISPLAY_RADIUS_M` constant (200 m).
+- **LiDAR view styling** (`lidar-view-point-color`, `lidar-view-point-opacity`, `lidar-view-wireframe`, `lidar-view-wireframe-color`, `lidar-view-wireframe-opacity`) → the point cloud + wireframe inherit `--primary-text-color` directly from the active HA theme, opacity stays live-tunable via the in-card bottom slider.
 
 ### Multi-array PV layouts
 

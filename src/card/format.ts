@@ -77,22 +77,6 @@ export function lerpHexToward(a: string, b: string, t: number): string
 }
 
 
-//Validate a config value as a #rrggbb hex string. Falls back to the provided default for null, undefined, or malformed input.
-export function cfgHex(v: unknown, fallback: string): string
-{
-    if (v == null)
-    {
-        return fallback;
-    }
-    const s = String(v).trim();
-    if (/^#[0-9a-fA-F]{6}$/.test(s))
-    {
-        return s;
-    }
-    return fallback;
-}
-
-
 //Short date formatter. Honours the user's HA language preference so a French dashboard reads "lun. 3 juin" while an English one reads "Mon, Jun 3".
 export function formatDate(d: Date, hass?: { language?: string }): string
 {

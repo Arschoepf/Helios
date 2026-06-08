@@ -111,11 +111,6 @@ export interface PvHost extends LoadingTrackerHost
 }
 
 
-//Per-instance flag key used by wipeLegacyPvCalibStorage to mark the one-time cleanup as done. Stored alongside the calibration entries it sweeps so a
-//stale read from another browser still triggers a fresh cleanup on first load.
-const PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
-
-
 //-----------------------------------------------------------------
 //Module-level cache for the three PV-side WS fetches. Survives Lit
 //element unmount + remount (the user navigating away from the card
@@ -1418,57 +1413,6 @@ export function pvInverterMaxW(config: HeliosConfig | undefined): number
     const result = (!isFinite(kw) || kw <= 0) ? Infinity : kw * 1000;
     _pvInverterMaxWCache.set(config, result);
     return result;
-}
-
-
-//One-time cleanup of the obsolete auto-calibration buffers (an
-//earlier release maintained a rolling 14-day fit in localStorage
-//and HA's frontend.user_data). Runs at boot, idempotent thanks
-//to the cleanup-flag key. Safe to keep forever, drops a few
-//bytes per coords pair we ever wrote samples for.
-export function wipeLegacyPvCalibStorage(
-    hass: any,
-    coords: { lat: number; lon: number } | null
-): void
-{
-    try
-    {
-        if (window.localStorage?.getItem(PV_CALIB_WIPE_FLAG_KEY) === '1')
-        {
-            return;
-        }
-    }
-    catch (_) { return; }
-
-    try
-    {
-        const ls = window.localStorage;
-        if (ls)
-        {
-            const stale: string[] = [];
-            for (let i = 0; i < ls.length; i++)
-            {
-                const k = ls.key(i);
-                if (k && k.startsWith('helios-pv-calib:') && k !== PV_CALIB_WIPE_FLAG_KEY)
-                {
-                    stale.push(k);
-                }
-            }
-            for (const k of stale)
-            {
-                ls.removeItem(k);
-            }
-            ls.setItem(PV_CALIB_WIPE_FLAG_KEY, '1');
-        }
-    }
-    catch (_) {}
-
-    if (coords && hass?.callWS)
-    {
-        const haKey = `helios-pv-calib:${coords.lat.toFixed(3)}_${coords.lon.toFixed(3)}`;
-        hass.callWS({ type: 'frontend/set_user_data', key: haKey, value: null })
-            .catch(() => {});
-    }
 }
 
 

@@ -25,22 +25,13 @@ export interface SampleHourly
 }
 
 
-//Forecast window: 30 days back + 2 days forward (today included on
-//the forecast side). The timeline itself only renders the last 2
-//past days (its slider stays tight and scrubbable), but the wider
-//past_days payload is needed by both the forecast calibration
-//(re-runs the model on past weather to derive a multiplier) and
-//the shading-map trainer (replays the model + PV history to
-//populate per-(sun-position, cloud-cover) cells). 30 days lets
-//the trainer pre-fill the dome on first load, no behavioural
-//cost for the calibration which uses its own internal 5-day
-//inner window.
-const PAST_DAYS     = 30;
-//Open-Meteo counts today inside `forecast_days`, so FORECAST_DAYS=3
-//yields today + 2 future days. Combined with PAST_DAYS=30, the
-//cached series spans 33 days total, but the timeline only plots
-//the most recent 2 past + today + 2 forecast since beyond +2 days
-//the cloud-cover forecast loses predictive value.
+//Forecast window: 5 days back + today + 2 days forward. Matches the timeline range exactly so the
+//cached payload feeds every consumer (timeline scrub, forecast calibration which reads its own 5-day
+//inner window) without overshoot. Each extra past day past 14 inflates Open-Meteo's billing by one
+//day-bucket, so capping at 5 + 3 = 8 days keeps the home-point fetch at the minimum 1 bucket.
+const PAST_DAYS     = 5;
+//Open-Meteo counts today inside `forecast_days`, so FORECAST_DAYS=3 yields today + 2 future days.
+//Beyond +2 days the cloud-cover forecast loses predictive value.
 const FORECAST_DAYS = 3;
 
 //Exponential back-off on consecutive HTTP 429 (rate-limited)

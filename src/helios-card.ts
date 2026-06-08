@@ -20,7 +20,6 @@ import
     pvCalibK,
     pvInverterMaxW,
     computePvPowerWeighted,
-    wipeLegacyPvCalibStorage,
     formatPvValue,
     resolvePvLiveEntity,
     clearPvModuleCaches
@@ -394,11 +393,6 @@ export class HeliosCard extends LitElement
     //(`inverter-cutoff-soc-pct`). Reserved for future use after the shading-map trainer retirement. Null when the guard is
     //off or no battery is configured. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
     _batteryHistory: { times: Date[]; values: number[] } | null = null;
-    //Idempotency flag for the one-time wipe of legacy PV calibration
-    //buffers (see _wipeLegacyPvCalibStorage). Per-instance so we
-    //attempt the cleanup at most once per card mount; the persisted
-    //flag in localStorage protects across reloads.
-    private _pvCalibWiped = false;
     //Rolling buffer of state samples. For cumulative-energy sensors this gives a "last minute" instantaneous rate, fresher than the historical fetch
     //which only refreshes per timeline range.
     _pvSampleBuffer: Array<{ t: number; v: number }> = [];
@@ -1146,15 +1140,6 @@ export class HeliosCard extends LitElement
 
         const { lat, lon } = coords;
 
-        //One-time wipe of the obsolete auto-calibration buffer left
-        //by older releases (localStorage + HA frontend.user_data).
-        //Idempotent via a flag in localStorage.
-        if (!this._pvCalibWiped)
-        {
-            this._pvCalibWiped = true;
-            wipeLegacyPvCalibStorage(this.hass, getHomeCoords(this.config, this.hass));
-        }
-
         const homeKey  = `${lat.toFixed(5)},${lon.toFixed(5)}`;
         const identityChanged = homeKey !== this._lastHomeKey;
 
@@ -1449,10 +1434,9 @@ export class HeliosCard extends LitElement
         //line whose dashes flow from the house up to the chip. Only renders when the HA Energy dashboard exposes a solar source and the live state
         //read produced a finite numeric value.
         const pvEntityId   = resolvePvLiveEntity(this._energyDefaults);
-        //Colour configs (pv-color / battery-color / sun-color / cloud-color / building-color) are no longer
-        //consulted, the card inherits the active HA theme's Energy palette via CSS tokens. Defaults below
-        //are the matching hex for any inline SVG attribute that still expects a string colour, the YAML
-        //keys stay in the config type for backward compat but the renderer ignores them.
+        //DEFAULT_PV_COLOR_HEX matches the HA Energy palette's solar token; inline SVG attributes that
+        //need a literal hex (rather than a CSS var) read it directly so the rendered colour stays in
+        //sync with the CSS rules that consume the same token.
         const pvColor      = DEFAULT_PV_COLOR_HEX;
         //When the user scrubs the timeline into the past, the chip
         //should reflect what the PV system actually produced at

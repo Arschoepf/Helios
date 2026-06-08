@@ -243,6 +243,47 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Open-Meteo rate-limit ban + dead-weight purge, beta.116 (#212)
+
+Audit of the card's Open-Meteo traffic showed the weather-mode cloud grid was firing 961 API
+calls (31 × 31 locations) in a single POST per entry, no cache, no dedup, no abort. One entry
+into the mode tripped the per-IP 600 calls/min ceiling and bricked every following request
+from the same IP for ~60 s; a dozen entries blew through the 10 000 calls/day quota. Four
+fixes ship together:
+
+- Grid down to 15 × 15 (225 locations). Cell pitch ~3 km. Still reads as a clear cloud cluster
+  in the dot-cloud encoding at the weather-mode zoom.
+- localStorage cache with a 30 min TTL on the grid payload. Re-entering weather mode within
+  the TTL window hits the cache, zero API calls. Key shape:
+  `helios-weather-grid:v3:<lat3>,<lon3>:<N>:<halfLat>`.
+- In-flight Promise dedup so a double-tap on the weather button shares one POST, and the 5 min
+  refresh tick coalesces with an explicit ensureWeatherCloudGrid() call from the host.
+- AbortController so exitWeatherMode cancels a pending grid fetch cleanly instead of letting
+  it land into a mode the user already left.
+
+Home-point fetch (`src/engine/weather.ts`) drops `PAST_DAYS` from 30 to 5. The 30-day window
+was for the retired shading-map trainer; the forecast calibration uses its own internal 5-day
+window. Open-Meteo bills per `ceil(days / 14)` bucket, so 30 → 5 cuts the home-point fetch
+cost from 6 to 2 API calls (3 × saving).
+
+Dead-weight purge in the same beta:
+- `_sweepLegacyStorage` in helios-engine.ts (3 localStorage keys: `helios-shading-map:v2`,
+  `helios:cloud-mode`, `helios-weather-grid:v2`) removed entirely.
+- `wipeLegacyPvCalibStorage` + `PV_CALIB_WIPE_FLAG_KEY` + caller removed entirely; the legacy
+  PV calibration buffer is no longer cleaned because we no longer need to support installs
+  that ever wrote it.
+- 5 YAML colour keys (`sun-color`, `cloud-color`, `pv-color`, `battery-color`,
+  `building-color`) removed from the config type, from the active readers in charts.ts and
+  dashboardRadial.ts, from the README. Colour identity is fixed by the HA Energy palette via
+  `DEFAULT_*_COLOR_HEX` constants. The editor's retired-keys list strips them on save.
+- 5 YAML LiDAR-view styling keys (`lidar-view-point-color`, `lidar-view-point-opacity`,
+  `lidar-view-wireframe`, `lidar-view-wireframe-color`, `lidar-view-wireframe-opacity`)
+  removed from the README; the point cloud + wireframe inherit `--primary-text-color` from
+  the active HA theme, opacity stays live-tunable via the in-card bottom slider. Editor
+  strips them on save.
+- `cfgHex` helper in card/format.ts removed (the last two readers stopped calling it once the
+  colour overrides went away).
+
 ### Weather mode polish, beta.115
 
 Disc radius drops by 40 % (factor 0.40 -> 0.24 of the on-screen cell pitch) so the dot cloud

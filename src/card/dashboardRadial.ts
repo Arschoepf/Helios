@@ -31,7 +31,7 @@ import { pickTranslations } from '../i18n';
 import { sliceForDay, displayUpdateFrequencyPerHour } from './unifiedStore';
 import { pvValueAtTime, interpAt, type ChartHost } from './charts';
 import { pvNormalizeToWatts, pvArrays } from './pv';
-import { cfgHex, lerpHexToward } from './format';
+import { lerpHexToward } from './format';
 import { DEFAULT_PV_COLOR_HEX } from '../helios-config';
 import { hasPvConfigured, hasBatteryConfigured } from './equipment';
 
@@ -1554,12 +1554,11 @@ export function renderDashCardGraphView(host: DashboardHost, cardOffset: number,
     const sunriseLeftPct  = sunrise !== null ? Math.max(0, Math.min(100, sunrise / 24 * 100)) : null;
     const sunsetLeftPct   = sunset  !== null ? Math.max(0, Math.min(100, sunset  / 24 * 100)) : null;
 
-    //Colours aligned on the timeline chart so the two surfaces read as one composed instrument:
-    //pvColor comes from the user-configurable card config (DEFAULT_PV_COLOR_HEX fallback) and applies
-    //to both the production area + the production line; the dashed forecast curve uses the same
-    //theme-aware lerp the timeline does (pvColor blended toward black on light theme, toward white
-    //on dark theme) so the forecast line stays readable on either background.
-    const pvColor          = cfgHex(host.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
+    //Colours aligned on the timeline chart so the two surfaces read as one composed instrument: same
+    //production line + area tint, same theme-aware lerp for the dashed forecast curve (pvColor blended
+    //toward black on light theme, toward white on dark theme) so the forecast stays readable on either
+    //background.
+    const pvColor          = DEFAULT_PV_COLOR_HEX;
     const isDarkTheme      = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
     const predictedPvColor = isDarkTheme
         ? lerpHexToward(pvColor, '#ffffff', 0.55)

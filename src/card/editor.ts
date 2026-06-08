@@ -174,6 +174,22 @@ export class HeliosCardEditor extends LitElement
         'lidar-view-point-size',
         'lidar-view-radius',
         'building-radius',
+        //Colour identity is fixed by the HA Energy palette via the DEFAULT_*_COLOR_HEX constants in
+        //helios-config.ts; the renderer no longer reads any per-card override so the stale YAML keys
+        //get stripped on the next editor pass.
+        'sun-color',
+        'cloud-color',
+        'pv-color',
+        'battery-color',
+        'building-color',
+        //LiDAR view styling collapsed into the HA --primary-text-color token + the in-card opacity
+        //slider. These five keys are also stripped on every edit via LIDAR_VIEW_LEGACY_KEYS below,
+        //listing them here too so an editor open that doesn't touch anything still cleans the YAML.
+        'lidar-view-point-color',
+        'lidar-view-point-opacity',
+        'lidar-view-wireframe',
+        'lidar-view-wireframe-color',
+        'lidar-view-wireframe-opacity',
     ];
     private static _sanitiseConfig(config: HeliosConfig): HeliosConfig
     {

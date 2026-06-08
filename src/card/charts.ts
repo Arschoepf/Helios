@@ -13,7 +13,7 @@ import
     DEFAULT_CLOUD_COLOR_HEX,
     DEFAULT_PV_COLOR_HEX
 } from '../helios-config';
-import { cfgHex, formatDate, formatLocalisedNumber, lerpHexToward } from './format';
+import { formatDate, formatLocalisedNumber, lerpHexToward } from './format';
 import
 {
     pvCalibK,
@@ -894,8 +894,8 @@ export function renderChart(host: ChartHost): TemplateResult
     const irrLine   = `M ${irrPoints.join(' L ')}`;
     const cloudLine = `M ${cloudPoints.join(' L ')}`;
 
-    const sunColor   = cfgHex(host.config?.['sun-color'],   DEFAULT_SUN_COLOR_HEX);
-    const cloudColor = cfgHex(host.config?.['cloud-color'], DEFAULT_CLOUD_COLOR_HEX);
+    const sunColor   = DEFAULT_SUN_COLOR_HEX;
+    const cloudColor = DEFAULT_CLOUD_COLOR_HEX;
 
     //Hover dots + vertical guide. Both curves are interpolated at
     //the hover timestamp so the dots ride the curves exactly,
@@ -1048,7 +1048,7 @@ export function renderPvChart(host: ChartHost): TemplateResult
         return html`<svg class="hc-chart-svg" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"></svg>`;
     }
 
-    const pvColor = cfgHex(host.config?.['pv-color'], DEFAULT_PV_COLOR_HEX);
+    const pvColor = DEFAULT_PV_COLOR_HEX;
     //Theme-aware "predicted" PV shade for the dashed forecast curve
     //overlay: light theme blends pvColor toward BLACK so it stays
     //readable on a white card; dark theme blends toward WHITE so it

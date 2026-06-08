@@ -21,9 +21,8 @@ import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './l
 //(card-only state), or is an identity input handled separately (home coords flip the engine identity through `_engineIdentitySig`).
 //
 //The list is exhaustive on purpose: a missing key would let a slider drag the editor exposes leave the engine on stale values until
-//the next natural respawn (page reload, dashboard edit, theme flip). The colour overrides and the legacy "pv-color" / "sun-color" /
-//"cloud-color" / "battery-color" / "building-color" keys are deliberately absent, those were removed from the schema and no longer
-//have a runtime effect.
+//the next natural respawn (page reload, dashboard edit, theme flip). Colour identity is fixed by the HA Energy palette via the
+//DEFAULT_*_COLOR_HEX constants in helios-config.ts, with no per-card override.
 export const VISUAL_CONFIG_KEYS = [
     'show-labels',
     //PV layout, every change must reach the engine so the per-array forecast geometry, the predicted curve and the calibration ratio

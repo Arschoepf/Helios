@@ -953,44 +953,36 @@ export class HeliosEngine
 
     //---------------------------------------------------------------------------------------------
     //Weather mode cloud-cover grid: a coarse lat / lon grid of Open-Meteo cloud_cover_low / mid /
-    //high values covering the weather-mode camera viewport. One POST per refresh tick (~5 min)
-    //carries every grid point in a single round-trip; the grid is sized so the total POST stays
-    //well under the per-IP daily quota (10 000 calls / day on the free tier, the previous 50 x 50
-    //grid that exhausted the quota is the cautionary tale here).
+    //high values covering the weather-mode camera viewport. Open-Meteo bills 1 API call per
+    //location per day-bucket, so a multi-location POST counts each point against the per-IP
+    //quota (600/min, 5 000/h, 10 000/day on the free tier). 15 x 15 = 225 points per fetch keeps
+    //a single entry well under the per-minute ceiling even when stacked with the home-point
+    //fetch, and the per-IP daily quota covers ~40 fresh fetches.
     //
-    //The response comes back with `models=best_match` resolved so the card knows which
-    //underlying numerical weather model fed the data (AROME-France at ~1.3 km, ICON-EU at ~7 km,
-    //ECMWF IFS at 25 km, etc.). The model name surfaces in the cached grid so a future UI hint
-    //can show "AROME / 1.3 km" alongside the overlay without a second fetch.
+    //localStorage cache + dedup soften the bill further: a re-entry within the cache TTL is a
+    //cache hit (zero API calls), and concurrent calls from the 5 min refresh + an explicit
+    //ensureWeatherCloudGrid() share the same in-flight Promise.
     //
     //Rendering happens client-side as an SVG overlay (see card/weatherMode.ts) anchored over the
-    //map. Each grid cell paints three stacked translucent polygons, one per cloud layer, colour-
-    //coded for an at-a-glance read of the per-altitude coverage. Drawing in SVG rather than
-    //rasterising into a MapLibre image source keeps every pixel of the cloud field crisp at the
-    //zoom 10 framing without the staircasing the old raster pipelines hit.
-    //
-    //Lifecycle: enterWeatherMode kicks ensureWeatherCloudGrid once the camera is settled. A 5 min
-    //refresh timer keeps the grid current while the user lingers in weather mode. exitWeatherMode
-    //cancels the timer + clears the cached grid.
+    //map.
     //---------------------------------------------------------------------------------------------
 
-    //Grid dimensions: 31 x 31 = 961 points per refresh. Open-Meteo's multi-location POST cap is
-    //1000 points per call, so 31 x 31 sits at the maximum density a single round-trip can carry
-    //(32 x 32 = 1024 would tip over the cap). The grid covers a bbox sized to match the
-    //weather-mode zoom 10 framing (~44 km wide); per-cell pitch lands at ~1.4 km which matches
-    //AROME-France's native resolution (1.3 km) so the overlay reads at the finest grain the
-    //best regional model can deliver.
-    private static readonly _WEATHER_GRID_SIDE        = 31;
+    //Grid dimensions: 15 x 15 = 225 points per fetch. Cell pitch ~3 km, coarse but reads clearly
+    //as a dot cloud at the weather-mode zoom level.
+    private static readonly _WEATHER_GRID_SIDE        = 15;
     //Half-extent of the grid in latitude degrees around the home. 0.20 deg ~= 22 km on the lat
     //axis at any latitude, so the grid covers a ~44 km x ~44 km bbox after the cos(lat)
-    //compression on the lon axis matches that envelope. Wide enough to overshoot the camera's
-    //weather-mode viewport so the polygon edges don't cut into the on-screen frame, narrow
-    //enough that the per-cell pitch stays close to the underlying model's native grid.
+    //compression on the lon axis matches that envelope.
     private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.20;
-    //Refresh cadence. Open-Meteo's underlying numerical models update every 1-3 h, so 5 min
-    //keeps the displayed frame close to the freshest data without burning the per-IP quota
-    //while the user lingers in the mode.
+    //Refresh cadence while inside weather mode. Hits the cache or the network depending on
+    //freshness vs the cache TTL below.
     private static readonly _WEATHER_GRID_REFRESH_MS   = 5 * 60_000;
+    //localStorage cache TTL. Open-Meteo's underlying models tick every 15 min server-side, so 30
+    //min stays "fresh enough" without burning fetches when the user toggles weather mode on and
+    //off repeatedly. Cache key precision is 3 decimal degrees (~110 m) on lat / lon: two homes on
+    //the same street round to the same key and share the cached grid.
+    private static readonly _WEATHER_GRID_CACHE_TTL_MS = 30 * 60_000;
+    private static readonly _WEATHER_GRID_CACHE_PREFIX = 'helios-weather-grid:v3:';
 
     private _weatherCloudGrid: {
         bounds:    { south: number; north: number; west: number; east: number };
@@ -998,9 +990,9 @@ export class HeliosEngine
         nLon:      number;
         lats:      Float32Array;
         lons:      Float32Array;
-        //Hourly time axis the cloud arrays index along (5-day window: 2 past + today + 2
-        //forecast = 120 hourly slices). One fetch covers the full timeline so timeline scrub
-        //picks the right slice from cache without firing another HTTP round-trip.
+        //Hourly time axis the cloud arrays index along (8-day window: 5 past + today + 2
+        //forecast). One fetch covers the full timeline so timeline scrub picks the right slice
+        //from cache without firing another HTTP round-trip.
         times:     Date[];
         //Cloud-cover percentages stored row-major: point index outer (latIdx * nLon + lonIdx),
         //time index inner. Read via `values[pointIdx * nTimes + timeIdx]`. nTimes is times.length.
@@ -1011,8 +1003,16 @@ export class HeliosEngine
         //accurate regional model for the home location). Surfaces in the UI so the user can
         //judge the displayed grid pitch against the model's native resolution.
         modelName: string;
+        //Epoch ms when the grid was fetched (network or localStorage load). Drives the per-call
+        //TTL guard: if Date.now() - storedAt < _WEATHER_GRID_CACHE_TTL_MS, ensureWeatherCloudGrid
+        //skips both the in-flight Promise and the network entirely.
+        storedAt:  number;
     } | null = null;
-    private _weatherCloudGridFetching = false;
+    //In-flight Promise shared between concurrent callers (the explicit ensureWeatherCloudGrid call
+    //after weather-mode entry and the 5 min refresh tick). Cleared in a finally block so an error
+    //path frees the slot for the next attempt.
+    private _weatherCloudGridPending: Promise<void> | null = null;
+    private _weatherCloudGridAbort: AbortController | null = null;
     private _weatherCloudGridRefreshTimer: number | undefined = undefined;
 
     public getWeatherCloudGrid(): typeof this._weatherCloudGrid
@@ -1038,124 +1038,225 @@ export class HeliosEngine
         return best;
     }
 
-    //Fetch the weather-mode cloud grid. Idempotent: a second call while one is in flight short-
-    //circuits. Errors leave the previous grid in place so the overlay keeps showing the last
-    //known cloud field until the next refresh tick succeeds.
-    public async ensureWeatherCloudGrid(): Promise<void>
+    //Compose the localStorage key for the cloud grid at the current home + grid geometry. Rounding
+    //home coords to 3 decimal degrees (~110 m) lets adjacent homes share the cache. The grid side
+    //and half-extent are part of the key so a constant change automatically invalidates the
+    //existing cached payloads instead of returning stale geometry to the renderer.
+    private _weatherCloudGridCacheKey(): string
     {
-        if (this._weatherCloudGridFetching) { return; }
-        this._weatherCloudGridFetching = true;
+        const lat = this.homeLat.toFixed(3);
+        const lon = this.homeLon.toFixed(3);
+        const N   = HeliosEngine._WEATHER_GRID_SIDE;
+        const hl  = HeliosEngine._WEATHER_GRID_HALF_LAT_DEG;
+        return `${HeliosEngine._WEATHER_GRID_CACHE_PREFIX}${lat},${lon}:${N}:${hl}`;
+    }
+
+    //Read a fresh grid out of localStorage, returns null on miss / stale / corrupt. Wraps the
+    //Float32Array payload back into typed arrays so the renderer's indexed reads keep their fast
+    //path without an extra Array.from on every paint.
+    private _readWeatherCloudGridFromCache(): NonNullable<typeof this._weatherCloudGrid> | null
+    {
         try
         {
-            const N       = HeliosEngine._WEATHER_GRID_SIDE;
-            const halfLat = HeliosEngine._WEATHER_GRID_HALF_LAT_DEG;
-            //Longitude span compresses by cos(lat) at higher latitudes; matching the lat envelope
-            //keeps the grid roughly square in physical km regardless of where the home sits. The
-            //abs(cos) guard keeps the division well-behaved near the poles.
-            const cosLat  = Math.max(0.1, Math.abs(Math.cos(this.homeLat * Math.PI / 180)));
-            const halfLon = halfLat / cosLat;
-            const south = this.homeLat - halfLat;
-            const north = this.homeLat + halfLat;
-            const west  = this.homeLon - halfLon;
-            const east  = this.homeLon + halfLon;
-
-            const lats = new Float32Array(N);
-            const lons = new Float32Array(N);
-            for (let i = 0; i < N; i++)
-            {
-                lats[i] = south + (i / (N - 1)) * (north - south);
-                lons[i] = west  + (i / (N - 1)) * (east  - west);
-            }
-
-            //Flatten to (lat, lon) string pairs in row-major (lat-outer, lon-inner) order. Open-
-            //Meteo's POST endpoint expects the same comma-separated string format the GET query
-            //uses, placed in the body with application/x-www-form-urlencoded.
-            const total: number = N * N;
-            const flatLats: string[] = new Array(total);
-            const flatLons: string[] = new Array(total);
-            for (let iLat = 0; iLat < N; iLat++)
-            {
-                for (let iLon = 0; iLon < N; iLon++)
-                {
-                    flatLats[iLat * N + iLon] = lats[iLat].toFixed(4);
-                    flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
-                }
-            }
-
-            //Fetch a 5-day hourly window in a single round-trip (2 past + today + 2 forecast)
-            //so the timeline scrub picks the right slice from cache without firing another
-            //HTTP round-trip on every cursor move. forecast_days=3 yields today + 2 future
-            //days; past_days=2 carries the timeline's two past days too.
-            const body = 'latitude='   + flatLats.join(',')
-                       + '&longitude=' + flatLons.join(',')
-                       + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
-                       + '&models=best_match'
-                       + '&forecast_days=3&past_days=2&timezone=UTC';
-            const resp = await fetch('https://api.open-meteo.com/v1/forecast', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body,
-            });
-            if (!resp.ok)
-            {
-                throw new Error(`Open-Meteo cloud grid HTTP ${resp.status}`);
-            }
-            const j: any = await resp.json();
-            const results: any[] = Array.isArray(j) ? j : [j];
-            if (results.length === 0 || !results[0]?.hourly?.time)
-            {
-                throw new Error('Open-Meteo cloud grid: empty payload');
-            }
-            const timeStrs: string[] = results[0].hourly.time;
-            const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
-            const nTimes = times.length;
-
-            //Pack the per-point hourly cloud series row-major: point outer, time inner. Cuts
-            //the renderer's per-cell read down to one indexed lookup per band without an
-            //intermediate slice copy on every scrub cursor move.
-            const cloudLow  = new Float32Array(total * nTimes);
-            const cloudMid  = new Float32Array(total * nTimes);
-            const cloudHigh = new Float32Array(total * nTimes);
-            for (let p = 0; p < total; p++)
-            {
-                const r  = results[p];
-                const lo = r?.hourly?.cloud_cover_low  ?? [];
-                const mi = r?.hourly?.cloud_cover_mid  ?? [];
-                const hi = r?.hourly?.cloud_cover_high ?? [];
-                const base = p * nTimes;
-                for (let t = 0; t < nTimes; t++)
-                {
-                    cloudLow[base + t]  = lo[t] ?? 0;
-                    cloudMid[base + t]  = mi[t] ?? 0;
-                    cloudHigh[base + t] = hi[t] ?? 0;
-                }
-            }
-
-            //Open-Meteo's response carries the resolved `model` per location; same model across
-            //the grid in practice (the entire bbox sits in one regional model's footprint), so
-            //reading the first sample is enough to label the overlay.
-            const modelName = String(results[0]?.model ?? 'best_match');
-
-            this._weatherCloudGrid = {
-                bounds: { south, north, west, east },
-                nLat:   N,
-                nLon:   N,
-                lats,
-                lons,
-                times,
-                cloudLow,
-                cloudMid,
-                cloudHigh,
-                modelName,
+            const raw = window.localStorage?.getItem(this._weatherCloudGridCacheKey());
+            if (!raw) { return null; }
+            const j: any = JSON.parse(raw);
+            const storedAt = Number(j?.storedAt);
+            if (!Number.isFinite(storedAt)) { return null; }
+            if (Date.now() - storedAt > HeliosEngine._WEATHER_GRID_CACHE_TTL_MS) { return null; }
+            const p = j?.payload;
+            if (!p?.bounds || !p?.lats?.length || !p?.times?.length) { return null; }
+            return {
+                bounds:    p.bounds,
+                nLat:      p.nLat,
+                nLon:      p.nLon,
+                lats:      new Float32Array(p.lats),
+                lons:      new Float32Array(p.lons),
+                times:     p.times.map((s: string) => new Date(s)),
+                cloudLow:  new Float32Array(p.cloudLow),
+                cloudMid:  new Float32Array(p.cloudMid),
+                cloudHigh: new Float32Array(p.cloudHigh),
+                modelName: String(p.modelName ?? 'best_match'),
+                storedAt,
             };
         }
-        catch (e)
+        catch { return null; }
+    }
+
+    private _writeWeatherCloudGridToCache(g: NonNullable<typeof this._weatherCloudGrid>): void
+    {
+        try
         {
-            console.warn('[HELIOS] weather cloud grid fetch failed:', e);
+            const payload =
+            {
+                bounds:    g.bounds,
+                nLat:      g.nLat,
+                nLon:      g.nLon,
+                lats:      Array.from(g.lats),
+                lons:      Array.from(g.lons),
+                times:     g.times.map(t => t.toISOString()),
+                cloudLow:  Array.from(g.cloudLow),
+                cloudMid:  Array.from(g.cloudMid),
+                cloudHigh: Array.from(g.cloudHigh),
+                modelName: g.modelName,
+            };
+            window.localStorage?.setItem(this._weatherCloudGridCacheKey(),
+                JSON.stringify({ storedAt: g.storedAt, payload }));
         }
+        catch { /* quota exceeded / disabled storage: silently degrade, in-memory grid still works */ }
+    }
+
+    //Fetch the weather-mode cloud grid. Resolution order:
+    //  1. In-memory grid still under TTL -> return immediately (no I/O, no API call).
+    //  2. localStorage cache hit -> hydrate the in-memory grid (no API call).
+    //  3. In-flight Promise -> await the same network round-trip a concurrent caller already kicked.
+    //  4. Cold path: POST to Open-Meteo, cache the result, populate the in-memory grid.
+    //Errors leave the previous grid in place so the overlay keeps showing the last known cloud
+    //field until the next refresh tick succeeds. AbortController lets exitWeatherMode cut a
+    //pending fetch off cleanly.
+    public async ensureWeatherCloudGrid(): Promise<void>
+    {
+        const now = Date.now();
+        if (this._weatherCloudGrid && now - this._weatherCloudGrid.storedAt < HeliosEngine._WEATHER_GRID_CACHE_TTL_MS)
+        {
+            return;
+        }
+        const cached = this._readWeatherCloudGridFromCache();
+        if (cached)
+        {
+            this._weatherCloudGrid = cached;
+            return;
+        }
+        if (this._weatherCloudGridPending) { return this._weatherCloudGridPending; }
+
+        this._weatherCloudGridAbort?.abort();
+        this._weatherCloudGridAbort = new AbortController();
+        const signal = this._weatherCloudGridAbort.signal;
+
+        const fetchPromise = (async (): Promise<void> =>
+        {
+            try
+            {
+                const N       = HeliosEngine._WEATHER_GRID_SIDE;
+                const halfLat = HeliosEngine._WEATHER_GRID_HALF_LAT_DEG;
+                //Longitude span compresses by cos(lat) at higher latitudes; matching the lat
+                //envelope keeps the grid roughly square in physical km regardless of where the
+                //home sits. The abs(cos) guard keeps the division well-behaved near the poles.
+                const cosLat  = Math.max(0.1, Math.abs(Math.cos(this.homeLat * Math.PI / 180)));
+                const halfLon = halfLat / cosLat;
+                const south = this.homeLat - halfLat;
+                const north = this.homeLat + halfLat;
+                const west  = this.homeLon - halfLon;
+                const east  = this.homeLon + halfLon;
+
+                const lats = new Float32Array(N);
+                const lons = new Float32Array(N);
+                for (let i = 0; i < N; i++)
+                {
+                    lats[i] = south + (i / (N - 1)) * (north - south);
+                    lons[i] = west  + (i / (N - 1)) * (east  - west);
+                }
+
+                //Flatten to (lat, lon) string pairs in row-major (lat-outer, lon-inner) order.
+                //Open-Meteo's POST endpoint expects the same comma-separated string format the GET
+                //query uses, placed in the body with application/x-www-form-urlencoded.
+                const total: number = N * N;
+                const flatLats: string[] = new Array(total);
+                const flatLons: string[] = new Array(total);
+                for (let iLat = 0; iLat < N; iLat++)
+                {
+                    for (let iLon = 0; iLon < N; iLon++)
+                    {
+                        flatLats[iLat * N + iLon] = lats[iLat].toFixed(4);
+                        flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
+                    }
+                }
+
+                //Multi-day hourly window in a single round-trip (2 past + today + 2 forecast) so
+                //timeline scrub picks the right slice from cache without firing another HTTP
+                //round-trip on every cursor move.
+                const body = 'latitude='   + flatLats.join(',')
+                           + '&longitude=' + flatLons.join(',')
+                           + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
+                           + '&models=best_match'
+                           + '&forecast_days=3&past_days=2&timezone=UTC';
+                const resp = await fetch('https://api.open-meteo.com/v1/forecast', {
+                    method:  'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body,
+                    signal,
+                });
+                if (!resp.ok)
+                {
+                    throw new Error(`Open-Meteo cloud grid HTTP ${resp.status}`);
+                }
+                const j: any = await resp.json();
+                const results: any[] = Array.isArray(j) ? j : [j];
+                if (results.length === 0 || !results[0]?.hourly?.time)
+                {
+                    throw new Error('Open-Meteo cloud grid: empty payload');
+                }
+                const timeStrs: string[] = results[0].hourly.time;
+                const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
+                const nTimes = times.length;
+
+                //Pack the per-point hourly cloud series row-major: point outer, time inner. Cuts
+                //the renderer's per-cell read down to one indexed lookup per band without an
+                //intermediate slice copy on every scrub cursor move.
+                const cloudLow  = new Float32Array(total * nTimes);
+                const cloudMid  = new Float32Array(total * nTimes);
+                const cloudHigh = new Float32Array(total * nTimes);
+                for (let p = 0; p < total; p++)
+                {
+                    const r  = results[p];
+                    const lo = r?.hourly?.cloud_cover_low  ?? [];
+                    const mi = r?.hourly?.cloud_cover_mid  ?? [];
+                    const hi = r?.hourly?.cloud_cover_high ?? [];
+                    const base = p * nTimes;
+                    for (let t = 0; t < nTimes; t++)
+                    {
+                        cloudLow[base + t]  = lo[t] ?? 0;
+                        cloudMid[base + t]  = mi[t] ?? 0;
+                        cloudHigh[base + t] = hi[t] ?? 0;
+                    }
+                }
+
+                //Open-Meteo's response carries the resolved `model` per location; same model
+                //across the grid in practice (the entire bbox sits in one regional model's
+                //footprint), so reading the first sample is enough to label the overlay.
+                const modelName = String(results[0]?.model ?? 'best_match');
+
+                const grid =
+                {
+                    bounds: { south, north, west, east },
+                    nLat:   N,
+                    nLon:   N,
+                    lats,
+                    lons,
+                    times,
+                    cloudLow,
+                    cloudMid,
+                    cloudHigh,
+                    modelName,
+                    storedAt: Date.now(),
+                };
+                this._weatherCloudGrid = grid;
+                this._writeWeatherCloudGridToCache(grid);
+            }
+            catch (e: any)
+            {
+                if (e?.name !== 'AbortError')
+                {
+                    console.warn('[HELIOS] weather cloud grid fetch failed:', e);
+                }
+            }
+        })();
+
+        this._weatherCloudGridPending = fetchPromise;
+        try { await fetchPromise; }
         finally
         {
-            this._weatherCloudGridFetching = false;
+            if (this._weatherCloudGridPending === fetchPromise) { this._weatherCloudGridPending = null; }
         }
     }
 
@@ -1177,6 +1278,11 @@ export class HeliosEngine
             window.clearInterval(this._weatherCloudGridRefreshTimer);
             this._weatherCloudGridRefreshTimer = undefined;
         }
+        //Abort any in-flight grid fetch so a user leaving weather mode mid-fetch doesn't keep the
+        //POST alive against Open-Meteo. The cache write inside the catch path is guarded against
+        //AbortError so a cancelled fetch leaves the previous cached grid untouched.
+        this._weatherCloudGridAbort?.abort();
+        this._weatherCloudGridAbort = null;
     }
 
     //Lat / lon -> screen pixel projection via MapLibre's own camera transform. Used by the SVG
@@ -1364,31 +1470,6 @@ export class HeliosEngine
     //mode-switching while a fresh exposure sweep is in flight.
     public onLidarExposureBusyChange?: (busy: boolean) => void;
 
-    //One-time sweep of localStorage keys that no longer have a writer. Idempotent + cheap, ~5 ms
-    //of localStorage.removeItem calls on cold start. Keeps the orphaned blobs (one of them can
-    //weigh 100-500 kB) from sitting forever in the user's storage quota.
-    private static _legacyStorageSwept = false;
-    private static _sweepLegacyStorage(): void
-    {
-        if (HeliosEngine._legacyStorageSwept) { return; }
-        HeliosEngine._legacyStorageSwept = true;
-        try
-        {
-            const ls = window.localStorage;
-            if (!ls) { return; }
-            const STATIC_RETIRED = [
-                'helios-shading-map:v2',
-                'helios:cloud-mode',
-                'helios-weather-grid:v2',
-            ];
-            for (const key of STATIC_RETIRED)
-            {
-                if (ls.getItem(key) !== null) { ls.removeItem(key); }
-            }
-        }
-        catch (_) { /* private browsing / disabled storage / quota: silently degrade */ }
-    }
-
     constructor(
         container:    HTMLElement,
         config:       HeliosConfig,
@@ -1396,7 +1477,6 @@ export class HeliosEngine
         haElevation?: number
     )
     {
-        HeliosEngine._sweepLegacyStorage();
         this.homeLat = haCoords[1];
         this.homeLon = haCoords[0];
         this.homeElevation = (typeof haElevation === 'number' && Number.isFinite(haElevation))
@@ -2397,7 +2477,7 @@ export class HeliosEngine
     //  - 'disc' : a polygon whose radius is proportional to the
     //             current cloud-cover percentage (0..100). Painted
     //             via the `helios-cloud-disc` fill layer in the
-    //             configured cloud-color (fixed colour, opacity-
+    //             DEFAULT_CLOUD_COLOR_HEX tone (fixed, opacity-
     //             modulated through CLOUD_DISC_OPACITY).
     //  - 'ring' : a fixed-radius polygon at CLOUD_DISC_RADIUS_M, only
     //             ever rendered as an outline by `helios-cloud-ring`.
@@ -2447,12 +2527,10 @@ export class HeliosEngine
     //At 0 % cloud cover the disc has zero radius, effectively
     //invisible, while the ring stays visible to anchor the gauge.
     //
-    //Fixed cloud colour. The disc's *radius* already encodes
-    //the cloud-cover percentage (0% = invisible, 100% = full ring);
-    //we keep the colour solid so the user-configured cloud-color
-    //reads everywhere identically. CLOUD_DISC_OPACITY (set on the
-    //layer's fill-opacity) handles the translucency against the
-    //basemap so the disc never fully hides what's underneath.
+    //Fixed cloud colour. The disc's *radius* already encodes the cloud-cover percentage (0 % =
+    //invisible, 100 % = full ring); the tone stays solid so the cloud identity reads everywhere
+    //identically. CLOUD_DISC_OPACITY (set on the layer's fill-opacity) handles the translucency
+    //against the basemap so the disc never fully hides what's underneath.
     private _updateCloudCoverDisc(
         cloudPct: number,
         cloudLow:  number = 0,
