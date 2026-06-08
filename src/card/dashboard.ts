@@ -654,14 +654,14 @@ export function computeTodayCumulative(host: DashboardHost): {
                        : unit === 'mwh' ? 1000
                        : 1;
 
-    //Merge LTS calib (hourly, covers 5 days) into the raw history's morning gap. The raw fetch is capped at the
-    //last 6 h of wall-clock time on purpose (HA recorder is single-threaded behind SQLite, multi-day raw scans on
-    //a 1 Hz Victron block every other card reading the same entity), so any production that happened before
-    //`now - 6 h` lives in `_pvCalibStats` (which already carries it via the 5-day LTS pass) and was previously
-    //invisible on the dashboard cumulative chart. The reported symptom was "0 kWh until ~13 h" while the user's
-    //real production started at 6 h. We pre-roll LTS samples into the integration so the morning portion of the
-    //chart matches what HA Energy itself shows. The raw window still owns the present tail (it has full sample
-    //resolution there) so LTS samples are dropped once they cross into the raw window's first timestamp.
+    //Merge LTS calib (hourly, covers 5 days) into the raw history's morning gap. The raw fetch
+    //is capped at the last 6 h of wall-clock time on purpose (HA recorder is single-threaded
+    //behind SQLite, multi-day raw scans on a 1 Hz Victron block every other card reading the
+    //same entity), so any production that happened before `now - 6 h` reaches the dashboard
+    //via the 5-day LTS samples carried in `_pvCalibStats`. Pre-rolling those samples into the
+    //integration keeps the morning portion of the cumulative chart aligned with HA Energy.
+    //The raw window owns the present tail (it has full sample resolution there); LTS samples
+    //are dropped once they cross into the raw window's first timestamp.
     const rawFirstMs = hist && hist.times.length > 0 ? hist.times[0].getTime() : Infinity;
     const mergedTimes:  Date[]   = [];
     const mergedValues: number[] = [];

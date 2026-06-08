@@ -80,10 +80,9 @@ export function setDetailMode(host: DetailModeHost, on: boolean): void
 
     if (on)
     {
-        //Capture the user's pose BEFORE the dive so the symmetric exit transition restores EXACTLY
-        //the pose they had on screen, not the hemisphere-aware default. This matters most for users
-        //running with the camera-locked chip on, who had previously dialled in a custom pitch /
-        //bearing and were quietly forced back to the default every time they closed the dashboard.
+        //Capture the user's pose BEFORE the dive so the symmetric exit restores EXACTLY the pose
+        //on screen, not the hemisphere-aware default. Matters most for users running with the
+        //camera-locked chip on: their custom pitch / bearing survives every dashboard dive.
         host._detailEntryPitch   = host.map.getPitch();
         host._detailEntryBearing = host.map.getBearing();
         //Widen the zoom ceiling so easeTo can actually reach the

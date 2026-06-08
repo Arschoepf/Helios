@@ -292,10 +292,9 @@ export const DEFAULT_PV_COLOR_HEX:    string = '#ff9800';  //--energy-solar-colo
 //as battery-out in HA's energy graph. Live power direction adds
 //the in/out variants below via dual-tone leaders / chips.
 export const DEFAULT_BATTERY_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
-//Battery charging (positive power) uses the HA Energy pink. The
-//card splits the battery power leader colour by sign: charging =
-//pink, discharging = teal, the dual indicator the user requested
-//in the backlog.
+//Battery charging (positive power) uses the HA Energy pink; discharging stays on the teal
+//defined above. The leader colour reads the sign of battery power and picks one of the two
+//so charging vs discharging is a glanceable distinction.
 export const DEFAULT_BATTERY_IN_COLOR_HEX:  string = '#f06292';  //--energy-battery-in-color
 export const DEFAULT_BATTERY_OUT_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
 //Grid import (consumption from the grid) blue, grid return (export

@@ -574,8 +574,8 @@ export class HeliosCard extends LitElement
     @state() _dashAnimPhase:        'idle' | 'entering' | 'exiting' = 'idle';
     _dashAnimTimer?:                number;
     //Shared view mode across every CoverFlow card. Flipped from the bandeau toggle on the front card,
-    //the change applies to every card simultaneously. Default radial keeps the historical chip strip +
-    //sundial layout that landed in v1.8.3.
+    //the change applies to every card simultaneously. Radial default surfaces the chip strip + sundial
+    //layout; the graph alternative trades the dial for the multi-day production curve.
     @state() _dashViewMode:         'radial' | 'graph' = 'radial';
     //Unified 5-day data store. Populated after the initial weather + PV + battery + grid fetches
     //land, rebuilt every time any of those refresh, sliced / interpolated by the radial dial, the
@@ -662,13 +662,10 @@ export class HeliosCard extends LitElement
     private _arcFrontBuf:     ArcSegment[] = [];
     private _arcFrontNearBuf: ArcSegment[] = [];
 
-    //Cached SVG point strings for the home silhouettes. The home
-    //silhouette is a stable feature of the (lon, lat, building shape)
-    //triple but the cards used to re-serialize every vertex to a
-    //"x,y" string on every render via Array.map + join. The cache
-    //below mirrors host._homeSilhouettes by reference, so when
-    //refreshOverlays substitutes a fresh array the cache rebuilds;
-    //otherwise the same pre-built strings are returned untouched.
+    //Cached SVG point strings for the home silhouettes. The silhouette is a stable feature of
+    //the (lon, lat, building shape) triple; the cache mirrors host._homeSilhouettes by reference
+    //so a fresh array from refreshOverlays rebuilds the cache, and the same pre-built strings
+    //come back untouched otherwise. Saves the Array.map + join per vertex on every render.
     private _silhouetteCacheKey: unknown = null;
     private _silhouettePtsCache: Array<{ base: string; top: string; walls: string[] } | null> = [];
 
@@ -1074,8 +1071,7 @@ export class HeliosCard extends LitElement
         //store whenever any of them changed since the last build, so the radial dial + graph view +
         //timeline always read the latest data without needing per-consumer cache invalidation. Cheap
         //when nothing changed (one hash compare returns early), measurable but bounded when a real
-        //refresh lands (~50 ms for a full 480 × 7 bucketization + forecast pass on the v1.8.3 vintage
-        //compute budget).
+        //refresh lands (~50 ms for a full 480 × 7 bucketization + forecast pass).
         this._maybeRebuildUnifiedStore();
 
         //Mode-transition state machine. When the user clicks a different mode on the mode-bar,
@@ -1238,13 +1234,11 @@ export class HeliosCard extends LitElement
             this._engine.updateConfig(this.config);
         }
 
-        //Refresh chain gate: the per-entity refresh helpers read
-        //hass.states + config and are pure functions of those two
-        //inputs plus the live time range. Lit calls updated() on
-        //every @state mutation (so every overlay reprojection during
-        //auto-rotate fires updated() again), which used to re-run
-        //the whole chain at 60+ Hz for zero new data. Skip it when
-        //neither hass nor config moved since the previous pass.
+        //Refresh chain gate: the per-entity refresh helpers read hass.states + config and are
+        //pure functions of those two inputs plus the live time range. Lit calls updated() on
+        //every @state mutation (every overlay reprojection during auto-rotate fires updated()
+        //again), so without this gate the chain re-runs at 60+ Hz for zero new data. Skip it
+        //when neither hass nor config moved since the previous pass.
         if (this.hass === this._lastRefreshHassRef
             && this.config === this._lastRefreshConfigRef
             && this._timeRange === this._lastRefreshTimeRangeRef
@@ -1997,15 +1991,11 @@ export class HeliosCard extends LitElement
                             </div>
                         ` : nothing}
 
-                        <!--  Chart card: hosts the area chart, the
-                              dotted day separators, the night-zone
-                              diagonal hatch overlay (one rect per
-                              sunset, next sunrise window) and the
-                              live + scrub cursors as HTML overlays.
-                              The day-label chip row used to overlay
-                              the midline of this card; it's now a
-                              sibling block below so the chips never
-                              cover the curves they describe.  -->
+                        <!--  Chart card: hosts the area chart, the dotted day separators, the
+                              night-zone diagonal hatch overlay (one rect per sunset, next
+                              sunrise window) and the live + scrub cursors as HTML overlays.
+                              Day-label chip row sits as a sibling block below so the chips
+                              never cover the curves they describe.  -->
                         <div
                             class="tb-chart-card"
                             @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"

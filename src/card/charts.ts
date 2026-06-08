@@ -28,13 +28,9 @@ import { computeForecastCalibration } from './calibration';
 import { sliceForRange } from './unifiedStore';
 
 
-//Per-point forecast multiplier. Used to be a blend between a learned shading-map ratio (per
-//azimuth / altitude / cloud bin, exponentially aged over 30 days) and the scalar 5-day
-//calibration ratio. The dome-trained shading map was retired in v1.8.3 (the gain over the
-//calibration ratio alone was negligible while the storage + visible-dome rendering cost was
-//heavy), so the helper now reduces to identity on calR. Kept as a single hook so a future
-//multiplier (weather grid contribution, hourly bias correction, etc.) can be re-wired through
-//one function call sites already use, without touching the call sites again.
+//Per-point forecast multiplier. Identity on calR today; kept as a single hook so a future
+//multiplier (weather grid contribution, hourly bias correction, etc.) can re-wire through
+//the call sites without a sweep.
 export function effectiveForecastRatio(calR: number): number
 {
     return calR;

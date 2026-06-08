@@ -47,7 +47,7 @@ export interface LoadingPhaseState
 //so any mutation through these helpers re-renders the banner automatically.
 export interface LoadingTrackerHost
 {
-    //Untyped to match the rest of the codebase (hass is `any` in pv.ts, shadingDome.ts, etc).
+    //Untyped to match the rest of the codebase (hass is `any` everywhere it crosses module boundaries).
     readonly hass?:           { language?: string } | undefined;
     _loadingPhases:           ReadonlyMap<LoadingPhaseId, LoadingPhaseState>;
     _loadingHasCompleted:     boolean;

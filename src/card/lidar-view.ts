@@ -94,7 +94,7 @@ export function startLidarFadeLoop(host: LidarViewHost): void
         const outStart = host._lidarFadeOutStartMs;
 
         //Exit fade complete, tear down the WebGL layer and lift the overlay mask if the user landed on
-        //base (mask stays on if they navigated to shading-dome instead, so the chips don't flash in
+        //base (mask stays on if they navigated to weather mode instead, so the chips don't flash in
         //between modes).
         if (outStart !== null && now - outStart >= LIDAR_FADE_OUT_MS)
         {
@@ -147,12 +147,9 @@ export function startLidarFadeLoop(host: LidarViewHost): void
 }
 
 
-//Bottom-of-card opacity slider, painted only while the LiDAR-View
-//mode is active. Mirrors the shading-dome cloud picker (same
-//capsule pill, same z-index, same vertical offset) so the two
-//modes use a consistent control well. Slider value is a percent
-//surface (0..100) for readability; the host bridges it back to
-//the [0..1] engine API.
+//Bottom-of-card opacity slider, painted only while the LiDAR-View mode is active. Slider
+//value is a percent surface (0..100) for readability; the host bridges it back to the [0..1]
+//engine API.
 export function renderLidarViewOpacityPicker(
     host:     LidarViewHost,
     onChange: (opacity: number) => void,

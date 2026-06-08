@@ -202,10 +202,10 @@ export function refreshPv(host: PvHost): void
         return;
     }
 
-    //Seed `_pvHistory` as an empty pair so the boot gate clears immediately on entity resolution and the live tail
-    //extension below can append without a null guard each cycle. The raw 6 h fetch that used to populate this slot
-    //is removed (see the long comment further down); the chart pulls its past portion from `_pvCalibStats` /
-    //`_pvTrainerStats` LTS and the right-edge live tail from the `hass.states[entity]` pushes appended here.
+    //Seed `_pvHistory` as an empty pair so the boot gate clears immediately on entity resolution
+    //and the live tail extension below can append without a null guard each cycle. The chart
+    //pulls its past portion from `_pvCalibStats` / `_pvTrainerStats` LTS and the right-edge
+    //live tail from the `hass.states[entity]` pushes appended here.
     if (host._pvHistory === null)
     {
         host._pvHistory = { times: [], values: [] };
@@ -232,14 +232,12 @@ export function refreshPv(host: PvHost): void
         {
             //Sum the raw value across every configured live entity and keep the unit of the first valid sample. The
             //downstream consumer (currentPvRate / pvRateAtTime) classifies cumulative vs measurement off `_pvUnit` so
-            //a kWh-only HA Energy install (4 stat_energy_from sources, no stat_rate) lands as a summed kWh stream
-            //and the buffer differentiation derives total W exactly as it does for a single source; a stat_rate-on-
-            //every-source install lands as a summed W stream and the chip skips the buffer path. Skipping
-            //pvNormalizeToWatts on the sum avoids the kWh → 0 regression that Phase 1 alpha.29 introduced. The unit
-            //is taken from the first valid entity, multi-source installs where the per-source units disagree are an
-            //HA config error (one source in W, another in kW would mis-sum), so we don't reach for a normalisation
-            //helper, the single-source assumption that every Helios install respected pre-multi-source still holds
-            //inside a single HA Energy battery / solar / grid block.
+            //a kWh-only HA Energy install (4 stat_energy_from sources, no stat_rate) lands as a summed kWh stream and
+            //the buffer differentiation derives total W exactly as it does for a single source; a stat_rate-on-every-
+            //source install lands as a summed W stream and the chip skips the buffer path. The unit is taken from the
+            //first valid entity; multi-source installs where the per-source units disagree are an HA config error
+            //(one source in W, another in kW would mis-sum), so this path trusts the single-unit assumption a single
+            //HA Energy block enforces and skips the per-sample normalisation helper.
             let sumValue  = 0;
             let firstUnit = '';
             let anyValid  = false;
@@ -435,9 +433,7 @@ export function refreshPv(host: PvHost): void
 
     //5-min LTS for the unified data source's past-production curve (5 days, matching the data
     //source window). Same multi-source aggregation as the calib path so the curve sees total
-    //production rather than the first-entity share. Window scoped to the store's J-2 to J+2 span
-    //(the trainer USED to fetch 30 days for the shading map; with the shading map retired, the
-    //extra 25 days were dead weight on every cold boot).
+    //production rather than the first-entity share. Window scoped to the store's J-2 to J+2 span.
     if (!host._pvTrainerStatsFetching)
     {
         const trainerStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);

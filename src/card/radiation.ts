@@ -173,19 +173,16 @@ export function refreshSolarRadiation(host: RadiationHost): void
     {
         return;
     }
-    //Narrow raw window cap, mirrors the PV side (see fetchPvHistory):
-    //a Davis / Ecowitt W/m² sensor reporting every second over a
-    //multi-day visible timeline used to drag the HA recorder for the
-    //whole duration of the fetch, blocking every other card reading
-    //the same entity. The chart only needs accurate live data for
-    //the head of the curve; older past values are interpolated from
-    //the engine's resampled series. 6 h gives the W/m² tooltip
-    //enough resolution while keeping the recorder responsive.
-    //Cap anchored on NOW so fetchStart stays in the past even when
-    //the visible timeline end sits in the forecast horizon (next
-    //day). Anchoring on timeline end would place fetchStart in the
-    //future and the inner clamp at fetchSolarRadiationHistory
-    //would leave the slot empty.
+    //Narrow raw window cap, mirrors the PV side (see fetchPvHistory): a Davis / Ecowitt W/m²
+    //sensor reporting every second over a multi-day visible timeline would otherwise drag the
+    //HA recorder for the whole duration of the fetch and block every other card reading the
+    //same entity. The chart only needs accurate live data for the head of the curve; older
+    //past values are interpolated from the engine's resampled series. 6 h gives the W/m²
+    //tooltip enough resolution while keeping the recorder responsive.
+    //
+    //Cap anchored on NOW so fetchStart stays in the past even when the visible timeline end
+    //sits in the forecast horizon (next day). Anchoring on timeline end would place fetchStart
+    //in the future and the inner clamp at fetchSolarRadiationHistory would leave the slot empty.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
     const cap          = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
@@ -218,12 +215,10 @@ export function refreshSolarRadiation(host: RadiationHost): void
 //O(n log n) sort once.
 //
 //Dirty-flag gate: the inputs are stable between hass pushes and
-//history fetches, so we hash the (history identity, state identity,
-//entity) tuple and skip the whole rebuild when nothing changed.
-//Without this guard the function used to rebuild ~700 sample
-//objects per render under rotation (auto-rotate fires move events
-//which mutate overlay @state which retriggers updated() which
-//calls refreshSolarRadiation), creating a massive GC churn.
+//history fetches, so we hash the (history identity, state identity, entity) tuple and skip
+//the whole rebuild when nothing changed. Without this guard the function rebuilds ~700 sample
+//objects per render under auto-rotate (move events mutate overlay @state which retriggers
+//updated() which calls refreshSolarRadiation), creating a massive GC churn.
 const _pushedRadiationKey = new WeakMap<RadiationHost, {
     histRef: unknown;
     stateRef: unknown;

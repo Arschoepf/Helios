@@ -501,11 +501,11 @@ function readStatRates(host: GridHost, rates: string[]): void
 }
 
 
-//Resolve every entity wired for a slot from the HA Energy dashboard snapshot. v1.8.3 dropped the legacy YAML overrides
-//(grid-import-entity / grid-export-entity / grid-power-entity / grid-power-invert), the card now reads grid wiring
-//exclusively from the HA Energy dashboard global settings (Settings -> Dashboards -> Energy). A user with an existing
-//card YAML carrying those keys gets a persistent migration notification + the editor strips them on the next save; the
-//runtime treats them as absent.
+//Resolve every entity wired for a slot from the HA Energy dashboard snapshot. Grid wiring reads
+//exclusively from the HA Energy dashboard global settings (Settings -> Dashboards -> Energy);
+//card YAML carrying retired override keys (grid-import-entity / grid-export-entity / grid-power-
+//entity / grid-power-invert) gets a one-shot persistent migration notification and the editor
+//strips them on the next save, the runtime treats them as absent.
 function resolveEntities(host: GridHost, slot: 'import' | 'export'): string[]
 {
     const ed = host._energyDefaults;

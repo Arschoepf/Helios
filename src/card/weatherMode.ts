@@ -15,9 +15,9 @@ import type { HeliosEngine } from '../helios-engine';
 import type { CardMode } from './card-mode';
 
 
-//Same time base as the previous shading-dome fade so the chip / leader / arc fade cadence stays
-//consistent across modes. Enter ramps the overlay in over 600 ms while the HUD fades out; exit
-//ramps back to invisible in 280 ms while the HUD fades back in.
+//Shared time base with the LiDAR fade so the chip / leader / arc fade cadence reads as one
+//consistent vocabulary across modes. Enter ramps the overlay in over 600 ms while the HUD fades
+//out; exit ramps back to invisible in 280 ms while the HUD fades back in.
 const WEATHER_FADE_IN_MS  = 600;
 const WEATHER_FADE_OUT_MS = 280;
 

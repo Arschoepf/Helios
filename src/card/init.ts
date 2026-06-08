@@ -605,17 +605,14 @@ function wireEngineCallbacks(host: InitHost): void
             }
         });
     };
-    //WebGL context loss handler. NO LONGER auto-respawns: when the
-    //browser kills our context (typically because the page hit the
-    //per-origin cap of 8 to 16 WebGL contexts in editor preview
-    //mode), respawning here used to fire ANOTHER getContext which
-    //killed another live context, which dispatched another
-    //context-lost event, looping until the editor session was
-    //drowning in error spam.
+    //WebGL context loss handler. Does NOT auto-respawn: when the browser kills our context
+    //(typically because the page hit the per-origin cap of 8 to 16 WebGL contexts in editor
+    //preview mode), respawning here would fire ANOTHER getContext which kills another live
+    //context, which dispatches another context-lost event, looping until the editor session
+    //drowns in error spam.
     //
-    //We just mark the engine as paused and let MapLibre's own
-    //internal context-restored path (which kicks in when the user
-    //leaves the editor / scrolls / refocuses the tab) bring it back.
+    //The handler marks the engine paused and lets MapLibre's own context-restored path bring
+    //it back when the user leaves the editor / scrolls / refocuses the tab.
     //If that fails, a manual config change (any user edit) will hit
     //the identity-change branch in updated() and spawn a fresh
     //engine from a clean slate, with no cascade in flight.

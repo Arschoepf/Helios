@@ -1,10 +1,9 @@
 //Unified 5-day data source. Single source of truth for every per-time signal the dashboard cards,
-//the radial sundial, the graph view and the main UI timeline read from. Replaces the per-card / per-
-//consumer bucketization passes that used to walk the raw history arrays + the weather series at every
-//render: the source is built ONCE after the underlying fetches land, cached on the host, sliced and
-//re-sampled by every downstream consumer at look-up time. Live numeric chips deliberately stay on
-//the direct hass.states path (no extra layer between the live entity value and the chip text), every
-//other surface that draws or hovers a curve uses the source.
+//the radial sundial, the graph view and the main UI timeline read from. Built ONCE after the
+//underlying fetches land, cached on the host, sliced and re-sampled by every downstream consumer
+//at look-up time. Live numeric chips deliberately stay on the direct hass.states path (no extra
+//layer between the live entity value and the chip text); every other surface that draws or hovers
+//a curve uses this source.
 //
 //Cadence: a single user-facing knob (`display-update-frequency-per-hour`, 1-60, default 4) controls
 //both the storage cadence of the data source and the rendering cadence of every graph that reads

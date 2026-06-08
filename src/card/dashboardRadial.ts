@@ -731,9 +731,9 @@ export function renderRadialDial(host: DashboardHost, cardOffset: number, active
     const battTrackPast     = data.hasBattery ? buildRingArcPath(battMidR, 0, pastEndHour) : '';
     const battTrackFuture   = data.hasBattery ? buildRingArcPath(battMidR, pastEndHour, 24) : '';
 
-    //Full-day production-forecast outline. The previous beta only drew the dashed forecast
-    //outline for the FUTURE portion of the day, the user wants it visible over the past too so
-    //they can compare the model's prediction against the realised production hour-by-hour.
+    //Full-day production-forecast outline. The dashed forecast curve runs across the whole day
+    //(past + future) so the user can compare the model's prediction against the realised
+    //production hour-by-hour at a glance.
     const prodForecastOutlinePath = data.hasPv && hourlyForecast.some(v => v !== null)
         ? buildRadialOutlinePath(hourlyForecast, prodScaleMax, R_PROD_INNER, R_PROD_OUTER, 0, 24)
         : '';

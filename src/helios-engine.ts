@@ -1011,12 +1011,12 @@ export class HeliosEngine
         }
     }
 
-    //Attach (or refresh) the RainViewer raster tile source + layer. Raw RainViewer tiles, no
-    //pre-stitch, no canvas filter, no blob URL: MapLibre fetches each tile itself and paints it
-    //via the GPU raster pipeline. The B&W look comes from raster-saturation: -1 (GPU), the
-    //user-asked translucency comes from raster-opacity: 0.50. Whatever pixelation the user sees
-    //at the weather-mode framing IS the native RainViewer resolution (~1 km / pixel at z=7);
-    //the previous downscale + canvas-blur attempts to hide it made the visual worse.
+    //Attach (or refresh) the RainViewer raster tile source + layer. MapLibre fetches each tile
+    //itself and paints it via the GPU raster pipeline. The B&W look comes from raster-saturation:
+    //-1, raster-brightness-min/max swap the luminance ramp so light blue (light rain) reads as
+    //light grey and red (storm) reads as dark grey, raster-opacity 0.50 lets the basemap show
+    //through the rain cells. The remaining staircasing at the weather-mode zoom 10 framing is
+    //the native RainViewer resolution (~1 km / pixel at z=7), inherent to the data.
     public attachRainViewerOverlay(): void
     {
         if (!this.map) { return; }
@@ -1274,10 +1274,9 @@ export class HeliosEngine
     //mode-switching while a fresh exposure sweep is in flight.
     public onLidarExposureBusyChange?: (busy: boolean) => void;
 
-    //Run a one-time sweep of legacy localStorage keys retired in previous betas of the v1.8.3
-    //cycle. Idempotent + cheap, ~5 ms of localStorage.removeItem calls on cold start. Without this
-    //purge the orphaned keys (helios-shading-map:v2 alone can be 100-500 kB) sit forever in the
-    //user's storage quota, since the writing code path no longer exists to clear them.
+    //One-time sweep of localStorage keys that no longer have a writer. Idempotent + cheap, ~5 ms
+    //of localStorage.removeItem calls on cold start. Keeps the orphaned blobs (one of them can
+    //weigh 100-500 kB) from sitting forever in the user's storage quota.
     private static _legacyStorageSwept = false;
     private static _sweepLegacyStorage(): void
     {
@@ -1287,11 +1286,6 @@ export class HeliosEngine
         {
             const ls = window.localStorage;
             if (!ls) { return; }
-            //Static-key retirees: shading-map (v1.8.3-beta.80, the big virage), the cloud-mode
-            //toggle preference (v1.8.3-beta.81, replaced by the auto-reveal in weather mode), and
-            //the per-home 50x50 Open-Meteo cloud-cover grid (v1.8.3-beta.97, replaced by the
-            //RainViewer radar overlay so weather mode no longer needs a multi-point Open-Meteo
-            //fetch).
             const STATIC_RETIRED = [
                 'helios-shading-map:v2',
                 'helios:cloud-mode',
@@ -4366,14 +4360,11 @@ export class HeliosEngine
     //based on how far they are from the viewer, bigger when close,
     //smaller when far, to give the otherwise flat top-down-ish view
     //a sense of perspective beyond what pitch alone provides.
-    //Per-frame projection caches and scratch buffers. These slots
-    //are mutated in place by _projectScenePoint(), which is called
-    //hundreds of times per map transform (sun arc 96 samples, cloud
-    //bands ~190 points, label anchors 49 points, shading-dome cells
-    //~2600 points, cloud dome ~290 points). Naive allocation in the
-    //hot path was the dominant source of GC pressure: 30k+ small
-    //arrays per second under auto-rotate, which is exactly the
-    //pattern that progressively bricks the M4 Pro after ~10 s.
+    //Per-frame projection caches and scratch buffers. These slots are mutated in place by
+    //_projectScenePoint(), called hundreds of times per map transform (sun arc 96 samples,
+    //cloud bands ~190 points, label anchors 49 points). Naive allocation in the hot path is
+    //the dominant source of GC pressure: 30k+ small arrays per second under auto-rotate,
+    //the pattern that progressively bricks the M4 Pro after ~10 s.
     //
     //_projCache caches the camera-side data (projection matrix,
     //canvas CSS dimensions) for the current frame; it is invalidated

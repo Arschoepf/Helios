@@ -169,12 +169,10 @@ export const heliosCardStyles = css`
             cross over the PV / battery / grid / cloud / solar value
             chips. The chips always win on the shared pixels. */
         z-index: 6;
-        /*  Resting opacity is a faint 0.25 so the home silhouette is
-            always discoverable on the basemap (the user reported the
-            home was lost in busy mixed buildings + map detail). Hover
-            bumps to 0.85 for an unmistakable interactive cue. The
-            drop-shadow stays modest at rest, ramps up on hover via a
-            heavier filter rule.                                      */
+        /*  Resting opacity is a faint 0.25 so the home silhouette stays discoverable on the
+            basemap even in busy mixed-building neighbourhoods. Hover bumps to 0.85 for an
+            unmistakable interactive cue; the drop-shadow stays modest at rest and ramps up on
+            hover via a heavier filter rule.                                                   */
         opacity: 0.25;
         transition: opacity 0.18s ease, filter 0.18s ease;
         filter: drop-shadow(0 0 4px var(--primary-color, #03a9f4));
@@ -205,21 +203,20 @@ export const heliosCardStyles = css`
         stroke: var(--primary-color, #03a9f4);
         stroke-width: 1;
         stroke-linejoin: round;
-        /*  Painted polygons capture clicks so the silhouette's actual
-            shape becomes the hit zone, the 120 px circular hitbox
-            below only catches the centre and was missing the corners
-            of larger / zoomed-in buildings (the user reported clicks
-            on visible parts of the home not registering). */
+        /*  Painted polygons capture clicks so the silhouette's actual shape becomes the hit
+            zone. The 120 px circular hitbox below only covers the centre, and on larger /
+            zoomed-in buildings the corners stick out past it; visiblePainted reads the painted
+            footprint and catches clicks anywhere on the visible roof. */
         pointer-events: visiblePainted;
     }
 
 
-    /*  Detail mode (dashboard dive) reuses the same chip / leader / arc / timeline hide rules as the
-        LiDAR + ShadingDome modes via the shared .overlay-masked class. The card-side render sets
-        overlay-masked whenever _overlayMaskActive OR _detailMode is true, so a home click triggers the
-        same eye-pleasing 0.35 s fade + 0.45 s timeline slide as a mode-bar click. Time-bar slide-out
-        transitions live alongside the chip fade rules further down so the two transforms (fade vs
-        slide) do not race during the dashboard open / close window. */
+    /*  Detail mode (dashboard dive) reuses the same chip / leader / arc / timeline hide rules
+        as the LiDAR + weather modes via the shared .overlay-masked class. The card-side render
+        sets overlay-masked whenever _overlayMaskActive OR _detailMode is true, so a home click
+        triggers the same 0.35 s fade + 0.45 s timeline slide as a mode-bar click. Time-bar
+        slide-out transitions live alongside the chip fade rules further down so the two
+        transforms (fade vs slide) do not race during the dashboard open / close window.       */
 
     /*  When LiDAR View is active, fade out every overlay layer so
         the dot cloud reads on its own against a quiet basemap. The
@@ -232,17 +229,11 @@ export const heliosCardStyles = css`
         minus the LiDAR button itself), the home hitbox / glow, and
         the timeline. Easier to audit if any future overlay needs
         to be hidden in LiDAR View by looking at this single block. */
-    /*  Base transition + composite-layer hint kept on the unprefixed
-        selectors so the fade runs in BOTH directions across every
-        browser. Declaring the transition only inside .lidar-view-
-        active made entry smooth but the exit snap-back instantly
-        because the selector no longer matched and the transition
-        property left scope; declaring it here keeps it in scope at
-        all times. The will-change: opacity hint promotes each element
-        to its own composite layer so the GPU drives the alpha sweep
-        instead of asking the painter to redo layout per frame,
-        which used to drop frames on the chips that sit inside
-        transform-less wrappers (time-bar, solar-svg).               */
+    /*  Base transition + composite-layer hint kept on the unprefixed selectors so the fade
+        runs in BOTH directions across every browser. The will-change: opacity hint promotes
+        each element to its own composite layer so the GPU drives the alpha sweep instead of
+        asking the painter to redo layout per frame, which would otherwise drop frames on the
+        chips that sit inside transform-less wrappers (time-bar, solar-svg).                  */
     .overlay-top-left,
     .home-glow-svg,
     .home-hitbox,
@@ -260,13 +251,12 @@ export const heliosCardStyles = css`
     {
         transition: opacity 0.35s ease;
     }
-    /*  will-change opt-in: scope the composite-layer promotion to the transition windows only. At
-        rest, 15+ elements declared will-change: opacity unconditionally was pinning that many GPU
-        layers in idle VRAM (~15-30 MB on devices with limited budgets) and forcing the compositor to
-        re-sync them on every Lit re-render. Promote only when a mode actually toggles. The trigger
-        class is ha-card.overlay-masked, set on every non-base _cardMode (LiDAR + ShadingDome) AND
-        whenever _detailMode is true (dashboard dive), so a single rule promotes the GPU layers for
-        the entire union of transition windows. */
+    /*  will-change opt-in: scope the composite-layer promotion to the transition windows only.
+        Declaring will-change: opacity unconditionally on 15+ elements pins that many GPU layers
+        in idle VRAM (~15-30 MB on devices with limited budgets) and forces the compositor to
+        re-sync them on every Lit re-render. Promote only when a mode actually toggles, gated
+        on ha-card.overlay-masked, which is set on every non-base _cardMode AND whenever
+        _detailMode is true (dashboard dive). One rule covers the union of transition windows. */
     ha-card.overlay-masked .overlay-top-left,
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
@@ -292,9 +282,9 @@ export const heliosCardStyles = css`
         transition: transform 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
         will-change: transform;
     }
-    /*  Chips + leaders + arcs fade out behind the LiDAR / ShadingDome overlay. Single rule keyed on
-        the overlay-masked class so the state machine on the card side controls exactly when the fade
-        kicks in either direction. */
+    /*  Chips + leaders + arcs fade out behind any non-base mode (LiDAR, weather, detail dive).
+        Single rule keyed on the overlay-masked class so the state machine on the card side
+        controls exactly when the fade kicks in either direction. */
     ha-card.overlay-masked .home-glow-svg,
     ha-card.overlay-masked .home-hitbox,
     ha-card.overlay-masked .home-drop-leader-svg,
@@ -1531,10 +1521,8 @@ export const heliosCardStyles = css`
         line-height: 1;
         white-space: nowrap;
     }
-    /*  Hour labels render at every hour, every width: the layout reworks landed in the v1.8.3
-        cycle gave the dial enough breathing room to fit all 24 numerals comfortably even on the
-        narrowest CoverFlow card sizes. The cardinal-only collapse this rule used to enforce is
-        no longer needed. */
+    /*  Hour labels render at every hour, every width: the dial geometry fits all 24 numerals
+        comfortably even on the narrowest CoverFlow card sizes. */
 
     /*  Sun halo: a soft sun-coloured glow ring sitting behind the disc. Stroke is none, the fill
         is the per-card radial gradient defined in the SVG <defs>. The halo grows from the rim out
@@ -3323,19 +3311,12 @@ export const heliosCardStyles = css`
     .solar-svg .solar-arc-outline { stroke: rgba(0, 0, 0, 0.35); stroke-linecap: round; }
     .solar-svg .solar-arc-segment { stroke-linecap: round; }
 
-    /*  Sunrise / sunset markers used to live here as ha-icon
-        glyphs anchored to the arc's horizon crossings. Removed:
-        the arc shape itself reads as "sunrise / sunset".          */
-
-
-    /*  Below-horizon segments, round dots at fixed spacing so the
-        eye reads "this is happening underground" without colour or
-        depth scaling having to carry the signal. dasharray "0 N"
-        with linecap round renders true circles on every browser.
-        Stroke alpha is halved relative to the above-horizon arc
-        so the dotted leg recedes visually: the user reads the
-        bright arc as "the part of the day where there's sunlight"
-        and the dotted leg as ambient context underneath.            */
+    /*  Below-horizon segments, round dots at fixed spacing so the eye reads "this is happening
+        underground" without colour or depth scaling having to carry the signal. dasharray "0 N"
+        with linecap round renders true circles on every browser. Stroke alpha is halved relative
+        to the above-horizon arc so the dotted leg recedes visually: the bright arc reads as
+        "the part of the day where there is sunlight" and the dotted leg as ambient context
+        underneath.                                                                              */
     .solar-svg .solar-arc-night
     {
         stroke-linecap: round;

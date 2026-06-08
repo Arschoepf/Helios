@@ -9,7 +9,7 @@
 
 It pulls weather forecasts from **Open-Meteo** (no key needed), reads the optional production sensor of your photovoltaic install from your HA states, and stitches them together onto an interactive 3D map powered by **MapLibre GL** with vector tiles served by **[OpenFreeMap](https://openfreemap.org/)** (free, no key, no signup). The whole map, sun arc, sun disc, incidence ray, cloud cover, building extrusions and cast shadows, irradiance graph, PV graph, reflects the timeline cursor; scrub it 2 days into the past or 2 days into the future and watch every layer follow.
 
-> **v1.8.3 note**, patch-and-polish release on top of v1.8.2. Three regression fixes for the grid history backfill (raw arm catch symmetry so a single transient failure no longer wipes both arms, scrub buffer recording for power-native grid sensors, LTS window extended from 24 h to 5 days), a deeper HA Energy dashboard alignment pass (the LIVE grid chip now mirrors `stat_rate` directly when configured on the Energy grid source, matching the official Energy dashboard to the watt), and four UI polish items for fullscreen / kiosk canvases (steeper chip-cluster vertical lift so the home-to-chip leader breathes, dampened sun-arc max ramp, sun disc + halo that scale with the arc, mode-bar handlers that clear the scrub tooltip before swapping mode). See [CHANGELOG](CHANGELOG.md) for the detail, and the public roadmap with upcoming work tracked live at [**helios-lidar.org/roadmap**](https://helios-lidar.org/roadmap).
+> **v1.8.3 note**, biggest release of the v1.8.x line by a wide margin. Three structural moves and a few older surfaces retired in one pass. (1) Entity wiring drops every user-configurable PV / grid / battery key in favour of the **HA Energy dashboard as the single source of truth** (`Settings → Dashboards → Energy`), the same global config the official Energy card reads, so the two surfaces stop disagreeing on which sensor a number comes from. (2) The dashboard dive ships a **radial sundial card** that absorbs the previous tiles + cumulative chart into one annular instrument with sunrise / sunset markers, hover dots that snap to every series at the same instant, and a production curve whose Y-axis is locked to the installation's peak power so a sunny vs cloudy day reads on the same scale. (3) The cloud-mode chip is replaced by a top-right **Weather mode** that overlays live RainViewer precipitation radar on the basemap, luminance-inverted to a black-and-white palette (light rain = light grey, storm = dark grey) and refreshed every 5 minutes while the mode stays on. The cycle also retires the shading-map trainer entirely (the gain over the 5-day calibration ratio alone was negligible while the dome rendering and storage costs were heavy), swaps the boot sun-spinner for a card-style **progress banner** with phase-aware fill, surfaces an alert banner under the loading banner whenever the Open-Meteo home-point fetch trips an HTTP 429 back-off, and bumps the i18n surface from 11 to **63 locales**. See [CHANGELOG](CHANGELOG.md) for the detail, and the public roadmap with upcoming work tracked live at [**helios-lidar.org/roadmap**](https://helios-lidar.org/roadmap).
 
 > **Companion site:** [**helios-lidar.org**](https://helios-lidar.org) is a free web tool that turns raw open LiDAR data from any country (LAZ / LAS point clouds OR DSM + DTM raster pairs) into the nDSM GeoTIFF Helios needs, plus the YAML snippet to paste into the card. Use it when your region is not covered by the built-in LiDAR providers below. No QGIS, no GDAL, no install. Free, no account, no ads, hosted on my own VPS. The full Python preparation toolchain lives in the standalone [Helios-Lidar repository](https://github.com/ReikanYsora/Helios-Lidar).
 
@@ -20,22 +20,22 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 * **Sun arc**, the sun's full daily trajectory, projected with depth onto your home. Below-horizon segments render as discreet dots behind the home so the underground portion of the arc reads as a calm background, while the daylight portion + sun disc + irradiance readout always stack on top of every chip.
 * **Live sun disc with irradiance-driven halo**, pinned on the arc; the inner fill scales with live W/m², a soft sun-coloured halo fades cleanly from 100 % at the centre to 0 % at the rim, with peak alpha driven by the same irradiance reading.
 * **Incidence ray**, dashed line from sun to PV chip, animated to flow at a speed proportional to live irradiance. The stronger the sun, the faster it pulses.
-* **Cloud cover chip + dome**, the live cloud-cover percentage shows in a top-of-card chip. Click it to fan three sub-chips below (low / mid / high layer breakdown) and to toggle the hemispheric **cloud dome** overlay: a semi-transparent celestial dome anchored at the home, sliced into three horizontal bands (low / mid / high) whose opacity tracks each layer's share of the sky. Combined with the **adaptive shading dome** (top-right mode bar), the user can compare modelled coverage against learned ground truth side by side.
-* **PV production chip** *(optional)*, pin above the home, shows the **instantaneous** production in W/kW. Cumulative-energy sensors (kWh) are differentiated automatically over a rolling 60 s window.
+* **Weather mode**, top-right mode bar (Layer / LiDAR / Weather). Weather tilts the camera to a top-down satellite framing around the home and overlays **live RainViewer precipitation radar** on the basemap, luminance-inverted to a black-and-white palette so light rain reads as light grey and storm cells as dark grey. Refreshed every 5 minutes for as long as the user stays in the mode. Three optional cloud-layer chips appear below the mode bar (low / mid / high coverage from the home-point Open-Meteo feed) so the user reads the per-altitude breakdown next to the live radar at a glance. Live-only, no scrub timeline.
+* **PV production chip** *(optional)*, pin above the home, shows the **instantaneous** production in W/kW. PV wiring resolves automatically from the HA Energy dashboard (`Settings → Dashboards → Energy → Solar production`); cumulative-energy sources (kWh) are differentiated to watts on the fly over a rolling 60 s window, power-native sources are read directly.
 * **PV → home animated leader**, a vertical dashed line in the configured PV colour from the production chip down to a small anchor bead on the home; when you set the installation's peak power (kWp) in the editor, dashes flow toward the home at a speed proportional to current production over that peak. Static and arrow-less when production is zero.
-* **PV production overlay + forecast** *(optional)*, when a PV entity is configured, the card surfaces the current production as a chip below the home and a dedicated graph above the timeline. If you also enter your installation's peak power (kWp) in the editor, a dotted forecast line based on the Haurwitz / Kasten-Czeplak clear-sky model + live cloud cover, with a Sandia NOCT cell-temperature derating fed from Open-Meteo's air temperature + wind speed, overlays the past observation, and the chip switches to a predicted value (prefixed `≈`) when scrubbing into the future. When a LiDAR provider covers the home (or a BYO local-nDSM is configured), the forecast additionally ray-marches from each array toward the sun against the loaded nDSM and zeroes the direct beam on shaded arrays, keeping diffuse + ground-reflected components so a shaded panel drops to ~25-30 % of clear-sky output rather than zero.
+* **PV production overlay + forecast** *(optional)*, when the HA Energy dashboard carries a Solar production source, the card surfaces the current production as a chip below the home and a dedicated graph above the timeline. If you also declare the installation's peak power on each `pv-arrays` entry (or fall back to the legacy top-level `pv-peak-kwp` for a single-array install), a dotted forecast line based on the Haurwitz / Kasten-Czeplak clear-sky model + live cloud cover, with a Sandia NOCT cell-temperature derating fed from Open-Meteo's air temperature + wind speed, overlays the past observation, and the chip switches to a predicted value (prefixed `≈`) when scrubbing into the future. When a LiDAR provider covers the home (or a BYO local-nDSM is configured), the forecast additionally ray-marches from each array toward the sun against the loaded nDSM and zeroes the direct beam on shaded arrays, keeping diffuse + ground-reflected components so a shaded panel drops to ~25-30 % of clear-sky output rather than zero.
 * **PV array map markers**, when entries in `pv-arrays` carry their own GPS coordinates (> 10 m from the home), a small solar-panel icon in the configured PV colour appears on the map at each panel location. Useful for ground-mounted arrays sitting elsewhere than the home, e.g. in a clearing while the house itself is under trees.
-* **Home battery overlay** *(optional)*, two chips flank the PV chip on the same horizontal axis: State of Charge on the left, signed instantaneous power on the right. Both chips aggregate across multiple banks (declare any number of physical batteries in the `batteries:` config , house + garage + standalone hybrid, etc., the SoC chip shows a capacity-weighted average and the power chip shows the signed sum) so the readouts stay single even with a multi-vendor setup. Either entity is independently optional per bank; the chip side appears as soon as the entity is set on any bank.
-* **Inverter cutoff guard** *(optional)*, when `inverter-cutoff-soc-pct` is set together with at least one bank exposing a SoC entity, the shading-map trainer drops every observation bucket where every bank reached the cutoff. Those buckets see the inverter clamp PV output even when the sun is up; training them would carve phantom shadows at the matching sun position.
-* **Detail dashboard**, click the home to dive into a chip-styled overlay with three sections: Today (produced kWh + a refined forecast + dual peak readouts + a cumulative chart with sunrise / sunset markers, a live now cursor and a hover tooltip), Tomorrow (full-day forecast + peak hour) and Battery when configured (vessel + charge / discharge totals). Headline kWh figures tick up from 0 to their real value with a 700 ms ease-out the moment you open the panel. Tomorrow stretches full width when no battery is configured. Click anywhere outside to exit.
+* **Home battery overlay** *(optional)*, two chips flank the PV chip on the same horizontal axis: State of Charge on the left, signed instantaneous power on the right. Battery wiring is resolved automatically from the HA Energy dashboard (`Settings → Dashboards → Energy → Home Battery Storage`): each bank you declared there contributes to the aggregate, and multi-bank setups (house + garage + standalone hybrid) collapse into one SoC chip (capacity-weighted average) and one power chip (signed sum) without per-card YAML. The chip side appears as soon as the matching slot is wired on the Energy block.
+* **Radial sundial dashboard**, click the home to dive into a chip-styled overlay built around a **radial sundial card**: an annular instrument that lays out the day on a 24-hour ring with concentric tracks for production, battery and cloud cover, sunrise / sunset markers anchored on the dial, hover dots that snap every series to the same instant, and a live cursor that traces the current hour. A second view (toggle in the bandeau) swaps the dial for a full-day production curve whose Y-axis is locked to the installation's peak power, so a sunny day stretches to the top and a cloudy day sits visibly lower on the same scale. Today (produced kWh + refined forecast + peak readouts) / Tomorrow (full forecast + peak hour) / Battery (vessel + totals) are surfaced as a CoverFlow strip above the chart so the user swipes between them. Click outside to exit.
 * **Forecast calibration**, the dashboard learns from the last 5 completed days how the Open-Meteo model under- or over-predicts your installation and surfaces a refined value next to each PRÉVU figure with a hover hint. Captures static biases (cloud forecast skew, soiling, orientation, inverter losses). Hidden when fewer than 2 past days carry enough production to derive a stable ratio.
-* **Adaptive shading map**, a second learning layer on top of the 5-day calibration: each cell of a polar grid (sun azimuth × sun altitude × cloud-cover bin) holds the average actual / predicted ratio observed at that combination. Lets the forecast bend at the right time of day for tree shadows, neighbouring roofs and other obstacles the LiDAR didn't capture. Visualisable from the editor as a hemispheric "dome" overlay (top-right mode bar → Shadows) for quick auditing.
-* **LiDAR-View overlay** , three-mode top-right button (Layer / LiDAR / Dome). LiDAR mode paints every loaded raster cell as a wireframe + filled triangles, shaded in real time by a per-cell raymarch (lit cells glow warm, shadowed cells dim out). A bottom-of-card slider tunes the layer opacity live. Hidden when no LiDAR provider covers the home. Wireframe is always on, only the opacity is user-tunable.
-* **Grid IN / OUT chips** *(optional)*, flank the home cluster on the grid side. Either entity is independently optional; the matching chip appears as soon as `grid-import-entity` or `grid-export-entity` is set. Each accepts a single sensor OR an array of cumulative-energy sensors for multi-tariff installs (HP / HC peak/off-peak indexes like Linky EASF01 + EASF02); the chip surfaces the most recently incrementing index, so the user reads "current grid power" without having to know which tariff is active. Cumulative kWh meters are differentiated on the fly with an HA recorder backfill at boot so the chip reads a meaningful slope even when the live integration is slow-polling. An animated bead rides the leader at a speed proportional to power. Installs that expose a **single signed grid sensor** (Fronius `P_Grid`, Shelly EM, P1 net power, …) can instead wire one `grid-power-entity`: the card reads its sign and lights the IMPORT chip when positive, the EXPORT chip when negative (flip with `grid-power-invert`), so the same two chips are driven from one meter.
+* **LiDAR-View overlay**, top-right mode bar (Layer / LiDAR / Weather). LiDAR mode paints every loaded raster cell as a wireframe + filled triangles, shaded in real time by a per-cell raymarch (lit cells glow warm, shadowed cells dim out). A bottom-of-card slider tunes the layer opacity live. Hidden when no LiDAR provider covers the home. Wireframe is always on, only the opacity is user-tunable.
+* **Grid IN / OUT chips** *(optional)*, flank the home cluster on the grid side. Grid wiring is resolved automatically from the HA Energy dashboard (`Settings → Dashboards → Energy → Grid consumption / Return to grid`). Multi-tariff installs (HP / HC peak / off-peak indexes like Linky EASF01 + EASF02) are handled natively when the Energy block carries multiple sources per slot, the chip surfaces the most recently incrementing index. Cumulative kWh meters are differentiated to watts on the fly with an HA recorder backfill at boot so the chip reads a meaningful slope even when the live integration is slow-polling. The LIVE chip mirrors the official Energy dashboard's `stat_rate` when configured on the source so the two surfaces match to the watt. An animated bead rides the leader at a speed proportional to power.
 * **Hover home glow**, hovering the home triggers a soft sun-coloured halo underneath the silhouette so the focal building reads as interactive before you click. Halo colour tracks the configured sun colour.
 * **Auto-rotation** *(opt-in)*, when enabled, the camera slowly orbits the home in the opposite direction to the sun's apparent motion (~1°/s) after a few seconds of inactivity. Any pinch / drag pauses it instantly and it resumes after a fresh idle window.
 * **Timeline**, 5 days wide (2 past + today + 2 forecast). Dual-area chart with irradiance on top and cloud cover below. A second graph appears above when a PV entity is configured. Click or drag anywhere on the timeline to scrub; the whole map snaps to the selected instant.
-* **Multilingual**, 11 locales: English, French, German, Spanish, Italian, Dutch, Portuguese, Norwegian, Czech, Polish, Swedish. Adapts to your Home Assistant language.
+* **Boot progress banner**, replaces the previous spinner on cold start. A themed banner pinned to the top of the card surfaces a per-phase fill (energy prefs, PV history, battery history, grid history, solar radiation, daily totals, weather forecast, buildings, LiDAR raster, LiDAR exposure) so the user reads exactly which fetch is in flight, not "something is loading". Latches itself off after the first complete pass so routine refreshes don't flash it back up.
+* **OpenMeteo rate-limit alert banner**, surfaces under the loading banner whenever the Open-Meteo home-point fetch hits HTTP 429 back-off. Themed with HA's `--warning-color` palette (amber tinted background + matching border) so the alert nature reads at a glance, EN + FR copy. Disappears the moment the next fetch lands.
+* **Multilingual**, 63 locales matching the full HA frontend translation surface (every language that ships with HA core). Adapts automatically to your Home Assistant language; fallback to English when a string hasn't been translated yet.
 
 ---
 
@@ -53,7 +53,7 @@ It pulls weather forecasts from **Open-Meteo** (no key needed), reads the option
 
 ## Support my work
 
-The 1.8.3 cycle patches three regression points users reported after the v1.8.2 grid backfill rework (a single failing fetch arm could leave the buffer empty, the scrub buffer never populated for power-native grid sensors, and the LTS window capped scrub coverage at 24 hours where 72 hours used to read fine), aligns the live grid chip with the official HA Energy dashboard when a `stat_rate` sensor is wired on the Energy source so the two surfaces match to the watt, and polishes four corners of the fullscreen layout (chip-cluster vertical lift, sun-arc ramp, sun-disc scale, mode-bar scrub-tooltip cleanup). Upcoming work is tracked live on the public roadmap at [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap). If Helios helps your daily routine, a ⭐ on GitHub or a small coffee keeps the project alive and lets me keep pushing on the next cycle.
+The v1.8.3 cycle was the biggest of the v1.8.x line. Entity wiring moved off the card's own YAML keys and onto the HA Energy dashboard as the single source of truth, the dashboard dive was rebuilt around a radial sundial that replaced the previous tiles + cumulative chart, the cloud-mode chip became a top-right Weather mode backed by live RainViewer precipitation radar, the shading-map trainer was retired, the boot spinner was swapped for a phase-aware progress banner, and the i18n surface went from 11 to 63 locales. Upcoming work is tracked live on the public roadmap at [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap). If Helios helps your daily routine, a ⭐ on GitHub or a small coffee keeps the project alive and lets me keep pushing on the next cycle.
 
 <a href="https://www.buymeacoffee.com/reikanysora"><img src="https://img.buymeacoffee.com/button-api/?text=Support this project&emoji=☀️&slug=reikanysora&button_colour=5F7FFF&font_colour=ffffff&font_family=Arial&outline_colour=000000&coffee_colour=FFDD00" /></a>
 
@@ -89,90 +89,137 @@ The 1.8.3 cycle patches three regression points users reported after the v1.8.2 
 
 No API key required. The basemap is served by [OpenFreeMap](https://openfreemap.org/) (free, no signup, no rate limits) and weather comes from Open-Meteo (also free, no key).
 
-The visual editor exposes every option. Minimal config:
+PV, grid and battery wiring is **not configured per-card**: the card resolves every entity slot from the HA Energy dashboard (`Settings → Dashboards → Energy`), the same global config the official Energy card reads. Set the slots there once and Helios picks them up automatically. The configuration surface below covers the install-specific bits HA does not know about: peak power per PV string, optional inverter cap, LiDAR providers, visual options.
+
+Minimal config:
 
 ```yaml
 type: custom:helios-card
 ```
 
-Every option below is editable visually:
+The visual editor exposes every option below. Direct YAML editing also works.
+
+### Map + buildings + shadows
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `map-style` | `'streets' \| 'minimal'` | `'streets'` | Basemap style. `streets` resolves to OpenFreeMap's [Liberty](https://tiles.openfreemap.org/styles/liberty) (full-colour OpenMapTiles look); `minimal` resolves to [Positron](https://tiles.openfreemap.org/styles/positron) (muted grey, very sober). Both flip to OpenFreeMap's [Dark](https://tiles.openfreemap.org/styles/dark) when the active HA theme is dark (probed via `hass.themes.darkMode`). The card no longer exposes its own theme YAML key, it tracks the HA frontend theme directly. |
-| `pixel-ratio` | `'auto' \| '1x'` | `'auto'` | WebGL canvas pixel density. `auto` uses the device's native devicePixelRatio (capped at 2 on desktop, 1.25 on mobile). `1x` forces 1.0, the cheapest per-frame fragment workload, useful on low-end devices or for long sessions where battery / heat matters more than crispness. |
-| `auto-rotate-enabled` | boolean | `false` | When `true`, the camera orbits the home slowly during idle. Any pinch / drag / wheel pauses it for 5 s and it resumes from the user's bearing. Off by default; enable for kiosk / always-on dashboards. |
+| `map-style` | `'streets' \| 'minimal'` | `'streets'` | Basemap style. `streets` resolves to OpenFreeMap's [Liberty](https://tiles.openfreemap.org/styles/liberty) (full-colour OpenMapTiles look); `minimal` resolves to [Positron](https://tiles.openfreemap.org/styles/positron) (muted grey, very sober). Both flip to OpenFreeMap's [Dark](https://tiles.openfreemap.org/styles/dark) when the active HA theme is dark (probed via `hass.themes.darkMode`). |
 | `show-labels` | boolean | `true` | Show street names, building numbers, POIs and place names on the basemap. |
-| `building-radius` | meters | `100` | Distance around the home within which surrounding buildings are rendered in 3D. Buildings outside the radius are not drawn, the perf win in dense urban areas. Range: 20–1000 m. |
+| `auto-rotate-enabled` | boolean | `false` | When `true`, the camera orbits the home slowly during idle. Any pinch / drag / wheel pauses it for 5 s and it resumes from the user's bearing. Off by default; enable for kiosk / always-on dashboards. |
 | `building-cluster-radius` | meters | `0` | Distance around the home within which every building joins the home group at full opacity. Use this to attach verandas, garages and sheds to the main house. Range: 0–100 m. |
 | `building-opacity` | 0–1 | `0.25` | Opacity of the surrounding buildings. The home (and its cluster) always stays at full opacity so it reads as the focal point. |
-| `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
-| `shadows-enabled` | boolean | `true` | Master toggle for cast ground shadows. When `false`, no shadows are projected. When `true`, the source is picked automatically: a LiDAR provider when one covers the home (buildings AND vegetation), OpenFreeMap building footprints otherwise (buildings only). All shadows are clipped to the building visibility radius for consistency with the rendered surroundings. See [LiDAR coverage](#lidar-coverage). |
+| `shadows-enabled` | boolean | `true` | Master toggle for cast ground shadows. When `false`, no shadows are projected. When `true`, the source is picked automatically: a LiDAR provider when one covers the home (buildings AND vegetation), OpenFreeMap building footprints otherwise (buildings only). See [LiDAR coverage](#lidar-coverage). |
 | `lidar-precision` | `'low' \| 'medium' \| 'high'` | `'medium'` | LiDAR raster size when a provider covers the home. Higher = finer shadow contours but a bigger payload. `low` 256², `medium` 512², `high` 1024² (close to IGN native sampling). No effect out of coverage. |
 | `shadow-opacity` | 0–1 | `0.32` | Opacity of the cast ground shadows. |
-| `lidar-local-ndsm-enabled` | boolean | `false` | Optional. Master opt-in for the BYO local nDSM provider. When `true` AND every key below validates, Helios uses your own GeoTIFF as the shadow source inside the configured bbox, taking precedence over any national provider that would otherwise match. See [LiDAR coverage](#lidar-coverage). |
-| `lidar-local-ndsm-url` | string | - | Browser-reachable URL of your nDSM GeoTIFF / COG. Same-origin `/local/community/Helios/lidar/…tif` is the recommended host path. The raster must be an nDSM (height-above-ground, in metres) prepared offline, not a raw DSM/DTM. |
-| `lidar-local-ndsm-min-lat` | number | - | Southern edge of the raster's geographic extent, EPSG:4326 degrees. Required when the provider is enabled. |
-| `lidar-local-ndsm-max-lat` | number | - | Northern edge, EPSG:4326 degrees. Required when the provider is enabled. |
-| `lidar-local-ndsm-min-lon` | number | - | Western edge, EPSG:4326 degrees. Required when the provider is enabled. |
-| `lidar-local-ndsm-max-lon` | number | - | Eastern edge, EPSG:4326 degrees. Required when the provider is enabled. |
-| `sun-color` | hex | `#ffc107` | Sun disc + arc + timeline irradiance area. |
-| `cloud-color` | hex | `#727272` | Cloud-dome bands + timeline cloud area + cloud-cover chip accent. |
-| `lidar-view-point-size` | px | `1` | Pixel side per LiDAR-View point. 1..6. The wireframe is always on and its opacity is controlled in-card by the bottom slider (not by a config key); only the point size remains tunable here. |
-| `pv-power-entity` | entity_id | - | Optional. Power (W/kW) or cumulative energy (Wh/kWh) sensor. |
-| `pv-peak-kwp` | number | - | Optional. Installed peak power in kilowatts-peak. When set, drives the dotted clear-sky forecast line on the PV chart and paces the PV → home animated leader against your installation. Leave empty to hide the forecast (live observation + today's peak still display). |
+
+### Display cadence
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `display-update-frequency-per-hour` | 1–60 | `4` | Storage cadence for the 5-day data store + render cadence for every graph that reads from it (radial sundial, graph view, main UI timeline). Higher = smoother curves but more memory + render cycles. Default `4` = 15 min granularity, which is the HA Energy dashboard's native bucket size; raise to `12` for 5 min buckets on a fast machine, lower to `1` for hourly only. Live numeric chips bypass this cadence and stay on the direct `hass.states` path. |
+
+### Installation specifics
+
+| Key | Type | Default | Description |
+|---|---|---|---|
 | `pv-inverter-max-kw` | number | - | Optional. Inverter AC nameplate in kW. Clips the forecast at this ceiling so an oversized DC array (typical European 6.4 kWp behind a 5 kW inverter) doesn't show a predicted peak above what the hardware delivers. Leave unset to let the forecast run unclipped. |
-| `pv-arrays` | list | - | Optional. One entry per group of co-oriented panels. Each entry takes `tilt` (0–90°), `azimuth` (0–360° clockwise from north), `peak-kwp` (preferred, this string's actual kWp) OR `share` (legacy % weight), and the optional GPS + height fields below. The forecast model evaluates each entry separately and weights the result, so split-array installs (one row east + one row west, roof + balcony, three-pitch roofs) get a correct production curve. See the example below the table. Removing every entry from the visual editor wipes the section cleanly. |
-| `pv-arrays[].peak-kwp` | number | - | Optional, preferred over `share`. This string's installed peak in kWp. When set, the engine uses the sum across entries as the install total and supersedes `pv-peak-kwp` for the weighted forecast. |
+| `inverter-cutoff-soc-pct` | 0–100 | - | Optional. Percent at which your hybrid inverter clamps PV output once the battery reaches its ceiling. When set AND the HA Energy battery slot exposes a SoC source, the 5-day calibration ratio skips every observation bucket where the battery reached the cutoff, so the inverter-blocked production doesn't poison the actual / predicted ratio. Per-inverter (typically 95 / 98 / 100). |
+| `solar-radiation-entity` | entity_id | - | Optional. Physical irradiance sensor (W/m²). When set, its live + recorder history feeds the sun chip number, PV chart Y-axis and sun-arc colouring for past + present timestamps. Forecast hours still come from Open-Meteo. |
+
+### PV arrays (per-string peak + orientation)
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `pv-arrays` | list | - | One entry per group of co-oriented panels. Each entry takes `tilt` (0–90°), `azimuth` (0–360° clockwise from north), `peak-kwp` (this string's actual kWp), and the optional GPS + height + tracker fields below. The forecast model evaluates each entry separately and weights the result, so split-array installs (one row east + one row west, roof + balcony, three-pitch roofs) get a correct production curve. See the example below the table. |
+| `pv-arrays[].peak-kwp` | number | - | This string's installed peak in kWp. The engine uses the sum across entries as the install total. |
 | `pv-arrays[].share` | number | auto | *Legacy.* This string's relative weight. Auto-normalised to sum to 100 % at compute time. Falls through to a flat split when no entry carries a share. Ignored when `peak-kwp` is set on the same entry. |
 | `pv-arrays[].latitude` | number | home lat | Optional. Decimal-degree latitude of this row of panels, used when they sit a meaningful distance away from the home (ground-mounted in a clearing, detached garage, etc.). The forecast runs at the panel's true location and a small solar-panel marker in the PV colour appears on the map. Both `latitude` and `longitude` must be set for the override to apply. |
 | `pv-arrays[].longitude` | number | home lon | Optional. Decimal-degree longitude, see `latitude`. |
 | `pv-arrays[].height` | metres | `5` | Optional. Height above ground in metres for this row of panels. Used as the starting altitude when the forecast ray-marches against the LiDAR nDSM to decide whether the array is in shadow. The default 5 m matches the eaves of a single-storey house; raise for upper-floor roofs, lower for ground-mounted. Has no effect when no LiDAR provider is active. |
+| `pv-arrays[].tracker` | `'none' \| 'dual-axis' \| 'single-axis-h' \| 'single-axis-v'` | `'none'` | Optional. Solar tracker model for this string. `none` (default) treats the panel as a fixed tilt + azimuth install; the tracker variants override the Liu-Jordan transposition with the sun-aligned tilt and / or azimuth (dual-axis hits theoretical peak every hour; horizontal-axis follows sun elevation while parking the configured azimuth; vertical-axis follows the sun's azimuth while parking the configured tilt). |
+| `pv-peak-kwp` | number | - | *Legacy top-level fallback.* Total install kWp. Used only when `pv-arrays` is empty or when no entry carries a `peak-kwp`. |
 | `pv-tilt` | degrees | `0` | *Legacy.* Tilt angle from horizontal. Superseded by `pv-arrays`; ignored when `pv-arrays` is set. |
 | `pv-azimuth` | degrees | `180` | *Legacy.* Compass bearing, clockwise from north. Only used when `pv-tilt > 0` and `pv-arrays` is unset. |
-| `pv-color` | hex | `#ff9800` | PV chip border + text + leader + dedicated graph. |
-| `solar-radiation-entity` | entity_id | - | Optional. Physical irradiance sensor (W/m²). When set, its live + recorder history feeds the sun chip number, PV chart Y-axis and sun-arc colouring for past + present timestamps. Forecast hours still come from Open-Meteo. |
-| `batteries` | list | - | Optional. Multi-bank battery declaration. One entry per physical bank, each carries `name` (optional), `soc-entity` (HA entity id, %), `power-entity` (HA entity id, W/kW), `power-invert` (boolean, per-bank), `capacity-kwh` (optional weight for the aggregated SoC chip when banks have different sizes). The card aggregates them into one chip (capacity-weighted SoC + summed signed power). Takes precedence over the flat `battery-*` keys below, which are now legacy single-bank fallbacks. Removing every entry from the visual editor wipes the section. |
-| `battery-soc-entity` | entity_id | - | *Legacy single-bank.* State-of-Charge sensor (`%`, usually `device_class: battery`). Auto-wrapped into a single `batteries:` entry when no multi-bank array is set. |
-| `battery-power-entity` | entity_id | - | *Legacy single-bank.* Battery power sensor (W/kW). Signed: positive is interpreted as charging. |
-| `battery-power-invert` | boolean | `false` | *Legacy single-bank.* Flip the sign at ingest when your upstream entity reports charging as negative (some GivEnergy / GivTCP setups). |
-| `inverter-cutoff-soc-pct` | 0–100 | - | Optional. Percent at which your hybrid inverter clamps PV output once the battery reaches its ceiling. When set AND at least one bank exposes a SoC entity, the shading-map trainer skips every observation bucket where every bank reached the cutoff, so the inverter-blocked production doesn't train as phantom shadow at the matching sun position. Per-inverter (typically 95 / 98 / 100). |
-| `battery-color` | hex | `#4db6ac` | Battery colour reused on both battery chips' borders + text + the static dotted leaders that connect each to the PV chip. |
-| `grid-import-entity` | entity_id OR list | - | Optional. Cumulative-energy meter (Wh / kWh / MWh) or power sensor (W / kW / MW) reporting grid IMPORT. List form covers multi-tariff installs (e.g. Linky EASF01 + EASF02): the chip surfaces the entity that most recently incremented. Cumulative meters are differentiated to W on the fly over a bracketed slope (minimum 60 s span). |
-| `grid-export-entity` | entity_id OR list | - | Optional. Same shape as `grid-import-entity`, for grid EXPORT. |
-| `grid-power-entity` | entity_id OR list | - | Optional. A single COMBINED signed sensor whose sign encodes the direction (Fronius `P_Grid`, Shelly EM, P1 net power, …) instead of two separate meters. When set it drives BOTH chips and supersedes `grid-import-entity` / `grid-export-entity`: a positive reading shows on the IMPORT chip, a negative reading on the EXPORT chip, never both at once. Accepts a power sensor (W / kW / MW, the value IS the signed watts) or a signed net-energy sensor (Wh / kWh / MWh whose total falls while exporting, the slope IS the signed watts). A list is summed (e.g. three signed per-phase sensors). |
-| `grid-power-invert` | boolean | `false` | Optional. Flips the `grid-power-entity` sign convention. Default treats positive as IMPORT (drawing from the grid); set `true` when your meter reports grid feed-in as positive. Ignored unless `grid-power-entity` is set. |
-| `timeline-enabled` | boolean | `true` | Master toggle for the bottom-of-card timeline strip (irradiance + cloud + optional PV charts + day-strip). Disable for a chip-only minimalist view. |
-| `timeline-width-pct` | 60–100 | `100` | Percentage of the card width the timeline occupies. Lower to leave more room for adjacent dashboard widgets in a tight Masonry layout. |
-| `timeline-consumption-enabled` | boolean | `false` | When `true` AND a PV power entity is set, the PV chart adds a second area showing the home consumption derived from PV minus battery flow. Quick visual of self-consumption vs export. |
-| `date-format` | string | `mm-dd` | Tokens: `yyyy`, `yy`, `mm`, `dd`. |
-| `time-format` | `'12h' \| '24h'` | `'24h'` | Clock display in the top-right chip. |
-| `home-latitude` | number | Home Assistant's home latitude | Optional override for the home latitude in decimal degrees. When BOTH `home-latitude` and `home-longitude` are set to valid coordinates, they take precedence over `hass.config.latitude` / `longitude` and the map recentres on the override. Useful when Home Assistant's configured home address isn't where you want the card centered (shared HA install, holiday home, mobile setup, privacy-conscious users who leave `hass.config` blank, or multiple cards on one dashboard each visualising a different place). Leave empty (default) to use HA's configured home. |
-| `home-longitude` | number | Home Assistant's home longitude | Optional override for the home longitude in decimal degrees. Only applied together with `home-latitude`; partial or out-of-range values are silently rejected and the card falls back to HA's configured home. |
 
-The PV entity picker filters to sensors that look like a power or energy reading (`device_class: power|energy` OR a unit in `W/kW/MW/Wh/kWh/MWh`). Both kinds work; the card auto-detects whether to display the entity's state directly (power sensor) or differentiate it on the fly (cumulative energy).
+### LiDAR (BYO local nDSM)
+
+When a national provider covers your home (see [LiDAR coverage](#lidar-coverage)), no extra config is needed. The keys below opt into a user-supplied raster when no public provider covers you.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `lidar-local-ndsm-enabled` | boolean | `false` | Master opt-in for the BYO local nDSM provider. When `true` AND every key below validates, Helios uses your own GeoTIFF as the shadow source inside the configured bbox, taking precedence over any national provider that would otherwise match. |
+| `lidar-local-ndsm-url` | string | - | Browser-reachable URL of your nDSM GeoTIFF / COG. Same-origin `/local/community/Helios/lidar/…tif` is the recommended host path. The raster must be an nDSM (height-above-ground, in metres) prepared offline, not a raw DSM / DTM. |
+| `lidar-local-ndsm-min-lat` | number | - | Southern edge of the raster's geographic extent, EPSG:4326 degrees. Required when the provider is enabled. |
+| `lidar-local-ndsm-max-lat` | number | - | Northern edge, EPSG:4326 degrees. Required when the provider is enabled. |
+| `lidar-local-ndsm-min-lon` | number | - | Western edge, EPSG:4326 degrees. Required when the provider is enabled. |
+| `lidar-local-ndsm-max-lon` | number | - | Eastern edge, EPSG:4326 degrees. Required when the provider is enabled. |
+
+### LiDAR view appearance (YAML-only, no editor UI)
+
+The Weather mode + LiDAR mode mode-bar buttons read the in-card sliders for opacity. The following YAML keys override the point cloud styling beyond the slider:
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `lidar-view-point-color` | hex | `--primary-text-color` | Per-point dot colour. Default tracks the HA theme so dots read black on light theme and white on dark theme. |
+| `lidar-view-point-opacity` | 0–1 | `0.6` | Per-point alpha (live tunable in-card via the bottom slider; this key sets the initial value on every card mount). |
+| `lidar-view-wireframe` | boolean | `true` | Toggle the cell-edge wireframe that overlays the point cloud. |
+| `lidar-view-wireframe-color` | hex | `--primary-text-color` | Wireframe stroke colour. |
+| `lidar-view-wireframe-opacity` | 0–1 | `0.4` | Wireframe stroke alpha. |
+
+### Home location override
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `home-latitude` | number | HA's home latitude | Optional override for the home latitude in decimal degrees. When BOTH `home-latitude` and `home-longitude` are set to valid coordinates, they take precedence over `hass.config.latitude` / `longitude` and the map recentres on the override. Useful when Home Assistant's configured home address isn't where you want the card centered (shared HA install, holiday home, mobile setup, privacy-conscious users who leave `hass.config` blank, or multiple cards on one dashboard each visualising a different place). Leave empty (default) to use HA's configured home. |
+| `home-longitude` | number | HA's home longitude | Optional override for the home longitude in decimal degrees. Only applied together with `home-latitude`; partial or out-of-range values are silently rejected and the card falls back to HA's configured home. |
+
+### Colour customisation (YAML-only)
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `sun-color` | hex | `#ffc107` | Sun disc + arc + timeline irradiance area. |
+| `cloud-color` | hex | `#727272` | Timeline cloud area + cloud-cover chip accent. |
+| `pv-color` | hex | `#ff9800` | PV chip border + text + leader + dedicated graph. |
+| `battery-color` | hex | `#4db6ac` | Battery chip border + text + leader. |
+| `building-color` | hex | `#d2d2d7` | Base colour for every rendered building, modulated by sun altitude across the day. |
+
+### What is no longer configurable
+
+Several v1.7.x / v1.8.x keys are silently stripped on every editor save (the runtime treats them as absent). The migration paths are baked in:
+
+- **Entity wiring** (`pv-power-entity`, `grid-import-entity`, `grid-export-entity`, `grid-power-entity`, `grid-power-invert`, `battery-soc-entity`, `battery-power-entity`, `battery-power-invert`, `batteries`) → resolved from the HA Energy dashboard.
+- **Theme keys** (`card-theme`, `card-theme-light`, `card-theme-dark`) → resolved from `hass.themes.darkMode`.
+- **Timeline keys** (`timeline-enabled`, `timeline-width-pct`, `timeline-consumption-enabled`) → the timeline is always on, sized to the card width.
+- **Display formatting** (`date-format`, `time-format`) → the card reads the HA locale settings.
+- **WebGL knobs** (`pixel-ratio`, `building-radius`, `lidar-view-point-size`, `lidar-view-radius`) → derived from a single `DEFAULT_DISPLAY_RADIUS_M` constant (200 m).
 
 ### Multi-array PV layouts
 
-Use `pv-arrays` when your panels aren't all facing the same way. One YAML entry per orientation group:
+Use `pv-arrays` when your panels aren't all facing the same way. One YAML entry per orientation group. Each entry's `peak-kwp` is the install total for that string in kilowatts-peak; the engine sums the entries so the total install kWp comes out of the YAML directly:
 
 ```yaml
 type: custom:helios-card
-pv-peak-kwp: 6.5
 pv-arrays:
-  - { tilt: 10, azimuth: 90,  share: 50 }   # one row tilted 10°, facing east
-  - { tilt: 10, azimuth: 270, share: 50 }   # one row tilted 10°, facing west
+  - { tilt: 10, azimuth: 90,  peak-kwp: 3.2 }   # one row tilted 10°, facing east
+  - { tilt: 10, azimuth: 270, peak-kwp: 3.2 }   # one row tilted 10°, facing west
 ```
 
 Other shapes work the same way: a roof + balcony combo, a three-pitch roof, or any asymmetric retrofit:
 
 ```yaml
 pv-arrays:
-  - { tilt: 35, azimuth: 180, share: 70 }   # main south-facing roof
-  - { tilt: 90, azimuth: 90,  share: 30 }   # vertical balcony panels facing east
+  - { tilt: 35, azimuth: 180, peak-kwp: 4.6 }   # main south-facing roof
+  - { tilt: 90, azimuth: 90,  peak-kwp: 1.9 }   # vertical balcony panels facing east
 ```
 
-The visual editor exposes a repeatable "Array" section with `+ Add array` / `Remove`, so you can configure this without dropping to YAML. Shares are auto-normalised, so typing 50/50, 60/60 or 1/1 all produce the same forecast. Existing configs using only `pv-tilt` / `pv-azimuth` keep working unchanged.
+Solar trackers are supported per-array via the optional `tracker` field (dual-axis tracks both tilt + azimuth, single-axis-h follows sun elevation, single-axis-v follows sun azimuth):
+
+```yaml
+pv-arrays:
+  - { tilt: 0, azimuth: 180, peak-kwp: 7.5, tracker: dual-axis }
+```
+
+The visual editor exposes a repeatable "Array" section with `+ Add array` / `Remove`, so you can configure this without dropping to YAML. Existing configs that still use the legacy `share:` weights or the bare `pv-tilt` / `pv-azimuth` keys keep working unchanged.
 
 ---
 
@@ -184,7 +231,7 @@ The visual editor exposes a repeatable "Array" section with `+ Add array` / `Rem
 * **Multi-model weather**, every fetch queries one global model (ECMWF IFS 0.25°) plus the most accurate national/regional model for your home location (AROME-France, UKMO UK, DWD ICON-D2, ItaliaMeteo, MET Nordic, NOAA HRRR, KMA LDPS, JMA MSM, BOM ACCESS-G, or ECMWF + GFS elsewhere). Per-timestep median fusion absorbs single-model outliers.
 * **Effective cloud cover**, the card replaces Open-Meteo's raw `cloud_cover` (satellite-view total) with `low + 0.6·mid + 0.2·high` (capped at 100 %), matching ground perception and shortwave attenuation.
 * **PV instantaneous rate**, for cumulative-energy sensors, the card maintains a 5-minute rolling buffer of state samples and differentiates over a ~60 s window, giving a real "what's being produced right now" reading instead of a misleading lifetime total.
-* **PV forecast (optional)**, when `pv-peak-kwp` is set, the card multiplies the live `effective_cover` by Haurwitz / Kasten-Czeplak per timestamp and scales by the installed peak power, painting a dotted prediction curve on the PV chart that the live observation tracks against. Scrubbing into the future flips the PV chip to the predicted figure (italicised, prefixed `≈`).
+* **PV forecast (optional)**, when at least one `pv-arrays` entry carries a `peak-kwp` value (or the legacy top-level `pv-peak-kwp` is set), the card multiplies the live `effective_cover` by Haurwitz / Kasten-Czeplak per timestamp and scales by the installed peak power, painting a dotted prediction curve on the PV chart that the live observation tracks against. Scrubbing into the future flips the PV chip to the predicted figure (italicised, prefixed `≈`).
 * **PV thermal derating**, the same forecast pulls `temperature_2m` + `wind_speed_10m` from Open-Meteo and runs a Sandia NOCT cell-temperature model (`T_cell = T_air + (NOCT - 20) / 800 · GHI - 1.5 · wind`), then derates the predicted output with a `γ_pmp = -0.0040 /°C` temperature coefficient. On a hot summer noon at 35 °C / ~900 W/m² the predicted peak drops by ~13 %, which was previously being absorbed by the rolling calibration ratio as a flat multiplier. Falls back to a multiplier of 1 when the model didn't return temperature or wind at that hour.
 * **LiDAR-aware shading on the PV forecast**, when a LiDAR provider covers the home (or a BYO local nDSM is configured), the forecast additionally ray-marches from each `pv-arrays` entry along the sun direction against the loaded nDSM (2 m step, 200 m reach, bilinear sample) and zeroes the direct-beam component on arrays whose line-of-sight to the sun is blocked. Diffuse + ground-reflected components are kept, so a shaded panel doesn't drop to zero but to ~25-30 % of clear-sky output. For installs with `pv-arrays` declared at distinct coordinates, each entry is shaded independently, so a roof-east array shaded by a tall neighbour at 8 am doesn't affect the roof-west array on the same property. From v1.6.3 onwards, when the loaded raster ships a DTM band (every COG produced by [helios-lidar.org](https://helios-lidar.org)) the ray-march also accounts for terrain slope between the panel and the obstacle: a building 50 m east on terrain that rises 8 m reads as a 13 m obstacle, the same building on terrain that drops 8 m reads as -3 m and is correctly ignored. Single-band rasters (legacy locals, every public provider) keep the previous flat-ground behaviour.
 
@@ -216,7 +263,7 @@ LiDAR coverage today, 10 registered providers:
 | Canada | **NRCan HRDEM Mosaic** | National (1-2 m LiDAR in the south, satellite-derived in the far north) | GeoTIFF float32 (WCS 1.1.1) | Pre-computed DSM coverage, single fetch |
 | United States (Vermont) | **VCGI nDSM** | Vermont (~645K people) | Float32 GeoTIFF (ArcGIS exportImage) | Pre-normalised nDSM, single fetch, no DSM-DTM round-trip |
 
-> **No new providers in v1.8.0.** This release was accelerated to address performance regressions, the LiDAR provider expansion is deferred to the next cycle. The card covers the same regions as v1.7.0 natively. If your region is not in the table, the [**helios-lidar.org**](https://helios-lidar.org) companion site is the answer today: prepare your own raster from raw open LiDAR data and feed it via the BYO local-nDSM path documented below. Bringing back the dormant providers (Baden-Württemberg, Tyrol, Styria, Flanders, where the DSM-DTM subtraction quality didn't meet the bar) is on the list once a cleaner data path is identified.
+> **Provider expansion is paused while the rest of the cycle catches up.** If your region is not in the table, the [**helios-lidar.org**](https://helios-lidar.org) companion site is the answer today: prepare your own raster from raw open LiDAR data and feed it via the BYO local-nDSM path documented below. Bringing back the dormant providers (Baden-Württemberg, Tyrol, Styria, Flanders, where the DSM-DTM subtraction quality didn't meet the bar) is on the list once a cleaner data path is identified.
 
 An interactive world map of every region the card covers natively
 lives at [helios-lidar.org/coverage](https://helios-lidar.org/coverage),
@@ -277,7 +324,7 @@ The BYO local nDSM provider was contributed by [@jourdant](https://github.com/jo
 | **GeoTIFF** | [geotiff.js](https://github.com/geotiffjs/geotiff.js) for parsing the Float32 LiDAR rasters from UK / ES / NL / NO / DE / PL / CA providers |
 | **Weather data** | [Open-Meteo API](https://open-meteo.com/) (free, no key) |
 | **Solar math** | NOAA-validated (mean altitude error 0.30°, mean azimuth error 0.36°) |
-| **Build** | Vite 5 |
+| **Build** | Vite 8 |
 
 ---
 
@@ -301,38 +348,46 @@ Source layout:
 | `src/helios-config.ts`            | `HeliosConfig` schema + `DEFAULT_*` constants (shared) |
 | `src/card/pv.ts`                  | PV live state + history fetch + rate derivation + chip formatter |
 | `src/card/battery.ts`             | Multi-bank battery parser + SoC + power live + history aggregation |
+| `src/card/grid.ts`                | Grid import / export live + history + HA Energy dashboard entity resolver |
+| `src/card/energy-prefs.ts`        | HA Energy dashboard preferences subscription + cache + slot resolution |
 | `src/card/radiation.ts`           | Optional `solar-radiation-entity` bridge → engine override |
 | `src/card/calibration.ts`         | Forecast calibration: actual / predicted ratio learned from past days |
-| `src/card/shadingMapView.ts`      | Polar shading-map editor panel (stats + 4-up grids + import/export/reset) |
-| `src/card/shadingTrainer.ts`      | Per-(sun × cloud) cell trainer + inverter-cutoff guard |
-| `src/card/shadingDome.ts`         | Hemispheric "dome" overlay of the shading map (visualisation) |
+| `src/card/unifiedStore.ts`        | 5-day data store: 480-bucket source of truth for every dashboard signal |
+| `src/card/dashboard.ts`           | Detail-mode panel: CoverFlow strip + Today / Tomorrow / Battery sections |
+| `src/card/dashboardRadial.ts`     | Radial sundial card: annular tracks, hover dots, sunrise / sunset markers |
+| `src/card/weatherMode.ts`         | Weather mode lifecycle: camera tilt + RainViewer overlay + fade loop |
 | `src/card/charts.ts`              | Timeline SVG charts + cursors + day labels |
-| `src/card/dashboard.ts`           | Detail-mode panel (today, tomorrow, battery) + counter-up animation |
 | `src/card/overlays.ts`            | Sun arc + cloud disc + home silhouette projections |
 | `src/card/timeline.ts`            | 30 s clock tick + scrub pointer handlers + config readers |
 | `src/card/lidar-view.ts`          | LiDAR-View toggle + fade rAF loop + bottom opacity slider |
+| `src/card/loading-tracker.ts`     | Per-phase boot progress banner + visibility latch |
 | `src/card/init.ts`                | Engine bootstrap + visibility observer + home-coords resolver |
 | `src/card/format.ts`              | cfgHex, formatDate, locale-aware number, hex colour helpers |
 | `src/card/editor.ts`              | `<helios-card-editor>` + `<helios-color-picker>` + About section |
+| `src/card/cloud-icons.ts`         | Cloud-cover icon picker for the weather mode-bar button |
+| `src/card/equipment.ts`           | Equipment chip layout helpers (PV / battery / grid clusters) |
 | `src/engine/sun.ts`               | Solar position + Haurwitz / Kasten-Czeplak / Liu-Jordan math |
 | `src/engine/pv-thermal.ts`        | Sandia NOCT cell-temp derating |
 | `src/engine/pv-shading.ts`        | nDSM raycast (per-array shading + per-cell exposure for LiDAR-View) |
-| `src/engine/shadingMap.ts`        | Polar grid bin layout + per-cell ratio store + ratio lookup |
 | `src/engine/weather.ts`           | Open-Meteo multi-model fetch + cache + 429 back-off |
 | `src/engine/buildings.ts`         | OpenFreeMap planet tile fetch + radius / cluster filter |
 | `src/engine/shadows.ts`           | Ground-projected shadow polygons + Sutherland-Hodgman clip |
 | `src/engine/shadow-raster.ts`     | Offscreen canvas rasteriser feeding MapLibre's image source |
 | `src/engine/lighting.ts`          | Day-night colour math (night shade, building tint, light angle) |
 | `src/engine/auto-rotate.ts`       | Idle camera orbit rAF loop |
+| `src/engine/camera-bounds.ts`     | Pitch min / max / rest constants shared across the camera entry points |
 | `src/engine/detail-mode.ts`       | Detail-mode camera dive (smoothstep zoom + pitch + bearing) |
 | `src/engine/lidar-view-layer.ts`  | MapLibre custom WebGL layer: dot cloud + wireframe + irradiance fill |
 | `src/engine/lidar.ts`             | `LidarSource` interface + registered provider registry + BYO validator |
 | `src/engine/lidar/pipeline.ts`    | Shared flood-fill + convex-hull pipeline |
 | `src/engine/lidar/geotiff.ts`     | Float32 GeoTIFF fetch + DSM-DTM math helpers |
+| `src/engine/lidar/aaigrid.ts`     | Arc/Info ASCII grid parser (used by a subset of providers) |
+| `src/engine/lidar/proj.ts`        | Lightweight EPSG → WGS84 reprojection helpers |
+| `src/engine/lidar/proxy.ts`       | CORS / SSL workaround layer for providers behind picky endpoints |
 | `src/engine/lidar/local-ndsm.ts`  | Generic BYO nDSM provider built from card config |
 | `src/engine/lidar/providers/`     | One file per registered country / region: `fr.ts`, `uk.ts`, `es.ts`, `nl.ts`, `no.ts`, `de-nrw.ts`, `de-bb-be.ts`, `pl.ts`, `ca.ts`, `us-vt.ts`. Four additional files (`at-stmk.ts`, `at-tirol.ts`, `de-bw.ts`, `be-fl.ts`) live in the same folder but are NOT currently in the registry, see the comment in `lidar.ts`. |
 | `src/css/`                        | Card + editor style literals |
-| `src/i18n/`                       | 11-locale strict-typed translations (en/fr/de/es/it/nl/pt/no/cs/pl/sv) |
+| `src/i18n/`                       | 63-locale strict-typed translations matching the HA frontend translation surface |
 
 Each `card/*` and `engine/*` module exports plain functions; subsystems
 talk to the card / engine through a small structural host interface
