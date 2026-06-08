@@ -33,6 +33,23 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Critical fixes round 2: ultra blur + LiDAR hard teardown (#210)
+
+- **Ultra-soft RainViewer composite via 4x downscale + blur(24 px)**: the source-pixel grid
+  is now erased twice. First by downsizing the 1536 x 1536 stitched canvas into a 384 x 384
+  output canvas (the browser's high-quality resampler does most of the smoothing on its own),
+  then by stacking a 24 px CSS blur on top. MapLibre upscales the 384 px bitmap back to
+  ~1500+ display px at the zoom 10 framing, the additional bilinear pass smooths whatever
+  edge-residue made it through. Cloud blobs read as painterly rather than mosaic.
+- **LiDAR overlay teardown is now synchronous + brutal on mode-bar exit**: the previous
+  fixes (rAF cancel + modeLocked drop) did not solve the report. The mode-bar click handlers
+  now run a hard teardown sequence BEFORE flipping the card mode: cancel any pending opacity
+  rAF, cancel any in-flight fade rAF, clear both fade timestamps, push `setLidarViewFadeAlpha(0)`
+  and `setLidarViewActive(false)` into the engine synchronously. The WebGL layer's draw
+  call short-circuits on the next paint (alphaFade <= 0 early return), so the dot cloud is
+  gone the moment the click lands. We lose the 280 ms exit fade animation in exchange for a
+  guaranteed exit no matter what state the slider drag left the layer in.
+
 ### Critical fixes: B&W radar, LiDAR slider, chart scale, MapLibre error (#210)
 
 - **Radar finally renders as black & white**: `saturate(0)` in the canvas filter was being

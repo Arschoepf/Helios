@@ -2787,15 +2787,13 @@ export class HeliosCard extends LitElement
     //timeline location, floating orphaned at the bottom of the card.
     //Returning to live before the mode swap hides the tooltip cleanly
     //in the same render cycle.
-    //Cancel any in-flight LiDAR opacity rAF so it cannot reapply the slider value to the
-    //WebGL layer after the exit fade has started tearing it down. Without this, a sequence of
-    //"drag the LiDAR opacity slider, immediately click the Layer / Weather mode button" left
-    //the rAF callback scheduled, fired one frame later, called setLidarViewOpacity on the
-    //engine, which mutated the layer's u_color.a uniform mid-fade and visually re-anchored
-    //the dot cloud to the new opacity while the fade alpha was racing to zero. Net effect:
-    //the LiDAR view felt like it was "stuck" because the cloud kept repainting at the new
-    //opacity for a frame or two after the user thought they had switched modes.
-    private _cancelLidarOpacityRaf(): void
+    //Hard-tear the LiDAR overlay before flipping the card mode. Cancels any pending opacity
+    //rAF (would otherwise fire next frame and re-anchor the layer's u_color.a uniform mid-
+    //transition), kills any in-flight fade rAF, and pushes alphaFade(0) + setActive(false)
+    //into the engine immediately. Skips the smooth 280 ms fade-out on exit, but in exchange
+    //the dot cloud is guaranteed to disappear the instant the user clicks any other mode
+    //button, no matter what state the slider drag left the layer in.
+    private _forceTeardownLidarOverlay(): void
     {
         if (this._lidarOpacityRaf)
         {
@@ -2803,22 +2801,44 @@ export class HeliosCard extends LitElement
             this._lidarOpacityRaf = 0;
             this._pendingLidarOpacity = null;
         }
+        if (this._lidarFadeRaf !== undefined)
+        {
+            cancelAnimationFrame(this._lidarFadeRaf);
+            this._lidarFadeRaf = undefined;
+        }
+        this._lidarFadeInStartMs  = null;
+        this._lidarFadeOutStartMs = null;
+        this._lidarLayerActive    = false;
+        //Push the zero-fade + inactive flags into the engine synchronously so MapLibre's next
+        //repaint short-circuits the layer draw call (see the alphaFade <= 0 early return in
+        //the WebGL layer). triggerRepaint inside the setters guarantees the next frame paints
+        //without the dots.
+        this._engine?.setLidarViewFadeAlpha(0);
+        this._engine?.setLidarViewActive(false);
     }
     private _onModeLayer = (): void =>
     {
-        this._cancelLidarOpacityRaf();
+        this._forceTeardownLidarOverlay();
         this._exitScrubMode();
         this._cardMode = 'base';
     };
     private _onModeLidar = (): void =>
     {
-        this._cancelLidarOpacityRaf();
+        //Re-enter: cancel any stale opacity rAF so the new mode's fade-in is not interrupted
+        //by a fire from a previous slider drag. Skip the full teardown so the engine layer
+        //instance stays warm (the buffer is already on the GPU, no reupload needed).
+        if (this._lidarOpacityRaf)
+        {
+            cancelAnimationFrame(this._lidarOpacityRaf);
+            this._lidarOpacityRaf = 0;
+            this._pendingLidarOpacity = null;
+        }
         this._exitScrubMode();
         this._cardMode = 'lidar';
     };
     private _onModeWeather = (): void =>
     {
-        this._cancelLidarOpacityRaf();
+        this._forceTeardownLidarOverlay();
         this._exitScrubMode();
         this._cardMode = 'weather';
     };

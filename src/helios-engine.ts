@@ -982,14 +982,19 @@ export class HeliosEngine
     //that the user can pan to the edge of the weather-mode camera envelope without ever seeing
     //the raster border.
     private static readonly _RAINVIEWER_HALF_LAT_DEG = 1.6;
-    //CSS filter blur radius applied to the stitched canvas before it is exported back as the
-    //MapLibre image source. The composite spans ~9 z=7 tiles at 512 px each, so the resulting
-    //canvas is ~1536 x ~1536 px; 30 px of Gaussian blur covers ~2 % of the canvas side, enough
-    //to obliterate the source pixel grid + give the radar a painterly cloud-mass look at the
-    //weather-mode zoom 10 framing. The cell silhouette is preserved because the source values
-    //are sparse (most pixels are transparent), so the blur spreads the dense cells out into
-    //soft cloud blobs rather than averaging them into uniform grey.
-    private static readonly _RAINVIEWER_BLUR_PX      = 30;
+    //Side length of the OUTPUT canvas the stitched + blurred composite is encoded into. Much
+    //smaller than the input stitch (~1536 px) so the downscale itself acts as a natural low-
+    //pass filter that erases the high-frequency RainViewer pixel grid before any explicit
+    //blur is applied. MapLibre then upscales this small bitmap 5-6x bilinearly at the zoom 10
+    //framing, which further smooths the rendering on the GPU. The downscale + bilinear upscale
+    //pair is more effective at hiding pixels than any single-pass CSS filter at the source
+    //resolution.
+    private static readonly _RAINVIEWER_OUTPUT_PX    = 384;
+    //CSS filter blur radius applied INSIDE the downscale step. 24 px on a 384 px output canvas
+    //is ~6 % of the canvas side, which is massive in absolute terms (the blur kernel covers
+    //~50 px effective on a 1536 px input). Combined with the downscale, the radar reads as
+    //very soft cloud blobs rather than a tile-aligned mosaic.
+    private static readonly _RAINVIEWER_BLUR_PX      = 24;
 
     private _rainViewerFrame: { host: string; path: string } | null = null;
     private _rainViewerFetching = false;
@@ -1182,22 +1187,27 @@ export class HeliosEngine
         }
         await Promise.all(tilePromises);
 
-        //Filter pass: blur + grayscale baked into the bitmap. grayscale(1) is more reliable
-        //than saturate(0) on Safari, both convert to B&W but the grayscale form is the WHATWG
-        //canonical name and Safari's filter implementation handles it without quirks. The full
-        //luminance ramp is preserved so light rain reads as light grey and storm reads as
-        //dark grey (contrast left at its 1.0 default; the previous 1.3 boost was clamping
-        //mid-tones toward pure white / black and erasing the rainfall intensity levels). A
-        //belt-and-suspenders raster-saturation: -1 in MapLibre's paint stage (see
-        //attachRainViewerOverlay below) handles any browser where the canvas filter is
-        //silently ignored.
+        //Filter pass: downscale stitchCanvas (~1536 px side) into a much smaller OUTPUT canvas
+        //(_RAINVIEWER_OUTPUT_PX side) with blur + grayscale baked into the resize. The
+        //downscale itself acts as a strong low-pass filter (the browser bilinear-averages
+        //source pixels into target pixels), so the high-frequency RainViewer pixel grid is
+        //erased before MapLibre ever sees the bitmap. Layering an explicit blur on top makes
+        //the cloud blobs even softer. grayscale(1) handles the desaturation; raster-saturation
+        //-1 on the MapLibre layer is the belt-and-suspenders backup.
+        const Wout = HeliosEngine._RAINVIEWER_OUTPUT_PX;
+        const Hout = HeliosEngine._RAINVIEWER_OUTPUT_PX;
         const filteredCanvas = document.createElement('canvas');
-        filteredCanvas.width  = W;
-        filteredCanvas.height = H;
+        filteredCanvas.width  = Wout;
+        filteredCanvas.height = Hout;
         const filteredCtx = filteredCanvas.getContext('2d');
         if (!filteredCtx) { return null; }
+        //imageSmoothingQuality: 'high' tells the browser to use the best resampler (Lanczos or
+        //similar) when downsizing the stitchCanvas. Combined with the explicit CSS blur this
+        //gives a very smooth painterly look.
+        filteredCtx.imageSmoothingEnabled = true;
+        filteredCtx.imageSmoothingQuality = 'high';
         filteredCtx.filter = `blur(${HeliosEngine._RAINVIEWER_BLUR_PX}px) grayscale(1)`;
-        filteredCtx.drawImage(stitchCanvas, 0, 0);
+        filteredCtx.drawImage(stitchCanvas, 0, 0, W, H, 0, 0, Wout, Hout);
 
         //Export as a blob URL rather than a data URL. The image-source path in MapLibre v5
         //serialises the URL across the main thread / worker boundary; a 1-2 MB data URL string
