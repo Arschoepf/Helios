@@ -238,18 +238,18 @@ function bilinearGrid(
 //Returns -1 when the grid is empty.
 //---------------------------------------------------------------------------------------------------
 
-//Resolve the HA frontend's --primary-color at render time and parse it to RGB triplets the
+//Resolve the HA frontend's --primary-text-color at render time and parse it to RGB triplets the
 //canvas pipeline can multiply into per-pixel alphas. Reads from the document root (the CSS var
-//cascades down from there). Supports the two formats HA themes emit:
-//  - 6-digit hex (#03a9f4)
-//  - rgb(r, g, b) function notation
-//Falls back to HA's default vivid blue (#03a9f4) when the variable is empty / malformed.
-function parsePrimaryColor(): { r: number; g: number; b: number }
+//cascades down from there). The text colour follows the theme polarity: dark text on light
+//themes, light text on dark themes, which keeps the cloud raster contrasting with the basemap
+//whichever way the user's HA frontend skin runs. Supports both 6-digit hex (#212121) and
+//rgb(r, g, b) function notation; falls back to a dark grey when the variable is unset.
+function parseCloudColor(): { r: number; g: number; b: number }
 {
-    const DEFAULT = { r: 0x03, g: 0xa9, b: 0xf4 };
+    const DEFAULT = { r: 0x21, g: 0x21, b: 0x21 };
     try
     {
-        const raw = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+        const raw = getComputedStyle(document.documentElement).getPropertyValue('--primary-text-color').trim();
         if (!raw) { return DEFAULT; }
         if (raw.startsWith('#'))
         {
@@ -351,10 +351,10 @@ export function refreshWeatherRaster(host: WeatherModeHost): void
     //cloud-blob-sized cells at the weather-mode zoom 9 framing.
     const NOISE_FREQ = 6;
 
-    //Resolve the HA theme's --primary-color at render time so the raster picks up theme swaps
-    //without a rebuild. Read from the document root since the variable cascades down from the
-    //HA frontend. Falls back to a vivid blue (#03a9f4) when the variable is empty / unset.
-    const primary = parsePrimaryColor();
+    //Resolve the HA theme's --primary-text-color at render time so the raster picks up theme
+    //swaps without a rebuild and the cloud mass always contrasts with the basemap (dark text
+    //on light theme → dark clouds; light text on dark theme → light clouds).
+    const cloud = parseCloudColor();
 
     let p = 0;
     for (let y = 0; y < H; y++)
@@ -380,41 +380,44 @@ export function refreshWeatherRaster(host: WeatherModeHost): void
             const n0 = fractalNoise(nx * NOISE_FREQ,         ny * NOISE_FREQ);
             const n1 = fractalNoise(nx * NOISE_FREQ + 100,   ny * NOISE_FREQ + 100);
             const n2 = fractalNoise(nx * NOISE_FREQ + 200,   ny * NOISE_FREQ + 200);
-            const modLo = 0.4 + 0.6 * n0;
-            const modMi = 0.4 + 0.6 * n1;
-            const modHi = 0.4 + 0.6 * n2;
+            //Noise modulation range raised to [0.65, 1.0] (from [0.4, 1.0]) so the dimmer noise
+            //pixels still carry most of the per-layer coverage. Average mod = ~0.83 keeps the
+            //cloud volume reading as dense rather than translucent across the canvas.
+            const modLo = 0.65 + 0.35 * n0;
+            const modMi = 0.65 + 0.35 * n1;
+            const modHi = 0.65 + 0.35 * n2;
 
             //Per-layer alpha = (coverage / 100) × noise modulation. Ceilings tuned so the cloud
-            //masses dominate the view (the whole point of the weather mode) while leaving the map
-            //legible underneath: at 100 % coverage the stacked layers compose to ~0.92 alpha, the
-            //basemap silhouette + landmarks still read through but the user clearly sees an
-            //overcast sky. The three layers stack with high (light) on top of mid (medium) on
-            //top of low (dense).
-            const aLo = Math.max(0, Math.min(1, (lo / 100) * modLo)) * 0.78;
-            const aMi = Math.max(0, Math.min(1, (mi / 100) * modMi)) * 0.65;
-            const aHi = Math.max(0, Math.min(1, (hi / 100) * modHi)) * 0.50;
+            //masses clearly dominate the view (the whole point of the weather mode). At 100 %
+            //coverage the stacked composite reaches ~0.98 alpha, the basemap silhouette is barely
+            //visible (intended); at 50 % coverage it drops to ~0.75 so the map is still legible
+            //under partial coverage. The three layers stack with high (top) on mid (middle) on
+            //low (densest at the bottom of the stack).
+            const aLo = Math.max(0, Math.min(1, (lo / 100) * modLo)) * 1.00;
+            const aMi = Math.max(0, Math.min(1, (mi / 100) * modMi)) * 0.85;
+            const aHi = Math.max(0, Math.min(1, (hi / 100) * modHi)) * 0.70;
 
-            //Composite three primary-tinted layers (high -> mid -> low) onto a transparent
-            //background using standard over-compositing. All three bands share the HA theme's
-            //--primary-color; the visual depth comes from the alpha stacking + noise modulation,
-            //not from per-band hue variation.
+            //Composite three text-tinted layers (high -> mid -> low) onto a transparent background
+            //using standard over-compositing. All three bands share the HA theme's
+            //--primary-text-color; the visual depth comes from the alpha stacking + noise
+            //modulation, not from per-band hue variation.
             let r = 0, g = 0, b = 0, a = 0;
             //High layer.
-            r += primary.r * aHi;
-            g += primary.g * aHi;
-            b += primary.b * aHi;
+            r += cloud.r * aHi;
+            g += cloud.g * aHi;
+            b += cloud.b * aHi;
             a += aHi;
             //Mid layer.
             const wMi = aMi * (1 - a);
-            r += primary.r * wMi;
-            g += primary.g * wMi;
-            b += primary.b * wMi;
+            r += cloud.r * wMi;
+            g += cloud.g * wMi;
+            b += cloud.b * wMi;
             a += wMi;
             //Low layer.
             const wLo = aLo * (1 - a);
-            r += primary.r * wLo;
-            g += primary.g * wLo;
-            b += primary.b * wLo;
+            r += cloud.r * wLo;
+            g += cloud.g * wLo;
+            b += cloud.b * wLo;
             a += wLo;
 
             px[p++] = Math.round(r);

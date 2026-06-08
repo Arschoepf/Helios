@@ -33,6 +33,17 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Cloud color + opacity round 3 (#210)
+
+- **Cloud color sourced from `--primary-text-color`** instead of `--primary-color`. Dark text on
+  light themes → dark clouds; light text on dark themes → light clouds. The cloud raster always
+  contrasts with the basemap whichever way the user's HA frontend skin runs.
+- **Opacity pushed harder** so the masses really dominate at high coverage. Per-layer alpha
+  ceilings 0.78 / 0.65 / 0.50 → **1.00 / 0.85 / 0.70**; noise modulation range narrowed from
+  [0.4, 1.0] to [0.65, 1.0] (less noise-driven translucency on individual pixels). Stacked
+  composite at 100 % coverage now reaches ~0.98 alpha (basemap silhouette barely visible,
+  intended); at 50 % coverage drops to ~0.75 (map still legible under partial coverage).
+
 ### Building extrusion null-warning fix (#210)
 
 The MapLibre "expected number, got null" log spam came from
