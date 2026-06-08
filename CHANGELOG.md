@@ -33,6 +33,21 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### RainViewer tiles passed through a client-side blur (#210)
+
+The z=7 RainViewer native cap, stretched to the weather-mode zoom 10 framing, made the radar
+read as a mosaic of large square pixels rather than a continuous cloud mass. The native data
+is what it is, but we can hide the staircasing in the rendering pipeline.
+
+- **Custom MapLibre protocol**: registered `helios-rv://` that intercepts every RainViewer
+  tile fetch, decodes the PNG into an offscreen canvas, runs a 2 px Gaussian blur on it, and
+  hands the smoothed bytes back to MapLibre. The blur lives one step earlier than MapLibre's
+  raster paint stage so the saturation + contrast settings still apply on top, and so the
+  smoothing happens once per tile load rather than every frame.
+- **Graceful degradation**: if the runtime lacks `OffscreenCanvas` or the canvas filter
+  property (older Safari, restricted iframes), the protocol falls through to the raw tile and
+  the user sees the original crisp-pixel radar rather than a broken layer.
+
 ### RainViewer black & white look + tile size fix (#210)
 
 - **Server-side palette swap does not work**: tested every colour scheme number (0 through 8)

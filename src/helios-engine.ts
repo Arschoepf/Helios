@@ -964,10 +964,63 @@ export class HeliosEngine
     private static readonly _RAINVIEWER_REFRESH_MS = 5 * 60_000;
     private static readonly _RAINVIEWER_SOURCE_ID  = 'helios-rainviewer-source';
     private static readonly _RAINVIEWER_LAYER_ID   = 'helios-rainviewer-layer';
+    //Custom MapLibre protocol that intercepts every RainViewer tile fetch and runs a Gaussian
+    //blur over it before handing the bytes back. Smooths the per-pixel staircasing that comes
+    //from MapLibre's 8x upscale of z=7 source data at the weather-mode zoom 10 framing, so the
+    //radar reads as soft cloud masses instead of mosaic squares.
+    private static readonly _RAINVIEWER_PROTOCOL   = 'helios-rv';
+    //CSS filter blur radius applied to each tile via the offscreen canvas during the protocol
+    //handler. 2 px on a 512 px tile = ~4 % of the tile side, enough to mask the source pixel
+    //grid without erasing the cloud-mass silhouette. Increase for softer / more painterly look,
+    //decrease toward 0 for the original crisp-edged radar.
+    private static readonly _RAINVIEWER_BLUR_PX    = 2;
+
+    private static _rainViewerProtocolRegistered = false;
 
     private _rainViewerFrame: { host: string; path: string } | null = null;
     private _rainViewerFetching = false;
     private _rainViewerRefreshTimer: number | undefined = undefined;
+
+    //One-time registration of the custom helios-rv:// protocol with MapLibre. Idempotent:
+    //subsequent calls short-circuit so the handler does not get stacked when multiple Helios
+    //cards mount on the same dashboard. addProtocol is global on the maplibregl namespace so
+    //this only needs to land once per page load.
+    private static _ensureRainViewerProtocol(): void
+    {
+        if (HeliosEngine._rainViewerProtocolRegistered) { return; }
+        HeliosEngine._rainViewerProtocolRegistered = true;
+        maplibregl.addProtocol(HeliosEngine._RAINVIEWER_PROTOCOL, async (params, abortController) =>
+        {
+            //Strip the custom scheme and hand the rest off to the public CDN over HTTPS.
+            const realUrl = params.url.replace(/^helios-rv:\/\//, 'https://');
+            const response = await fetch(realUrl, { signal: abortController.signal });
+            if (!response.ok)
+            {
+                throw new Error(`RainViewer tile HTTP ${response.status}`);
+            }
+            const blob = await response.blob();
+            //Decode + blur in an offscreen canvas. Wrapped in try / catch so a runtime that
+            //lacks OffscreenCanvas or the canvas filter property silently falls back to the
+            //raw tile (still a usable view, just the crisp radar pixels we were trying to
+            //hide). createImageBitmap + OffscreenCanvas land in Safari iOS 16.4+ and all
+            //evergreen desktops.
+            try
+            {
+                const bitmap = await createImageBitmap(blob);
+                const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+                const ctx    = canvas.getContext('2d');
+                if (ctx && 'filter' in ctx)
+                {
+                    ctx.filter = `blur(${HeliosEngine._RAINVIEWER_BLUR_PX}px)`;
+                    ctx.drawImage(bitmap, 0, 0);
+                    const blurred = await canvas.convertToBlob({ type: 'image/png' });
+                    return { data: await blurred.arrayBuffer() };
+                }
+            }
+            catch (_) { /* fall through to raw tile */ }
+            return { data: await blob.arrayBuffer() };
+        });
+    }
 
     //Fetch the RainViewer index and stash the most recent past frame. Idempotent: a second call
     //while a fetch is in flight short-circuits. Errors are logged and leave the previous frame
@@ -1008,14 +1061,16 @@ export class HeliosEngine
         if (!frame) { return; }
         const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
         const lyrId = HeliosEngine._RAINVIEWER_LAYER_ID;
-        //URL template: {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
-        //size 512 (RainViewer free tier supports 256 + 512 only; 1024 falls back to a smaller
-        //default), color 2 (Universal Blue, the only scheme the public CDN respects in practice,
-        //the other colour numbers are silently ignored and serve the same Universal Blue tile),
-        //smooth + snow on. The black & white look is achieved client-side via the raster paint
-        //saturation -1 desaturation below, since the server-side palette swap does not work on
-        //this endpoint.
-        const url = `${frame.host}${frame.path}/512/{z}/{x}/{y}/2/1_1.png`;
+        //URL template: helios-rv://{host-no-scheme}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
+        //The helios-rv:// scheme routes every tile through the custom protocol handler so the
+        //offscreen canvas blur runs before MapLibre paints the texture. size 512 (RainViewer
+        //free tier supports 256 + 512 only), color 2 (Universal Blue, the only scheme the
+        //public CDN respects, other numbers are silently ignored), smooth + snow on. The
+        //black & white look comes from the raster paint saturation -1 below; the blur masks
+        //the source pixel grid that MapLibre's z=7 -> z=10 upscale would otherwise expose.
+        HeliosEngine._ensureRainViewerProtocol();
+        const hostNoScheme = frame.host.replace(/^https?:\/\//, '');
+        const url = `${HeliosEngine._RAINVIEWER_PROTOCOL}://${hostNoScheme}${frame.path}/512/{z}/{x}/{y}/2/1_1.png`;
         const existing = this.map.getSource(srcId) as any;
         if (!existing)
         {
