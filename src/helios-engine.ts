@@ -893,7 +893,7 @@ export class HeliosEngine
             center:   [this.homeLon, this.homeLat],
             bearing:  0,
             pitch:    0,
-            zoom:     9,
+            zoom:     10,
             duration: 1200,
         });
     }
@@ -939,343 +939,130 @@ export class HeliosEngine
         this._weatherZoomTighten = window.setTimeout(tighten, 1250);
     }
 
-    //Public read of the low / mid / high cloud-cover percentages at an arbitrary time. Wraps the
-    //internal _getWeatherAtTime resolver so the weather-mode overlay can pull the same hourly Open-
-    //Meteo numbers every other consumer reads from. Returns 0/0/0 when the home hourly data hasn't
-    //landed yet or the timestamp falls outside the fetched window.
-    public getCloudLayersAt(t: Date): { low: number; mid: number; high: number; cover: number }
-    {
-        const w = this._getWeatherAtTime(t);
-        return { low: w.cloudLow, mid: w.cloudMid, high: w.cloudHigh, cover: w.cloudCover };
-    }
-
     //---------------------------------------------------------------------------------------------
-    //Weather grid: a 31 x 31 lat / lon raster of cloud-cover-low / mid / high values sampled by a
-    //single Open-Meteo multi-location call centred on the home. Spans ~150 km × ~150 km so each
-    //grid cell is ~5 km on a side, roughly matching the underlying model native resolution (3 km
-    //for AROME-France, 13 km for ICON-EU). Read by the weather-mode canvas renderer which paints
-    //a bilinear-interpolated + Perlin-noise-textured cloud raster onto a MapLibre image layer.
+    //RainViewer overlay: precipitation radar tiles for the weather mode. Picks the latest live
+    //frame from the public weather-maps.json index and attaches a MapLibre raster source pointing
+    //at the global radar tile cache. No timeline / scrub, the user always sees the current state
+    //of the atmosphere. The value of the weather mode is "what is happening right now" rather
+    //than a forecast scrub the user cannot trust.
     //
-    //Storage layout: per-layer Float32Array of shape (nLat * nLon * nTimes) so cloudLow[lat, lon,
-    //time] = `cloudLow[(latIdx * nLon + lonIdx) * nTimes + timeIdx]`. Float32 keeps the memory
-    //footprint at ~7 MB total (961 cells × 49 h × 3 layers × 4 bytes) which is acceptable.
+    //Tiles encode rainfall intensity (color scheme 4, The Weather Channel gradient: blue light
+    //rain, green moderate, yellow / orange / red heavy / storm). RainViewer's native data caps
+    //at z=7 so we request 1024 px tiles + cap maxzoom on the raster source: MapLibre asks for
+    //z=7 tiles even past zoom 7 and handles the upscale itself, the server stays in its native
+    //range, and the 1024 px tile resolution keeps the visible texture acceptable at the camera's
+    //weather-mode zoom 10 framing.
+    //
+    //Lifecycle: enterWeatherMode kicks ensureRainViewerFrame + attachRainViewerOverlay once the
+    //index has landed. A 5 min refresh timer keeps the radar current while the user lingers
+    //in weather mode (RainViewer refreshes the actual radar every 10 min, half-period polling
+    //keeps the displayed frame at most 5 min behind reality). exitWeatherMode detaches the
+    //overlay + cancels the timer.
     //---------------------------------------------------------------------------------------------
 
-    private static readonly _WEATHER_GRID_SIDE       = 50;
-    //Half-extent of the grid in latitude degrees. 1.6 deg approx 178 km north + 178 km south on
-    //any latitude, so the grid covers ~356 km x ~356 km when the longitude span gets compressed
-    //by cos(lat). Sized to overshoot the camera's weather-mode zoom 9 viewport (~320 km wide)
-    //so the raster keeps painting past the visible edges and a small pan doesn't drift out. At
-    //50 x 50 cells over 356 km that yields ~7 km / cell, well inside the underlying numerical
-    //weather model native resolution range (3 km AROME-France, 13 km ICON-EU); the bilinear +
-    //Perlin canvas pipeline reads as sharper cloud-edge transitions than the previous 31 x 31.
-    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 1.6;
-    //Cache TTL for the grid fetch. Open-Meteo refreshes its underlying numerical models every 1-3
-    //hours; 30 min keeps the data near-current without burning calls on every mode toggle.
-    private static readonly _WEATHER_GRID_TTL_MS     = 30 * 60_000;
-    //localStorage key for the cached grid (survives page reloads inside the TTL window). v2 bump
-    //matches the grid-size change (31 x 31 -> 50 x 50): the schema is the same but the array
-    //lengths differ, so a v1 entry on existing installs gets re-fetched once on the first hit.
-    private static readonly _WEATHER_GRID_STORAGE_KEY = 'helios-weather-grid:v2';
-    //Open-Meteo's multi-location POST endpoint caps at 1000 lat/lon pairs per call. 50 x 50 = 2500
-    //points needs 3 parallel calls (max 1000 each); we slice the flat lat/lon arrays into chunks
-    //of this size and Promise.all them so the total latency stays at one round-trip.
-    private static readonly _WEATHER_GRID_CHUNK_SIZE = 1000;
+    private static readonly _RAINVIEWER_INDEX_URL  = 'https://api.rainviewer.com/public/weather-maps.json';
+    private static readonly _RAINVIEWER_REFRESH_MS = 5 * 60_000;
+    private static readonly _RAINVIEWER_SOURCE_ID  = 'helios-rainviewer-source';
+    private static readonly _RAINVIEWER_LAYER_ID   = 'helios-rainviewer-layer';
 
-    private _weatherGrid: {
-        bounds:    { south: number; north: number; west: number; east: number };
-        nLat:      number;
-        nLon:      number;
-        lats:      Float32Array;
-        lons:      Float32Array;
-        times:     Date[];
-        cloudLow:  Float32Array;
-        cloudMid:  Float32Array;
-        cloudHigh: Float32Array;
-    } | null = null;
-    private _weatherGridFetching = false;
-    private _weatherGridFetchKey = '';
-    private _weatherGridStaleAtMs = 0;
+    private _rainViewerFrame: { host: string; path: string } | null = null;
+    private _rainViewerFetching = false;
+    private _rainViewerRefreshTimer: number | undefined = undefined;
 
-    //Returns the grid if it's already in memory and fresh, otherwise kicks an async fetch and
-    //returns null. The weather-mode overlay calls this on every render; the first call after a
-    //cold start triggers the fetch and falls back to the point overlay until the grid lands.
-    public getWeatherGrid(): typeof this._weatherGrid
+    //Fetch the RainViewer index and stash the most recent past frame. Idempotent: a second call
+    //while a fetch is in flight short-circuits. Errors are logged and leave the previous frame
+    //in place so the overlay can keep showing the last known radar pass until the next refresh
+    //tick succeeds.
+    public async ensureRainViewerFrame(): Promise<void>
     {
-        return this._weatherGrid;
-    }
-
-    public isWeatherGridFresh(): boolean
-    {
-        return this._weatherGrid !== null && Date.now() < this._weatherGridStaleAtMs;
-    }
-
-    public isWeatherGridFetching(): boolean
-    {
-        return this._weatherGridFetching;
-    }
-
-    //Fire the grid fetch when stale. Idempotent: a second call while a fetch is in flight short-
-    //circuits without queueing a second request. The Promise resolves when the data has landed (or
-    //the request failed); callers can await for a clean "show the raster once ready" gate but the
-    //weather-mode overlay just polls getWeatherGrid() and re-renders when the next host refresh
-    //tick fires.
-    public async ensureWeatherGrid(): Promise<void>
-    {
-        if (this._weatherGridFetching) { return; }
-        const key = `${this.homeLat.toFixed(4)},${this.homeLon.toFixed(4)}`;
-        if (this._weatherGrid && this._weatherGridFetchKey === key && Date.now() < this._weatherGridStaleAtMs)
-        {
-            return;
-        }
-        //localStorage probe: cheap (~1 ms) and skips the network entirely when the cached entry
-        //is still inside the TTL window. Survives page reloads + new card mounts within the
-        //30 min cache lifetime, so a user reloading the dashboard a few times doesn't re-fetch
-        //the same grid. Falls through to the network when the entry is missing, expired or
-        //schema-mismatched.
-        const cached = this._readWeatherGridFromCache(key);
-        if (cached)
-        {
-            this._weatherGrid          = cached.grid;
-            this._weatherGridFetchKey  = key;
-            this._weatherGridStaleAtMs = cached.staleAtMs;
-            return;
-        }
-        this._weatherGridFetching = true;
+        if (this._rainViewerFetching) { return; }
+        this._rainViewerFetching = true;
         try
         {
-            const N = HeliosEngine._WEATHER_GRID_SIDE;
-            const halfLat = HeliosEngine._WEATHER_GRID_HALF_LAT_DEG;
-            //Longitude span gets compressed by cos(lat) so the grid covers the same west-east
-            //distance as the north-south distance regardless of latitude. The math degenerates near
-            //the poles, the abs(cos) guard keeps the division well-behaved at high latitudes.
-            const cosLat = Math.max(0.1, Math.abs(Math.cos(this.homeLat * Math.PI / 180)));
-            const halfLon = halfLat / cosLat;
-            const south = this.homeLat - halfLat;
-            const north = this.homeLat + halfLat;
-            const west  = this.homeLon - halfLon;
-            const east  = this.homeLon + halfLon;
-            const lats  = new Float32Array(N);
-            const lons  = new Float32Array(N);
-            for (let i = 0; i < N; i++)
-            {
-                lats[i] = south + (i / (N - 1)) * (north - south);
-                lons[i] = west  + (i / (N - 1)) * (east  - west);
-            }
-            //Flatten to (lat, lon) pairs in row-major (lat-outer, lon-inner) order. Open-Meteo
-            //returns results in the same order the lat / lon arrays are passed. We POST a JSON
-            //body instead of GET because >1 k lat/lon pairs serialise past common CDN URL limits;
-            //Open-Meteo's POST endpoint expects the same comma-separated string format as the GET
-            //query string, just placed in the body with application/x-www-form-urlencoded.
-            //
-            //2500 points (50 x 50) exceeds Open-Meteo's documented 1000-coord per-call cap, so we
-            //split the flat (lat, lon) arrays into chunks of CHUNK_SIZE and fire all chunks in
-            //parallel via Promise.all. The chunks land in the same Open-Meteo model run (same
-            //forecast_days + past_days + timezone), so their per-point time axes match across
-            //chunks and we can stitch the responses back into the row-major grid without
-            //alignment work.
-            const flatLats: string[] = new Array(N * N);
-            const flatLons: string[] = new Array(N * N);
-            for (let iLat = 0; iLat < N; iLat++)
-            {
-                for (let iLon = 0; iLon < N; iLon++)
-                {
-                    flatLats[iLat * N + iLon] = lats[iLat].toFixed(4);
-                    flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
-                }
-            }
-            const TOTAL  = N * N;
-            const CHUNK  = HeliosEngine._WEATHER_GRID_CHUNK_SIZE;
-            const nChunks = Math.ceil(TOTAL / CHUNK);
-            const chunkPromises: Promise<any[]>[] = new Array(nChunks);
-            for (let c = 0; c < nChunks; c++)
-            {
-                const start = c * CHUNK;
-                const end   = Math.min(TOTAL, start + CHUNK);
-                const sliceLats = flatLats.slice(start, end);
-                const sliceLons = flatLons.slice(start, end);
-                chunkPromises[c] = (async () =>
-                {
-                    const r = await fetch('https://api.open-meteo.com/v1/forecast', {
-                        method:  'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body:    'latitude='  + sliceLats.join(',')
-                               + '&longitude=' + sliceLons.join(',')
-                               + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
-                               + '&forecast_days=2&past_days=0&timezone=UTC',
-                    });
-                    if (!r.ok) { throw new Error(`Open-Meteo grid chunk ${c} HTTP ${r.status}`); }
-                    const j: any = await r.json();
-                    return Array.isArray(j) ? j : [j];
-                })();
-            }
-            const chunkResults: any[][] = await Promise.all(chunkPromises);
-            const results: any[] = chunkResults.flat();
-            if (results.length === 0 || !results[0]?.hourly?.time)
-            {
-                throw new Error('Open-Meteo grid fetch: empty payload');
-            }
-            const timeStrs: string[] = results[0].hourly.time;
-            const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
-            const nTimes = times.length;
-            const cloudLow  = new Float32Array(TOTAL * nTimes);
-            const cloudMid  = new Float32Array(TOTAL * nTimes);
-            const cloudHigh = new Float32Array(TOTAL * nTimes);
-            for (let g = 0; g < TOTAL; g++)
-            {
-                const r = results[g];
-                const lo = r?.hourly?.cloud_cover_low  ?? [];
-                const mi = r?.hourly?.cloud_cover_mid  ?? [];
-                const hi = r?.hourly?.cloud_cover_high ?? [];
-                const base = g * nTimes;
-                for (let t = 0; t < nTimes; t++)
-                {
-                    cloudLow[base + t]  = lo[t] ?? 0;
-                    cloudMid[base + t]  = mi[t] ?? 0;
-                    cloudHigh[base + t] = hi[t] ?? 0;
-                }
-            }
-            const grid = {
-                bounds: { south, north, west, east },
-                nLat:  N,
-                nLon:  N,
-                lats,
-                lons,
-                times,
-                cloudLow,
-                cloudMid,
-                cloudHigh,
-            };
-            this._weatherGrid          = grid;
-            this._weatherGridFetchKey  = key;
-            this._weatherGridStaleAtMs = Date.now() + HeliosEngine._WEATHER_GRID_TTL_MS;
-            //Persist to localStorage so the next page reload skips the network entirely while the
-            //TTL is still valid. Errors in the write path (quota exceeded, private browsing)
-            //silently degrade to in-memory only.
-            this._writeWeatherGridToCache(key, grid, this._weatherGridStaleAtMs);
+            const r = await fetch(HeliosEngine._RAINVIEWER_INDEX_URL, { cache: 'no-store' });
+            if (!r.ok) { throw new Error(`RainViewer index HTTP ${r.status}`); }
+            const j: any = await r.json();
+            const host: string = j?.host ?? 'https://tilecache.rainviewer.com';
+            const past: any[] = j?.radar?.past ?? [];
+            if (past.length === 0) { throw new Error('RainViewer radar.past empty'); }
+            const last = past[past.length - 1];
+            this._rainViewerFrame = { host, path: String(last.path ?? '') };
         }
         catch (e)
         {
-            console.warn('[HELIOS] weather grid fetch failed:', e);
+            console.warn('[HELIOS] RainViewer index fetch failed:', e);
         }
         finally
         {
-            this._weatherGridFetching = false;
+            this._rainViewerFetching = false;
         }
     }
 
-    //localStorage cache for the parsed weather grid. Saves the next mode-entry on a page reload
-    //within the 30 min TTL from another network roundtrip. Schema-versioned via the key suffix so
-    //a future shape change can be rolled out without poisoning existing entries. Cloud values are
-    //quantised to 1 decimal in the cache to shave the JSON payload from ~700 KB to ~300 KB at
-    //31x31x49x3 (still well under the typical 5-10 MB browser quota).
-    private _readWeatherGridFromCache(homeKey: string): { grid: NonNullable<HeliosEngine['_weatherGrid']>; staleAtMs: number } | null
-    {
-        try
-        {
-            const ls = window.localStorage;
-            if (!ls) { return null; }
-            const raw = ls.getItem(HeliosEngine._WEATHER_GRID_STORAGE_KEY);
-            if (!raw) { return null; }
-            const obj: any = JSON.parse(raw);
-            if (obj?.homeKey !== homeKey) { return null; }
-            if (typeof obj.staleAtMs !== 'number' || Date.now() >= obj.staleAtMs) { return null; }
-            const grid = {
-                bounds:    obj.bounds,
-                nLat:      obj.nLat,
-                nLon:      obj.nLon,
-                lats:      new Float32Array(obj.lats),
-                lons:      new Float32Array(obj.lons),
-                times:     (obj.times as string[]).map(s => new Date(s)),
-                cloudLow:  new Float32Array(obj.cloudLow),
-                cloudMid:  new Float32Array(obj.cloudMid),
-                cloudHigh: new Float32Array(obj.cloudHigh),
-            };
-            return { grid, staleAtMs: obj.staleAtMs };
-        }
-        catch (_)
-        {
-            return null;
-        }
-    }
-
-    private _writeWeatherGridToCache(homeKey: string, grid: NonNullable<HeliosEngine['_weatherGrid']>, staleAtMs: number): void
-    {
-        try
-        {
-            const ls = window.localStorage;
-            if (!ls) { return; }
-            //toFixed(1) on the cloud values: percentages quoted with one decimal place hold all
-            //the precision the bilinear + Perlin canvas pipeline can use, and shaves ~60 % off the
-            //serialised payload vs full-precision Float32 -> string.
-            const round1 = (arr: Float32Array): number[] =>
-            {
-                const out = new Array<number>(arr.length);
-                for (let i = 0; i < arr.length; i++) { out[i] = Math.round(arr[i] * 10) / 10; }
-                return out;
-            };
-            const obj = {
-                homeKey,
-                staleAtMs,
-                bounds:    grid.bounds,
-                nLat:      grid.nLat,
-                nLon:      grid.nLon,
-                lats:      Array.from(grid.lats),
-                lons:      Array.from(grid.lons),
-                times:     grid.times.map(t => t.toISOString()),
-                cloudLow:  round1(grid.cloudLow),
-                cloudMid:  round1(grid.cloudMid),
-                cloudHigh: round1(grid.cloudHigh),
-            };
-            ls.setItem(HeliosEngine._WEATHER_GRID_STORAGE_KEY, JSON.stringify(obj));
-        }
-        catch (_) { /* quota / private browsing / disabled storage: silently degrade */ }
-    }
-
-    //Cloud overlay raster source / layer management. MapLibre's `image` source warps a single image
-    //onto a quadrilateral defined by 4 lat / lon corners; the weather-mode canvas renders into an
-    //offscreen HTMLCanvasElement, exports a data URL, and attaches it to the source. Pan / zoom /
-    //rotation are handled by MapLibre natively from there.
-    private static readonly _WEATHER_OVERLAY_SOURCE_ID = 'helios-weather-cloud-source';
-    private static readonly _WEATHER_OVERLAY_LAYER_ID  = 'helios-weather-cloud-layer';
-
-    public setWeatherCloudOverlay(dataUrl: string, bounds: { south: number; north: number; west: number; east: number }): void
+    //Attach (or refresh) the RainViewer raster source + layer. Safe to call repeatedly: when the
+    //source already exists, we swap the tile URL in place and force a tile re-fetch so the new
+    //"now" frame paints without dropping the layer and blinking the radar off-screen mid-pan.
+    public attachRainViewerOverlay(): void
     {
         if (!this.map) { return; }
-        const srcId = HeliosEngine._WEATHER_OVERLAY_SOURCE_ID;
-        const lyrId = HeliosEngine._WEATHER_OVERLAY_LAYER_ID;
-        const coordinates: [[number, number], [number, number], [number, number], [number, number]] = [
-            [bounds.west, bounds.north],
-            [bounds.east, bounds.north],
-            [bounds.east, bounds.south],
-            [bounds.west, bounds.south],
-        ];
+        const frame = this._rainViewerFrame;
+        if (!frame) { return; }
+        const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
+        const lyrId = HeliosEngine._RAINVIEWER_LAYER_ID;
+        //URL template: {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
+        //size 1024 (max free tier), color 4 (Weather Channel gradient), smooth + snow on.
+        const url = `${frame.host}${frame.path}/1024/{z}/{x}/{y}/4/1_1.png`;
         const existing = this.map.getSource(srcId) as any;
-        if (existing)
+        if (!existing)
         {
-            //updateImage atomically swaps the URL + coordinates without dropping the layer, so the
-            //raster doesn't blink while the user scrubs the timeline.
-            existing.updateImage({ url: dataUrl, coordinates });
-            return;
+            this.map.addSource(srcId, {
+                type:     'raster',
+                tiles:    [url],
+                tileSize: 1024,
+                //Native data caps at z=7. Telling MapLibre maxzoom 7 keeps every tile request
+                //inside the server's native range; MapLibre handles the per-pixel upscale past
+                //that point. Saves the server a round of bilinear blow-up and keeps the radar
+                //texture sharp through the zoom 10 weather-mode framing.
+                maxzoom:  7,
+            });
+            this.map.addLayer({
+                id:     lyrId,
+                type:   'raster',
+                source: srcId,
+                paint:  { 'raster-opacity': 0.85, 'raster-fade-duration': 0 },
+            });
         }
-        this.map.addSource(srcId, {
-            type: 'image',
-            url: dataUrl,
-            coordinates,
-        });
-        this.map.addLayer({
-            id:     lyrId,
-            type:   'raster',
-            source: srcId,
-            paint:  { 'raster-opacity': 1, 'raster-fade-duration': 0 },
-        });
+        else
+        {
+            //Swap the tile URL in place: a new "now" frame has a different path, MapLibre re-
+            //fetches under the same source / layer so the camera, opacity and order stay stable.
+            existing.tiles = [url];
+            const cache = (this.map as any).style?.sourceCaches?.[srcId];
+            cache?.clearTiles?.();
+            cache?.update?.((this.map as any).transform);
+            this.map.triggerRepaint();
+        }
+        //Kick a periodic refresh so the radar stays current while the user lingers in weather
+        //mode. RainViewer refreshes the actual radar every 10 min; polling at half that keeps
+        //the displayed frame at most 5 min behind reality.
+        if (this._rainViewerRefreshTimer === undefined)
+        {
+            this._rainViewerRefreshTimer = window.setInterval(() =>
+            {
+                void this.ensureRainViewerFrame().then(() => this.attachRainViewerOverlay());
+            }, HeliosEngine._RAINVIEWER_REFRESH_MS);
+        }
     }
 
-    public clearWeatherCloudOverlay(): void
+    public detachRainViewerOverlay(): void
     {
+        if (this._rainViewerRefreshTimer !== undefined)
+        {
+            window.clearInterval(this._rainViewerRefreshTimer);
+            this._rainViewerRefreshTimer = undefined;
+        }
         if (!this.map) { return; }
-        const srcId = HeliosEngine._WEATHER_OVERLAY_SOURCE_ID;
-        const lyrId = HeliosEngine._WEATHER_OVERLAY_LAYER_ID;
+        const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
+        const lyrId = HeliosEngine._RAINVIEWER_LAYER_ID;
         if (this.map.getLayer(lyrId))  { this.map.removeLayer(lyrId); }
         if (this.map.getSource(srcId)) { this.map.removeSource(srcId); }
     }
@@ -1468,11 +1255,15 @@ export class HeliosEngine
         {
             const ls = window.localStorage;
             if (!ls) { return; }
-            //Static-key retirees: shading-map (v1.8.3-beta.80, the big virage) and the cloud-mode
-            //toggle preference (v1.8.3-beta.81, replaced by the auto-reveal in weather mode).
+            //Static-key retirees: shading-map (v1.8.3-beta.80, the big virage), the cloud-mode
+            //toggle preference (v1.8.3-beta.81, replaced by the auto-reveal in weather mode), and
+            //the per-home 50x50 Open-Meteo cloud-cover grid (v1.8.3-beta.97, replaced by the
+            //RainViewer radar overlay so weather mode no longer needs a multi-point Open-Meteo
+            //fetch).
             const STATIC_RETIRED = [
                 'helios-shading-map:v2',
                 'helios:cloud-mode',
+                'helios-weather-grid:v2',
             ];
             for (const key of STATIC_RETIRED)
             {

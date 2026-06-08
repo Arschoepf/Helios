@@ -33,6 +33,40 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather mode: Open-Meteo grid -> RainViewer radar (#210)
+
+The 50 x 50 Open-Meteo cloud grid + canvas Perlin pipeline was costing 3 chunked POST requests
+per mode entry, kept tripping Open-Meteo's per-IP daily ban on the first call of the day, and
+delivered a heavily synthesised "cloud" texture rather than a measurement of the actual sky.
+Weather mode now pulls live precipitation radar from RainViewer instead, a free public API
+with no key required and global coverage.
+
+- **Precipitation radar overlay**: live RainViewer "now" frame attached as a MapLibre raster
+  source. Rainfall intensity is colour-coded (Weather Channel gradient: blue light rain ->
+  green moderate -> yellow / orange / red heavy / storm), so the user sees what is actually
+  happening over their roof right now rather than a forecast they cannot trust.
+- **No timeline / no scrub**: weather mode is intentionally live-only. The mode-bar handler
+  resets the card to live the moment it fires, and the timeline slides off-screen for the
+  duration of the mode so the user is not invited to scrub a frame that does not exist.
+- **5 min auto-refresh** while the mode stays active: RainViewer publishes a fresh radar
+  frame every 10 min, half-period polling keeps the displayed frame at most 5 min behind
+  reality without holding a connection open.
+- **Camera zoom envelope 9 -> 10**: the tighter framing makes individual rain cells readable
+  at the home / neighbourhood scale instead of the previous regional satellite-style view.
+- **1024 px tiles + maxzoom 7**: RainViewer's native data caps at z=7. Requesting larger
+  tiles + telling MapLibre the source maxzoom is 7 keeps every tile request inside the
+  server's native range; MapLibre handles the per-pixel upscale past that point, the server
+  stays out of bilinear blow-up territory and the radar texture stays sharp through the
+  zoom 10 framing.
+- **Open-Meteo stays in charge of cloud-cover numbers**: the low / mid / high chips beside
+  the mode bar still read the same hourly Open-Meteo home-point series every other consumer
+  in the card pulls from. RainViewer is the visual context layer (where is the rain right
+  now?); Open-Meteo is the precise per-altitude breakdown at the home.
+- **Cleanup**: the entire 50 x 50 grid fetcher + bilinear canvas + Perlin noise pipeline +
+  text-colour cloud tint is gone (~350 LOC). `helios-weather-grid:v2` localStorage entries
+  are added to the legacy-storage sweep so users coming from beta.96 reclaim ~300 kB of
+  cached grid data on first load.
+
 ### Weather grid 31 x 31 -> 50 x 50 (#210)
 
 User feedback: the Perlin noise + 31 x 31 grid wasn't carrying enough real spatial signal at

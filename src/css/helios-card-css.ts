@@ -304,17 +304,17 @@ export const heliosCardStyles = css`
         pointer-events: none;
     }
     /*  Timeline slides below the card edge for any non-base mode + the dashboard dive (overlay-masked
-        is set for both, see the card-side render comment). EXCEPTION: weather mode keeps the timeline
-        in view so the user can scrub through the day and the cloud raster tracks the cursor; the
-        :not(.mode-weather) qualifier opts weather out of the slide-out. */
-    ha-card.overlay-masked:not(.mode-weather) .time-bar
+        is set for both, see the card-side render comment). Weather mode is no exception: the radar
+        overlay shows the live RainViewer frame only, no scrub, and the mode-bar handler resets the
+        card to live the moment the user toggles into weather, so the timeline disappearing matches
+        the actual time model rather than hinting at a scrub capability that no longer exists. */
+    ha-card.overlay-masked .time-bar
     {
         transform: translateY(140%);
         pointer-events: none;
     }
-    /*  Same weather-mode exception on the top-left cluster: the cloud cover anchor + the per-layer
-        chips need to stay legible so the user reads the current low / mid / high coverage values
-        without leaving the overlay. */
+    /*  Top-left lock chip stays visible (but disabled) in weather mode so the user keeps the same
+        anchor for their camera-lock preference; every other non-base mode hides the cluster. */
     ha-card.overlay-masked:not(.mode-weather) .overlay-top-left
     {
         opacity: 0;
