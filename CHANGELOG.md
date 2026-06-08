@@ -33,6 +33,14 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather grid fetch: switch GET to POST (#210)
+
+beta.83 fired the multi-location forecast call as a GET with 961 (lat, lon) pairs in the query
+string, which serialises to ~22 kB. The user's browser surfaced HTTP 414 (URI Too Long) on the
+first weather-mode entry: Open-Meteo's Cloudflare edge enforces the usual 8-16 kB URL ceiling.
+The fetch now uses POST with the same fields packed into a JSON body. Same endpoint, same
+response shape, no URL ceiling.
+
 ### Weather mode raster overlay shipped (#210)
 
 The weather mode now paints a satellite-style cloud raster on the map when active. Each
