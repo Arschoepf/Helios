@@ -822,6 +822,11 @@ export class HeliosEngine
         minZoom: number;
         maxZoom: number;
     } | null = null;
+    //Pending setTimeout that re-tightens the zoom envelope after an exit's easeTo lands. Held as a
+    //handle so a rapid UI -> Weather -> UI -> Weather sequence can CANCEL a stale tighten before it
+    //fires during the next entry's animation, which would otherwise re-clamp min/maxZoom to 18 and
+    //snap the camera back mid-ease.
+    private _weatherZoomTighten: number | null = null;
 
     //Weather mode camera transition: tilt down to top-down + zoom out so the cloud-cover overlay
     //reads as a meteorological satellite plan. Three knobs have to give for this to work:
@@ -835,6 +840,15 @@ export class HeliosEngine
     public enterWeatherCamera(): void
     {
         if (!this.map) { return; }
+        //Cancel any pending zoom-tighten scheduled by a prior exit. Without this guard, a fast
+        //UI -> Weather -> UI -> Weather sequence lets the previous exit's setTimeout fire mid-
+        //ease here and re-clamp [minZoom, maxZoom] back to [18, 18], freezing the camera at 18
+        //before the easeTo to 12 can settle.
+        if (this._weatherZoomTighten !== null)
+        {
+            window.clearTimeout(this._weatherZoomTighten);
+            this._weatherZoomTighten = null;
+        }
         const prevLocked = this.isCameraLocked();
         this._preWeatherPose = {
             bearing: this.map.getBearing(),
@@ -879,17 +893,17 @@ export class HeliosEngine
         //Restore the rotation-lock state the user had before entering. setCameraLocked also writes
         //the state back to localStorage so the next reload still sees the user's preference.
         if (this.isCameraLocked() !== pose.locked) { this.setCameraLocked(pose.locked); }
-        //Re-tighten the zoom envelope. We DON'T re-clamp during the easeTo so the animation can run
-        //its course; the new bounds take effect from the next user / programmatic camera action.
+        //Re-tighten the zoom envelope after the easeTo lands. Deferred past the 1200 ms ease + a
+        //50 ms buffer for MapLibre's onMoveEnd delivery. The handle is kept on the engine so a
+        //subsequent enter (fast mode swap) can cancel it before it fires.
         const tighten = (): void =>
         {
+            this._weatherZoomTighten = null;
             if (!this.map) { return; }
             this.map.setMinZoom(pose.minZoom);
             this.map.setMaxZoom(pose.maxZoom);
         };
-        //Defer past the easeTo duration so the animation lands cleanly before the new clamps kick
-        //in. 50 ms buffer over the 1200 ms ease covers MapLibre's onMoveEnd delivery.
-        window.setTimeout(tighten, 1250);
+        this._weatherZoomTighten = window.setTimeout(tighten, 1250);
     }
 
     //Public read of the low / mid / high cloud-cover percentages at an arbitrary time. Wraps the

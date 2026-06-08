@@ -347,29 +347,29 @@ export function refreshWeatherRaster(host: WeatherModeHost): void
             const aMi = Math.max(0, Math.min(1, (mi / 100) * modMi)) * 0.70;
             const aHi = Math.max(0, Math.min(1, (hi / 100) * modHi)) * 0.55;
 
-            //Stack the three layers on a transparent background using standard over-compositing.
-            //Each band has its own grayscale: high (light), mid (medium), low (dark).
-            //   - High clouds: cirrus, light gray (R=G=B=200)
-            //   - Mid clouds : altocumulus, medium gray (180)
-            //   - Low clouds : stratus, dark gray (140)
-            //We composite from high to low so the dense low band wins where coverages overlap.
+            //DEBUG: red palette so the user can visually confirm the raster is painting. Restore
+            //the grayscale (200 / 180 / 140 RGB) once visibility is validated.
+            //   - High band: light red (255, 120, 120)
+            //   - Mid band : medium red (220, 60, 60)
+            //   - Low band : deep red (180, 0, 0)
+            //Composite high -> mid -> low so the dense low band wins where coverages overlap.
             let r = 0, g = 0, b = 0, a = 0;
             //High layer.
-            r += 200 * aHi;
-            g += 200 * aHi;
-            b += 200 * aHi;
+            r += 255 * aHi;
+            g += 120 * aHi;
+            b += 120 * aHi;
             a += aHi;
             //Mid layer.
             const wMi = aMi * (1 - a);
-            r += 180 * wMi;
-            g += 180 * wMi;
-            b += 180 * wMi;
+            r += 220 * wMi;
+            g += 60  * wMi;
+            b += 60  * wMi;
             a += wMi;
             //Low layer.
             const wLo = aLo * (1 - a);
-            r += 140 * wLo;
-            g += 140 * wLo;
-            b += 140 * wLo;
+            r += 180 * wLo;
+            g += 0   * wLo;
+            b += 0   * wLo;
             a += wLo;
 
             px[p++] = Math.round(r);

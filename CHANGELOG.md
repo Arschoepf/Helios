@@ -33,6 +33,20 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather raster: red debug palette + zoom race fix (#210)
+
+Two fixes for the user-visible weather mode pass:
+
+- **Red debug palette.** Temporarily swap the grayscale composite (200 / 180 / 140 RGB) for a
+  red palette (high = light red 255/120/120, mid = medium red 220/60/60, low = deep red 180/0/0)
+  so the raster is impossible to miss visually. Restore the grayscale once the visibility is
+  validated.
+- **Zoom race condition fix.** A rapid UI -> Weather -> UI -> Weather sequence could let the
+  previous exit's `setTimeout(tighten, 1250)` fire mid-ease of the next entry, re-clamping
+  `[minZoom, maxZoom]` to `[18, 18]` and freezing the camera at 18 before the entry's easeTo to
+  12 could land. The pending tighten handle is now kept on the engine and `enterWeatherCamera`
+  cancels any stale one before scheduling its own.
+
 ### Weather grid POST body uses form encoding, not JSON (#210)
 
 Beta.84 packed the lat / lon arrays as JSON in the POST body. Open-Meteo's API rejected this with
