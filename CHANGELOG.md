@@ -243,6 +243,14 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Weather mode polish, beta.113
+
+The per-altitude cloud band toggles in the top-left rail now reuse the exact `.mode-bar /
+.mode-bar-seg` recipe of the top-right mode bar: identical 40 px round icon-only buttons, same
+4 px-gap flex column, same idle / active state recipe. The two rails read as one family of
+controls. The per-band coverage percentage that briefly sat under each glyph in beta.112 is
+dropped, the live home coverage stays available on the mode-bar weather button glyph itself.
+
 ### Weather mode polish, beta.112
 
 Final round of refinements on the cloud-cover overlay before the v1.8.3 ship:

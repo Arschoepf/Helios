@@ -2678,36 +2678,11 @@ export const heliosCardStyles = css`
         gap: 8px;
         pointer-events: none;
     }
-    /*  Per-altitude cloud band toggles. Vertical stack of three real buttons in the top-left
-        rail while weather mode is active, mirroring the mode-bar vocabulary in the top-right
-        corner (.mode-bar-seg style is inherited, only the shape + content layout differ here).
-        Each button shows a layer glyph + the current home-point coverage percentage; tapping
-        toggles the matching SVG band off in the overlay. Buttons pop in / pop out with the mode
-        flip rather than animating in separately, so the cluster reads as one moment with the
-        rest of the weather UI swap. */
-    .cloud-layer-seg
-    {
-        flex-direction: column;
-        width: 56px;
-        height: 56px;
-        border-radius: 18px;
-        gap: 2px;
-        padding: 4px 0;
-        pointer-events: auto;
-        font-size: var(--ha-font-size-xs, 11px);
-        font-weight: 600;
-        line-height: 1;
-        font-variant-numeric: tabular-nums;
-    }
-    .cloud-layer-seg ha-icon
-    {
-        --mdc-icon-size: 20px;
-    }
-    .cloud-layer-seg .cloud-layer-pct
-    {
-        font-size: 11px;
-        opacity: 0.95;
-    }
+    /*  Per-altitude cloud band toggles share the .mode-bar / .mode-bar-seg recipe with the
+        top-right mode bar: identical 40 px round icon-only buttons stacked in a 4 px-gap flex
+        column. Nothing extra needed here, the wrapper class .mode-bar already pins pointer-
+        events: auto on the cluster so taps reach the buttons through the overlay-top-left rail
+        (which keeps pointer-events: none by default).                                            */
 
     /*  Loading banner. Shown at the top of the card while the first hydration wave of data fetches
         is still in flight (PV, battery, grid, solar radiation, daily totals, weather, buildings,
