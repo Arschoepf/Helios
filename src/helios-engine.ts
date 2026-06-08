@@ -973,10 +973,13 @@ export class HeliosEngine
     //model (ICON-EU 7 km / IFS 9 km), which is the point: a tight grid feeds a tight bilinear
     //interpolation into the fragment shader, the FBM noise on top of it carries the texture.
     private static readonly _WEATHER_GRID_SIDE        = 10;
-    //Half-extent of the grid in latitude degrees around the home. 0.10 deg ~= 11 km on the lat
-    //axis, so the grid covers a ~22 x 22 km bbox after the cos(lat) compression on the lon axis
-    //matches that envelope, tracking the zoom-11 camera framing.
-    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.10;
+    //Half-extent of the grid in latitude degrees around the home. 0.20 deg ~= 22 km on the lat
+    //axis, so the grid covers a ~44 x 44 km bbox after the cos(lat) compression on the lon axis
+    //matches that envelope. Larger than the zoom-11 viewport so the shader's edge fade
+    //completes off-screen and the visible part of the cloud field reads as full-bleed rather
+    //than a small patch in the centre. API cost is invariant in the bbox size (Open-Meteo bills
+    //per location, not per km²), so widening the envelope is free.
+    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.20;
     //Refresh cadence while inside weather mode. Hits the cache or the network depending on
     //freshness vs the cache TTL below.
     private static readonly _WEATHER_GRID_REFRESH_MS   = 5 * 60_000;

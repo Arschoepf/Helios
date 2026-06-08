@@ -243,6 +243,31 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Weather mode shader polish: full-viewport bbox + driver hardening, beta.119 (#213)
+
+beta.118 fixed the flat-grey artefact but the cloud field only covered the central ~22 km bbox
+of the camera viewport, leaving a soft-edged square in the middle of the screen instead of a
+continuous overhead. Plus the smoothstep band still saturated to a flat fill at coverage 100 %
+(overcast skies), so even the central area looked uniform when the sky was fully cloudy.
+
+Fixes:
+
+- `_WEATHER_GRID_HALF_LAT_DEG` 0.10 -> 0.20. Bbox 22 km -> 44 km. Overshoots the zoom-11
+  viewport so the shader's edge fade completes off-screen and the visible cloud field reads as
+  full-bleed. Open-Meteo bills per location (not per km²) so the API cost stays at 100 calls
+  per fetch.
+- Density formula reworked to keep noise variation visible at any coverage. Threshold maps to
+  [0.10, 0.90] (was [0, 1]), and the smoothstep band widens to 0.45 (was 0.25). At coverage
+  100 % the formula now sits in [0.0, 0.45] over the noise range instead of saturating at
+  0.20-1.0, so overcast still shows the cloud relief.
+- Early discard on out-of-bbox + zero-edge-fade fragments before the FBM call. Saves the
+  4-octave simplex work on the soft rim of the quad without touching the visible output.
+- `u_bandIndex` switched to float (some Adreno / Mali drivers misbehave on int ternary inside
+  fragments). `u_time` wrapped mod 3600 host-side so the noise sample stays within FP24
+  precision on long sessions. `u_latCos` uniform passed in so the noise sample undoes Mercator's
+  longitude stretching at high latitudes, keeping cloud features round instead of elongated
+  east-west.
+
 ### Weather mode shader fixes: cloud carving + premultiplied alpha, beta.118 (#213)
 
 Fast follow on beta.117. The first cut shipped a flat-grey quad with no visible cloud structure

@@ -53,26 +53,33 @@ void main()
 
 
 //Fragment shader. Threshold-based cloud carving: the FBM simplex noise field defines WHERE
-//clouds could be, the bilinear-sampled coverage from the data texture shifts the threshold
-//(low coverage -> very high threshold, only the strongest noise peaks bleed through; high
-//coverage -> very low threshold, almost everything paints; in between the noise carves the
-//organic shapes). Output is premultiplied alpha so MapLibre's framebuffer blends correctly.
+//clouds could be, the bilinear-sampled coverage from the data texture shifts the threshold +
+//the smoothstep band so the noise variation stays visible at any coverage level (the previous
+//formula collapsed to a flat fill at 100 % coverage). Output is premultiplied alpha so
+//MapLibre's framebuffer blends correctly.
 //
 //Per-band scale + phase so the three altitudes paint visibly different cloud signatures: high
 //bands get broader features (cirrus-like sheets), low bands get tighter features (cumulus
 //puffs). All three bands tint with --primary-text-color, the band identity comes from the
 //shape + opacity stack.
 //
+//Mobile-driver hardening: u_bandIndex is a float (some Adreno / Mali drivers misbehave on int
+//ternary inside fragments), u_time is wrapped to [0, 3600) host-side to keep FP24 precision
+//on long sessions, and the geographic UV computation discards out-of-bounds + edge-faded-to-
+//zero fragments before the expensive FBM call so the per-frame cost stays low even when the
+//quad geometry overshoots the data bbox.
+//
 //Simplex noise: Ashima Arts' canonical 2D implementation, public domain.
 const FRAG_SRC = `
 precision highp float;
 
 uniform sampler2D u_dataTexture;
-uniform int       u_bandIndex;   //0 = low, 1 = mid, 2 = high
+uniform float     u_bandIndex;   //0.0 = low, 1.0 = mid, 2.0 = high (float for driver safety)
 uniform vec3      u_color;
 uniform float     u_opacity;
-uniform float     u_time;
+uniform float     u_time;        //seconds since layer mount, wrapped mod 3600 host-side
 uniform vec4      u_bbox;        //west, south, east, north
+uniform float     u_latCos;      //cos(radians(centre_lat)), undoes Mercator lon stretching
 varying vec2      v_geo;
 
 vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
@@ -123,46 +130,56 @@ float fbm(vec2 p, float t)
 void main()
 {
     //Geographic UV inside the bbox. CLAMP_TO_EDGE on the data texture extends the edge cells
-    //past the bbox so the quad can be larger than the data extent (smoother edge fade) without
-    //a hard cut at the data boundary.
+    //past the bbox so the quad can overshoot the data extent without a hard cut.
     vec2 uv = vec2(
         (v_geo.x - u_bbox.x) / (u_bbox.z - u_bbox.x),
         (v_geo.y - u_bbox.y) / (u_bbox.w - u_bbox.y)
     );
 
-    vec4 dataSample = texture2D(u_dataTexture, uv);
-    float coverage = (u_bandIndex == 0) ? dataSample.r
-                   : (u_bandIndex == 1) ? dataSample.g
-                                        : dataSample.b;
+    //Early discard outside the quad bbox: skip the FBM compute when the fragment can't
+    //contribute (CLAMP_TO_EDGE would still feed an edge value, but the edge fade below kills
+    //the alpha anyway).
+    if (uv.x < -0.01 || uv.x > 1.01 || uv.y < -0.01 || uv.y > 1.01) { discard; }
 
-    //Per-band noise scale: high clouds spread as broad sheets (low frequency), low clouds
-    //break into tighter puffs (high frequency). The float-typed band index avoids the WebGL 1
-    //integer-precision pitfalls some mobile drivers have around ternary on int uniforms.
-    float bandF = float(u_bandIndex);
-    float scale = mix(28.0, 14.0, bandF * 0.5); //low=28, mid=21, high=14 cycles per degree
-    float phase = bandF * 137.5;                //decorrelate the three bands so they don't paint
-                                                //identical shapes when all three are visible
-
-    float noise = fbm(v_geo * scale + vec2(phase), u_time);
-    noise = clamp(noise * 0.5 + 0.5, 0.0, 1.0);
-
-    //Threshold-driven cloud carving. The coverage shifts the noise threshold so:
-    //  coverage = 0   -> threshold = 1.0   -> mostly empty (only the highest peaks bleed)
-    //  coverage = 0.5 -> threshold = 0.5   -> noise cleanly carves organic shapes
-    //  coverage = 1   -> threshold = 0.0   -> mostly full (everything paints)
-    //smoothstep on a narrow band around the threshold gives soft, photographic edges.
-    float threshold = 1.0 - coverage;
-    float density   = smoothstep(threshold - 0.05, threshold + 0.20, noise);
-
-    //Quad edge fade. The quad geometry extends past the data bbox so the cloud field bleeds
-    //a bit beyond the strict 22 km box; fade alpha out near the quad rim so the boundary is
-    //invisible instead of a hard cut.
+    //Quad edge fade. Computed up front so a near-zero edge factor can short-circuit the FBM.
     float edgeFade = smoothstep(0.0, 0.10, uv.x) * smoothstep(1.0, 0.90, uv.x)
                    * smoothstep(0.0, 0.10, uv.y) * smoothstep(1.0, 0.90, uv.y);
+    if (edgeFade <= 0.001) { discard; }
+
+    vec4 dataSample = texture2D(u_dataTexture, uv);
+    float coverage = (u_bandIndex < 0.5) ? dataSample.r
+                   : (u_bandIndex < 1.5) ? dataSample.g
+                                         : dataSample.b;
+
+    //Latitude correction: Web Mercator stretches longitude by 1 / cos(lat); scaling x by
+    //cos(lat) here lets the noise sample at "round" geographic units so the cloud features
+    //look the same in both axes instead of being elongated east-west.
+    vec2 noiseSpace = vec2(v_geo.x * u_latCos, v_geo.y);
+
+    //Per-band noise scale: low clouds break into tighter puffs (high frequency), high clouds
+    //spread as broad sheets (low frequency). The per-band phase offset decorrelates the three
+    //altitude layers so a fully overcast point shows three distinct cloud shapes rather than
+    //three identical greys stacking.
+    float scale = mix(28.0, 14.0, u_bandIndex * 0.5);   //low=28, mid=21, high=14 cycles / deg
+    float phase = u_bandIndex * 137.5;
+
+    float noise = fbm(noiseSpace * scale + vec2(phase), u_time);
+    noise = clamp(noise * 0.5 + 0.5, 0.0, 1.0);
+
+    //Threshold-driven cloud carving with a wide smoothstep band so the noise variation stays
+    //visible even at the extremes:
+    //  coverage = 0   -> threshold = 0.90 -> almost everything dark (only the highest peaks)
+    //  coverage = 0.5 -> threshold = 0.50 -> noise cleanly carves organic shapes
+    //  coverage = 1   -> threshold = 0.10 -> mostly full, but noise still carves visible relief
+    //The 0.45-wide smoothstep keeps a transition from "carved hole" to "thick cloud" across
+    //the full noise range at every coverage level, so overcast skies still look textured.
+    float threshold = 1.0 - coverage * 0.8 - 0.10;
+    float density   = smoothstep(threshold - 0.10, threshold + 0.35, noise);
 
     float alpha = density * u_opacity * edgeFade;
-    //Premultiplied alpha for MapLibre's framebuffer. The blend func is gl.ONE / gl.ONE_MINUS_SRC_ALPHA
-    //in the host (see render()), so the rgb channel must already carry alpha.
+
+    //Premultiplied alpha for MapLibre's framebuffer. The blend func is gl.ONE / gl.ONE_MINUS_
+    //SRC_ALPHA in the host (see render()), so the rgb channel must already carry alpha.
     gl_FragColor = vec4(u_color * alpha, alpha);
 }
 `;
@@ -199,9 +216,13 @@ export class WeatherCloudLayer implements CustomLayerInterface
     private uOpacity:     WebGLUniformLocation | null = null;
     private uTime:        WebGLUniformLocation | null = null;
     private uBbox:        WebGLUniformLocation | null = null;
+    private uLatCos:      WebGLUniformLocation | null = null;
 
     private opts:    WeatherCloudLayerOptions;
     private startMs: number = performance.now();
+    //cos(centre_lat) cached host-side so the per-frame render() loop is one uniform write per
+    //draw instead of recomputing the trig on every call. Refreshed on every bbox update.
+    private latCosCached: number = 1;
 
     constructor(opts: WeatherCloudLayerOptions)
     {
@@ -209,6 +230,13 @@ export class WeatherCloudLayer implements CustomLayerInterface
             ...opts,
             bandsVisible: [...opts.bandsVisible] as [boolean, boolean, boolean],
         };
+        this._cacheLatitudeCos();
+    }
+
+    private _cacheLatitudeCos(): void
+    {
+        const centreLat = (this.opts.bbox.south + this.opts.bbox.north) / 2;
+        this.latCosCached = Math.cos(centreLat * Math.PI / 180);
     }
 
     public onAdd(map: MaplibreMap, gl: WebGLRenderingContext): void
@@ -273,7 +301,12 @@ export class WeatherCloudLayer implements CustomLayerInterface
         gl.uniform3f(this.uColor, this.opts.color[0], this.opts.color[1], this.opts.color[2]);
         gl.uniform4f(this.uBbox,  this.opts.bbox.west, this.opts.bbox.south,
                                   this.opts.bbox.east, this.opts.bbox.north);
-        gl.uniform1f(this.uTime, (performance.now() - this.startMs) / 1000);
+        gl.uniform1f(this.uLatCos, this.latCosCached);
+        //Wrap the elapsed seconds at 3600 (1 h) so the time uniform stays within FP24 precision
+        //even on mobile GPUs that demote highp float in the fragment shader. The drift step is
+        //small enough that the wrap is invisible to the user.
+        const elapsedSec = (performance.now() - this.startMs) / 1000;
+        gl.uniform1f(this.uTime, elapsedSec % 3600);
 
         gl.enable(gl.BLEND);
         //Premultiplied alpha matches MapLibre's framebuffer; the fragment shader already
@@ -284,12 +317,14 @@ export class WeatherCloudLayer implements CustomLayerInterface
         gl.disable(gl.DEPTH_TEST);
 
         //Paint order low -> mid -> high so the higher (more opaque) band sits on top, matching
-        //the dot-cloud composition from previous betas.
+        //the dot-cloud composition from previous betas. The band index is passed as a float so
+        //the fragment shader can run ternaries against it without int-precision pitfalls on
+        //mobile drivers.
         const order = [0, 1, 2] as const;
         for (const band of order)
         {
             if (!this.opts.bandsVisible[band]) { continue; }
-            gl.uniform1i(this.uBandIndex, band);
+            gl.uniform1f(this.uBandIndex, band);
             gl.uniform1f(this.uOpacity,   BAND_OPACITY[band]);
             gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
         }
@@ -308,7 +343,8 @@ export class WeatherCloudLayer implements CustomLayerInterface
         if (patch.cloudMid)     { this.opts.cloudMid  = patch.cloudMid;  needTexture  = true; }
         if (patch.cloudHigh)    { this.opts.cloudHigh = patch.cloudHigh; needTexture  = true; }
         if (patch.gridSide)     { this.opts.gridSide  = patch.gridSide;  needTexture  = true; }
-        if (patch.bbox)         { this.opts.bbox      = patch.bbox;      needGeometry = true; }
+        if (patch.bbox)         { this.opts.bbox      = patch.bbox;      needGeometry = true;
+                                  this._cacheLatitudeCos(); }
         if (patch.color)        { this.opts.color     = patch.color; }
         if (patch.bandsVisible)
         {
@@ -353,6 +389,7 @@ export class WeatherCloudLayer implements CustomLayerInterface
         this.uOpacity     = gl.getUniformLocation(program, 'u_opacity');
         this.uTime        = gl.getUniformLocation(program, 'u_time');
         this.uBbox        = gl.getUniformLocation(program, 'u_bbox');
+        this.uLatCos      = gl.getUniformLocation(program, 'u_latCos');
     }
 
     private _compileShader(type: number, src: string): WebGLShader
