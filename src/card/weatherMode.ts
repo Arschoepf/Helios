@@ -1,16 +1,26 @@
 //Weather overlay mode. When the user toggles the weather chip in the mode bar, the rest of the
-//HUD fades out (same vocabulary as the LiDAR view), the camera tilts to top-down + zooms out so
-//the user sees the area around the home from above, and a per-altitude cloud-cover SVG overlay
-//paints the modelled coverage as a dot cloud, one disc per grid point per altitude band. The
-//5-day timeline stays visible and scrubbable: each scrub move just picks a different time slice
-//out of the same cached grid, no fresh HTTP round-trip.
+//HUD fades out (same vocabulary as the LiDAR view), the camera tilts top-down and zooms in on
+//the area around the home, and a GPU-side cloud-cover overlay paints the modelled coverage as
+//three altitude bands (low / mid / high) using a fragment-shader-driven custom MapLibre layer
+//(see src/engine/weather-cloud-layer.ts). The bands stack with growing per-band opacity (20 /
+//40 / 60 %) so a fully overcast point reads as a heavy ceiling rather than three identical
+//greys.
 //
-//The dot-cloud encoding deliberately under-fills its cell so the basemap stays visible between
-//discs and the overall shape reads as a punctuated cloud cluster rather than a contiguous wash.
-//Per-band opacity grows from low (20 %) to high (60 %) so layered points naturally weight the
-//higher band heavier when more than one altitude reports cloud cover at the same grid sample.
+//Lifecycle:
+//  - enterWeatherMode tilts the camera, ensures the cloud grid is loaded, then asks the engine
+//    to mount the shader layer.
+//  - exitWeatherMode tells the engine to remove the layer + cancel the refresh timer + restore
+//    the camera.
+//  - Timeline scrubs hit the engine's refreshCloudShaderTime(); the shader re-uploads the
+//    target hour's R / G / B data texture (one ~400-byte transfer, no network call).
+//  - The three altitude toggle buttons in the top-left rail drive setCloudShaderBands().
+//
+//The data feed itself is cached in localStorage for 30 minutes, dedup-guarded, and abortable,
+//see src/helios-engine.ts (ensureWeatherCloudGrid + addCloudShaderLayer pair). One entry of the
+//mode costs at most one 100-location POST against Open-Meteo; subsequent entries within the TTL
+//window cost zero API calls.
 
-import { html, nothing, svg, type TemplateResult } from 'lit';
+import { nothing, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
 import type { HeliosEngine } from '../helios-engine';
 import type { CardMode } from './card-mode';
@@ -21,13 +31,6 @@ import type { CardMode } from './card-mode';
 //out; exit ramps back to invisible in 280 ms while the HUD fades back in.
 const WEATHER_FADE_IN_MS  = 600;
 const WEATHER_FADE_OUT_MS = 280;
-
-//Per-cell threshold below which the band paints nothing. Cells whose mean coverage on a band
-//falls under this percentage are dropped from the blob mask so the basemap stays visible in
-//clear areas. The threshold doubles as the bucket boundary for connected-component grouping:
-//two adjacent cells both above the threshold end up in the same blob regardless of their exact
-//percentages, two adjacent cells one above one below stay in separate blobs.
-const CLOUD_LAYER_THRESHOLD_PCT = 15;
 
 
 export interface WeatherModeHost extends OverlaysHost
@@ -41,22 +44,33 @@ export interface WeatherModeHost extends OverlaysHost
     _weatherFadeRaf?:           number;
     _selectedTime:              Date | null;
     _isLiveMode:                boolean;
-    //Per-band visibility flags driven by the three buttons in the top-left weather rail. Each
-    //flag gates its band's polygon set out of the SVG when false; reset to all true on every
-    //weather-mode entry.
+    //Per-band visibility flags driven by the three buttons in the top-left weather rail. Reset
+    //to all true on every weather-mode entry; the values forward straight into the shader layer
+    //as per-band draw skips, no shader uniform branching.
     _weatherShowHigh:           boolean;
     _weatherShowMid:            boolean;
     _weatherShowLow:            boolean;
-    //LitElement.requestUpdate(), invoked each frame during the fade so the inline opacity steps
-    //smoothly. Duck-typed so importing LitElement here doesn't drag Lit into the engine surface.
+    //Last time index pushed into the shader, used to short-circuit duplicate scrub updates.
+    _weatherShownTimeIdx?:      number;
+    //LitElement.requestUpdate(), invoked each frame during the fade so the inline opacity on
+    //the surrounding HUD elements steps smoothly. Duck-typed so importing LitElement here
+    //doesn't drag Lit into the engine surface.
     requestUpdate(): void;
 }
 
 
-//Tilt the camera to top-down + zoom out, kick the overlay fade-in, fetch the cloud-cover grid
-//in the background. The SVG polygons paint as soon as the grid lands; subsequent refreshes
-//are driven by the engine's internal 5 min timer. Toggle flags reset to all true so the user
-//always lands on a complete view of every band the first time they re-enter the mode.
+//Lit elements are HTMLElements themselves, so the card root acts directly as the source of the
+//`--primary-text-color` CSS variable the shader reads. This helper just casts through the host
+//interface so the engine surface stays free of any Lit-specific typing.
+function getCssHost(host: WeatherModeHost): HTMLElement | null
+{
+    return (host as unknown as HTMLElement | null) ?? null;
+}
+
+
+//Tilt the camera, fetch the cloud grid in the background, mount the shader layer the moment
+//the grid lands. Per-band toggles reset to all-true so the user always lands on a complete view
+//of every band the first time they re-enter the mode.
 export function enterWeatherMode(host: WeatherModeHost): boolean
 {
     if (!host._engine) { return false; }
@@ -66,12 +80,24 @@ export function enterWeatherMode(host: WeatherModeHost): boolean
     host._weatherShowHigh       = true;
     host._weatherShowMid        = true;
     host._weatherShowLow        = true;
+    host._weatherShownTimeIdx   = undefined;
     host._engine.enterWeatherCamera();
     void host._engine.ensureWeatherCloudGrid().then(() =>
     {
         if (host._weatherFadeOutStartMs !== null) { return; }
         if (!host._weatherOverlayVisible)         { return; }
-        host._engine?.startWeatherCloudRefresh();
+        const engine = host._engine;
+        if (!engine) { return; }
+        engine.startWeatherCloudRefresh();
+        const cssHost = getCssHost(host);
+        const activeTime = (host._isLiveMode || !host._selectedTime)
+            ? new Date()
+            : host._selectedTime;
+        const timeIdx = engine.getWeatherCloudGridTimeIndex(activeTime);
+        const bands: [boolean, boolean, boolean] =
+            [host._weatherShowLow, host._weatherShowMid, host._weatherShowHigh];
+        engine.addCloudShaderLayer(cssHost, bands, timeIdx >= 0 ? timeIdx : 0);
+        host._weatherShownTimeIdx = timeIdx >= 0 ? timeIdx : 0;
         host.requestUpdate();
     });
     refreshOverlays(host);
@@ -80,13 +106,16 @@ export function enterWeatherMode(host: WeatherModeHost): boolean
 }
 
 
-//Start the overlay fade-out, hand the camera back, stop the cloud refresh timer.
+//Tear the overlay down: start the HUD fade-in, drop the shader layer immediately so the basemap
+//comes back clean, hand the camera back, stop the cloud refresh timer.
 export function exitWeatherMode(host: WeatherModeHost): void
 {
     host._weatherFadeInStartMs  = null;
     host._weatherFadeOutStartMs = performance.now();
+    host._engine?.removeCloudShaderLayer();
     host._engine?.exitWeatherCamera();
     host._engine?.stopWeatherCloudRefresh();
+    host._weatherShownTimeIdx = undefined;
     startWeatherFadeLoop(host);
 }
 
@@ -139,115 +168,33 @@ export function weatherFadeAlpha(host: WeatherModeHost): number
 }
 
 
-//Per-point dot renderer. Reads the cloud cover series for one band at one time slice and emits
-//one SVG circle per grid point whose value crosses the threshold. The disc is filled in the
-//card's primary text colour with the band-specific opacity (low 40 %, mid 60 %, high 80 %) so
-//the three altitudes stack with growing visual weight at each step. Discs are sized to a
-//fraction of the on-screen cell pitch so neighbours never quite touch, which keeps the cloud
-//cluster legible as a punctuated grid rather than a solid wash of colour.
-function renderCloudBand(
-    projected: ReadonlyArray<{ x: number; y: number } | null>,
-    nLat:      number,
-    nLon:      number,
-    values:    Float32Array,
-    nTimes:    number,
-    timeIdx:   number,
-    radius:    number,
-    cssClass:  string,
-): TemplateResult[]
+//Push any band-visibility / time-index changes coming from the card into the engine so the
+//shader updates without a Lit re-render path. Called from updated() on every card cycle.
+export function syncWeatherShaderState(host: WeatherModeHost): void
 {
-    const dots: TemplateResult[] = [];
-    const r = radius.toFixed(1);
-    for (let iLat = 0; iLat < nLat; iLat++)
+    const engine = host._engine;
+    if (!engine) { return; }
+    if (host._cardMode !== 'weather') { return; }
+    engine.setCloudShaderBands([
+        host._weatherShowLow,
+        host._weatherShowMid,
+        host._weatherShowHigh,
+    ]);
+    const activeTime = (host._isLiveMode || !host._selectedTime)
+        ? new Date()
+        : host._selectedTime;
+    const timeIdx = engine.getWeatherCloudGridTimeIndex(activeTime);
+    if (timeIdx >= 0 && timeIdx !== host._weatherShownTimeIdx)
     {
-        for (let iLon = 0; iLon < nLon; iLon++)
-        {
-            const pointIdx = iLat * nLon + iLon;
-            const v = values[pointIdx * nTimes + timeIdx];
-            if (v < CLOUD_LAYER_THRESHOLD_PCT) { continue; }
-            const p = projected[pointIdx];
-            if (!p) { continue; }
-            dots.push(svg`<circle class="${cssClass}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" />`);
-        }
+        engine.refreshCloudShaderTime(timeIdx);
+        host._weatherShownTimeIdx = timeIdx;
     }
-    return dots;
 }
 
 
-export function renderWeatherOverlay(host: WeatherModeHost): TemplateResult | typeof nothing
+//The shader layer renders inside MapLibre, the card no longer has an SVG overlay to emit. Kept
+//as a no-op stub so the call sites in helios-card.ts compile unchanged.
+export function renderWeatherOverlay(_host: WeatherModeHost): TemplateResult | typeof nothing
 {
-    if (!host._weatherOverlayVisible && host._weatherFadeOutStartMs === null) { return nothing; }
-    const fade   = weatherFadeAlpha(host);
-    const engine = host._engine ?? null;
-    const grid   = engine?.getWeatherCloudGrid() ?? null;
-    const ready  = !!grid && !!engine;
-
-    //Time slice resolved from the timeline scrub state. Live = "now"; scrubbing into the past
-    //or the forecast horizon picks the corresponding hour out of the cached 5-day grid without
-    //firing another fetch.
-    let bandHigh: TemplateResult[] = [];
-    let bandMid:  TemplateResult[] = [];
-    let bandLow:  TemplateResult[] = [];
-    if (ready)
-    {
-        const activeTime = (host._isLiveMode || !host._selectedTime)
-            ? new Date()
-            : host._selectedTime;
-        const timeIdx = engine!.getWeatherCloudGridTimeIndex(activeTime);
-        if (timeIdx >= 0)
-        {
-            const nTimes = grid!.times.length;
-            const nLat   = grid!.nLat;
-            const nLon   = grid!.nLon;
-            //Project every grid point once + reuse across the three bands. Points that fall
-            //outside the camera's clip space come back as null; the per-band loop drops them.
-            const projected: Array<{ x: number; y: number } | null> = new Array(nLat * nLon);
-            for (let iLat = 0; iLat < nLat; iLat++)
-            {
-                for (let iLon = 0; iLon < nLon; iLon++)
-                {
-                    projected[iLat * nLon + iLon] = engine!.projectLonLat(grid!.lons[iLon], grid!.lats[iLat]);
-                }
-            }
-            //Disc radius derived from the on-screen cell pitch: pick two adjacent points near
-            //the centre of the grid (camera centre = home, so the centre samples reproject with
-            //the least perspective distortion), measure their on-screen distance, and take a
-            //fraction of it as the dot radius. The fraction stays under 0.5 so neighbouring
-            //dots never overlap, leaving the lit basemap visible between them.
-            const midLat = Math.floor(nLat / 2);
-            const midLon = Math.floor(nLon / 2);
-            const a = projected[midLat * nLon + midLon];
-            const b = projected[midLat * nLon + midLon + 1];
-            let pitch = 16;
-            if (a && b)
-            {
-                pitch = Math.hypot(b.x - a.x, b.y - a.y) || pitch;
-            }
-            const radius = Math.max(2, pitch * 0.24);
-            if (host._weatherShowHigh)
-            {
-                bandHigh = renderCloudBand(projected, nLat, nLon, grid!.cloudHigh, nTimes, timeIdx, radius, 'weather-cloud-dot-high');
-            }
-            if (host._weatherShowMid)
-            {
-                bandMid  = renderCloudBand(projected, nLat, nLon, grid!.cloudMid,  nTimes, timeIdx, radius, 'weather-cloud-dot-mid');
-            }
-            if (host._weatherShowLow)
-            {
-                bandLow  = renderCloudBand(projected, nLat, nLon, grid!.cloudLow,  nTimes, timeIdx, radius, 'weather-cloud-dot-low');
-            }
-        }
-    }
-
-    return html`
-        <div class="weather-mode-overlay" aria-hidden="true" style="opacity:${fade.toFixed(3)}">
-            ${ready ? html`
-                <svg class="weather-cloud-svg" xmlns="http://www.w3.org/2000/svg">
-                    <g class="weather-cloud-band weather-cloud-band--high">${bandHigh}</g>
-                    <g class="weather-cloud-band weather-cloud-band--mid">${bandMid}</g>
-                    <g class="weather-cloud-band weather-cloud-band--low">${bandLow}</g>
-                </svg>
-            ` : nothing}
-        </div>
-    `;
+    return nothing;
 }

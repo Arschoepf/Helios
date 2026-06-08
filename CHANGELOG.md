@@ -243,6 +243,28 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Weather mode -> GPU shader overlay (3 quads + FBM noise), beta.117 (#213)
+
+SVG dots out, fragment-shader-driven custom MapLibre layer in. The cached cloud grid feeds an
+RGBA8 data texture (R = low, G = mid, B = high cloud cover %) sampled bilinearly in the
+fragment shader, modulated by 4 octaves of simplex FBM noise to carve the shredded organic
+edge the dot encoding never managed. Three full-bbox quads, one per altitude band, draw at the
+same `--primary-text-color` tint (read off the live card root via getComputedStyle) with the
+20 / 40 / 60 % per-band opacity from beta.116 preserved. WebGL state is saved + restored
+around every render() so the basemap stays uncorrupted.
+
+Grid is now 10 x 10 at 0.10 deg half-extent, matching the new weather-mode zoom 11 framing
+(~22 x 22 km). One fetch costs 100 API calls; the 30 min localStorage cache + inflight dedup
++ AbortController from beta.116 still apply.
+
+Card-side: `_weatherShowLow/Mid/High` toggles + timeline scrub feed directly into the engine's
+`setCloudShaderBands` / `refreshCloudShaderTime` so band visibility flips and hour changes
+land in a single texture upload without a Lit re-render. `weather-mode-overlay`,
+`weather-cloud-svg` and `weather-cloud-dot-*` CSS rules removed (dead with the SVG path).
+
+A slow time uniform makes the noise drift, MapLibre coalesces the per-frame triggerRepaint
+so the cost stays at one map redraw per frame even at 60 fps.
+
 ### Open-Meteo rate-limit ban + dead-weight purge, beta.116 (#212)
 
 Audit of the card's Open-Meteo traffic showed the weather-mode cloud grid was firing 961 API

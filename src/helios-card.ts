@@ -84,6 +84,7 @@ import {
     renderWeatherOverlay,
     enterWeatherMode,
     exitWeatherMode,
+    syncWeatherShaderState,
 } from './card/weatherMode';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
 import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
@@ -1089,6 +1090,18 @@ export class HeliosCard extends LitElement
             {
                 this._handleCardModeChange(prev, this._cardMode);
             }
+        }
+
+        //Weather mode: forward band-toggle + scrub changes to the shader layer without an SVG
+        //rebuild. No-op unless the card is currently in weather mode and the layer is mounted.
+        if (this._cardMode === 'weather'
+            && (_changedProperties.has('_weatherShowLow')
+             || _changedProperties.has('_weatherShowMid')
+             || _changedProperties.has('_weatherShowHigh')
+             || _changedProperties.has('_selectedTime')
+             || _changedProperties.has('_isLiveMode')))
+        {
+            syncWeatherShaderState(this);
         }
 
         //Lazy Energy WS subscribe: HA can attach hass AFTER

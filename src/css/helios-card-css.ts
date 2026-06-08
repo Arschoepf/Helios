@@ -2885,41 +2885,8 @@ export const heliosCardStyles = css`
         font-variant-numeric: tabular-nums;
     }
 
-    /*  Weather mode overlay. Transparent wrapper anchored over the map container that hosts the
-        per-altitude cloud SVG. Pointer-events stay off so the user can still drag / pinch the
-        basemap through the overlay (the cloud cells are read-only context, no interaction).    */
-    .weather-mode-overlay
-    {
-        position: absolute;
-        inset: 0;
-        pointer-events: none;
-        z-index: 4;
-    }
-    .weather-cloud-svg
-    {
-        width: 100%;
-        height: 100%;
-        display: block;
-        overflow: visible;
-    }
-    /*  Per-point cloud dots. Every grid point with cloud cover over the threshold paints as one
-        small filled disc with a thin contour, both in --primary-text-color so the cluster reads
-        as a single HA-themed swarm regardless of the user's theme. Opacity grows with altitude
-        so a point covered on all three bands stacks low (20 %) under mid (40 %) under high
-        (60 %), the higher band carrying the most visual weight. Stroke is the same colour at
-        the same opacity, just renders as a tighter rim because it is only 1 px wide.            */
-    .weather-cloud-dot-low,
-    .weather-cloud-dot-mid,
-    .weather-cloud-dot-high
-    {
-        fill:   var(--primary-text-color, #212121);
-        stroke: var(--primary-text-color, #212121);
-        stroke-width: 1;
-        vector-effect: non-scaling-stroke;
-    }
-    .weather-cloud-dot-low  { fill-opacity: 0.20; stroke-opacity: 0.20; }
-    .weather-cloud-dot-mid  { fill-opacity: 0.40; stroke-opacity: 0.40; }
-    .weather-cloud-dot-high { fill-opacity: 0.60; stroke-opacity: 0.60; }
+    /*  Weather mode renders inside MapLibre via a GL custom layer (see
+        src/engine/weather-cloud-layer.ts), no DOM overlay any more, no per-cell SVG. */
 
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +

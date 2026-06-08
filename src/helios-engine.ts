@@ -7,6 +7,7 @@ import { projectExtrusionShadows } from './engine/shadows';
 import { resolveLidarSource } from './engine/lidar';
 import { RASTER_DEFAULTS } from './engine/lidar/pipeline';
 import { LidarViewLayer } from './engine/lidar-view-layer';
+import { WeatherCloudLayer } from './engine/weather-cloud-layer';
 import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
@@ -905,7 +906,7 @@ export class HeliosEngine
             center:   [this.homeLon, this.homeLat],
             bearing:  0,
             pitch:    0,
-            zoom:     10,
+            zoom:     11,
             duration: 1200,
         });
     }
@@ -967,13 +968,15 @@ export class HeliosEngine
     //map.
     //---------------------------------------------------------------------------------------------
 
-    //Grid dimensions: 15 x 15 = 225 points per fetch. Cell pitch ~3 km, coarse but reads clearly
-    //as a dot cloud at the weather-mode zoom level.
-    private static readonly _WEATHER_GRID_SIDE        = 15;
-    //Half-extent of the grid in latitude degrees around the home. 0.20 deg ~= 22 km on the lat
-    //axis at any latitude, so the grid covers a ~44 km x ~44 km bbox after the cos(lat)
-    //compression on the lon axis matches that envelope.
-    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.20;
+    //Grid dimensions: 10 x 10 = 100 points per fetch. At weather-mode zoom 11 the visible bbox
+    //is ~22 x 22 km, so cell pitch lands at ~2.2 km. That over-samples Open-Meteo's underlying
+    //model (ICON-EU 7 km / IFS 9 km), which is the point: a tight grid feeds a tight bilinear
+    //interpolation into the fragment shader, the FBM noise on top of it carries the texture.
+    private static readonly _WEATHER_GRID_SIDE        = 10;
+    //Half-extent of the grid in latitude degrees around the home. 0.10 deg ~= 11 km on the lat
+    //axis, so the grid covers a ~22 x 22 km bbox after the cos(lat) compression on the lon axis
+    //matches that envelope, tracking the zoom-11 camera framing.
+    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.10;
     //Refresh cadence while inside weather mode. Hits the cache or the network depending on
     //freshness vs the cache TTL below.
     private static readonly _WEATHER_GRID_REFRESH_MS   = 5 * 60_000;
@@ -1014,6 +1017,13 @@ export class HeliosEngine
     private _weatherCloudGridPending: Promise<void> | null = null;
     private _weatherCloudGridAbort: AbortController | null = null;
     private _weatherCloudGridRefreshTimer: number | undefined = undefined;
+    //Live GPU-side overlay built on top of the cloud grid. Holds the active MapLibre custom layer
+    //instance + the rendering state the card drives (selected time index, per-band visibility,
+    //primary-text-color). Null while weather mode is off.
+    private _weatherCloudLayer: WeatherCloudLayer | null = null;
+    private _weatherCloudShownTimeIdx: number = -1;
+    private _weatherCloudBandsVisible: [boolean, boolean, boolean] = [true, true, true];
+    private _weatherCloudColor: [number, number, number] = [1, 1, 1];
 
     public getWeatherCloudGrid(): typeof this._weatherCloudGrid
     {
@@ -1125,6 +1135,10 @@ export class HeliosEngine
         if (cached)
         {
             this._weatherCloudGrid = cached;
+            //Push the cached payload into the active shader layer (if any) so the renderer picks
+            //up the freshly loaded grid without waiting for the next time-index change.
+            this.reuploadCloudShaderFromGrid(this._weatherCloudShownTimeIdx >= 0
+                ? this._weatherCloudShownTimeIdx : 0);
             return;
         }
         if (this._weatherCloudGridPending) { return this._weatherCloudGridPending; }
@@ -1242,6 +1256,10 @@ export class HeliosEngine
                 };
                 this._weatherCloudGrid = grid;
                 this._writeWeatherCloudGridToCache(grid);
+                //Push the fresh payload into the active shader layer, if any. No-op when the
+                //layer isn't mounted yet (the card will instantiate it once we return).
+                this.reuploadCloudShaderFromGrid(this._weatherCloudShownTimeIdx >= 0
+                    ? this._weatherCloudShownTimeIdx : 0);
             }
             catch (e: any)
             {
@@ -1283,6 +1301,164 @@ export class HeliosEngine
         //AbortError so a cancelled fetch leaves the previous cached grid untouched.
         this._weatherCloudGridAbort?.abort();
         this._weatherCloudGridAbort = null;
+    }
+
+    //Attach the GPU cloud overlay to the active MapLibre style. Idempotent: a second call while
+    //the layer is already mounted refreshes the data + visibility state instead of mounting a
+    //duplicate. Reads `--primary-text-color` off the supplied host element so the shader output
+    //matches the active HA theme; falls back to white if the var is unresolved.
+    public addCloudShaderLayer(host: HTMLElement | null,
+                               bandsVisible: [boolean, boolean, boolean],
+                               timeIdx: number): void
+    {
+        if (!this.map) { return; }
+        const grid = this._weatherCloudGrid;
+        if (!grid) { return; }
+        this._weatherCloudColor = this._readPrimaryTextColor(host);
+        this._weatherCloudBandsVisible = [...bandsVisible] as [boolean, boolean, boolean];
+        this._weatherCloudShownTimeIdx = Math.max(0, Math.min(grid.times.length - 1, timeIdx));
+        const slice = this._sliceCloudGridForTime(this._weatherCloudShownTimeIdx);
+        if (this._weatherCloudLayer)
+        {
+            this._weatherCloudLayer.updateData({
+                color:        this._weatherCloudColor,
+                gridSide:     grid.nLat,
+                bbox:         { west:  grid.bounds.west,  south: grid.bounds.south,
+                                east:  grid.bounds.east,  north: grid.bounds.north },
+                cloudLow:     slice.low,
+                cloudMid:     slice.mid,
+                cloudHigh:    slice.high,
+                bandsVisible: this._weatherCloudBandsVisible,
+            });
+            return;
+        }
+        this._weatherCloudLayer = new WeatherCloudLayer({
+            color:        this._weatherCloudColor,
+            gridSide:     grid.nLat,
+            bbox:         { west:  grid.bounds.west,  south: grid.bounds.south,
+                            east:  grid.bounds.east,  north: grid.bounds.north },
+            cloudLow:     slice.low,
+            cloudMid:     slice.mid,
+            cloudHigh:    slice.high,
+            bandsVisible: this._weatherCloudBandsVisible,
+        });
+        try { this.map.addLayer(this._weatherCloudLayer); }
+        catch (e) { console.warn('[HELIOS] weather cloud shader layer addLayer failed:', e); }
+    }
+
+    //Detach the GPU cloud overlay. Safe to call when the layer is already absent.
+    public removeCloudShaderLayer(): void
+    {
+        if (!this._weatherCloudLayer) { return; }
+        try { this.map?.removeLayer(this._weatherCloudLayer.id); }
+        catch { /* style swapped underneath us, layer already gone */ }
+        this._weatherCloudLayer = null;
+        this._weatherCloudShownTimeIdx = -1;
+    }
+
+    //Re-upload the data texture for a different hour in the cached grid. Called on every timeline
+    //scrub move; the cost is one ~400-byte texture upload, well below the cost of the map repaint
+    //the call triggers anyway.
+    public refreshCloudShaderTime(timeIdx: number): void
+    {
+        if (!this._weatherCloudLayer || !this._weatherCloudGrid) { return; }
+        const clamped = Math.max(0, Math.min(this._weatherCloudGrid.times.length - 1, timeIdx));
+        if (clamped === this._weatherCloudShownTimeIdx) { return; }
+        this._weatherCloudShownTimeIdx = clamped;
+        const slice = this._sliceCloudGridForTime(clamped);
+        this._weatherCloudLayer.updateData({
+            cloudLow:  slice.low,
+            cloudMid:  slice.mid,
+            cloudHigh: slice.high,
+        });
+    }
+
+    //Toggle individual altitude bands without re-uploading the texture. Card-side button clicks
+    //call straight through here.
+    public setCloudShaderBands(bandsVisible: [boolean, boolean, boolean]): void
+    {
+        this._weatherCloudBandsVisible = [...bandsVisible] as [boolean, boolean, boolean];
+        this._weatherCloudLayer?.updateData({ bandsVisible: this._weatherCloudBandsVisible });
+    }
+
+    //After a fresh grid lands (network or cache hit), push the new payload into the layer + reset
+    //the shown time index since the grid timeline shifted underneath us.
+    public reuploadCloudShaderFromGrid(timeIdx: number): void
+    {
+        const grid = this._weatherCloudGrid;
+        if (!this._weatherCloudLayer || !grid) { return; }
+        this._weatherCloudShownTimeIdx = Math.max(0, Math.min(grid.times.length - 1, timeIdx));
+        const slice = this._sliceCloudGridForTime(this._weatherCloudShownTimeIdx);
+        this._weatherCloudLayer.updateData({
+            gridSide:  grid.nLat,
+            bbox:      { west:  grid.bounds.west,  south: grid.bounds.south,
+                         east:  grid.bounds.east,  north: grid.bounds.north },
+            cloudLow:  slice.low,
+            cloudMid:  slice.mid,
+            cloudHigh: slice.high,
+        });
+    }
+
+    //Extract a single hour from the packed [pointIdx * nTimes + timeIdx] storage into three flat
+    //N x N arrays the shader uploads as the R / G / B channels of its data texture.
+    private _sliceCloudGridForTime(timeIdx: number):
+        { low: Float32Array; mid: Float32Array; high: Float32Array }
+    {
+        const grid = this._weatherCloudGrid!;
+        const N      = grid.nLat;
+        const total  = N * N;
+        const nTimes = grid.times.length;
+        const low    = new Float32Array(total);
+        const mid    = new Float32Array(total);
+        const high   = new Float32Array(total);
+        for (let p = 0; p < total; p++)
+        {
+            const idx = p * nTimes + timeIdx;
+            low [p] = grid.cloudLow [idx];
+            mid [p] = grid.cloudMid [idx];
+            high[p] = grid.cloudHigh[idx];
+        }
+        return { low, mid, high };
+    }
+
+    //Resolve --primary-text-color off the supplied host element (the live <helios-card> root) and
+    //convert to a normalised RGB triplet for the shader. Falls back to white when the variable is
+    //unset or unparseable, which keeps the overlay visible against any basemap rather than going
+    //transparent.
+    private _readPrimaryTextColor(host: HTMLElement | null): [number, number, number]
+    {
+        if (!host) { return [1, 1, 1]; }
+        try
+        {
+            const raw = getComputedStyle(host).getPropertyValue('--primary-text-color')?.trim() ?? '';
+            const parsed = this._parseCssColor(raw);
+            if (parsed) { return parsed; }
+        }
+        catch { /* getComputedStyle on a detached node */ }
+        return [1, 1, 1];
+    }
+
+    //Minimal CSS colour parser: accepts #rgb / #rrggbb / rgb(...) / rgba(...). Returns null on
+    //anything else so the caller falls back to white.
+    private _parseCssColor(s: string): [number, number, number] | null
+    {
+        if (!s) { return null; }
+        const hex = s.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
+        if (hex)
+        {
+            let h = hex[1];
+            if (h.length === 3) { h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2]; }
+            const r = parseInt(h.slice(0, 2), 16) / 255;
+            const g = parseInt(h.slice(2, 4), 16) / 255;
+            const b = parseInt(h.slice(4, 6), 16) / 255;
+            return [r, g, b];
+        }
+        const rgb = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (rgb)
+        {
+            return [Number(rgb[1]) / 255, Number(rgb[2]) / 255, Number(rgb[3]) / 255];
+        }
+        return null;
     }
 
     //Lat / lon -> screen pixel projection via MapLibre's own camera transform. Used by the SVG
@@ -5666,7 +5842,10 @@ export class HeliosEngine
                 //to custom layers, this explicit removeLayer is the
                 //only thing preventing the buffers + program from
                 //leaking through every engine respawn.
-                'helios-lidar-view'
+                'helios-lidar-view',
+                //Weather-mode cloud shader: same rationale. onRemove() frees the program, the
+                //quad VBO and the data texture.
+                'helios-weather-cloud'
             ])
             {
                 try { if (this.map.getLayer(lid)) this.map.removeLayer(lid); }
