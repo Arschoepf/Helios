@@ -33,6 +33,47 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather mode raster overlay shipped (#210)
+
+The weather mode now paints a satellite-style cloud raster on the map when active. Each
+canvas pixel composites three altitude bands (low / mid / high) sampled from a 31 x 31
+Open-Meteo grid centred on the home, bilinear-interpolated to the pixel's lat / lon, then
+modulated by a 3-octave value-noise field so the raster reads as a textured cloud volume
+rather than a flat colour swatch.
+
+**Engine surface:**
+
+- `_weatherGrid` storage: ~7 MB in-memory hourly cloud values (cloud_low / cloud_mid /
+  cloud_high) at 31 x 31 grid points spanning ~156 km x ~156 km around the home.
+- `ensureWeatherGrid()`: idempotent fetch with a 30 min TTL. A single Open-Meteo
+  multi-location GET (961 lat / lon pairs in one call, under the 1000-coordinate API
+  limit) brings down 48 h of forecast.
+- `getWeatherGrid()` / `isWeatherGridFresh()`: read-side accessors the renderer polls.
+- `setWeatherCloudOverlay(dataUrl, bounds)`: attaches the canvas image as a MapLibre
+  `image` source + `raster` layer. Subsequent calls swap the image via `updateImage` so
+  the layer never blinks during scrub.
+- `clearWeatherCloudOverlay()`: removes the source + layer on mode exit.
+
+**Card / `weatherMode.ts`:**
+
+- Inline value-noise (`fractalNoise`, 3 octaves of `valueNoise2D`) for cloud texture.
+  Deterministic per (x, y) so the texture stays stable across re-renders within a
+  session.
+- 512 x 512 offscreen canvas reused across renders (allocate once, paint many).
+- Bilinear interpolation on the grid at every canvas pixel + per-layer alpha derived
+  from the matching coverage percent, modulated by independent noise offsets for each
+  band so the three masses aren't perfectly correlated.
+- Composite order: high (light gray, top of stack) → mid → low (dark gray, bottom).
+  Dense low band wins where coverages overlap, matching real-sky visual weighting.
+- `refreshWeatherRaster(host)` short-circuits when the selected time hasn't crossed
+  into a new hourly bucket since the last paint, so the scrub cursor sweeping through
+  the same hour costs zero canvas work.
+
+The MapLibre raster layer handles pan / zoom / rotation natively, so the cloud mass moves
+correctly with the camera without per-frame JS reprojection. Initial fetch takes 200-500 ms
+on a residential connection; the raster paints on the next render tick after the data
+lands.
+
 ### Lock button disabled in weather mode (#210)
 
 Last polish on the weather mode entry / exit: the camera-lock button stays visible in the top-

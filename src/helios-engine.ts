@@ -902,6 +902,219 @@ export class HeliosEngine
         return { low: w.cloudLow, mid: w.cloudMid, high: w.cloudHigh, cover: w.cloudCover };
     }
 
+    //---------------------------------------------------------------------------------------------
+    //Weather grid: a 31 x 31 lat / lon raster of cloud-cover-low / mid / high values sampled by a
+    //single Open-Meteo multi-location call centred on the home. Spans ~150 km × ~150 km so each
+    //grid cell is ~5 km on a side, roughly matching the underlying model native resolution (3 km
+    //for AROME-France, 13 km for ICON-EU). Read by the weather-mode canvas renderer which paints
+    //a bilinear-interpolated + Perlin-noise-textured cloud raster onto a MapLibre image layer.
+    //
+    //Storage layout: per-layer Float32Array of shape (nLat * nLon * nTimes) so cloudLow[lat, lon,
+    //time] = `cloudLow[(latIdx * nLon + lonIdx) * nTimes + timeIdx]`. Float32 keeps the memory
+    //footprint at ~7 MB total (961 cells × 49 h × 3 layers × 4 bytes) which is acceptable.
+    //---------------------------------------------------------------------------------------------
+
+    private static readonly _WEATHER_GRID_SIDE       = 31;
+    //Half-extent of the grid in latitude degrees. 0.7 deg ≈ 78 km north + 78 km south on any
+    //latitude, so the grid covers ~156 km × ~156 km when the longitude span gets compressed by
+    //cos(lat). Sized to match the camera's weather-mode zoom 12 viewport at temperate latitudes
+    //plus a margin so a small pan doesn't drift out of the raster.
+    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.7;
+    //Cache TTL for the grid fetch. Open-Meteo refreshes its underlying numerical models every 1-3
+    //hours; 30 min keeps the data near-current without burning calls on every mode toggle.
+    private static readonly _WEATHER_GRID_TTL_MS     = 30 * 60_000;
+
+    private _weatherGrid: {
+        bounds:    { south: number; north: number; west: number; east: number };
+        nLat:      number;
+        nLon:      number;
+        lats:      Float32Array;
+        lons:      Float32Array;
+        times:     Date[];
+        cloudLow:  Float32Array;
+        cloudMid:  Float32Array;
+        cloudHigh: Float32Array;
+    } | null = null;
+    private _weatherGridFetching = false;
+    private _weatherGridFetchKey = '';
+    private _weatherGridStaleAtMs = 0;
+
+    //Returns the grid if it's already in memory and fresh, otherwise kicks an async fetch and
+    //returns null. The weather-mode overlay calls this on every render; the first call after a
+    //cold start triggers the fetch and falls back to the point overlay until the grid lands.
+    public getWeatherGrid(): typeof this._weatherGrid
+    {
+        return this._weatherGrid;
+    }
+
+    public isWeatherGridFresh(): boolean
+    {
+        return this._weatherGrid !== null && Date.now() < this._weatherGridStaleAtMs;
+    }
+
+    public isWeatherGridFetching(): boolean
+    {
+        return this._weatherGridFetching;
+    }
+
+    //Fire the grid fetch when stale. Idempotent: a second call while a fetch is in flight short-
+    //circuits without queueing a second request. The Promise resolves when the data has landed (or
+    //the request failed); callers can await for a clean "show the raster once ready" gate but the
+    //weather-mode overlay just polls getWeatherGrid() and re-renders when the next host refresh
+    //tick fires.
+    public async ensureWeatherGrid(): Promise<void>
+    {
+        if (this._weatherGridFetching) { return; }
+        const key = `${this.homeLat.toFixed(4)},${this.homeLon.toFixed(4)}`;
+        if (this._weatherGrid && this._weatherGridFetchKey === key && Date.now() < this._weatherGridStaleAtMs)
+        {
+            return;
+        }
+        this._weatherGridFetching = true;
+        try
+        {
+            const N = HeliosEngine._WEATHER_GRID_SIDE;
+            const halfLat = HeliosEngine._WEATHER_GRID_HALF_LAT_DEG;
+            //Longitude span gets compressed by cos(lat) so the grid covers the same west-east
+            //distance as the north-south distance regardless of latitude. The math degenerates near
+            //the poles, the abs(cos) guard keeps the division well-behaved at high latitudes.
+            const cosLat = Math.max(0.1, Math.abs(Math.cos(this.homeLat * Math.PI / 180)));
+            const halfLon = halfLat / cosLat;
+            const south = this.homeLat - halfLat;
+            const north = this.homeLat + halfLat;
+            const west  = this.homeLon - halfLon;
+            const east  = this.homeLon + halfLon;
+            const lats  = new Float32Array(N);
+            const lons  = new Float32Array(N);
+            for (let i = 0; i < N; i++)
+            {
+                lats[i] = south + (i / (N - 1)) * (north - south);
+                lons[i] = west  + (i / (N - 1)) * (east  - west);
+            }
+            //Flatten to (lat, lon) pairs in row-major (lat-outer, lon-inner) order. Open-Meteo
+            //returns results in the same order the lat / lon arrays are passed.
+            const flatLats: string[] = new Array(N * N);
+            const flatLons: string[] = new Array(N * N);
+            for (let iLat = 0; iLat < N; iLat++)
+            {
+                for (let iLon = 0; iLon < N; iLon++)
+                {
+                    flatLats[iLat * N + iLon] = lats[iLat].toFixed(4);
+                    flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
+                }
+            }
+            const url = 'https://api.open-meteo.com/v1/forecast?'
+                + 'latitude='  + flatLats.join(',')
+                + '&longitude=' + flatLons.join(',')
+                + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
+                + '&forecast_days=2&past_days=0&timezone=UTC';
+            const r = await fetch(url);
+            if (!r.ok)
+            {
+                throw new Error(`Open-Meteo grid fetch failed: HTTP ${r.status}`);
+            }
+            const arr: any = await r.json();
+            //Multi-location response is an array of single-location result objects, each with its
+            //own `hourly.time` axis. We assume the axis is identical across locations (it is by
+            //construction since every location used the same forecast_days + past_days + timezone),
+            //and only parse it once from the first entry.
+            const results: any[] = Array.isArray(arr) ? arr : [arr];
+            if (results.length === 0 || !results[0]?.hourly?.time)
+            {
+                throw new Error('Open-Meteo grid fetch: empty payload');
+            }
+            const timeStrs: string[] = results[0].hourly.time;
+            const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
+            const nTimes = times.length;
+            const cloudLow  = new Float32Array(N * N * nTimes);
+            const cloudMid  = new Float32Array(N * N * nTimes);
+            const cloudHigh = new Float32Array(N * N * nTimes);
+            for (let g = 0; g < N * N; g++)
+            {
+                const r = results[g];
+                const lo = r?.hourly?.cloud_cover_low  ?? [];
+                const mi = r?.hourly?.cloud_cover_mid  ?? [];
+                const hi = r?.hourly?.cloud_cover_high ?? [];
+                const base = g * nTimes;
+                for (let t = 0; t < nTimes; t++)
+                {
+                    cloudLow[base + t]  = lo[t] ?? 0;
+                    cloudMid[base + t]  = mi[t] ?? 0;
+                    cloudHigh[base + t] = hi[t] ?? 0;
+                }
+            }
+            this._weatherGrid = {
+                bounds: { south, north, west, east },
+                nLat:  N,
+                nLon:  N,
+                lats,
+                lons,
+                times,
+                cloudLow,
+                cloudMid,
+                cloudHigh,
+            };
+            this._weatherGridFetchKey = key;
+            this._weatherGridStaleAtMs = Date.now() + HeliosEngine._WEATHER_GRID_TTL_MS;
+        }
+        catch (e)
+        {
+            console.warn('[HELIOS] weather grid fetch failed:', e);
+        }
+        finally
+        {
+            this._weatherGridFetching = false;
+        }
+    }
+
+    //Cloud overlay raster source / layer management. MapLibre's `image` source warps a single image
+    //onto a quadrilateral defined by 4 lat / lon corners; the weather-mode canvas renders into an
+    //offscreen HTMLCanvasElement, exports a data URL, and attaches it to the source. Pan / zoom /
+    //rotation are handled by MapLibre natively from there.
+    private static readonly _WEATHER_OVERLAY_SOURCE_ID = 'helios-weather-cloud-source';
+    private static readonly _WEATHER_OVERLAY_LAYER_ID  = 'helios-weather-cloud-layer';
+
+    public setWeatherCloudOverlay(dataUrl: string, bounds: { south: number; north: number; west: number; east: number }): void
+    {
+        if (!this.map) { return; }
+        const srcId = HeliosEngine._WEATHER_OVERLAY_SOURCE_ID;
+        const lyrId = HeliosEngine._WEATHER_OVERLAY_LAYER_ID;
+        const coordinates: [[number, number], [number, number], [number, number], [number, number]] = [
+            [bounds.west, bounds.north],
+            [bounds.east, bounds.north],
+            [bounds.east, bounds.south],
+            [bounds.west, bounds.south],
+        ];
+        const existing = this.map.getSource(srcId) as any;
+        if (existing)
+        {
+            //updateImage atomically swaps the URL + coordinates without dropping the layer, so the
+            //raster doesn't blink while the user scrubs the timeline.
+            existing.updateImage({ url: dataUrl, coordinates });
+            return;
+        }
+        this.map.addSource(srcId, {
+            type: 'image',
+            url: dataUrl,
+            coordinates,
+        });
+        this.map.addLayer({
+            id:     lyrId,
+            type:   'raster',
+            source: srcId,
+            paint:  { 'raster-opacity': 1, 'raster-fade-duration': 0 },
+        });
+    }
+
+    public clearWeatherCloudOverlay(): void
+    {
+        if (!this.map) { return; }
+        const srcId = HeliosEngine._WEATHER_OVERLAY_SOURCE_ID;
+        const lyrId = HeliosEngine._WEATHER_OVERLAY_LAYER_ID;
+        if (this.map.getLayer(lyrId))  { this.map.removeLayer(lyrId); }
+        if (this.map.getSource(srcId)) { this.map.removeSource(srcId); }
+    }
+
     //Auto-rotation state. The map slowly orbits the home in the
     //opposite direction to the sun's apparent motion (decreasing
     //bearing, ~1.5°/s) when the user has been idle for a few
