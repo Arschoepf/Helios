@@ -3472,8 +3472,11 @@ export class HeliosEngine
             paint:
             {
                 'fill-extrusion-color':   baseColor,
-                'fill-extrusion-height':  ['get', 'render_height'],
-                'fill-extrusion-base':    ['get', 'render_min_height'],
+                //coalesce: features missing render_height / render_min_height fall back to 0
+                //instead of evaluating the `get` to null, which MapLibre would otherwise log as
+                //"expected number, got null" once per missing feature on every paint.
+                'fill-extrusion-height':  ['coalesce', ['get', 'render_height'],     0],
+                'fill-extrusion-base':    ['coalesce', ['get', 'render_min_height'], 0],
                 'fill-extrusion-opacity': opacity
             }
         });
@@ -3491,8 +3494,8 @@ export class HeliosEngine
                 //surrounding. Surroundings keep the configured /
                 //default neutral baseColor.
                 'fill-extrusion-color':   '#488fc2',
-                'fill-extrusion-height':  ['get', 'render_height'],
-                'fill-extrusion-base':    ['get', 'render_min_height'],
+                'fill-extrusion-height':  ['coalesce', ['get', 'render_height'],     0],
+                'fill-extrusion-base':    ['coalesce', ['get', 'render_min_height'], 0],
                 'fill-extrusion-opacity': 1
             }
         });

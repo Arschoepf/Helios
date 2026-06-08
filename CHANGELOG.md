@@ -33,6 +33,15 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Building extrusion null-warning fix (#210)
+
+The MapLibre "expected number, got null" log spam came from
+`helios-buildings-surroundings` and `helios-buildings-home` layers reading `render_height` /
+`render_min_height` directly via `['get', ...]`. Features missing those fields fell into
+MapLibre's expression evaluator, returned null and tripped the warning once per missing feature
+on every paint. `coalesce(['get', ...], 0)` wraps both reads with a safe fallback so the
+warning path never fires.
+
 ### Weather grid localStorage cache + opacity bump (#210)
 
 - **localStorage cache** on the weather grid, same recipe the home-point Open-Meteo cache used:
