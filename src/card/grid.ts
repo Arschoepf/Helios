@@ -2,24 +2,22 @@
 //hass.states and the past-scrub derivation from the rolling buffer
 //backed by HA recorder history.
 //
-//grid-import-entity and grid-export-entity can be wired as a single
-//entity (string) OR as an array of entities. The array form is the
-//only sane way to model time-of-use installs where the cumulative
-//meter is split across two indexes (heures pleines / creuses in
-//France, peak / off-peak elsewhere). Crucially, those indexes are
-//MUTUALLY EXCLUSIVE: only one is incrementing at any given moment
-//(the active tariff), so the chip displays the value of the entity
-//that changed MOST RECENTLY. No averaging, no summing: the last-
-//updated entity wins.
+//Entity resolution is 100 % HA Energy dashboard (config/energy global
+//settings): the card pulls the cumulative kWh meters from
+//`stat_energy_from` (import) / `stat_energy_to` (export) and the live
+//signed-power sensors from `stat_rate` / `power_config.stat_rate`. A
+//multi-source install (split tariffs, separate phase meters, multiple
+//grid connections) is summed at consumer side: every meter declared
+//on every grid source in HA Energy contributes; the last-updated
+//meter wins on the live chip, every meter's bracketed slope sums on
+//the scrub path.
 //
-//grid-power-entity is the third wiring: a single COMBINED signed
-//sensor (Fronius P_Grid, Shelly EM, P1 net power, ...) whose sign
-//encodes the direction. When it is set it owns both chips and the
-//directional slots above are ignored: readCombined derives the net
-//signed watts (a power sensor's value, or a net-energy sensor's
-//signed slope), applies the optional grid-power-invert flip, then
-//routes a non-negative net to the IMPORT chip and a negative net to
-//the EXPORT chip so only the active direction is ever shown.
+//Per-source sign inversion is honoured via HA Energy's own
+//`power_config.stat_rate_inverted` switch, surfaced through
+//`invertedRateEntities[]` on the EnergyDefaults snapshot. The card
+//applies the flip at sample time so downstream consumers (chip,
+//leader, scrub buffer) see the canonical "positive = import"
+//convention regardless of how the user wired the source.
 //
 //Both live and past-scrub derivations share one bracketed-slope
 //helper. The bracket is chosen so that the time span across the two
@@ -29,9 +27,10 @@
 //samples landed 5 s apart, while still using the natural sample
 //cadence on sparse meters (Linky 30 min, Shelly 60 s).
 
-import type { HeliosConfig } from '../helios-config';
 import { pvNormalizeToWatts } from './pv';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import type { EnergyDefaults } from './energy-prefs';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 type Sample = { t: number; v: number; lastChangeT?: number | null };
@@ -48,8 +47,10 @@ const _historyFetched   = new Map<string, number>();
 //to the load.
 const _historyFailedUntil = new Map<string, number>();
 const _historyInflight  = new Set<string>();
-//24 h refresh cadence: re-issue the 72 h backfill once a day so the buffer head stays fresh on long-uptime sessions.
-const GRID_FETCH_REFRESH_MS = 24 * 60 * 60_000;
+//Refresh cadence: re-issue the backfill once per hour so the buffer head stays fresh on long-uptime sessions. The old 24 h cadence
+//combined with the empty-result fetch-marker bug below would lock a card out of the recorder for a full day after a single empty
+//response, which made past-scrub chips read blank until the editor's reset button was pressed.
+const GRID_FETCH_REFRESH_MS = 60 * 60_000;
 //2 min cooldown after a `WsTimeoutError`, prevents the per-tick retry storm.
 const GRID_FETCH_COOLDOWN_MS = 2 * 60_000;
 
@@ -69,20 +70,20 @@ export function clearGridModuleCaches(): void
 //  - RAW the last 6 hours, full resolution + significant_changes_only.
 //    This is the heaviest call (~10-20k rows per entity at 1 Hz) but
 //    it stays bounded and the recorder handles it in 1 to 2 s.
-//  - LTS (5-minute period) the previous 18 hours, total backfill
-//    coverage 24 hours. ~216 rows per entity, near-free on the
-//    recorder regardless of source frequency since the rows come
-//    from HA's pre-aggregated `statistics_short_term` table.
+//  - LTS (5-minute period) the previous 4 days 18 hours, total
+//    backfill coverage 5 days. ~1440 rows per entity, near-free on
+//    the recorder regardless of source frequency since the rows
+//    come from HA's pre-aggregated `statistics_short_term` table.
 //
-//Scrubbing inside 24 hours past returns a real bracketed slope.
-//Past 24 hours pickBracket refuses to extrapolate (returns null)
-//and the chip displays nothing rather than a fabricated value.
-//Live readings stay accurate at all times.
+//Scrubbing inside 5 days past returns a real bracketed slope. Past
+//5 days pickBracket refuses to extrapolate (returns null) and the
+//chip displays nothing rather than a fabricated value. Live
+//readings stay accurate at all times.
 const GRID_HISTORY_WINDOW_MS = 6 * 60 * 60_000;
-const GRID_LTS_WINDOW_MS     = 24 * 60 * 60_000;
+const GRID_LTS_WINDOW_MS     = 5 * 24 * 60 * 60_000;
 //In-memory retention window aligned with the LTS backfill so live
 //accumulation never trims off bracket-relevant history.
-const GRID_SAMPLE_WINDOW_MS = 24 * 60 * 60_000;
+const GRID_SAMPLE_WINDOW_MS = 5 * 24 * 60 * 60_000;
 const GRID_SAMPLE_MAX       = 16384;
 //Minimum time span a slope must cover before it is trusted. Below
 //this the 1 Wh meter quantum dominates the numerator and the
@@ -105,10 +106,16 @@ const LIVE_SLOPE_LOOKBACK_MS = 10 * 60_000;
 const SCRUB_EDGE_TOLERANCE_MS = 10 * 60_000;
 
 
-export interface GridHost
+export interface GridHost extends LoadingTrackerHost
 {
-    readonly config: HeliosConfig | undefined;
     readonly hass:   any;
+    //Optional snapshot of HA Energy dashboard defaults, populated by
+    //`card/energy-prefs.ts` via a long-running subscription. When the
+    //user has `stat_rate` sensors configured on grid sources, Helios
+    //layers a LIVE-only override on top of the directional kWh
+    //derivation so the chip matches the value the official Energy
+    //dashboard displays to the watt.
+    readonly _energyDefaults?: EnergyDefaults;
 
     requestUpdate(): void;
 
@@ -132,27 +139,58 @@ export interface GridHost
     //updated" entity when the slot has several entities wired.
     _gridImportLastDerived: Map<string, { watts: number; t: number }>;
     _gridExportLastDerived: Map<string, { watts: number; t: number }>;
-    //Combined signed grid-power slot (grid-power-entity). One buffer
-    //+ unit per wired source; the per-entity signed slopes / powers
-    //sum to the net grid watts, whose sign routes the value to the
-    //import (>=0) or export (<0) chip.
-    _gridCombinedSamples: Map<string, Sample[]>;
-    _gridCombinedUnits:   Map<string, string>;
+}
+
+
+//Per-host counter tracking how many grid-history fetches are currently in flight for this card.
+//Aggregates per-entity fetches into a single 'grid-history' phase: the first dispatched fetch begins
+//the phase, the last completed fetch ends it. WeakMap so the entry GCs with its card.
+const _gridInflightByHost = new WeakMap<object, number>();
+function gridPhaseEnter(host: GridHost): void
+{
+    const count = (_gridInflightByHost.get(host) ?? 0) + 1;
+    _gridInflightByHost.set(host, count);
+    if (count === 1)
+    {
+        beginLoadingPhase(host, 'grid-history');
+    }
+}
+function gridPhaseLeave(host: GridHost): void
+{
+    const count = Math.max(0, (_gridInflightByHost.get(host) ?? 1) - 1);
+    _gridInflightByHost.set(host, count);
+    if (count === 0)
+    {
+        endLoadingPhase(host, 'grid-history');
+    }
 }
 
 
 function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string, Sample[]>): void
 {
-    if (!host.hass?.callWS) return;
-    if (_historyInflight.has(entity)) return;
+    if (!host.hass?.callWS)
+    {
+        return;
+    }
+    if (_historyInflight.has(entity))
+    {
+        return;
+    }
     const now = Date.now();
     //Cooldown after a previous timeout: do not retry yet.
     const failedUntil = _historyFailedUntil.get(entity);
-    if (failedUntil !== undefined && now < failedUntil) return;
+    if (failedUntil !== undefined && now < failedUntil)
+    {
+        return;
+    }
     //Fresh enough: a previous backfill already landed within the refresh window.
     const lastFetched = _historyFetched.get(entity);
-    if (lastFetched !== undefined && now - lastFetched < GRID_FETCH_REFRESH_MS) return;
+    if (lastFetched !== undefined && now - lastFetched < GRID_FETCH_REFRESH_MS)
+    {
+        return;
+    }
     _historyInflight.add(entity);
+    gridPhaseEnter(host);
     const end      = new Date();
     const rawStart = new Date(end.getTime() - GRID_HISTORY_WINDOW_MS);
     const ltsStart = new Date(end.getTime() - GRID_LTS_WINDOW_MS);
@@ -161,13 +199,23 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
         try
         {
             //Fire BOTH backfills in parallel through the module-level
-            //semaphore. LTS catches the 24 h..6 h slice with 5-minute
+            //semaphore. LTS catches the 5 d..6 h slice with 5-minute
             //buckets, raw catches the 6 h..now slice at full resolution
-            //with significant_changes_only. The LTS arm is wrapped in a
-            //.catch so a recorder without LTS for this entity (custom
-            //sensor without `state_class`) silently degrades to raw
-            //only, the user-facing behaviour stays the same as before
-            //the LTS arm landed.
+            //with significant_changes_only. BOTH arms are wrapped in a
+            //.catch that returns null and arms the cooldown on a
+            //WsTimeoutError; that way a single failing arm degrades
+            //the buffer to whatever the other arm returned instead of
+            //rejecting the whole Promise.all and leaving the buffer
+            //empty. The merge code downstream handles ltsArr / rawArr
+            //being empty gracefully.
+            const armCooldownIfTimeout = (e: unknown): null =>
+            {
+                if (e instanceof WsTimeoutError)
+                {
+                    _historyFailedUntil.set(entity, Date.now() + GRID_FETCH_COOLDOWN_MS);
+                }
+                return null;
+            };
             const [ltsResult, rawResult] = await Promise.all([
                 callWSWithTimeout<any>(host.hass, {
                     type:          'recorder/statistics_during_period',
@@ -182,7 +230,10 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     //at the bucket end so consecutive deltas attribute
                     //to the bucket that produced them.
                     types:         ['mean', 'state'],
-                }).catch(() => null),
+                    //Normalise to kWh / W so installs reporting in Wh, MWh or kW land on the same scale the chip + scrub
+                    //buffer assume downstream.
+                    units:         { energy: 'kWh', power: 'W' },
+                }).catch(armCooldownIfTimeout),
                 callWSWithTimeout<any>(host.hass, {
                     type:                     'history/history_during_period',
                     start_time:               rawStart.toISOString(),
@@ -190,9 +241,9 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     entity_ids:               [entity],
                     minimal_response:         true,
                     no_attributes:            true,
-                    //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters. See #157.
+                    //Lets HA drop bucket-internal duplicates server-side, lighter recorder load on high-frequency grid meters.
                     significant_changes_only: true,
-                }),
+                }).catch(armCooldownIfTimeout),
             ]);
             const merged: Sample[] = [];
             let lastV: number | null = null;
@@ -203,7 +254,10 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
             {
                 const startMs = parseStatBoundary(item?.start);
                 const endMs   = parseStatBoundary(item?.end);
-                if (startMs === null) continue;
+                if (startMs === null)
+                {
+                    continue;
+                }
                 let valueRaw: unknown = item?.mean;
                 let anchorAtEnd = false;
                 if (valueRaw === null || valueRaw === undefined)
@@ -211,14 +265,23 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
                     valueRaw = item?.state;
                     anchorAtEnd = true;
                 }
-                if (valueRaw === null || valueRaw === undefined) continue;
+                if (valueRaw === null || valueRaw === undefined)
+                {
+                    continue;
+                }
                 const v = parseNumericState(valueRaw);
-                if (v === null) continue;
+                if (v === null)
+                {
+                    continue;
+                }
                 const t = anchorAtEnd
                     ? (endMs ?? startMs)
                     : (endMs !== null ? (startMs + endMs) / 2 : startMs);
                 const realTransition = lastV !== null && lastV !== v;
-                if (realTransition || lastChangeT === null) lastChangeT = t;
+                if (realTransition || lastChangeT === null)
+                {
+                    lastChangeT = t;
+                }
                 merged.push({ t, v, lastChangeT });
                 lastV = v;
             }
@@ -227,35 +290,75 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
             for (const item of rawArr)
             {
                 const sRaw = item?.s ?? item?.state;
-                if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
+                if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+                {
+                    continue;
+                }
                 const v = parseNumericState(sRaw);
-                if (v === null) continue;
+                if (v === null)
+                {
+                    continue;
+                }
                 const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
                 const t = parseTimestamp(tsRaw);
-                if (t === null) continue;
+                if (t === null)
+                {
+                    continue;
+                }
                 const realTransition = lastV !== null && lastV !== v;
-                if (realTransition || lastChangeT === null) lastChangeT = t;
+                if (realTransition || lastChangeT === null)
+                {
+                    lastChangeT = t;
+                }
                 merged.push({ t, v, lastChangeT });
                 lastV = v;
             }
             //Merge with any live samples that may have already landed
             //while the WS call was in flight, dedupe by timestamp.
             const live = bufMap.get(entity) ?? [];
-            for (const s of live) merged.push(s);
+            for (const s of live)
+            {
+                merged.push(s);
+            }
             merged.sort((a, b) => a.t - b.t);
             const deduped: Sample[] = [];
             for (const s of merged)
             {
                 const last = deduped[deduped.length - 1];
-                if (last && last.t === s.t) continue;
+                if (last && last.t === s.t)
+                {
+                    continue;
+                }
                 deduped.push(s);
             }
             if (deduped.length > 0)
             {
                 bufMap.set(entity, deduped);
+                //Invalidate the refresh-gate cache on HeliosCard so the next updated() pass runs the FULL
+                //refresh chain again, recomputing the slope (and therefore the live grid chip value) from
+                //the newly-populated bufMap. Without this the gate short-circuits the refresh because the
+                //hass / config / energyDefaults references have not changed since the WS round-trip
+                //started, and the chip stays null until something else triggers a render. Symptom on the
+                //user side: 'I have to refresh the page to see import / export chips'.
+                const h = host as unknown as {
+                    _lastRefreshHassRef?:           unknown;
+                    _lastRefreshConfigRef?:         unknown;
+                    _lastRefreshTimeRangeRef?:      unknown;
+                    _lastRefreshEnergyDefaultsRef?: unknown;
+                };
+                h._lastRefreshHassRef           = undefined;
+                h._lastRefreshConfigRef         = undefined;
+                h._lastRefreshTimeRangeRef      = undefined;
+                h._lastRefreshEnergyDefaultsRef = undefined;
                 host.requestUpdate();
+                _historyFetched.set(entity, Date.now());
             }
-            _historyFetched.set(entity, Date.now());
+            //Only mark this entity as fetched when we actually got rows back. The previous version set the
+            //flag unconditionally on the success path, so a cold recorder (HA just restarted, entity created
+            //less than 5 days ago, transient LTS gap) treated as a "successful" empty fetch locked us out of
+            //the next backfill for the full GRID_FETCH_REFRESH_MS window. The user could not scrub more than
+            //~10 min into the past because the buffer never got beyond the live samples accumulated since
+            //then, and the refresh button did not bust the flag, only the editor reset path did.
             _historyFailedUntil.delete(entity);
         }
         catch (e)
@@ -271,6 +374,7 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
         finally
         {
             _historyInflight.delete(entity);
+            gridPhaseLeave(host);
         }
     })();
 }
@@ -281,12 +385,21 @@ function ensureHistoryFetched(host: GridHost, entity: string, bufMap: Map<string
 //copied here so grid.ts stays import-light.
 function parseStatBoundary(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
     if (typeof raw === 'string')
     {
         const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
         const d = new Date(raw);
         const t = d.getTime();
         return isFinite(t) ? t : null;
@@ -299,52 +412,112 @@ export function refreshGrid(host: GridHost): void
 {
     if (!host.hass)
     {
-        if (host._gridImportValue !== null) host._gridImportValue = null;
-        if (host._gridImportUnit  !== '')   host._gridImportUnit  = '';
-        if (host._gridExportValue !== null) host._gridExportValue = null;
-        if (host._gridExportUnit  !== '')   host._gridExportUnit  = '';
+        if (host._gridImportValue !== null)
+        {
+            host._gridImportValue = null;
+        }
+        if (host._gridImportUnit  !== '')
+        {
+            host._gridImportUnit  = '';
+        }
+        if (host._gridExportValue !== null)
+        {
+            host._gridExportValue = null;
+        }
+        if (host._gridExportUnit  !== '')
+        {
+            host._gridExportUnit  = '';
+        }
         return;
     }
 
-    //A combined signed entity, when wired, owns both chips and the
-    //two directional slots are ignored. Otherwise fall back to the
-    //independent import / export slots.
-    if (resolveEntities(host, 'combined').length > 0)
-    {
-        readCombined(host);
-        return;
-    }
-
+    //Directional slots run unconditionally so the scrub + chart
+    //past-derivation buffers stay warm. They consume the HA Energy
+    //dashboard's `stat_energy_from` / `stat_energy_to` cumulative
+    //kWh meters and own the past-derivation path.
     readSlot(host, 'import');
     readSlot(host, 'export');
-}
 
-
-//Config key backing each slot.
-function slotKey(slot: 'import' | 'export' | 'combined'): string
-{
-    if (slot === 'import') return 'grid-import-entity';
-    if (slot === 'export') return 'grid-export-entity';
-    return 'grid-power-entity';
-}
-
-
-//Resolve every entity wired for a slot. Accepts both:
-//  - "sensor.foo"          (single entity)
-//  - ["sensor.foo", "sensor.bar"]  (multi-entity)
-//Empty / missing entities are silently dropped.
-function resolveEntities(host: GridHost, slot: 'import' | 'export' | 'combined'): string[]
-{
-    const key = slotKey(slot);
-    const raw = (host.config as Record<string, unknown> | undefined)?.[key];
-    if (Array.isArray(raw))
+    //HA Energy dashboard alignment: when the user's Energy
+    //dashboard config exposes a `stat_rate` sensor on any grid
+    //source, mirror HA's live read on top of the directional
+    //slope so the LIVE chip matches the value the official
+    //Energy dashboard renders to the watt. The kWh buffers
+    //populated above keep driving scrub + chart history; only
+    //the LIVE chip values are overridden.
+    const statRates = host._energyDefaults?.gridStatRates ?? [];
+    if (statRates.length > 0)
     {
-        return (raw as unknown[])
-            .filter((s): s is string => typeof s === 'string' && s.trim() !== '')
-            .map(s => s.trim());
+        readStatRates(host, statRates);
     }
-    if (typeof raw === 'string' && raw.trim() !== '') return [raw.trim()];
-    return [];
+}
+
+
+//Mirror of HA `hui-power-sankey-card`'s live grid read. Sums the signed power across every `stat_rate` entity collected
+//from the HA Energy dashboard prefs, then routes the net through `applyCombinedSplit`: a non-negative net shows on
+//IMPORT only, a negative net on EXPORT only.
+//
+//No slope, no integration. The chip value reads whatever the signed power sensor reports right now, normalised by SI
+//prefix on the unit (k -> *1000, M -> *1e6, etc.) the same way the official Energy dashboard does it.
+//
+//Bails out silently when no rate sensor produced a usable value, leaving the directional readSlot results from this same
+//refresh cycle as the displayed LIVE values. That preserves the cumulative-kWh fallback for users whose HA Energy grid
+//sources do not declare a stat_rate.
+function readStatRates(host: GridHost, rates: string[]): void
+{
+    let signedWatts = 0;
+    let sawAny      = false;
+    for (const entity of rates)
+    {
+        const stateObj = host.hass.states?.[entity];
+        if (!stateObj)
+        {
+            continue;
+        }
+        const raw = stateObj.state;
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable')
+        {
+            continue;
+        }
+        const num = parseNumericState(raw);
+        if (num === null)
+        {
+            continue;
+        }
+        const unit  = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
+        const watts = pvNormalizeToWatts(num, unit);
+        //Per-entity inversion: HA Energy `power_config.stat_rate_inverted` flips the sign convention for one source
+        //in a multi-source grid wiring. Apply the flag at read time so the directional split below sees the canonical
+        //"positive = import" convention.
+        const inverted = host._energyDefaults?.invertedRateEntities.includes(entity) ?? false;
+        signedWatts += inverted ? -watts : watts;
+        sawAny = true;
+    }
+    if (!sawAny)
+    {
+        return;
+    }
+    applyCombinedSplit(host, signedWatts);
+}
+
+
+//Resolve every entity wired for a slot from the HA Energy dashboard snapshot. Grid wiring reads
+//exclusively from the HA Energy dashboard global settings (Settings -> Dashboards -> Energy);
+//card YAML carrying retired override keys (grid-import-entity / grid-export-entity / grid-power-
+//entity / grid-power-invert) gets a one-shot persistent migration notification and the editor
+//strips them on the next save, the runtime treats them as absent.
+function resolveEntities(host: GridHost, slot: 'import' | 'export'): string[]
+{
+    const ed = host._energyDefaults;
+    if (!ed)
+    {
+        return [];
+    }
+    if (slot === 'import')
+    {
+        return [...ed.gridStatEnergyFroms];
+    }
+    return [...ed.gridStatEnergyTos];
 }
 
 
@@ -361,8 +534,14 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
 
     //Drop buffers + last-derived records for entities that have been
     //removed from the config (user trimmed the array in the editor).
-    for (const key of Array.from(bufMap.keys()))     if (!entities.includes(key)) bufMap.delete(key);
-    for (const key of Array.from(derivedMap.keys())) if (!entities.includes(key)) derivedMap.delete(key);
+    for (const key of Array.from(bufMap.keys()))     if (!entities.includes(key))
+    {
+        bufMap.delete(key);
+    }
+    for (const key of Array.from(derivedMap.keys())) if (!entities.includes(key))
+    {
+        derivedMap.delete(key);
+    }
 
     let unitForOutput = '';
     let sawAny        = false;
@@ -378,12 +557,21 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
         ensureHistoryFetched(host, entity, bufMap);
 
         const stateObj = host.hass.states?.[entity];
-        if (!stateObj) continue;
+        if (!stateObj)
+        {
+            continue;
+        }
         const raw  = stateObj.state;
         const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
+        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable')
+        {
+            continue;
+        }
         const num = parseNumericState(raw);
-        if (num === null) continue;
+        if (num === null)
+        {
+            continue;
+        }
         unitForOutput = unitForOutput || unit;
         sawAny = true;
 
@@ -398,9 +586,17 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
                      ?? parseTimestamp(stateObj.last_changed)
                      ?? nowMs;
 
+        //Record the sample BEFORE the per-unit derivation so the
+        //scrub buffer is populated regardless of unit. Cumulative
+        //meters need it for the bracketed-slope past-derivation;
+        //power-native meters need it for the closest-sample-wins
+        //past-derivation. The previous gate inside the kWh branch
+        //starved the scrub path on power-native configurations
+        //(closest-sample search on an empty buffer returned null).
+        recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
+
         if (u === 'wh' || u === 'kwh' || u === 'mwh')
         {
-            recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
             const out = bracketedSlopeWatts(bufMap.get(entity), u, nowMs, LIVE_SLOPE_LOOKBACK_MS);
             if (out !== null)
             {
@@ -475,91 +671,6 @@ function readSlot(host: GridHost, slot: 'import' | 'export'): void
 }
 
 
-//Read the combined signed grid-power slot. Each wired entity
-//contributes its signed live watts (a power sensor's value, or a
-//net-energy sensor's bracketed slope, both of which carry the
-//import / export sign); the contributions sum to the net grid power.
-//The optional grid-power-invert flips that sign once. A non-negative
-//net routes to the IMPORT chip (EXPORT hides), a negative net routes
-//to the EXPORT chip (IMPORT hides), so only the active direction
-//shows, never both at once.
-function readCombined(host: GridHost): void
-{
-    const entities = resolveEntities(host, 'combined');
-    const bufMap   = host._gridCombinedSamples;
-    const unitsMap = host._gridCombinedUnits;
-
-    //Drop buffers / units for entities removed from the config.
-    for (const key of Array.from(bufMap.keys()))   if (!entities.includes(key)) bufMap.delete(key);
-    for (const key of Array.from(unitsMap.keys())) if (!entities.includes(key)) unitsMap.delete(key);
-
-    let signedWatts = 0;
-    let sawAny      = false;
-    const nowMs     = Date.now();
-
-    for (const entity of entities)
-    {
-        //Same recorder backfill as the directional slots so the
-        //past-scrub bracket is populated even when the live state is
-        //slow to push.
-        ensureHistoryFetched(host, entity, bufMap);
-
-        const stateObj = host.hass.states?.[entity];
-        if (!stateObj) continue;
-        const raw  = stateObj.state;
-        const unit = String(stateObj.attributes?.unit_of_measurement ?? '').trim();
-        if (raw === null || raw === undefined || raw === '' || raw === 'unknown' || raw === 'unavailable') continue;
-        const num = parseNumericState(raw);
-        if (num === null) continue;
-
-        const u = unit.toLowerCase();
-        unitsMap.set(entity, u);
-
-        const stateTs = parseTimestamp(stateObj.last_updated)
-                     ?? parseTimestamp(stateObj.last_changed)
-                     ?? nowMs;
-
-        //Every form records a sample so the scrub path can re-derive
-        //the signed watts at a past instant from the same buffer.
-        recordCumulativeSample(bufMap, entity, num, stateTs, nowMs);
-
-        if (u === 'wh' || u === 'kwh' || u === 'mwh')
-        {
-            //Signed net-energy meter: its running total can fall while
-            //exporting, so the bracketed slope already carries the sign.
-            const out = bracketedSlopeWatts(bufMap.get(entity), u, nowMs, LIVE_SLOPE_LOOKBACK_MS);
-            if (out !== null)
-            {
-                signedWatts += out.watts;
-                sawAny = true;
-            }
-        }
-        else if (u === 'w' || u === 'kw' || u === 'mw')
-        {
-            //Signed power sensor: the value IS the signed watts.
-            signedWatts += pvNormalizeToWatts(num, unit);
-            sawAny = true;
-        }
-        else
-        {
-            //Unknown unit: forward the raw signed value untouched.
-            signedWatts += num;
-            sawAny = true;
-        }
-    }
-
-    if (!sawAny)
-    {
-        //No live derivation yet (states unavailable or buffers still
-        //warming). Leave the chips as-is rather than flashing a fake 0.
-        return;
-    }
-
-    if (gridPowerInvert(host.config)) signedWatts = -signedWatts;
-    applyCombinedSplit(host, signedWatts);
-}
-
-
 //Route a signed net-grid wattage to exactly one directional slot:
 //import when >= 0 (including the idle 0 W, so one chip stays visible
 //to signal the connection is alive), export when < 0. The opposite
@@ -592,10 +703,19 @@ function unitIsEnergy(unit: string): boolean
 //for anything that isn't a finite number.
 function parseNumericState(raw: unknown): number | null
 {
-    if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
-    if (typeof raw !== 'string') return null;
+    if (typeof raw === 'number')
+    {
+        return Number.isFinite(raw) ? raw : null;
+    }
+    if (typeof raw !== 'string')
+    {
+        return null;
+    }
     const trimmed = raw.trim();
-    if (trimmed === '') return null;
+    if (trimmed === '')
+    {
+        return null;
+    }
     //Locale-tolerant: replace a single comma with a dot when the
     //string has no dot already. Avoids breaking thousand-separated
     //inputs like "12,345.6" which would otherwise parse as 12.
@@ -607,15 +727,27 @@ function parseNumericState(raw: unknown): number | null
 
 function parseTimestamp(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
     if (typeof raw === 'number')
     {
-        if (!Number.isFinite(raw)) return null;
+        if (!Number.isFinite(raw))
+        {
+            return null;
+        }
         return raw > 1e12 ? raw : raw * 1000;
     }
-    if (typeof raw !== 'string') return null;
+    if (typeof raw !== 'string')
+    {
+        return null;
+    }
     const trimmed = raw.trim();
-    if (trimmed === '') return null;
+    if (trimmed === '')
+    {
+        return null;
+    }
     const asNum = Number(trimmed);
     if (Number.isFinite(asNum) && asNum > 1e9)
     {
@@ -658,8 +790,14 @@ function recordCumulativeSample(
     //window, measured against the current wall clock (so stale buffers
     //prune themselves out of memory even if no new sample lands for
     //a while).
-    while (buf.length > GRID_SAMPLE_MAX) buf.shift();
-    while (buf.length > 1 && nowMs - buf[0].t > GRID_SAMPLE_WINDOW_MS) buf.shift();
+    while (buf.length > GRID_SAMPLE_MAX)
+    {
+        buf.shift();
+    }
+    while (buf.length > 1 && nowMs - buf[0].t > GRID_SAMPLE_WINDOW_MS)
+    {
+        buf.shift();
+    }
 }
 
 
@@ -682,14 +820,23 @@ function pickBracket(
     maxLookbackMs: number | null
 ): { oldest: Sample; newest: Sample } | null
 {
-    if (buf.length < 2) return null;
+    if (buf.length < 2)
+    {
+        return null;
+    }
     //beforeIdx = index of the latest sample with t <= targetMs.
     //afterIdx  = index of the earliest sample with t > targetMs.
     let beforeIdx = -1;
     for (let i = 0; i < buf.length; i++)
     {
-        if (buf[i].t <= targetMs) beforeIdx = i;
-        else break;
+        if (buf[i].t <= targetMs)
+        {
+            beforeIdx = i;
+        }
+        else
+        {
+            break;
+        }
     }
     let afterIdx = beforeIdx + 1;
 
@@ -706,7 +853,10 @@ function pickBracket(
             //Within the edge tolerance the first bracket is still
             //used so a small gap between buffer start and the user's
             //scrub instant doesn't hide the chip needlessly.
-            if (buf[0].t - targetMs > SCRUB_EDGE_TOLERANCE_MS) return null;
+            if (buf[0].t - targetMs > SCRUB_EDGE_TOLERANCE_MS)
+            {
+                return null;
+            }
         }
         beforeIdx = 0;
         afterIdx  = 1;
@@ -728,7 +878,10 @@ function pickBracket(
     {
         const canShrinkOlder  = beforeIdx > 0;
         const canExtendNewer  = afterIdx < buf.length - 1;
-        if (!canShrinkOlder && !canExtendNewer) break;
+        if (!canShrinkOlder && !canExtendNewer)
+        {
+            break;
+        }
         if (!canShrinkOlder)
         {
             afterIdx++;
@@ -762,7 +915,10 @@ function pickBracket(
     {
         return null;
     }
-    if (newest.t === oldest.t) return null;
+    if (newest.t === oldest.t)
+    {
+        return null;
+    }
     return { oldest, newest };
 }
 
@@ -770,10 +926,19 @@ function pickBracket(
 function slopeWatts(oldest: Sample, newest: Sample, u: string): number | null
 {
     const dt = (newest.t - oldest.t) / 1000;
-    if (dt <= 0) return null;
+    if (dt <= 0)
+    {
+        return null;
+    }
     let dE_wh = newest.v - oldest.v;
-    if (u === 'kwh') dE_wh *= 1000;
-    else if (u === 'mwh') dE_wh *= 1_000_000;
+    if (u === 'kwh')
+    {
+        dE_wh *= 1000;
+    }
+    else if (u === 'mwh')
+    {
+        dE_wh *= 1_000_000;
+    }
     //Power = energy / time. dE_wh is in Wh, dt is in seconds; the
     //3600 factor turns Wh per second into watts.
     return dE_wh * 3600 / dt;
@@ -790,11 +955,20 @@ function bracketedSlopeWatts(
     maxLookbackMs: number | null
 ): { watts: number; changedAt: number } | null
 {
-    if (!buf) return null;
+    if (!buf)
+    {
+        return null;
+    }
     const bracket = pickBracket(buf, targetMs, maxLookbackMs);
-    if (!bracket) return null;
+    if (!bracket)
+    {
+        return null;
+    }
     const w = slopeWatts(bracket.oldest, bracket.newest, u);
-    if (w === null) return null;
+    if (w === null)
+    {
+        return null;
+    }
     //changedAt = the timestamp of the latest REAL value transition
     //seen in this entity's buffer, not the last poll. The multi-
     //tariff picker ranks by "moved most recently", and HA pushes
@@ -826,7 +1000,10 @@ export function gridWattsAtTime(
     let anyHit: boolean = false;
     for (const [entity, buf] of samples)
     {
-        if (buf.length < 2) continue;
+        if (buf.length < 2)
+        {
+            continue;
+        }
         const u = (units.get(entity) ?? 'kwh').toLowerCase();
         if (u !== 'wh' && u !== 'kwh' && u !== 'mwh')
         {
@@ -849,49 +1026,19 @@ export function gridWattsAtTime(
         }
         //Cumulative-energy sensor.
         const bracket = pickBracket(buf, targetMs, null);
-        if (!bracket) continue;
+        if (!bracket)
+        {
+            continue;
+        }
         const w = slopeWatts(bracket.oldest, bracket.newest, u);
-        if (w === null) continue;
+        if (w === null)
+        {
+            continue;
+        }
         total += w;
         anyHit = true;
     }
     return anyHit ? total : null;
-}
-
-
-//True when the user wired a combined signed grid-power entity, which
-//then owns both chips and supersedes the separate import / export
-//slots. Used by the card to pick the right scrub derivation and by
-//the editor to collapse the directional pickers.
-export function isGridCombined(config: HeliosConfig | undefined): boolean
-{
-    const raw = (config as Record<string, unknown> | undefined)?.['grid-power-entity'];
-    if (Array.isArray(raw))
-    {
-        return (raw as unknown[]).some(s => typeof s === 'string' && s.trim() !== '');
-    }
-    return typeof raw === 'string' && raw.trim() !== '';
-}
-
-
-//Sign-convention flag for the combined slot. Default false means
-//positive = import; true flips it so positive = export.
-export function gridPowerInvert(config: HeliosConfig | undefined): boolean
-{
-    return (config as Record<string, unknown> | undefined)?.['grid-power-invert'] === true;
-}
-
-
-//Past-scrub derivation for the combined slot: the net signed watts
-//flowing at `targetMs`, summed across every wired source and flipped
-//by grid-power-invert. The caller splits the sign into the import /
-//export chips exactly as the live path does. Returns null when no
-//buffer can bracket the target.
-export function gridCombinedWattsAtTime(host: GridHost, targetMs: number): number | null
-{
-    const signed = gridWattsAtTime(host._gridCombinedSamples, host._gridCombinedUnits, targetMs);
-    if (signed === null) return null;
-    return gridPowerInvert(host.config) ? -signed : signed;
 }
 
 
@@ -906,13 +1053,25 @@ function applyValue(host: GridHost, slot: 'import' | 'export', value: number | n
     const clamped = (value === null) ? null : Math.max(0, value);
     if (slot === 'import')
     {
-        if (host._gridImportValue !== clamped) host._gridImportValue = clamped;
-        if (host._gridImportUnit  !== unit)    host._gridImportUnit  = unit;
+        if (host._gridImportValue !== clamped)
+        {
+            host._gridImportValue = clamped;
+        }
+        if (host._gridImportUnit  !== unit)
+        {
+            host._gridImportUnit  = unit;
+        }
     }
     else
     {
-        if (host._gridExportValue !== clamped) host._gridExportValue = clamped;
-        if (host._gridExportUnit  !== unit)    host._gridExportUnit  = unit;
+        if (host._gridExportValue !== clamped)
+        {
+            host._gridExportValue = clamped;
+        }
+        if (host._gridExportUnit  !== unit)
+        {
+            host._gridExportUnit  = unit;
+        }
     }
 }
 
@@ -924,13 +1083,22 @@ function applyValue(host: GridHost, slot: 'import' | 'export', value: number | n
 //chip without an explicit conditional.
 export function formatGridValue(value: number | null, unit: string): string
 {
-    if (value === null) return '';
+    if (value === null)
+    {
+        return '';
+    }
     const u = unit.toLowerCase();
     if (u === 'w' || u === 'kw' || u === 'mw')
     {
         const w = pvNormalizeToWatts(value, unit);
-        if (Math.abs(w) >= 1000) return `${(w / 1000).toFixed(1)} kW`;
-        if (Math.abs(w) >= 100)  return `${Math.round(w)} W`;
+        if (Math.abs(w) >= 1000)
+        {
+            return `${(w / 1000).toFixed(1)} kW`;
+        }
+        if (Math.abs(w) >= 100)
+        {
+            return `${Math.round(w)} W`;
+        }
         return `${w.toFixed(1)} W`;
     }
     if (u === 'wh' || u === 'kwh' || u === 'mwh')

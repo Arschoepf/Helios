@@ -159,7 +159,10 @@ export function processHeightRaster(
         {
             const idx = j * rasterSize + i;
             const h   = heights[idx];
-            if (!isFinite(h) || h < heightThresh || h > heightMax) continue;
+            if (!isFinite(h) || h < heightThresh || h > heightMax)
+            {
+                continue;
+            }
 
             if (cropM !== null)
             {
@@ -173,8 +176,14 @@ export function processHeightRaster(
             validArr[idx] = 1;
             hOk[idx]      = h;
             keptCells++;
-            if (h < hMin) hMin = h;
-            if (h > hMax) hMax = h;
+            if (h < hMin)
+            {
+                hMin = h;
+            }
+            if (h > hMax)
+            {
+                hMax = h;
+            }
         }
     }
 
@@ -187,7 +196,10 @@ export function processHeightRaster(
 
     for (let seed = 0; seed < N; seed++)
     {
-        if (!validArr[seed] || labels[seed]) continue;
+        if (!validArr[seed] || labels[seed])
+        {
+            continue;
+        }
 
         nextLabel++;
         const cells: number[] = [];
@@ -198,7 +210,10 @@ export function processHeightRaster(
         while (stack.length && cells.length < maxCellsPerComponent)
         {
             const idx = stack.pop()!;
-            if (labels[idx] || !validArr[idx]) continue;
+            if (labels[idx] || !validArr[idx])
+            {
+                continue;
+            }
             labels[idx] = nextLabel;
             cells.push(idx);
             heightSum += hOk[idx];
@@ -209,11 +224,20 @@ export function processHeightRaster(
             {
                 for (let dx = -1; dx <= 1; dx++)
                 {
-                    if (dx === 0 && dy === 0) continue;
+                    if (dx === 0 && dy === 0)
+                    {
+                        continue;
+                    }
                     const nx = x + dx, ny = y + dy;
-                    if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize) continue;
+                    if (nx < 0 || nx >= rasterSize || ny < 0 || ny >= rasterSize)
+                    {
+                        continue;
+                    }
                     const nIdx = ny * rasterSize + nx;
-                    if (!labels[nIdx] && validArr[nIdx]) stack.push(nIdx);
+                    if (!labels[nIdx] && validArr[nIdx])
+                    {
+                        stack.push(nIdx);
+                    }
                 }
             }
         }
@@ -245,7 +269,10 @@ export function processHeightRaster(
             corners.push([cLon - halfLon, cLat + halfLat]);
         }
         const hull = convexHull(corners);
-        if (hull.length < 3) continue;
+        if (hull.length < 3)
+        {
+            continue;
+        }
         hull.push([hull[0][0], hull[0][1]]);
 
         const avg = comp.heightSum / comp.cells.length;
@@ -321,13 +348,22 @@ function median3x3(src: Float32Array, size: number): Float32Array
             for (let dj = -1; dj <= 1; dj++)
             {
                 const jj = j + dj;
-                if (jj < 0 || jj >= size) continue;
+                if (jj < 0 || jj >= size)
+                {
+                    continue;
+                }
                 for (let di = -1; di <= 1; di++)
                 {
                     const ii = i + di;
-                    if (ii < 0 || ii >= size) continue;
+                    if (ii < 0 || ii >= size)
+                    {
+                        continue;
+                    }
                     const v = src[jj * size + ii];
-                    if (isFinite(v)) buf[n++] = v;
+                    if (isFinite(v))
+                    {
+                        buf[n++] = v;
+                    }
                 }
             }
             if (n === 0) { out[idx] = NaN; continue; }

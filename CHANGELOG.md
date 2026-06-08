@@ -5,6 +5,301 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.8.3
+
+> The biggest release of the v1.8.x line by a wide margin. v1.8.3
+> started as a triage release for the v1.8.2 long tail of grid /
+> recorder bug reports and grew into a structural pass when the
+> root cause of half those reports turned out to be the same
+> shape: the card and the official HA Energy dashboard were
+> resolving "the grid sensor" / "the PV sensor" / "the battery
+> sensor" from two independent sources, so the two surfaces
+> disagreed on which entity a number came from. Fixing it cleanly
+> meant dropping every per-card entity YAML key and reading the
+> wiring from the same global config the official Energy card
+> reads. Once that was on the table, three other surfaces queued
+> up to ride the same cycle: the dashboard dive rebuilt around a
+> radial sundial, the cloud-mode chip replaced by a top-right
+> Weather mode backed by live RainViewer precipitation radar, and
+> the boot spinner swapped for a phase-aware progress banner. The
+> dome / shading-map family is retired entirely, the i18n surface
+> goes from 11 to 63 locales, the deps are refreshed.
+>
+> Upcoming work is tracked live on the public roadmap at
+> [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
+> pulled directly from the GitHub Project and refreshed every five
+> minutes.
+
+### HA Energy dashboard as the single source of truth for entity wiring (#184)
+
+The card's PV, grid and battery entity slots are no longer configured per-card. They resolve
+from `Settings → Dashboards → Energy`, the same global block the official HA Energy card reads.
+The two surfaces never disagree again on which sensor a number came from, and the configuration
+surface shrinks to what HA does not know about: PV peak kWp + per-string tilt / azimuth via
+`pv-arrays`, optional inverter cap, LiDAR providers, visual options.
+
+The retired card keys are:
+`pv-power-entity`, `pv-cumulative-energy-entity`, `pv-extra-entities`, `grid-import-entity`,
+`grid-export-entity`, `grid-power-entity`, `grid-power-invert`, `battery-soc-entity`,
+`battery-power-entity`, `battery-power-invert`, `batteries`.
+
+Migration is a one-shot HA persistent notification: any leftover key in the YAML is silently
+ignored at runtime and the editor strips it on the next save. The notification lists the
+retired keys and points at the Energy dashboard for the replacement wiring.
+
+### Unified 5-day data store (#210)
+
+Every per-time signal the dashboard cards, the radial sundial, the graph view, and the main
+UI timeline read from is built once into a 480-bucket (96 / day × 5 days, 15 min granularity)
+data store, hashed against its underlying fetches and rebuilt only when a fetch lands. Replaces
+three or four per-card bucketization passes that each walked the raw history arrays at every
+render. Live numeric chips deliberately stay on the direct `hass.states` path; every other
+surface that draws or hovers a curve uses the store.
+
+A single user-facing knob (`display-update-frequency-per-hour`, 1-60, default 4) controls both
+the storage cadence of the store and the rendering cadence of every graph that reads from it.
+
+### Radial sundial dashboard (#199)
+
+The detail-mode panel is rebuilt around a **radial sundial card**: an annular instrument that
+lays out the day on a 24 h ring with concentric tracks for production, battery and cloud cover,
+sunrise / sunset markers anchored on the dial, hover dots that snap every series to the same
+instant, and a live cursor that traces the current hour. A second view (toggle in the bandeau)
+swaps the dial for a full-day production curve whose Y-axis is locked to the installation's
+peak power, so a sunny day stretches to the top and a cloudy day sits visibly lower on the
+same scale.
+
+Today / Tomorrow / Battery sections surface as a CoverFlow strip above the chart so the user
+swipes through the three cards rather than scrolling them. Day-load grow animation runs at
+400 ms ease-out (down from 700 ms), aligned on the HA Energy forecast chart cadence. The
+cumulative production chart from the previous design is gone; the radial dial plus the peak-
+power-scaled production curve carry the same information at a glance.
+
+### Weather mode with per-altitude SVG cloud overlay (#210)
+
+Top-right mode bar switches from `Layer / LiDAR / Dome` to `Layer / LiDAR / Weather`. Weather
+mode tilts the camera to a top-down framing around the home and overlays the modelled cloud
+coverage as three colour-coded translucent layers (high / mid / low) on top of the basemap.
+Each layer paints one polygon per grid cell with fill opacity tracking the local cloud cover
+for that altitude band; polygon corners reproject through MapLibre's camera transform on every
+move event so the overlay stays glued to the basemap.
+
+The data feed is a single Open-Meteo POST per refresh tick (5 min cadence) carrying a 10 x 10
+grid of points covering a ~44 km bbox around the home. The request asks for
+`models=best_match` so the response includes the resolved numerical weather model name
+(AROME-France ~1.3 km, ICON-EU ~7 km, ECMWF IFS ~25 km, etc.); the grid pitch is sized so the
+overlay reads at a reasonable resolution against the underlying model's native cells. 100
+points per call x 12 calls per hour stays well under the per-IP daily quota (10 000 calls /
+day on the free tier) the previous 50 x 50 grid kept tripping.
+
+Drawing in SVG rather than rasterising into a MapLibre image source keeps every pixel crisp
+at the zoom 10 framing; the previous raster pipelines that downscaled + blurred a stitched
+canvas turned the layer into a muted grey wash that erased the per-altitude signal.
+
+The first cut paints in vivid debug colours (red for high, green for mid, yellow for low) so
+the per-band signal reads at a glance during testing. The palette collapses to a single muted
+hue once the rendering pipeline is validated.
+
+Three cloud-layer chips (low / mid / high) under the mode bar keep showing the per-altitude
+Open-Meteo coverage at the home for the precise numbers; the SVG overlay carries the spatial
+context around it.
+
+### RainViewer overlay retired (#210)
+
+The previous RainViewer precipitation-radar overlay is removed in favour of the cloud-cover
+SVG above. RainViewer encodes rainfall intensity (rain / snow / storm cells), not cloud
+cover, and the two are very different signals: a 100 % overcast sky with no rain registers
+as nothing on RainViewer, and a thin band of light rain across an otherwise clear sky reads
+as a heavy radar return. Solar production cares about cloud cover (sunlight attenuation),
+not active precipitation. Aligning the mode's data feed with what the rest of the card uses
+(Open-Meteo cloud_cover_low / mid / high) keeps weather mode coherent with the chips, the
+chart curves, the forecast model and the calibration ratio.
+
+### Shading-map family fully retired (#210)
+
+The polar shading-map trainer, the hemispheric dome visualisation, and the editor's shading
+panel are gone. Quick audit: the per-(sun × cloud) cell ratio had ~2 percentage points of
+forecast accuracy on top of the 5-day calibration ratio alone, while the dome rendering carried
+~2,600 projected points per camera transform, ~300 KB of cached polar grid in localStorage, and
+two editor surfaces (stats + 4-up grids + import / export / reset) that very few users opened.
+Cost / benefit did not survive a second look.
+
+Forecast accuracy is now carried entirely by the 5-day calibration ratio (clamped [0.5, 1.5])
+plus the LiDAR-aware ray-march that zeroes the direct beam on shaded arrays. The
+`helios-shading-map:v2` localStorage entry is swept on cold start so users coming from earlier
+releases reclaim the quota.
+
+### LiDAR-View polish (#201, #194)
+
+- Bottom-of-card opacity slider live-tunes the overlay alpha. Drag throttled to one rAF / frame
+  so the WebGL repaint storm stays bounded. Slider container hidden outside LiDAR mode.
+- Mode-bar LiDAR button swaps to the loading spinner the moment the engine flips
+  `_lidarExposureBusy` true (shadow fetch in flight OR per-cell irradiance sweep in flight).
+  The Layer + Weather exits stay fully enabled during the sweep so the user can leave the mode
+  whenever they want.
+- Camera lock chip is hidden entirely in Weather mode (the engine force-locks the camera on
+  enter, the toggle had no effect anyway).
+- When the camera lock is on, the MapLibre grab cursor is replaced by the default arrow so the
+  cursor stops advertising drag-rotate / drag-pan interactions that are disabled.
+
+### Boot progress banner (#191)
+
+The boot sun-spinner is replaced by a themed banner pinned to the top of the card with a
+per-phase progress fill. The tracker registers the following phases lazily as the install
+needs them: `energy-prefs`, `pv-history`, `battery-history`, `grid-history`, `solar-radiation`,
+`ha-daily-totals`, `weather-forecast`, `buildings`, `lidar-raster`, `lidar-exposure`. The
+banner latches itself off after the first complete pass so routine background refreshes do not
+flash it back up.
+
+The `Helios` brand in the HA card catalog is now sentence-case (was `HELIOS` uppercase); the
+console banners + diagnostic messages keep the stylised `☀ HELIOS` for developer surfaces.
+
+### Open-Meteo rate-limit alert banner (#193)
+
+When the home-point fetch hits HTTP 429 back-off, an alert banner under the loading banner
+surfaces with a `--warning-color` (amber) tinted background and matching border, matching HA's
+frontend alert palette. EN + FR copy: "OpenMeteo: rate limit / Too many requests, please wait".
+Disappears the moment the next fetch lands.
+
+### Grid history backfill regression fixes (#173, #172, #206)
+
+- The grid history backfill loop's catch path was symmetric on LTS errors but not on the raw
+  arm. A single transient failure on the raw fetch wiped both arms and left the buffer empty,
+  the IN / OUT chips read 0 W forever until a card respawn. Catch path is now symmetric on
+  both arms (each one persists what landed, the other arm retries on the next tick).
+- The scrub buffer never populated for power-native grid sensors (`device_class: power`,
+  units in W / kW). The bucketing path was gated on a cumulative-energy assumption that the
+  power-native sensor does not match. Scrub coverage is now consistent across both sensor
+  shapes.
+- The LTS window was capped at 24 h, which capped the timeline scrub at the same horizon.
+  Bumped to 5 days to match the rest of the data store.
+- LIVE grid chip mirrors `stat_rate` directly when configured on the HA Energy grid source,
+  matching the official Energy dashboard to the watt.
+
+### PV regression fixes (#205, #180, #188)
+
+- PV today-kWh underestimate vs HA Energy / PowerCalc on 1 Hz Victron installs was an in-browser
+  integration drift: the rolling buffer differentiation was running every input event instead
+  of every state-change. Throttled to the state-change cadence; the today-kWh figure now reads
+  within 0.1 kWh of HA Energy's own daily total across the cycle.
+- Multi-source PV aggregation skips `pvNormalizeToWatts` on the per-source sum so a kWh-only
+  HA Energy install (4 stat_energy_from sources, no stat_rate) lands as a summed kWh stream
+  and the buffer differentiates total W exactly as it does for a single source.
+- Battery charge / discharge stuck at 0 W on a multi-bank declaration where one bank's power
+  entity was empty: the per-bank parser bailed the whole aggregation on the first empty slot.
+  It now bails per-bank and the configured banks still aggregate normally.
+
+### UI polish (#209, #203, #196, #195, #189, #198)
+
+- Radial dial: digit labels move inside the annulus to read against the night-shade colour
+  ramp, hover cursors get a thicker stroke so they stay legible against a busy curve, and the
+  day's weather is sketched into the dial's background as a soft sky gradient.
+- Timeline chart hover dots render as true circles on every aspect ratio (the SVG
+  `preserveAspectRatio: none` was stretching them into ovals). Dots are HTML overlays positioned
+  by percent of the chart bbox so the geometry stays round regardless of the chart's aspect.
+- HA card catalog preview now renders the actual card (was a blank gradient), and the catalog
+  title uses sentence case `Helios` instead of `HELIOS`.
+- Dashboard dive exit restores the user's exact pre-entry pitch + bearing instead of the
+  hemisphere-aware default. Matters for installs running the camera-locked chip on.
+- Camera pitch range widened: REST 50°, MIN 15°, MAX 55°. The previous 30° floor was too
+  top-down for the new weather-mode framing.
+- Card picker surfaces a `Helios` suggestion under "By entity" → Zone → `zone.home` so the
+  end-user discovers the card without scrolling the custom card list.
+
+### Configurable bearing + camera pose persistence (#201)
+
+The home's resting bearing is editable from the visual editor (0-360°). Pose persistence to
+localStorage that landed in v1.8.2 stays; the editor's slider is now the canonical entry point
+for committing a custom bearing back to the card config.
+
+### Display radius single source of truth (#197)
+
+The Building / LiDAR / Raster Shadows surfaces all clip at the same display radius, derived
+from one shared `DEFAULT_DISPLAY_RADIUS_M` constant in `helios-config.ts`. Cells, buildings
+and shadows that fall past the radius are dropped at the same boundary; the visible cliff
+between layers is gone.
+
+### i18n surface 11 → 63 locales
+
+The translation surface now covers the full HA frontend translation set (every language that
+ships with HA core): `af, ar, bg, bn, bs, ca, cs, cy, da, de, el, en, en-GB, eo, es, es-419,
+et, eu, fa, fi, fr, fy, gl, gsw, he, hi, hr, hu, hy, id, is, it, ja, ka, ko, lb, lt, lv, ml,
+nb, nl, nn, no, pl, pt, pt-BR, ro, ru, si, sk, sl, sr, sr-Latn, sv, ta, te, th, tr, uk, ur,
+vi, zh-Hans, zh-Hant`. EN is the source of truth, FR is hand-translated, every other locale
+carries native translations matching the HA frontend tone + register for its language.
+
+### LiDAR opacity slider crashed Lit and stranded the dot cloud on screen
+
+The slider's `@input` handler did an imperative `span.textContent =` write to skip the
+re-render cost of coupling `_lidarViewOpacity` to a `@state`. `textContent =` removes every
+child of the span, including the marker comments Lit places around `${pct}%` interpolations.
+Once the markers were gone the next render of the card crashed inside `performUpdate`
+(`TypeError: null is not an object (evaluating 'this._$AA.nextSibling.data=ae')`) and aborted
+`updated()` partway through, which is the lifecycle method that fires `exitLidarView`. Net
+effect: clicking Layer or Weather flipped the mode-bar visual but the dot cloud kept drawing
+forever.
+
+Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.requestUpdate()` so
+Lit re-renders the picker template through the normal text-node pipeline with the markers
+intact. rAF coalescing keeps the cost at one render per frame max during drag.
+
+### Weather mode polish, beta.115
+
+Disc radius drops by 40 % (factor 0.40 -> 0.24 of the on-screen cell pitch) so the dot cloud
+reads as small punctuation rather than dense blobs. Per-band opacity tightens to 20 / 40 /
+60 % (low / mid / high) so even fully overlapping stacks stay legible without saturating the
+home + map context underneath.
+
+### Weather mode polish, beta.114
+
+The cloud-cover overlay drops the connected-component polygon finder in favour of a per-point
+dot cloud. Every grid sample whose cloud cover crosses the threshold paints as a small filled
+disc with a 1 px contour, sized to a fraction of the on-screen cell pitch so neighbours never
+quite touch and the basemap stays visible between discs. Both fill and stroke use
+`--primary-text-color`; per-band opacity grows from low (40 %) to mid (60 %) to high (80 %), so
+a point covered on all three altitudes stacks with growing visual weight and the higher band
+dominates. The encoding reads as a punctuated cloud cluster rather than a contiguous wash and
+keeps the home + surrounding map context clearly visible underneath.
+
+### Weather mode polish, beta.113
+
+The per-altitude cloud band toggles in the top-left rail now reuse the exact `.mode-bar /
+.mode-bar-seg` recipe of the top-right mode bar: identical 40 px round icon-only buttons, same
+4 px-gap flex column, same idle / active state recipe. The two rails read as one family of
+controls. The per-band coverage percentage that briefly sat under each glyph in beta.112 is
+dropped, the live home coverage stays available on the mode-bar weather button glyph itself.
+
+### Weather mode polish, beta.112
+
+Final round of refinements on the cloud-cover overlay before the v1.8.3 ship:
+
+- The per-cell polygon rasterisation is replaced by a connected-component blob finder. Adjacent
+  cells that share the "covered" state (mean cloud cover >= 15 % on that band) merge into a
+  single SVG polygon walked along the union's outline, so the overlay reads as smooth shapes
+  rather than a 30 x 30 mosaic of individual squares.
+- The three altitude toggles (high / mid / low) move from the right rail under the mode bar to
+  the top-left corner as a vertical stack of real buttons. Same shape vocabulary as the mode
+  bar, just slightly taller so each button can stack a layer glyph above its current home-point
+  coverage percentage. State resets to all-on every time the user enters weather mode.
+- Band fills derive from `--primary-text-color` via `color-mix` (high = 100 %, mid = 55 %, low =
+  25 % blend toward the card background). No translucency: the contrast comes from the value
+  step between mixes so the three bands stay distinct on every HA theme.
+- The bottom timeline stays visible in weather mode and is fully scrubbable. The cloud-cover
+  grid is fetched once per refresh tick as a 5-day window (-2 days past + today + +2 days
+  forecast = 120 hourly slices); scrubbing the cursor picks the right slice out of the cached
+  Float32Array without any fresh HTTP round-trip.
+
+### Dependencies refreshed
+
+- `vite` 8.0.14 → 8.0.16
+- `maplibre-gl` 5.24.0 (current)
+- `lit` 3.3.3 (current)
+- `geotiff` 3.0.5 (current)
+- `@mapbox/vector-tile` 3.0.0 (current)
+- `pbf` 5.1.0 (current)
+- `terser` 5.48.0 (current)
+- `typescript` 6.0.3 (current)
+
 ## v1.8.2
 
 > Hardening release on top of v1.8.1. The cycle focuses on three

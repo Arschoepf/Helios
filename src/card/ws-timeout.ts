@@ -1,7 +1,7 @@
 //Thin wrapper around `hass.callWS` that aborts the in-flight promise after a configurable timeout.
 //
 //Helios's history and statistics fetches are the slowest WebSocket round-trips the card issues, and on a recorder under heavy load (the Victron
-//Cerbo case in #155 saturated the SQLite connection) they would never complete. Without a timeout the card stayed pinned on its loading state
+//Cerbo case saturated the SQLite connection) they would never complete. Without a timeout the card stayed pinned on its loading state
 //forever and the user had no signal that anything was wrong. With this wrapper a stuck fetch resolves to a rejection after the budget elapses;
 //each caller catches the error and renders a degraded state (live chip values still update from `hass.states`, the chart history line just
 //disappears until the next attempt).
@@ -34,7 +34,7 @@ export class WsTimeoutError extends Error
 //(PV history, PV calib stats, PV trainer stats, battery,
 //radiation) it monopolises the recorder for the duration and
 //other cards' history queries stall behind us. A cap of 2 leaves
-//slack for the rest of the dashboard. See #160.
+//slack for the rest of the dashboard.
 //
 //Fetches over the cap queue up and fire as slots free, in FIFO
 //order. The semaphore is intentionally scoped to this module
@@ -68,7 +68,10 @@ function releaseFetchSlot(): void
 {
     _activeFetches = Math.max(0, _activeFetches - 1);
     const next = _fetchQueue.shift();
-    if (next) next();
+    if (next)
+    {
+        next();
+    }
 }
 
 
@@ -87,7 +90,10 @@ export function callWSWithTimeout<T = unknown>(
         let settled = false;
         const finish = (action: () => void) =>
         {
-            if (settled) return;
+            if (settled)
+            {
+                return;
+            }
             settled = true;
             releaseFetchSlot();
             action();
@@ -114,9 +120,9 @@ export function callWSWithTimeout<T = unknown>(
 
 //Schedule a callback to run when the browser is idle, with a
 //conservative timeout fallback. Used to defer expensive non-critical
-//fetches (the 30-day shading-map trainer) until the user-facing
+//fetches (the 5-min trainer stats) until the user-facing
 //work has landed and the main thread has a moment to breathe. See
-//#160.
+
 //
 //Safari and some embedded browsers don't expose
 //`requestIdleCallback`; we fall back to a 1 s timeout so the work

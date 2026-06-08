@@ -1,5 +1,5 @@
 //Screen-space overlay subsystem: pulls fresh projections from the
-//engine (sun arc, cloud disc, home silhouettes, label anchors),
+//engine (sun arc, cloud dome, home silhouettes, label anchors),
 //maps the sun arc samples into stroke-ready segments, controls
 //the SMIL animation play-state when the card scrolls in / out of
 //view, and exposes the "flow duration" easing used to ramp
@@ -34,15 +34,11 @@ export interface SunScene
     sunset:   { x: number; y: number; angleRad: number; time: Date } | null;
 }
 
-//Screen-space layout of the cloud-cover disc + 100 % reference
-//ring, projected through engine.projectCloudScene() on every map
-//transform and clock tick.
+//Cloud-cover scene snapshot consumed by the card chip stack. The engine exposes the per-altitude percentages and the
+//resolved chip colour, refreshed on every map transform and clock tick. The per-layer chips next to the cloud-cover
+//toggle display these values directly.
 export interface CloudScene
 {
-    discLow:    Array<{ x: number; y: number }>;
-    discMid:    Array<{ x: number; y: number }>;
-    discHigh:   Array<{ x: number; y: number }>;
-    ring:       Array<{ x: number; y: number }>;
     cloudHex:   string;
     cloudPct:   number;
     cloudLow:   number;
@@ -50,7 +46,7 @@ export interface CloudScene
     cloudHigh:  number;
 }
 
-//Per-polygon silhouette of one home building in screen space: the projected base ring and the projected top ring. Painted into the cloud-disc SVG
+//Per-polygon silhouette of one home building in screen space: the projected base ring and the projected top ring. Painted into the cloud-dome SVG
 //mask so the union covers the exact extruded prism even for concave footprints.
 export interface HomeSilhouette
 {
@@ -71,6 +67,11 @@ export interface LabelLayout
     gridExportLabel:   { x: number; y: number };
     ringEdge:          { x: number; y: number };
     home:              { x: number; y: number };
+    //Projected screen position of the home roof top (home lat/lon at
+    //altitude render_height). Drop leader from the home pill lands
+    //exactly here so the connection follows the roof even when the
+    //user resizes the card or pitches the camera.
+    homeRoof:          { x: number; y: number };
     //Perspective-projected ground disc around the home. Drawn as
     //a polygon in the PV leader SVG; pulses with the bead arrival
     //by scaling around its centre (which is `home`).
@@ -128,8 +129,14 @@ function pointEq(
     b: { x: number; y: number } | null | undefined,
 ): boolean
 {
-    if (a === b) return true;
-    if (!a || !b) return false;
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b)
+    {
+        return false;
+    }
     return nearlyEq(a.x, b.x) && nearlyEq(a.y, b.y);
 }
 
@@ -138,19 +145,34 @@ function pointArrayEq(
     b: Array<{ x: number; y: number }>,
 ): boolean
 {
-    if (a === b) return true;
-    if (a.length !== b.length) return false;
+    if (a === b)
+    {
+        return true;
+    }
+    if (a.length !== b.length)
+    {
+        return false;
+    }
     for (let i = 0; i < a.length; i++)
     {
-        if (!nearlyEq(a[i].x, b[i].x) || !nearlyEq(a[i].y, b[i].y)) return false;
+        if (!nearlyEq(a[i].x, b[i].x) || !nearlyEq(a[i].y, b[i].y))
+        {
+            return false;
+        }
     }
     return true;
 }
 
 function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
 {
-    if (a === b) return true;
-    if (!a || !b) return false;
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b)
+    {
+        return false;
+    }
     return pointEq(a.cloudLabel,        b.cloudLabel)
         && pointEq(a.pvLabel,           b.pvLabel)
         && pointEq(a.batterySocLabel,   b.batterySocLabel)
@@ -168,24 +190,51 @@ function labelLayoutEq(a: LabelLayout | null, b: LabelLayout | null): boolean
 
 function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
 {
-    if (a === b) return true;
-    if (!a || !b) return false;
-    if (!nearlyEq(a.daylight, b.daylight)) return false;
-    if (!pointEq(a.home, b.home)) return false;
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b)
+    {
+        return false;
+    }
+    if (!nearlyEq(a.daylight, b.daylight))
+    {
+        return false;
+    }
+    if (!pointEq(a.home, b.home))
+    {
+        return false;
+    }
     if (!nearlyEq(a.sun.x, b.sun.x) || !nearlyEq(a.sun.y, b.sun.y)
         || !nearlyEq(a.sun.altitude, b.sun.altitude)) return false;
-    if (a.arc.length !== b.arc.length) return false;
+    if (a.arc.length !== b.arc.length)
+    {
+        return false;
+    }
     for (let i = 0; i < a.arc.length; i++)
     {
         const sa = a.arc[i], sb = b.arc[i];
-        if (sa.belowHorizon !== sb.belowHorizon) return false;
-        if (!nearlyEq(sa.x, sb.x) || !nearlyEq(sa.y, sb.y)) return false;
+        if (sa.belowHorizon !== sb.belowHorizon)
+        {
+            return false;
+        }
+        if (!nearlyEq(sa.x, sb.x) || !nearlyEq(sa.y, sb.y))
+        {
+            return false;
+        }
     }
     //Sunrise / sunset markers must match presence and screen pos.
-    if ((a.sunrise === null) !== (b.sunrise === null)) return false;
+    if ((a.sunrise === null) !== (b.sunrise === null))
+    {
+        return false;
+    }
     if (a.sunrise && b.sunrise
         && (!nearlyEq(a.sunrise.x, b.sunrise.x) || !nearlyEq(a.sunrise.y, b.sunrise.y))) return false;
-    if ((a.sunset === null) !== (b.sunset === null)) return false;
+    if ((a.sunset === null) !== (b.sunset === null))
+    {
+        return false;
+    }
     if (a.sunset && b.sunset
         && (!nearlyEq(a.sunset.x, b.sunset.x) || !nearlyEq(a.sunset.y, b.sunset.y))) return false;
     return true;
@@ -193,27 +242,53 @@ function sunSceneEq(a: SunScene | null, b: SunScene | null): boolean
 
 function cloudSceneEq(a: CloudScene | null, b: CloudScene | null): boolean
 {
-    if (a === b) return true;
-    if (!a || !b) return false;
-    if (a.cloudHex   !== b.cloudHex)   return false;
-    if (a.cloudPct   !== b.cloudPct)   return false;
-    if (a.cloudLow   !== b.cloudLow)   return false;
-    if (a.cloudMid   !== b.cloudMid)   return false;
-    if (a.cloudHigh  !== b.cloudHigh)  return false;
-    return pointArrayEq(a.discLow,  b.discLow)
-        && pointArrayEq(a.discMid,  b.discMid)
-        && pointArrayEq(a.discHigh, b.discHigh)
-        && pointArrayEq(a.ring,     b.ring);
+    if (a === b)
+    {
+        return true;
+    }
+    if (!a || !b)
+    {
+        return false;
+    }
+    if (a.cloudHex !== b.cloudHex)
+    {
+        return false;
+    }
+    if (a.cloudPct !== b.cloudPct)
+    {
+        return false;
+    }
+    if (a.cloudLow !== b.cloudLow)
+    {
+        return false;
+    }
+    if (a.cloudMid !== b.cloudMid)
+    {
+        return false;
+    }
+    return a.cloudHigh === b.cloudHigh;
 }
 
 function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
 {
-    if (a === b) return true;
-    if (a.length !== b.length) return false;
+    if (a === b)
+    {
+        return true;
+    }
+    if (a.length !== b.length)
+    {
+        return false;
+    }
     for (let i = 0; i < a.length; i++)
     {
-        if (!pointArrayEq(a[i].base, b[i].base)) return false;
-        if (!pointArrayEq(a[i].top,  b[i].top))  return false;
+        if (!pointArrayEq(a[i].base, b[i].base))
+        {
+            return false;
+        }
+        if (!pointArrayEq(a[i].top,  b[i].top))
+        {
+            return false;
+        }
     }
     return true;
 }
@@ -241,26 +316,35 @@ function homeSilhouettesEq(a: HomeSilhouette[], b: HomeSilhouette[]): boolean
 export function refreshOverlays(host: OverlaysHost): void
 {
     const nextLabel = host._engine?.projectHomeLabelLayout() ?? null;
-    if (!labelLayoutEq(host._labelLayout, nextLabel)) host._labelLayout = nextLabel;
+    if (!labelLayoutEq(host._labelLayout, nextLabel))
+    {
+        host._labelLayout = nextLabel;
+    }
 
     const t = host._selectedTime ?? host._now;
     const nextSun   = host._engine ? host._engine.projectSunScene(t)        : null;
     const nextCloud = host._engine ? host._engine.projectCloudScene()       : null;
     const nextHomes = host._engine ? host._engine.projectHomeFootprints()   : [];
-    if (!sunSceneEq       (host._sunScene,        nextSun))   host._sunScene        = nextSun;
-    if (!cloudSceneEq     (host._cloudScene,      nextCloud)) host._cloudScene      = nextCloud;
-    if (!homeSilhouettesEq(host._homeSilhouettes, nextHomes)) host._homeSilhouettes = nextHomes;
+    if (!sunSceneEq       (host._sunScene,        nextSun))
+    {
+        host._sunScene        = nextSun;
+    }
+    if (!cloudSceneEq     (host._cloudScene,      nextCloud))
+    {
+        host._cloudScene      = nextCloud;
+    }
+    if (!homeSilhouettesEq(host._homeSilhouettes, nextHomes))
+    {
+        host._homeSilhouettes = nextHomes;
+    }
 
-    //LiDAR View overlay lives entirely inside the engine's WebGL
     //custom layer now: no per-transform projection on the JS side,
     //no canvas redraw. The card just drives the fade-in/out alpha
     //via _startLidarFadeLoop; MapLibre re-issues the layer's draw
     //call on every transform automatically.
 
-    //Shading-dome scene re-projection is wired separately from the
-    //card's onMapTransform handler so this module stays free of a
-    //circular dependency on shadingDome (which imports
-    //refreshOverlays in turn).
+    //Weather raster source / layer is owned by the engine + the weather mode lifecycle, so this
+    //transform path stays free of a per-frame refreshOverlays for it.
 }
 
 
@@ -275,7 +359,10 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
 {
     host.classList.toggle('helios-paused', paused);
     const root = host.shadowRoot;
-    if (!root) return;
+    if (!root)
+    {
+        return;
+    }
     //NodeList directly iterable: skip Array.from. The querySelectorAll
     //result is live in spec but immutable for our use here; the loop
     //touches every svg in order regardless.
@@ -288,8 +375,14 @@ export function setAnimationsPaused(host: OverlaysHost, paused: boolean): void
         };
         try
         {
-            if (paused) s.pauseAnimations?.();
-            else        s.unpauseAnimations?.();
+            if (paused)
+            {
+                s.pauseAnimations?.();
+            }
+            else
+            {
+                s.unpauseAnimations?.();
+            }
         }
         catch (_) {}
     }

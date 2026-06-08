@@ -12,9 +12,8 @@
 import type { HeliosConfig } from '../helios-config';
 import { HeliosEngine } from '../helios-engine';
 import { refreshOverlays, setAnimationsPaused, type OverlaysHost } from './overlays';
-import { refreshShadingDomeScene, type ShadingDomeHost } from './shadingDome';
-import { refreshCloudDomeScene, type CloudDomeHost } from './cloudDome';
 import type { ChartSeries } from './charts';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 //Visual config keys that the engine reacts to via updateConfig(). Editing any of these from the visual editor or via the YAML hot-
@@ -27,47 +26,24 @@ import type { ChartSeries } from './charts';
 //have a runtime effect.
 export const VISUAL_CONFIG_KEYS = [
     'show-labels',
-    'pv-power-entity',
-    //PV layout, every change must reach the engine so the per-array shading geometry, the forecast and the calibration ratio
+    //PV layout, every change must reach the engine so the per-array forecast geometry, the predicted curve and the calibration ratio
     //recompute against the new tilt / azimuth / kWp / inverter cap.
     'pv-arrays',
     'pv-tilt',
     'pv-azimuth',
-    'pv-peak-kwp',
     'pv-inverter-max-kw',
     //map-style triggers a MapLibre setStyle(), the engine reloads the cloud disc, buildings and labels on the resulting `style.load`.
     'map-style',
-    //Battery flat keys + the multi-bank array + the inverter-cutoff guard. Any of them changes the trainer guard or the chip wiring.
-    'battery-soc-entity',
-    'battery-power-entity',
-    'battery-power-invert',
-    'batteries',
+    //Inverter-cutoff guard: when set, downstream calibration consumers can skip buckets where SoC reached the cutoff so the
+    //inverter-blocked production does not pollute the 5-day calibration ratio.
     'inverter-cutoff-soc-pct',
-    //Grid wiring: chips and flow leader paths follow these directly.
-    'grid-import-entity',
-    'grid-export-entity',
-    'grid-power-entity',
-    'grid-power-invert',
     //solar-radiation-entity, when set, feeds the engine sensor samples that override Open-Meteo for the live + past irradiance
     //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
     'solar-radiation-entity',
     //building-radius / cluster-radius invalidate cache and refetch; opacity is a cheap paint-property update.
-    'building-radius',
     'building-cluster-radius',
     'building-opacity',
-    //Render budget + LiDAR-View visuals. The slider that drives lidar-view-point-size lives on the LiDAR-View itself so the engine
-    //picks up the change immediately.
-    'pixel-ratio',
-    'shadows-enabled',
-    'shadow-opacity',
-    'lidar-precision',
-    'lidar-view-point-size',
     //Timeline visibility + chart UX preferences.
-    'timeline-enabled',
-    'timeline-width-pct',
-    'timeline-consumption-enabled',
-    'date-format',
-    'time-format',
     'auto-rotate-enabled',
     //lidar-local-ndsm-*: the 6 BYO-LiDAR keys. Any change must invalidate the engine sig so the shadow pipeline reruns against the
     //new provider config (toggle, URL or bbox).
@@ -100,7 +76,10 @@ function parseConfigCoord(raw: unknown): number | null
     if (typeof raw === 'string')
     {
         const trimmed = raw.trim();
-        if (trimmed === '') return null;
+        if (trimmed === '')
+        {
+            return null;
+        }
         const n = Number(trimmed);
         return isFinite(n) ? n : null;
     }
@@ -164,8 +143,14 @@ export function getHomeCoords(
 
     const result = _resolveHomeCoords(config, hassCfg, overrideId);
     const entry: HomeCoordsCacheEntry = { hassCfg, overrideId, result };
-    if (config) _homeCoordsCache.set(config, entry);
-    else        _homeCoordsNoConfigCache = entry;
+    if (config)
+    {
+        _homeCoordsCache.set(config, entry);
+    }
+    else
+    {
+        _homeCoordsNoConfigCache = entry;
+    }
     return result;
 }
 
@@ -193,7 +178,10 @@ function _resolveHomeCoords(
 
     const lat = hassCfg?.latitude;
     const lon = hassCfg?.longitude;
-    if (typeof lat !== 'number' || typeof lon !== 'number') return null;
+    if (typeof lat !== 'number' || typeof lon !== 'number')
+    {
+        return null;
+    }
     return { lat, lon };
 }
 
@@ -215,7 +203,10 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
         return '';
     }
     const cached = _configSigCache.get(config);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined)
+    {
+        return cached;
+    }
     const sig = VISUAL_CONFIG_KEYS
         .map(k => `${k}=${config[k] ?? ''}`)
         .join('|');
@@ -228,19 +219,19 @@ export function computeConfigSig(config: HeliosConfig | undefined): string
 //OverlaysHost so refreshOverlays(host) lands cleanly inside the
 //engine onWeatherUpdate / onMapTransform callbacks; the rest is
 //the engine + init lifecycle state the bootstrap mutates.
-export interface InitHost extends OverlaysHost
+export interface InitHost extends OverlaysHost, LoadingTrackerHost
 {
     readonly config: HeliosConfig | undefined;
     readonly hass:   any;
 
     _engine?:            HeliosEngine;
-    _fetching:           boolean;
     _cloudCover:         number;
     _timeRange:          { start: Date; end: Date } | null;
     _isLiveMode:         boolean;
     _chartSeries:        ChartSeries | null;
     _shadowBusy:         boolean;
     _lidarExposureBusy:  boolean;
+    _weatherRateLimited: boolean;
 
     _lastHomeKey:        string;
     _initInflight:       boolean;
@@ -282,12 +273,33 @@ export function initVisibilityObserver(host: InitHost): void
     //engine's own pause flag is updated when it exists (cheap, no
     //teardown).
     let intersecting = true;
+    let wasTabHidden = false;
     const applyState = () =>
     {
         const tabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
         const paused    = !intersecting || tabHidden;
         setAnimationsPaused(host, paused);
         host._engine?.setPaused(paused);
+        //Tab just became visible after being hidden. While hidden, refreshGrid / refreshPv / refreshBattery
+        //can clear their live values to null if hass momentarily disconnected (HA does this on tab focus
+        //loss in some setups). The reference-equality refresh gate in HeliosCard then short-circuits the
+        //next refresh because hass / config / _energyDefaults pointers are unchanged. Force-invalidating
+        //the cache references here makes the next render call refreshAll, repopulating the chip values.
+        if (wasTabHidden && !tabHidden)
+        {
+            const h = host as unknown as {
+                _lastRefreshHassRef?:           unknown;
+                _lastRefreshConfigRef?:         unknown;
+                _lastRefreshTimeRangeRef?:      unknown;
+                _lastRefreshEnergyDefaultsRef?: unknown;
+            };
+            h._lastRefreshHassRef           = undefined;
+            h._lastRefreshConfigRef         = undefined;
+            h._lastRefreshTimeRangeRef      = undefined;
+            h._lastRefreshEnergyDefaultsRef = undefined;
+            host.requestUpdate();
+        }
+        wasTabHidden = tabHidden;
     };
     host._visibilityObserver = new IntersectionObserver(entries =>
     {
@@ -368,7 +380,10 @@ export function initEngine(host: InitHost): void
         //is cleared so we never enqueue more than one wake-up; the
         //latest config wins.
         const prev = _pendingRespawnTimers.get(host);
-        if (prev !== undefined) window.clearTimeout(prev);
+        if (prev !== undefined)
+        {
+            window.clearTimeout(prev);
+        }
         host._initInflight = true;
         const perCardWait = lastAt > 0 ? ENGINE_SPAWN_COOLDOWN_MS - delta : 0;
         const globalWait  = GLOBAL_SPAWN_COOLDOWN_MS - sinceGlobalSpawn;
@@ -493,7 +508,10 @@ export function initEngineNow(host: InitHost): void
 //just been assigned and is non-null.
 function wireEngineCallbacks(host: InitHost): void
 {
-    if (!host._engine) return;
+    if (!host._engine)
+    {
+        return;
+    }
 
     //Ping Lit so the chrome that depends on engine readiness
     //(today: the LiDAR View button, which gates on the provider
@@ -507,11 +525,19 @@ function wireEngineCallbacks(host: InitHost): void
 
     host._engine.onFetchStart = () =>
     {
-        host._fetching = true;
+        beginLoadingPhase(host, 'weather-forecast');
     };
     host._engine.onFetchEnd = () =>
     {
-        host._fetching = false;
+        endLoadingPhase(host, 'weather-forecast');
+    };
+    host._engine.onBuildingsFetchStart = () =>
+    {
+        beginLoadingPhase(host, 'buildings');
+    };
+    host._engine.onBuildingsFetchEnd = () =>
+    {
+        endLoadingPhase(host, 'buildings');
     };
     host._engine.onWeatherUpdate = data =>
     {
@@ -538,7 +564,7 @@ function wireEngineCallbacks(host: InitHost): void
     //the rAF gate, at most one full overlay pass per frame, no
     //matter how many move events MapLibre fires.
     let overlayRaf: number | null = null;
-    //LiDAR-View and Shading-dome modes hide the regular HUD via
+    //LiDAR-View and Weather modes hide the regular HUD via
     //CSS opacity:0 + pointer-events:none. While in those modes
     //the projected sun arc, home silhouettes and chip anchors are
     //invisible but `refreshOverlays` still re-projects them on
@@ -548,9 +574,7 @@ function wireEngineCallbacks(host: InitHost): void
     //refresh leaves the stale scene cached (the toggle path
     //re-runs it once on enter so the user sees up-to-date data).
     type ModeAwareHost = InitHost & {
-        readonly _lidarViewMode?:   boolean;
-        readonly _shadingDomeMode?: boolean;
-        readonly _cloudDomeMode?:   boolean;
+        readonly _cardMode?: 'base' | 'lidar' | 'weather';
     };
     host._engine.onMapTransform = () =>
     {
@@ -559,8 +583,14 @@ function wireEngineCallbacks(host: InitHost): void
         //but the user can't see anything, so skip the per-frame
         //work entirely. Comes back on the next render once the
         //IntersectionObserver re-enables the engine.
-        if (host._engine?.isPaused()) return;
-        if (overlayRaf !== null) return;
+        if (host._engine?.isPaused())
+        {
+            return;
+        }
+        if (overlayRaf !== null)
+        {
+            return;
+        }
         overlayRaf = requestAnimationFrame(() =>
         {
             overlayRaf = null;
@@ -569,31 +599,20 @@ function wireEngineCallbacks(host: InitHost): void
             //the sun arc, silhouettes, label layout, cloud scene.
             //Same gate for both dome scenes when their own mode
             //is OFF.
-            if (!mh._lidarViewMode)
+            if (mh._cardMode !== 'lidar')
             {
                 refreshOverlays(host);
             }
-            if (mh._shadingDomeMode)
-            {
-                refreshShadingDomeScene(host as unknown as ShadingDomeHost);
-            }
-            if (mh._cloudDomeMode)
-            {
-                refreshCloudDomeScene(host as unknown as CloudDomeHost);
-            }
         });
     };
-    //WebGL context loss handler. NO LONGER auto-respawns: when the
-    //browser kills our context (typically because the page hit the
-    //per-origin cap of 8 to 16 WebGL contexts in editor preview
-    //mode), respawning here used to fire ANOTHER getContext which
-    //killed another live context, which dispatched another
-    //context-lost event, looping until the editor session was
-    //drowning in error spam.
+    //WebGL context loss handler. Does NOT auto-respawn: when the browser kills our context
+    //(typically because the page hit the per-origin cap of 8 to 16 WebGL contexts in editor
+    //preview mode), respawning here would fire ANOTHER getContext which kills another live
+    //context, which dispatches another context-lost event, looping until the editor session
+    //drowns in error spam.
     //
-    //We just mark the engine as paused and let MapLibre's own
-    //internal context-restored path (which kicks in when the user
-    //leaves the editor / scrolls / refocuses the tab) bring it back.
+    //The handler marks the engine paused and lets MapLibre's own context-restored path bring
+    //it back when the user leaves the editor / scrolls / refocuses the tab.
     //If that fails, a manual config change (any user edit) will hit
     //the identity-change branch in updated() and spawn a fresh
     //engine from a clean slate, with no cascade in flight.
@@ -607,10 +626,12 @@ function wireEngineCallbacks(host: InitHost): void
     host._engine.onShadowComputeStart = () =>
     {
         host._shadowBusy = true;
+        beginLoadingPhase(host, 'lidar-raster');
     };
     host._engine.onShadowComputeEnd = () =>
     {
         host._shadowBusy = false;
+        endLoadingPhase(host, 'lidar-raster');
     };
     //Exposure compute busy flag: same pattern, used by the mode-bar
     //LiDAR button to swap to a spinner + lock mode-switching while
@@ -618,6 +639,16 @@ function wireEngineCallbacks(host: InitHost): void
     host._engine.onLidarExposureBusyChange = (busy: boolean): void =>
     {
         host._lidarExposureBusy = busy;
+        if (busy) { beginLoadingPhase(host, 'lidar-exposure'); }
+        else      { endLoadingPhase(host, 'lidar-exposure'); }
+    };
+
+    //Rate-limit alert banner trigger: the engine fires this whenever the Open-Meteo home-point
+    //fetch transitions in or out of HTTP 429 back-off. The card paints an alert banner under
+    //the loading banner so the user understands why the weather data is not refreshing.
+    host._engine.onWeatherRateLimitChange = (rateLimited: boolean): void =>
+    {
+        host._weatherRateLimited = rateLimited;
     };
 
 }

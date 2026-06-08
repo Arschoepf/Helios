@@ -1,7 +1,7 @@
 import maplibregl from 'maplibre-gl';
 import type { Map as MapLibreMap } from 'maplibre-gl';
 import { getSunPosition, computePvPower, computeIrradianceWm2 } from './engine/sun';
-import { fetchHomePointData, clearWeatherCache, RATE_LIMIT_BACKOFF_MS, type SampleHourly } from './engine/weather';
+import { fetchHomePointData, clearWeatherCache, getWeatherFetchStats, RATE_LIMIT_BACKOFF_MS, OTHER_ERROR_BACKOFF_MS, type SampleHourly } from './engine/weather';
 import { fetchBuildingsAroundHome, type BuildingsResult } from './engine/buildings';
 import { projectExtrusionShadows } from './engine/shadows';
 import { resolveLidarSource } from './engine/lidar';
@@ -10,6 +10,7 @@ import { LidarViewLayer } from './engine/lidar-view-layer';
 import { computeLidarCellExposureRows } from './engine/pv-shading';
 import { startAutoRotateLoop } from './engine/auto-rotate';
 import { setDetailMode as _setDetailMode } from './engine/detail-mode';
+import { CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_MAX_DEG, CAMERA_PITCH_REST_DEG } from './engine/camera-bounds';
 import
 {
     shadowRasterSizeFor,
@@ -28,17 +29,15 @@ import
 {
     type HeliosConfig,
     type LidarPrecisionLevel,
-    DEFAULT_BUILDING_RADIUS_M,
+    DEFAULT_DISPLAY_RADIUS_M,
     DEFAULT_BUILDING_OPACITY,
     DEFAULT_BUILDING_CLUSTER_RADIUS_M,
     DEFAULT_BUILDING_COLOR_HEX,
     DEFAULT_LIDAR_PRECISION,
     LIDAR_PRECISION_PITCH_MULT,
     DEFAULT_SHADOW_OPACITY,
-    DEFAULT_LIDAR_VIEW_POINT_SIZE_PX,
     DEFAULT_LIDAR_VIEW_OPACITY,
     LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
-    LIDAR_VIEW_DISPLAY_RADIUS_M
 } from './helios-config';
 
 
@@ -73,7 +72,10 @@ interface HeliosStats
 }
 function bumpStat(key: keyof HeliosStats): void
 {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined')
+    {
+        return;
+    }
     const w = window as unknown as { __heliosStats?: HeliosStats };
     if (!w.__heliosStats)
     {
@@ -109,7 +111,7 @@ const _liveEngines = new Set<HeliosEngine>();
 
 //-----------------------------------------------------------------
 //Shared fetch caches: HA's editor preview pane destroys and re-creates the helios-card element on every config-changed commit
-//(slider release, picker write, see #162 and `hui-card.ts:195`). The map's WebGL context is unavoidably re-allocated each time
+//(slider release, picker write and `hui-card.ts:195`). The map's WebGL context is unavoidably re-allocated each time
 //because the cycle is hard-coded in HA, but the expensive PARSED fetch payloads (buildings GeoJSON, LiDAR raster) do not need to
 //be re-downloaded and re-parsed. Stashing them at module scope lets the fresh engine pick them up synchronously and skip the
 //network round-trip entirely.
@@ -149,7 +151,10 @@ const _sharedLidarCache:     Map<string, SharedLidarCacheEntry>     = new Map();
 function sharedBuildingsCacheGet(key: string): BuildingsResult | null
 {
     const entry = _sharedBuildingsCache.get(key);
-    if (!entry) return null;
+    if (!entry)
+    {
+        return null;
+    }
     if (Date.now() - entry.ts > SHARED_FETCH_CACHE_TTL_MS)
     {
         _sharedBuildingsCache.delete(key);
@@ -162,7 +167,10 @@ function sharedBuildingsCacheGet(key: string): BuildingsResult | null
 function sharedLidarCacheGet(key: string): SharedLidarCacheEntry | null
 {
     const entry = _sharedLidarCache.get(key);
-    if (!entry) return null;
+    if (!entry)
+    {
+        return null;
+    }
     if (Date.now() - entry.ts > SHARED_FETCH_CACHE_TTL_MS)
     {
         _sharedLidarCache.delete(key);
@@ -241,6 +249,44 @@ const IS_MOBILE = (() =>
 
 
 const DEFAULT_CLOUD_RGB: RGB = [0x5A, 0x8D, 0xC4];
+
+
+//Parse a CSS colour string ("#rrggbb", "rgb(r, g, b)", "rgba(r, g, b, a)", "var(...)" already resolved
+//by getComputedStyle) into a 0..1 RGB triplet for WebGL uniforms. Returns [1, 1, 1] (white) on parse
+//failure so the LiDAR view falls back to the pre-theme behaviour on weird inputs.
+function parseCssColorToUnitRgb(raw: string): [number, number, number]
+{
+    const s = (raw || '').trim().toLowerCase();
+    if (!s) return [1, 1, 1];
+    if (s.startsWith('#'))
+    {
+        const hex = s.slice(1);
+        if (hex.length === 3 || hex.length === 4)
+        {
+            const r = parseInt(hex[0] + hex[0], 16);
+            const g = parseInt(hex[1] + hex[1], 16);
+            const b = parseInt(hex[2] + hex[2], 16);
+            if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
+        }
+        else if (hex.length === 6 || hex.length === 8)
+        {
+            const r = parseInt(hex.slice(0, 2), 16);
+            const g = parseInt(hex.slice(2, 4), 16);
+            const b = parseInt(hex.slice(4, 6), 16);
+            if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
+        }
+        return [1, 1, 1];
+    }
+    const m = s.match(/^rgba?\s*\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+    if (m)
+    {
+        const r = parseFloat(m[1]);
+        const g = parseFloat(m[2]);
+        const b = parseFloat(m[3]);
+        if (isFinite(r) && isFinite(g) && isFinite(b)) return [r / 255, g / 255, b / 255];
+    }
+    return [1, 1, 1];
+}
 
 
 
@@ -419,6 +465,23 @@ export class HeliosEngine
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
+    //Optional host callback fired whenever the Open-Meteo home-point fetch transitions in or
+    //out of the rate-limited state. Lets the card draw an alert banner under the loading banner
+    //so the user understands why the weather data has stopped refreshing for a few minutes.
+    public onWeatherRateLimitChange?: (rateLimited: boolean) => void;
+    private _emittedRateLimited = false;
+    private _setRateLimited(rateLimited: boolean): void
+    {
+        if (this._emittedRateLimited === rateLimited) { return; }
+        this._emittedRateLimited = rateLimited;
+        try { this.onWeatherRateLimitChange?.(rateLimited); }
+        catch (_) { /* host callback errors must not break the fetch path */ }
+    }
+    //Consecutive non-429 failure count (5xx, network, JSON parse). Drives a graduated back-off so
+    //a server outage at the previous flat 60 s cadence (= 1440 retries / day per card, compounded
+    //across multiple cards / tabs) can no longer pile up the kind of traffic that triggers an IP
+    //rate limit even without a single 429 from the API. Resets on success.
+    private _otherErrorStreak = 0;
 
     private _fetchAbortController?: AbortController;
     private _resizeDebounceTimer?:  number;
@@ -446,6 +509,10 @@ export class HeliosEngine
     public onFetchStart?:    () => void;
     public onFetchEnd?:      () => void;
     public onWeatherUpdate?: (data: WeatherData) => void;
+    //Buildings GeoJSON fetch lifecycle. Fired around fetchBuildingsAroundHome so the card can track
+    //the buildings phase in the loading banner.
+    public onBuildingsFetchStart?: () => void;
+    public onBuildingsFetchEnd?:   () => void;
 
     //Irradiance samples pushed in by the card from a HA solar-radiation
     //sensor: the entity's history (recorder snapshots) up to "now",
@@ -469,7 +536,10 @@ export class HeliosEngine
     {
         if (!samples || samples.length === 0)
         {
-            if (this._sensorIrradianceSamples === null) return;
+            if (this._sensorIrradianceSamples === null)
+            {
+                return;
+            }
             this._sensorIrradianceSamples = null;
             this._arcInputsCache = undefined;
             this._renderForCurrentSelection();
@@ -479,8 +549,14 @@ export class HeliosEngine
         for (const s of samples)
         {
             const ms = s.time.getTime();
-            if (!isFinite(ms)) continue;
-            if (!isFinite(s.wm2) || s.wm2 < 0) continue;
+            if (!isFinite(ms))
+            {
+                continue;
+            }
+            if (!isFinite(s.wm2) || s.wm2 < 0)
+            {
+                continue;
+            }
             cleaned.push({ tMs: ms, wm2: s.wm2 });
         }
         cleaned.sort((a, b) => a.tMs - b.tMs);
@@ -511,13 +587,28 @@ export class HeliosEngine
         b: { tMs: number; wm2: number }[] | null
     ): boolean
     {
-        if (a === b) return true;
-        if (a === null || b === null) return false;
-        if (a.length !== b.length) return false;
+        if (a === b)
+        {
+            return true;
+        }
+        if (a === null || b === null)
+        {
+            return false;
+        }
+        if (a.length !== b.length)
+        {
+            return false;
+        }
         for (let i = 0; i < a.length; i++)
         {
-            if (a[i].tMs !== b[i].tMs) return false;
-            if (a[i].wm2 !== b[i].wm2) return false;
+            if (a[i].tMs !== b[i].tMs)
+            {
+                return false;
+            }
+            if (a[i].wm2 !== b[i].wm2)
+            {
+                return false;
+            }
         }
         return true;
     }
@@ -530,7 +621,10 @@ export class HeliosEngine
     private _sensorIrradianceAt(t: Date): number | null
     {
         const samples = this._sensorIrradianceSamples;
-        if (!samples || samples.length === 0) return null;
+        if (!samples || samples.length === 0)
+        {
+            return null;
+        }
         const tMs = t.getTime();
         let bestIdx = -1;
         let bestDelta = Number.POSITIVE_INFINITY;
@@ -589,9 +683,15 @@ export class HeliosEngine
         try
         {
             const raw = window.localStorage.getItem(this._cameraPoseStorageKey());
-            if (!raw) return null;
+            if (!raw)
+            {
+                return null;
+            }
             const parsed = JSON.parse(raw);
-            if (parsed && typeof parsed === 'object') return parsed as { bearing?: number; pitch?: number; locked?: boolean };
+            if (parsed && typeof parsed === 'object')
+            {
+                return parsed as { bearing?: number; pitch?: number; locked?: boolean };
+            }
         }
         catch
         {
@@ -640,9 +740,9 @@ export class HeliosEngine
         const raw = Number.isFinite(rawStored) ? rawStored : rawCfg;
         if (Number.isFinite(raw))
         {
-            return Math.max(15, Math.min(85, raw));
+            return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, raw));
         }
-        return 55;
+        return CAMERA_PITCH_REST_DEG;
     }
     //True when manual drag-rotate / drag-pitch + the idle auto-orbit
     //should all be suppressed because the user opted into a locked
@@ -651,14 +751,20 @@ export class HeliosEngine
     public isCameraLocked(): boolean
     {
         const stored = this._readStoredPose();
-        if (stored && typeof stored.locked === 'boolean') return stored.locked;
+        if (stored && typeof stored.locked === 'boolean')
+        {
+            return stored.locked;
+        }
         return (this.cfg as Record<string, unknown>)['camera-locked'] === true;
     }
     //Live setter so the editor's slider can preview a new bearing
     //without waiting for the next config commit. Wraps to [0, 360).
     public setCameraBearing(deg: number): void
     {
-        if (!this.map || !Number.isFinite(deg)) return;
+        if (!this.map || !Number.isFinite(deg))
+        {
+            return;
+        }
         const wrapped = ((deg % 360) + 360) % 360;
         this.map.setBearing(wrapped);
     }
@@ -666,8 +772,11 @@ export class HeliosEngine
     //bounds the drag-pitch handler enforces.
     public setCameraPitch(deg: number): void
     {
-        if (!this.map || !Number.isFinite(deg)) return;
-        const clamped = Math.max(15, Math.min(85, deg));
+        if (!this.map || !Number.isFinite(deg))
+        {
+            return;
+        }
+        const clamped = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, deg));
         this.map.setPitch(clamped);
     }
     //Toggle the lock at runtime so the lock chip applies immediately
@@ -678,27 +787,407 @@ export class HeliosEngine
     //next boot restores the same state without a config round-trip.
     public setCameraLocked(locked: boolean): void
     {
-        if (!this.map) return;
+        if (!this.map)
+        {
+            return;
+        }
         (this.cfg as Record<string, unknown>)['camera-locked'] = locked;
         this._writeStoredPose({
             bearing: this.map.getBearing(),
             pitch:   this.map.getPitch(),
             locked,
         });
-        if (locked) this.map.touchZoomRotate.disable();
-        else        this.map.touchZoomRotate.enable({ around: 'center' });
+        if (locked)
+        {
+            this.map.touchZoomRotate.disable();
+        }
+        else
+        {
+            this.map.touchZoomRotate.enable({ around: 'center' });
+        }
     }
     //Out-of-config defaults that the editor's reset button restores.
     //Always the hemisphere-aware boot pose, never the user's
     //customised values; reading from _initialBearing / _initialPitch
     //here would simply echo back whatever the user just changed.
     public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }
-    public getDefaultPitch():   number { return 55; }
+    public getDefaultPitch():   number { return CAMERA_PITCH_REST_DEG; }
     //Live camera pose readers so the editor can pre-fill its sliders
     //with whatever the user is currently looking at, not just the
     //value committed to the YAML config.
     public getCameraBearing(): number { return this.map ? this.map.getBearing() : this.getDefaultBearing(); }
     public getCameraPitch():   number { return this.map ? this.map.getPitch()   : this.getDefaultPitch(); }
+    public getCameraZoom():    number { return this.map ? this.map.getZoom()    : 18; }
+
+    //Pre-weather-mode camera pose snapshot. Captured when enterWeatherCamera() fires so the symmetric
+    //exit (exitWeatherCamera) restores EXACTLY the pose the user was on, bypassing the default
+    //easeTo target which would otherwise drag them back to the boot pose. Also stashes the
+    //pre-enter camera-locked state so the exit returns to the rotation behaviour the user had set
+    //(locked stays locked, free stays free), and the zoom min/max so the temporary expansion we
+    //apply for the satellite-style overview reverts on the way back.
+    private _preWeatherPose: {
+        bearing:   number;
+        pitch:     number;
+        zoom:      number;
+        center:    [number, number];
+        locked:    boolean;
+        minZoom:   number;
+        maxZoom:   number;
+        //Captured maxBounds box so the exit restores the tight building-radius clamp the rest of
+        //the card relies on. Without saving + restoring this, the engine's _applyMapBounds would
+        //race the easeTo back to UI mode and clamp the camera before the animation lands.
+        maxBoundsWest:  number | null;
+        maxBoundsSouth: number | null;
+        maxBoundsEast:  number | null;
+        maxBoundsNorth: number | null;
+    } | null = null;
+    //Pending setTimeout that re-tightens the zoom envelope after an exit's easeTo lands. Held as a
+    //handle so a rapid UI -> Weather -> UI -> Weather sequence can CANCEL a stale tighten before it
+    //fires during the next entry's animation, which would otherwise re-clamp min/maxZoom to 18 and
+    //snap the camera back mid-ease.
+    private _weatherZoomTighten: number | null = null;
+
+    //Weather mode camera transition: tilt down to top-down + zoom out so the cloud-cover overlay
+    //reads as a meteorological satellite plan. Three knobs have to give for this to work:
+    //  1. Zoom min/max are locked to 18 in the base map init so the user can't wander off the
+    //     designed altitude. We temporarily widen [minZoom, maxZoom] to [10, 18] for the duration of
+    //     weather mode and restore the lock on exit.
+    //  2. Rotation gets locked the moment we enter so a stray drag doesn't pan the overhead view
+    //     out of frame. The pre-enter lock state is captured so the exit restores it verbatim.
+    //  3. easeTo carries the pose change on a 1200 ms cubic easing so the transition reads as a
+    //     deliberate "stepping back" rather than a jump cut.
+    public enterWeatherCamera(): void
+    {
+        if (!this.map) { return; }
+        //Cancel any pending zoom-tighten scheduled by a prior exit. Without this guard, a fast
+        //UI -> Weather -> UI -> Weather sequence lets the previous exit's setTimeout fire mid-
+        //ease here and re-clamp [minZoom, maxZoom] back to [18, 18], freezing the camera at 18
+        //before the easeTo to 12 can settle.
+        if (this._weatherZoomTighten !== null)
+        {
+            window.clearTimeout(this._weatherZoomTighten);
+            this._weatherZoomTighten = null;
+        }
+        const prevLocked = this.isCameraLocked();
+        const mb = this.map.getMaxBounds();
+        this._preWeatherPose = {
+            bearing: this.map.getBearing(),
+            pitch:   this.map.getPitch(),
+            zoom:    this.map.getZoom(),
+            center:  [this.homeLon, this.homeLat],
+            locked:  prevLocked,
+            minZoom: this.map.getMinZoom(),
+            maxZoom: this.map.getMaxZoom(),
+            maxBoundsWest:  mb ? mb.getWest()  : null,
+            maxBoundsSouth: mb ? mb.getSouth() : null,
+            maxBoundsEast:  mb ? mb.getEast()  : null,
+            maxBoundsNorth: mb ? mb.getNorth() : null,
+        };
+        //Clear the maxBounds clamp BEFORE the easeTo. _applyMapBounds at boot installs a tight
+        //bbox (~2 x building-radius around the home) so the user can't pan past the rendered
+        //surroundings; MapLibre enforces an effective minimum zoom such that the bounds always
+        //fit the viewport, which would clamp the weather-mode easeTo back up to ~16 regardless
+        //of setMinZoom. Dropping the bounds entirely lets the camera dezoom freely; the exit
+        //restores the original bbox so the rest of the card recovers its pan clamp.
+        //MapLibre accepts both null and undefined to clear the clamp; undefined avoids the
+        //internal "expected number, got null" log spam MapLibre 5.x emits when null bubbles
+        //through its bound validation path.
+        this.map.setMaxBounds(undefined);
+        //Widen the zoom envelope. Buffer of 1 below the target keeps MapLibre from edge-clamping
+        //the ease in flight.
+        this.map.setMinZoom(8);
+        this.map.setMaxZoom(18);
+        //Force the rotation lock on. setCameraLocked persists the new state to localStorage; we'll
+        //restore the original on exit so the user's preference comes back exactly as it was.
+        if (!prevLocked) { this.setCameraLocked(true); }
+        this.map.stop();
+        this.map.easeTo({
+            center:   [this.homeLon, this.homeLat],
+            bearing:  0,
+            pitch:    0,
+            zoom:     10,
+            duration: 1200,
+        });
+    }
+
+    public exitWeatherCamera(): void
+    {
+        if (!this.map) { return; }
+        const pose = this._preWeatherPose;
+        if (!pose) { return; }
+        this._preWeatherPose = null;
+        this.map.stop();
+        this.map.easeTo({
+            center:   pose.center,
+            bearing:  pose.bearing,
+            pitch:    pose.pitch,
+            zoom:     pose.zoom,
+            duration: 1200,
+        });
+        //Restore the rotation-lock state the user had before entering. setCameraLocked also writes
+        //the state back to localStorage so the next reload still sees the user's preference.
+        if (this.isCameraLocked() !== pose.locked) { this.setCameraLocked(pose.locked); }
+        //Re-tighten the zoom envelope + restore the maxBounds clamp after the easeTo lands.
+        //Deferred past the 1200 ms ease + a 50 ms buffer for MapLibre's onMoveEnd delivery. The
+        //handle is kept on the engine so a subsequent enter (fast mode swap) can cancel it before
+        //it fires.
+        const tighten = (): void =>
+        {
+            this._weatherZoomTighten = null;
+            if (!this.map) { return; }
+            if (pose.maxBoundsWest !== null
+             && pose.maxBoundsSouth !== null
+             && pose.maxBoundsEast !== null
+             && pose.maxBoundsNorth !== null)
+            {
+                this.map.setMaxBounds([
+                    [pose.maxBoundsWest, pose.maxBoundsSouth],
+                    [pose.maxBoundsEast, pose.maxBoundsNorth],
+                ]);
+            }
+            this.map.setMinZoom(pose.minZoom);
+            this.map.setMaxZoom(pose.maxZoom);
+        };
+        this._weatherZoomTighten = window.setTimeout(tighten, 1250);
+    }
+
+    //---------------------------------------------------------------------------------------------
+    //Weather mode cloud-cover grid: a coarse lat / lon grid of Open-Meteo cloud_cover_low / mid /
+    //high values covering the weather-mode camera viewport. One POST per refresh tick (~5 min)
+    //carries every grid point in a single round-trip; the grid is sized so the total POST stays
+    //well under the per-IP daily quota (10 000 calls / day on the free tier, the previous 50 x 50
+    //grid that exhausted the quota is the cautionary tale here).
+    //
+    //The response comes back with `models=best_match` resolved so the card knows which
+    //underlying numerical weather model fed the data (AROME-France at ~1.3 km, ICON-EU at ~7 km,
+    //ECMWF IFS at 25 km, etc.). The model name surfaces in the cached grid so a future UI hint
+    //can show "AROME / 1.3 km" alongside the overlay without a second fetch.
+    //
+    //Rendering happens client-side as an SVG overlay (see card/weatherMode.ts) anchored over the
+    //map. Each grid cell paints three stacked translucent polygons, one per cloud layer, colour-
+    //coded for an at-a-glance read of the per-altitude coverage. Drawing in SVG rather than
+    //rasterising into a MapLibre image source keeps every pixel of the cloud field crisp at the
+    //zoom 10 framing without the staircasing the old raster pipelines hit.
+    //
+    //Lifecycle: enterWeatherMode kicks ensureWeatherCloudGrid once the camera is settled. A 5 min
+    //refresh timer keeps the grid current while the user lingers in weather mode. exitWeatherMode
+    //cancels the timer + clears the cached grid.
+    //---------------------------------------------------------------------------------------------
+
+    //Grid dimensions: 31 x 31 = 961 points per refresh. Open-Meteo's multi-location POST cap is
+    //1000 points per call, so 31 x 31 sits at the maximum density a single round-trip can carry
+    //(32 x 32 = 1024 would tip over the cap). The grid covers a bbox sized to match the
+    //weather-mode zoom 10 framing (~44 km wide); per-cell pitch lands at ~1.4 km which matches
+    //AROME-France's native resolution (1.3 km) so the overlay reads at the finest grain the
+    //best regional model can deliver.
+    private static readonly _WEATHER_GRID_SIDE        = 31;
+    //Half-extent of the grid in latitude degrees around the home. 0.20 deg ~= 22 km on the lat
+    //axis at any latitude, so the grid covers a ~44 km x ~44 km bbox after the cos(lat)
+    //compression on the lon axis matches that envelope. Wide enough to overshoot the camera's
+    //weather-mode viewport so the polygon edges don't cut into the on-screen frame, narrow
+    //enough that the per-cell pitch stays close to the underlying model's native grid.
+    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.20;
+    //Refresh cadence. Open-Meteo's underlying numerical models update every 1-3 h, so 5 min
+    //keeps the displayed frame close to the freshest data without burning the per-IP quota
+    //while the user lingers in the mode.
+    private static readonly _WEATHER_GRID_REFRESH_MS   = 5 * 60_000;
+
+    private _weatherCloudGrid: {
+        bounds:    { south: number; north: number; west: number; east: number };
+        nLat:      number;
+        nLon:      number;
+        lats:      Float32Array;
+        lons:      Float32Array;
+        //Hourly time axis the cloud arrays index along (5-day window: 2 past + today + 2
+        //forecast = 120 hourly slices). One fetch covers the full timeline so timeline scrub
+        //picks the right slice from cache without firing another HTTP round-trip.
+        times:     Date[];
+        //Cloud-cover percentages stored row-major: point index outer (latIdx * nLon + lonIdx),
+        //time index inner. Read via `values[pointIdx * nTimes + timeIdx]`. nTimes is times.length.
+        cloudLow:  Float32Array;
+        cloudMid:  Float32Array;
+        cloudHigh: Float32Array;
+        //Resolved numerical weather model fed back by Open-Meteo (`best_match` picks the most
+        //accurate regional model for the home location). Surfaces in the UI so the user can
+        //judge the displayed grid pitch against the model's native resolution.
+        modelName: string;
+    } | null = null;
+    private _weatherCloudGridFetching = false;
+    private _weatherCloudGridRefreshTimer: number | undefined = undefined;
+
+    public getWeatherCloudGrid(): typeof this._weatherCloudGrid
+    {
+        return this._weatherCloudGrid;
+    }
+
+    //Resolve the time-axis index closest to the given timestamp. The grid covers a 5-day
+    //window, so this is cheap (~120 entries) and runs on every renderer pass. Returns -1 when
+    //the grid is empty.
+    public getWeatherCloudGridTimeIndex(t: Date): number
+    {
+        const g = this._weatherCloudGrid;
+        if (!g || g.times.length === 0) { return -1; }
+        const tMs = t.getTime();
+        let best = 0;
+        let bestDt = Math.abs(g.times[0].getTime() - tMs);
+        for (let i = 1; i < g.times.length; i++)
+        {
+            const dt = Math.abs(g.times[i].getTime() - tMs);
+            if (dt < bestDt) { bestDt = dt; best = i; }
+        }
+        return best;
+    }
+
+    //Fetch the weather-mode cloud grid. Idempotent: a second call while one is in flight short-
+    //circuits. Errors leave the previous grid in place so the overlay keeps showing the last
+    //known cloud field until the next refresh tick succeeds.
+    public async ensureWeatherCloudGrid(): Promise<void>
+    {
+        if (this._weatherCloudGridFetching) { return; }
+        this._weatherCloudGridFetching = true;
+        try
+        {
+            const N       = HeliosEngine._WEATHER_GRID_SIDE;
+            const halfLat = HeliosEngine._WEATHER_GRID_HALF_LAT_DEG;
+            //Longitude span compresses by cos(lat) at higher latitudes; matching the lat envelope
+            //keeps the grid roughly square in physical km regardless of where the home sits. The
+            //abs(cos) guard keeps the division well-behaved near the poles.
+            const cosLat  = Math.max(0.1, Math.abs(Math.cos(this.homeLat * Math.PI / 180)));
+            const halfLon = halfLat / cosLat;
+            const south = this.homeLat - halfLat;
+            const north = this.homeLat + halfLat;
+            const west  = this.homeLon - halfLon;
+            const east  = this.homeLon + halfLon;
+
+            const lats = new Float32Array(N);
+            const lons = new Float32Array(N);
+            for (let i = 0; i < N; i++)
+            {
+                lats[i] = south + (i / (N - 1)) * (north - south);
+                lons[i] = west  + (i / (N - 1)) * (east  - west);
+            }
+
+            //Flatten to (lat, lon) string pairs in row-major (lat-outer, lon-inner) order. Open-
+            //Meteo's POST endpoint expects the same comma-separated string format the GET query
+            //uses, placed in the body with application/x-www-form-urlencoded.
+            const total: number = N * N;
+            const flatLats: string[] = new Array(total);
+            const flatLons: string[] = new Array(total);
+            for (let iLat = 0; iLat < N; iLat++)
+            {
+                for (let iLon = 0; iLon < N; iLon++)
+                {
+                    flatLats[iLat * N + iLon] = lats[iLat].toFixed(4);
+                    flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
+                }
+            }
+
+            //Fetch a 5-day hourly window in a single round-trip (2 past + today + 2 forecast)
+            //so the timeline scrub picks the right slice from cache without firing another
+            //HTTP round-trip on every cursor move. forecast_days=3 yields today + 2 future
+            //days; past_days=2 carries the timeline's two past days too.
+            const body = 'latitude='   + flatLats.join(',')
+                       + '&longitude=' + flatLons.join(',')
+                       + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
+                       + '&models=best_match'
+                       + '&forecast_days=3&past_days=2&timezone=UTC';
+            const resp = await fetch('https://api.open-meteo.com/v1/forecast', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body,
+            });
+            if (!resp.ok)
+            {
+                throw new Error(`Open-Meteo cloud grid HTTP ${resp.status}`);
+            }
+            const j: any = await resp.json();
+            const results: any[] = Array.isArray(j) ? j : [j];
+            if (results.length === 0 || !results[0]?.hourly?.time)
+            {
+                throw new Error('Open-Meteo cloud grid: empty payload');
+            }
+            const timeStrs: string[] = results[0].hourly.time;
+            const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
+            const nTimes = times.length;
+
+            //Pack the per-point hourly cloud series row-major: point outer, time inner. Cuts
+            //the renderer's per-cell read down to one indexed lookup per band without an
+            //intermediate slice copy on every scrub cursor move.
+            const cloudLow  = new Float32Array(total * nTimes);
+            const cloudMid  = new Float32Array(total * nTimes);
+            const cloudHigh = new Float32Array(total * nTimes);
+            for (let p = 0; p < total; p++)
+            {
+                const r  = results[p];
+                const lo = r?.hourly?.cloud_cover_low  ?? [];
+                const mi = r?.hourly?.cloud_cover_mid  ?? [];
+                const hi = r?.hourly?.cloud_cover_high ?? [];
+                const base = p * nTimes;
+                for (let t = 0; t < nTimes; t++)
+                {
+                    cloudLow[base + t]  = lo[t] ?? 0;
+                    cloudMid[base + t]  = mi[t] ?? 0;
+                    cloudHigh[base + t] = hi[t] ?? 0;
+                }
+            }
+
+            //Open-Meteo's response carries the resolved `model` per location; same model across
+            //the grid in practice (the entire bbox sits in one regional model's footprint), so
+            //reading the first sample is enough to label the overlay.
+            const modelName = String(results[0]?.model ?? 'best_match');
+
+            this._weatherCloudGrid = {
+                bounds: { south, north, west, east },
+                nLat:   N,
+                nLon:   N,
+                lats,
+                lons,
+                times,
+                cloudLow,
+                cloudMid,
+                cloudHigh,
+                modelName,
+            };
+        }
+        catch (e)
+        {
+            console.warn('[HELIOS] weather cloud grid fetch failed:', e);
+        }
+        finally
+        {
+            this._weatherCloudGridFetching = false;
+        }
+    }
+
+    //Start the periodic refresh that keeps the cloud grid current while the user lingers in
+    //weather mode. Idempotent: a second call while the timer is already armed is a no-op.
+    public startWeatherCloudRefresh(): void
+    {
+        if (this._weatherCloudGridRefreshTimer !== undefined) { return; }
+        this._weatherCloudGridRefreshTimer = window.setInterval(() =>
+        {
+            void this.ensureWeatherCloudGrid();
+        }, HeliosEngine._WEATHER_GRID_REFRESH_MS);
+    }
+
+    public stopWeatherCloudRefresh(): void
+    {
+        if (this._weatherCloudGridRefreshTimer !== undefined)
+        {
+            window.clearInterval(this._weatherCloudGridRefreshTimer);
+            this._weatherCloudGridRefreshTimer = undefined;
+        }
+    }
+
+    //Lat / lon -> screen pixel projection via MapLibre's own camera transform. Used by the SVG
+    //cloud overlay to position the per-cell polygons at the right on-screen coordinates without
+    //re-implementing the Mercator math. Returns null when the map is not ready.
+    public projectLonLat(lon: number, lat: number): { x: number; y: number } | null
+    {
+        if (!this.map) { return null; }
+        const p = this.map.project([lon, lat]);
+        return { x: p.x, y: p.y };
+    }
 
     //Auto-rotation state. The map slowly orbits the home in the
     //opposite direction to the sun's apparent motion (decreasing
@@ -875,6 +1364,31 @@ export class HeliosEngine
     //mode-switching while a fresh exposure sweep is in flight.
     public onLidarExposureBusyChange?: (busy: boolean) => void;
 
+    //One-time sweep of localStorage keys that no longer have a writer. Idempotent + cheap, ~5 ms
+    //of localStorage.removeItem calls on cold start. Keeps the orphaned blobs (one of them can
+    //weigh 100-500 kB) from sitting forever in the user's storage quota.
+    private static _legacyStorageSwept = false;
+    private static _sweepLegacyStorage(): void
+    {
+        if (HeliosEngine._legacyStorageSwept) { return; }
+        HeliosEngine._legacyStorageSwept = true;
+        try
+        {
+            const ls = window.localStorage;
+            if (!ls) { return; }
+            const STATIC_RETIRED = [
+                'helios-shading-map:v2',
+                'helios:cloud-mode',
+                'helios-weather-grid:v2',
+            ];
+            for (const key of STATIC_RETIRED)
+            {
+                if (ls.getItem(key) !== null) { ls.removeItem(key); }
+            }
+        }
+        catch (_) { /* private browsing / disabled storage / quota: silently degrade */ }
+    }
+
     constructor(
         container:    HTMLElement,
         config:       HeliosConfig,
@@ -882,6 +1396,7 @@ export class HeliosEngine
         haElevation?: number
     )
     {
+        HeliosEngine._sweepLegacyStorage();
         this.homeLat = haCoords[1];
         this.homeLon = haCoords[0];
         this.homeElevation = (typeof haElevation === 'number' && Number.isFinite(haElevation))
@@ -896,7 +1411,10 @@ export class HeliosEngine
         while (_liveEngines.size >= MAX_LIVE_ENGINES)
         {
             const oldest = _liveEngines.values().next().value;
-            if (!oldest) break;
+            if (!oldest)
+            {
+                break;
+            }
             console.warn('[HELIOS] WebGL context cap reached, force-cleaning the oldest engine');
             try { oldest.cleanup(); }
             catch (_) {}
@@ -930,8 +1448,7 @@ export class HeliosEngine
         //basemap, shadow raster), so the desktop cap sits at 2 (not
         //the native 2-3 of Retina) and mobile at 1.25, slashing per-
         //frame fragment work without a visible quality regression on
-        //the card-sized viewport. The user-exposed `pixel-ratio: 1x`
-        //forces 1.0 for the cheapest possible workload.
+        //the card-sized viewport.
         const pixelRatio = this._pixelRatio();
 
         const styleInfo = this._resolveMapStyle();
@@ -956,6 +1473,11 @@ export class HeliosEngine
             zoom:            18,
             pitch:           this._initialPitch(),
             bearing:         this._initialBearing(),
+            //MapLibre default maxPitch is 60, default minPitch is 0. Push our own bounds in so the
+            //library's internals (animation easing, pinch-zoom-rotate, programmatic jumpTo / easeTo
+            //fallbacks) can never bypass the floor / ceiling even when callers forget to clamp first.
+            minPitch:        CAMERA_PITCH_MIN_DEG,
+            maxPitch:        CAMERA_PITCH_MAX_DEG,
             //Zoom is locked to the resting pose. The 3D camera + LiDAR overlay are tuned for this single altitude, and letting the user wander
             //off-zoom only opened the door to "why does my card look different from the docs" screenshots. detail-mode separately raises maxZoom for
             //its dive animation and resets it on exit.
@@ -1035,8 +1557,14 @@ export class HeliosEngine
         //
         //When camera-locked is true the pinch-rotate is disabled too so
         //the configured pose is the only pose the user ever sees.
-        if (this.isCameraLocked()) this.map.touchZoomRotate.disable();
-        else                       this.map.touchZoomRotate.enable({ around: 'center' });
+        if (this.isCameraLocked())
+        {
+            this.map.touchZoomRotate.disable();
+        }
+        else
+        {
+            this.map.touchZoomRotate.enable({ around: 'center' });
+        }
 
         //Hard pin the map centre on every user-driven transform: the
         //home must never leave the dead-centre of the card during a
@@ -1059,10 +1587,19 @@ export class HeliosEngine
         let pinning = false;
         this._mapPinHandler = (e: { originalEvent?: unknown }) =>
         {
-            if (pinning) return;
-            if (!this.map || !e?.originalEvent) return;
+            if (pinning)
+            {
+                return;
+            }
+            if (!this.map || !e?.originalEvent)
+            {
+                return;
+            }
             const c = this.map.getCenter();
-            if (c.lng === this.homeLon && c.lat === this.homeLat) return;
+            if (c.lng === this.homeLon && c.lat === this.homeLat)
+            {
+                return;
+            }
             pinning = true;
             try { this.map.setCenter([this.homeLon, this.homeLat]); }
             finally { pinning = false; }
@@ -1098,9 +1635,18 @@ export class HeliosEngine
             //existing style.load handler the engine already wires.
             window.setTimeout(() =>
             {
-                if (!this.map) return;
-                if (this.map.areTilesLoaded()) return;
-                if (!this.map.isStyleLoaded())  return;
+                if (!this.map)
+                {
+                    return;
+                }
+                if (this.map.areTilesLoaded())
+                {
+                    return;
+                }
+                if (!this.map.isStyleLoaded())
+                {
+                    return;
+                }
                 //No tile arrived in 5 s despite a fully-loaded style. Force a soft reload of the style URL, which makes MapLibre re-walk every source
                 //and re-issue tile fetches for the current viewport.
                 try
@@ -1124,7 +1670,10 @@ export class HeliosEngine
         //hasImage() guards re-registration.
         this._mapStyleImageMissingHandler = (e: { id?: string }) =>
         {
-            if (!this.map || !e?.id || this.map.hasImage(e.id)) return;
+            if (!this.map || !e?.id || this.map.hasImage(e.id))
+            {
+                return;
+            }
             try
             {
                 this.map.addImage(e.id, {
@@ -1175,18 +1724,12 @@ export class HeliosEngine
         canvas.style.touchAction = 'none';
 
         const ROTATE_SENSITIVITY_DEG_PER_PX = 0.35;
-        //Vertical drag controls camera pitch. dy positive (drag down)
-        //tilts the camera flatter (less top-down, more horizon-on);
-        //dy negative (drag up) tilts it back toward the bird's-eye.
-        //Bounds: [15°, 85°]. The wider span lets the user dive
-        //almost top-down (15°) for a "map view" feel or peek almost
-        //flat against the ground (85°) for a "ground-level" feel,
-        //without ever allowing the camera to dip below the ground
-        //plane (90° would reveal the missing under-side of the
-        //basemap mesh).
+        //Vertical drag controls camera pitch. dy positive (drag down) tilts the camera flatter (less
+        //top-down, more horizon-on), dy negative (drag up) tilts it back toward the bird's-eye. Bounds
+        //pulled from the module-level CAMERA_PITCH_MIN_DEG / MAX so this handler stays in sync with
+        //every other pitch entry point (MapLibre constructor, setCameraPitch, _initialPitch,
+        //detail-mode dive target).
         const PITCH_SENSITIVITY_DEG_PER_PX = 0.30;
-        const PITCH_MIN_DEG = 15;
-        const PITCH_MAX_DEG = 85;
         let dragRotating  = false;
         let lastPointerX  = 0;
         let lastPointerY  = 0;
@@ -1195,19 +1738,31 @@ export class HeliosEngine
         const onDown = (e: PointerEvent) =>
         {
             //Mouse: left button only. Touch / pen: always start.
-            if (e.pointerType === 'mouse' && e.button !== 0) return;
+            if (e.pointerType === 'mouse' && e.button !== 0)
+            {
+                return;
+            }
             //Single-pointer rotation; ignore additional touches so the
             //two-finger pinch-rotate gesture stays with MapLibre.
-            if (activeId !== null) return;
+            if (activeId !== null)
+            {
+                return;
+            }
             //Swallow gestures during the post-exit cooldown so the click that dismissed the dashboard panel can't bleed into a fresh drag-rotate on
             //the canvas behind.
-            if (this.isUserGestureSuppressed()) return;
+            if (this.isUserGestureSuppressed())
+            {
+                return;
+            }
             //camera-locked: the user opted into a fixed pose so manual
             //drag-rotate / drag-pitch are inert. The toggle is exposed
             //in the editor UI section and is re-evaluated on every
             //pointerdown so flipping it in live preview disengages
             //immediately without an engine respawn.
-            if (this.isCameraLocked()) return;
+            if (this.isCameraLocked())
+            {
+                return;
+            }
             dragRotating = true;
             activeId     = e.pointerId;
             lastPointerX = e.clientX;
@@ -1218,7 +1773,10 @@ export class HeliosEngine
         };
         const onMove = (e: PointerEvent) =>
         {
-            if (!dragRotating || !this.map || e.pointerId !== activeId) return;
+            if (!dragRotating || !this.map || e.pointerId !== activeId)
+            {
+                return;
+            }
             const dx = e.clientX - lastPointerX;
             const dy = e.clientY - lastPointerY;
             lastPointerX = e.clientX;
@@ -1235,13 +1793,16 @@ export class HeliosEngine
             //the horizon up toward the bird's-eye. Clamp at the
             //session bounds so the camera can never look past the
             //ground.
-            const nextPitch = Math.max(PITCH_MIN_DEG, Math.min(PITCH_MAX_DEG,
+            const nextPitch = Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG,
                 this.map.getPitch() - dy * PITCH_SENSITIVITY_DEG_PER_PX));
             this.map.setPitch(nextPitch);
         };
         const onEnd = (e: PointerEvent) =>
         {
-            if (e.pointerId !== activeId) return;
+            if (e.pointerId !== activeId)
+            {
+                return;
+            }
             dragRotating = false;
             activeId     = null;
             try { canvas.releasePointerCapture(e.pointerId); }
@@ -1288,7 +1849,10 @@ export class HeliosEngine
             //on layers that may already be removed during the suppression
             //sweep; MapLibre reports each as "Cannot style non-existing
             //layer X" but the outcome is the harmless intended one.
-            if (msg.includes('non-existing layer')) return;
+            if (msg.includes('non-existing layer'))
+            {
+                return;
+            }
             console.warn('[HELIOS] MapLibre error:', msg);
         };
         this.map.on('error', this._mapErrorHandler);
@@ -1306,7 +1870,7 @@ export class HeliosEngine
     //             variant for both above. Chosen over OFM's `dark`
     //             style which clamps the background to near-black
     //             (rgb(12,12,12)) and is too oppressive at the small
-    //             card viewport, Fiord's #45516E reads as "evening"
+    //             card viewport
     //             without losing the basemap content underneath.
     //
     //OFM has no separate light / dark pair per style; the dark style
@@ -1336,11 +1900,20 @@ export class HeliosEngine
 
     public setCardThemeIsDark(isDark: boolean): void
     {
-        if (this._cardIsDark === isDark) return;
+        if (this._cardIsDark === isDark)
+        {
+            return;
+        }
         this._cardIsDark = isDark;
-        if (!this.map) return;
+        if (!this.map)
+        {
+            return;
+        }
         const next = this._resolveMapStyle().url;
-        if (next === this._currentStyleUrl) return;
+        if (next === this._currentStyleUrl)
+        {
+            return;
+        }
         //Defer the setStyle until the first style.load has fired;
         //setStyle during the cold-start window has surfaced as a
         //race where the buildings layers never get re-added, the
@@ -1348,7 +1921,10 @@ export class HeliosEngine
         //flip lands during the engine spawn. _onStyleLoad's tail
         //compares the loaded URL to the desired one and re-triggers
         //setStyle in that case.
-        if (!this._mapReady) return;
+        if (!this._mapReady)
+        {
+            return;
+        }
         this._currentStyleUrl = next;
         try { this.map.setStyle(next); }
         catch (_) {}
@@ -1360,9 +1936,18 @@ export class HeliosEngine
         const isDark = this._cardIsDark;
 
         let styleName: string;
-        if      (isDark)            styleName = 'fiord';
-        else if (raw === 'minimal') styleName = 'positron';
-        else                        styleName = 'liberty';
+        if (isDark)
+        {
+            styleName = 'fiord';
+        }
+        else if (raw === 'minimal')
+        {
+            styleName = 'positron';
+        }
+        else
+        {
+            styleName = 'liberty';
+        }
 
         return {
             url:       `https://tiles.openfreemap.org/styles/${styleName}`,
@@ -1370,16 +1955,11 @@ export class HeliosEngine
         };
     }
 
-    //Resolve the WebGL canvas pixel ratio. '1x' forces 1.0 (cheapest
-    //fragment workload), anything else (including unset) falls back
-    //to the device-native ratio capped at 2 on desktop / 1.25 on
-    //mobile so even retina screens stay within the per-frame budget.
+    //Resolve the WebGL canvas pixel ratio: device-native, capped at 2
+    //on desktop and 1.25 on mobile so even retina screens stay within
+    //the per-frame budget.
     private _pixelRatio(): number
     {
-        if (String(this.cfg['pixel-ratio'] ?? 'auto').toLowerCase() === '1x')
-        {
-            return 1.0;
-        }
         const dpr = typeof window !== 'undefined' ? window.devicePixelRatio : 1;
         return IS_MOBILE
             ? Math.min(Math.max(dpr, 1), 1.25)
@@ -1409,7 +1989,10 @@ export class HeliosEngine
     private _shadowOpacity(): number
     {
         const raw = Number(this.cfg['shadow-opacity']);
-        if (!Number.isFinite(raw)) return DEFAULT_SHADOW_OPACITY;
+        if (!Number.isFinite(raw))
+        {
+            return DEFAULT_SHADOW_OPACITY;
+        }
         return Math.max(0, Math.min(1, raw));
     }
 
@@ -1529,26 +2112,36 @@ export class HeliosEngine
     //`getTimelineSeries()`, which returns every hourly sample.
     private _getTimeRange(): { start: Date; end: Date } | null
     {
+        const TIMELINE_PAST_DAYS    = 2;
+        const TIMELINE_FORECAST_DAYS = 3;
         const home = this._homeHourlyData;
-        if (!home || !home.times.length)
+
+        //Open-Meteo path: derive the visible window from the live weather samples when they are available.
+        //First sample at or after `today - past_days`, last available sample as the end.
+        if (home && home.times.length)
         {
-            return null;
+            const t = home.times;
+            const last = t[t.length - 1];
+            const today0 = new Date();
+            today0.setHours(0, 0, 0, 0);
+            const visibleStartMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
+            let startIdx = 0;
+            for (let i = 0; i < t.length; i++)
+            {
+                if (t[i].getTime() >= visibleStartMs) { startIdx = i; break; }
+            }
+            return { start: t[startIdx], end: last };
         }
-        const t = home.times;
-        const last = t[t.length - 1];
-        const TIMELINE_PAST_DAYS = 2;
+
+        //Fallback when the Open-Meteo fetch failed (offline, CORS, 502, etc.). The timeline still has to
+        //render so the user can scrub PV history / battery curves and read the live state; we just lose
+        //the cloud / irradiance / forecast traces. Synthetic window: today midnight minus PAST_DAYS to
+        //today midnight plus FORECAST_DAYS.
         const today0 = new Date();
         today0.setHours(0, 0, 0, 0);
-        const visibleStartMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
-        //Snap to the earliest sample at or after the visible start.
-        //If the entire fetched window is shorter (cache truncated,
-        //first boot), fall back to the very first sample we have.
-        let startIdx = 0;
-        for (let i = 0; i < t.length; i++)
-        {
-            if (t[i].getTime() >= visibleStartMs) { startIdx = i; break; }
-        }
-        return { start: t[startIdx], end: last };
+        const startMs = today0.getTime() - TIMELINE_PAST_DAYS * 24 * 3_600_000;
+        const endMs   = today0.getTime() + TIMELINE_FORECAST_DAYS * 24 * 3_600_000;
+        return { start: new Date(startMs), end: new Date(endMs) };
     }
 
     //Resolve the configured cloud colour, falling back to the design
@@ -1568,7 +2161,11 @@ export class HeliosEngine
 
     private _renderForCurrentSelection(): void
     {
-        if (!this.map || !this._homeHourlyData)
+        //Only the map is strictly required: _getWeatherAtTime returns sensible zero defaults when
+        //_homeHourlyData is null, so the sun position + sun arc + scrub tooltip still update during a
+        //scrub even when Open-Meteo is unreachable. Cloud / irradiance / forecast traces fall back to
+        //their analytical defaults via the Haurwitz path and the (empty) cloud cover.
+        if (!this.map)
         {
             return;
         }
@@ -1721,7 +2318,10 @@ export class HeliosEngine
         //miss) entirely while scrolled away.
         this._skyTimer = window.setInterval(() =>
         {
-            if (this._paused) return;
+            if (this._paused)
+            {
+                return;
+            }
             this._refreshShadowsAndAtmosphere();
         }, 60_000);
 
@@ -1826,7 +2426,10 @@ export class HeliosEngine
         //Sweep any leftover map sources / layers that might still be in the style after a hot-reload, so the SVG-only pipeline runs clean.
         for (const lid of ['helios-cloud-disc', 'helios-cloud-disc-ring', 'helios-cloud-ring'])
         {
-            if (this.map.getLayer(lid)) this.map.removeLayer(lid);
+            if (this.map.getLayer(lid))
+            {
+                this.map.removeLayer(lid);
+            }
         }
         if (this.map.getSource('helios-cloud-rings'))
         {
@@ -1899,7 +2502,10 @@ export class HeliosEngine
         cloudHigh:  number;
     } | null
     {
-        if (!this.map || !this._mapReady) return null;
+        if (!this.map || !this._mapReady)
+        {
+            return null;
+        }
 
         const pct  = this._currentCloudPct;
         const cLow = this._currentCloudLow;
@@ -1937,7 +2543,10 @@ export class HeliosEngine
             for (const [lon, lat] of geo)
             {
                 const p = this._projectScenePoint(lon, lat, 0);
-                if (p) out.push({ x: p.x, y: p.y });
+                if (p)
+                {
+                    out.push({ x: p.x, y: p.y });
+                }
             }
             return out;
         };
@@ -1947,7 +2556,10 @@ export class HeliosEngine
         const discHigh = projectGeo(highGeo);
         const ring     = projectGeo(ringGeo);
 
-        if (discHigh.length < 3 && ring.length < 3) return null;
+        if (discHigh.length < 3 && ring.length < 3)
+        {
+            return null;
+        }
 
         const rgb      = this._resolvedCloudRgb();
         const cloudHex = '#'
@@ -1980,9 +2592,15 @@ export class HeliosEngine
         top:  Array<{ x: number; y: number }>;
     }>
     {
-        if (!this.map || !this._mapReady) return [];
+        if (!this.map || !this._mapReady)
+        {
+            return [];
+        }
         const home = this._buildingsData?.home;
-        if (!home || !home.features.length) return [];
+        if (!home || !home.features.length)
+        {
+            return [];
+        }
 
         const out: Array<{
             base: Array<{ x: number; y: number }>;
@@ -1991,21 +2609,39 @@ export class HeliosEngine
         for (const feat of home.features)
         {
             const geom = feat.geometry;
-            if (!geom) continue;
+            if (!geom)
+            {
+                continue;
+            }
             const props = (feat.properties ?? {}) as Record<string, unknown>;
             const topH  = typeof props['render_height']     === 'number' ? props['render_height']     as number : 0;
             const baseH = typeof props['render_min_height'] === 'number' ? props['render_min_height'] as number : 0;
 
             let polygons: number[][][][] | null = null;
-            if      (geom.type === 'Polygon')      polygons = [geom.coordinates as number[][][]];
-            else if (geom.type === 'MultiPolygon') polygons = geom.coordinates as number[][][][];
-            if (!polygons) continue;
+            if (geom.type === 'Polygon')
+            {
+                polygons = [geom.coordinates as number[][][]];
+            }
+            else if (geom.type === 'MultiPolygon')
+            {
+                polygons = geom.coordinates as number[][][][];
+            }
+            if (!polygons)
+            {
+                continue;
+            }
 
             for (const poly of polygons)
             {
-                if (!poly.length) continue;
+                if (!poly.length)
+                {
+                    continue;
+                }
                 const outer = poly[0] as number[][];
-                if (outer.length < 3) continue;
+                if (outer.length < 3)
+                {
+                    continue;
+                }
 
                 const baseRing: Array<{ x: number; y: number }> = [];
                 const topRing:  Array<{ x: number; y: number }> = [];
@@ -2015,7 +2651,10 @@ export class HeliosEngine
                     const pBase = this._projectScenePoint(lon, lat, baseH);
                     const pTop  = this._projectScenePoint(lon, lat, topH);
                     //Drop the whole vertex pair if either point is behind the camera, otherwise the side-wall quad would shear through the screen.
-                    if (!pBase || !pTop) continue;
+                    if (!pBase || !pTop)
+                    {
+                        continue;
+                    }
                     baseRing.push({ x: pBase.x, y: pBase.y });
                     topRing .push({ x: pTop.x,  y: pTop.y  });
                 }
@@ -2034,7 +2673,10 @@ export class HeliosEngine
     private _lidarViewActive: boolean = false;
     public setLidarViewActive(on: boolean): void
     {
-        if (on === this._lidarViewActive) return;
+        if (on === this._lidarViewActive)
+        {
+            return;
+        }
         this._lidarViewActive = on;
         //Going from off→on, kick the fetch path so the raster lands.
         //Going from on→off, no-op: the raster stays cached and the
@@ -2124,9 +2766,18 @@ export class HeliosEngine
         //by the time the user opens the mode the exposure buffer
         //is already on the layer, the fade-in shows the finished
         //rendering.
-        if (!this._lidarRaster || !this._lidarViewLayer) return;
-        if (this._exposureIdleHandle !== undefined) return;
-        if (this._exposureChunkRaf  !== undefined) return;
+        if (!this._lidarRaster || !this._lidarViewLayer)
+        {
+            return;
+        }
+        if (this._exposureIdleHandle !== undefined)
+        {
+            return;
+        }
+        if (this._exposureChunkRaf  !== undefined)
+        {
+            return;
+        }
         try { this.onLidarExposureBusyChange?.(true); }
         catch { /* host callback errors must not break the schedule */ }
         this._exposureIdleHandle = this._requestIdleCb(() =>
@@ -2246,7 +2897,10 @@ export class HeliosEngine
     //the "map renders black until page refresh" symptom.
     private _initLidarViewLayer(): void
     {
-        if (!this.map) return;
+        if (!this.map)
+        {
+            return;
+        }
         try
         {
             if (!this._lidarViewLayer)
@@ -2264,14 +2918,20 @@ export class HeliosEngine
             const raster = this._lidarRaster;
             window.requestAnimationFrame(() =>
             {
-                if (!this.map) return;
+                if (!this.map)
+                {
+                    return;
+                }
                 try
                 {
                     if (!this.map.getLayer(layer.id))
                     {
                         this.map.addLayer(layer);
                     }
-                    if (raster) layer.setData(raster);
+                    if (raster)
+                    {
+                        layer.setData(raster);
+                    }
                 }
                 catch (err)
                 {
@@ -2299,16 +2959,44 @@ export class HeliosEngine
     //way up.
     private _pushLidarViewConfig(): void
     {
-        if (!this._lidarViewLayer) return;
+        if (!this._lidarViewLayer)
+        {
+            return;
+        }
         this._lidarViewLayer.setPointSizePx(this._lidarViewPointSizePx());
         this._lidarViewLayer.setOpacity(this._lidarViewOpacity * 0.5);
+        this._pushLidarViewColor();
     }
 
-    //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / LIDAR_VIEW_DISPLAY_RADIUS_M, both compile-time constants), no reason to
+    //Push the active theme's text colour into the LiDAR View layer so the points + wireframe render in
+    //black on a light theme and white on a dark theme (or whatever the user themed their HA frontend
+    //--primary-text-color to). Reads the computed CSS variable off the map container (which inherits the
+    //ha-card theme) and parses the result into a 0..1 RGB triplet for the WebGL uniform.
+    private _pushLidarViewColor(): void
+    {
+        if (!this._lidarViewLayer)
+        {
+            return;
+        }
+        const host = this.map?.getContainer() ?? document.body;
+        let raw = getComputedStyle(host).getPropertyValue('--primary-text-color').trim();
+        if (!raw)
+        {
+            //Fallback: walk up to ha-card / document to grab the variable from a higher scope.
+            raw = getComputedStyle(document.documentElement).getPropertyValue('--primary-text-color').trim();
+        }
+        const rgb = parseCssColorToUnitRgb(raw);
+        this._lidarViewLayer.setViewColor(rgb[0], rgb[1], rgb[2]);
+    }
+
+    //Fade range is fixed (LIDAR_VIEW_FULL_OPACITY_RADIUS_M / DEFAULT_DISPLAY_RADIUS_M, both compile-time constants), no reason to
     //push it on every slider tick. Called once from _initLidarViewLayer and that's it.
     private _pushLidarViewFadeRange(): void
     {
-        if (!this._lidarViewLayer) return;
+        if (!this._lidarViewLayer)
+        {
+            return;
+        }
         const [fullR, fadeR] = this._lidarViewFadeRange();
         this._lidarViewLayer.setFadeRange(fullR, fadeR);
     }
@@ -2316,7 +3004,10 @@ export class HeliosEngine
     public setLidarViewOpacity(opacity: number): void
     {
         const clamped = Math.max(0, Math.min(1, opacity));
-        if (clamped === this._lidarViewOpacity) return;
+        if (clamped === this._lidarViewOpacity)
+        {
+            return;
+        }
         this._lidarViewOpacity = clamped;
         //Direct push to skip even the _pushLidarViewConfig overhead, no other tunable changes during a slider drag.
         this._lidarViewLayer?.setOpacity(clamped * 0.5);
@@ -2335,20 +3026,18 @@ export class HeliosEngine
         this._lidarViewLayer?.setAlphaFade(alpha);
     }
 
-    //Distance-based opacity fall-off bounds for the View. Both thresholds are fixed: full opacity inside LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth
-    //fade out at LIDAR_VIEW_DISPLAY_RADIUS_M. Decoupled from building-radius on purpose, so the LiDAR overlay is always painted at a tight,
-    //consistent disc no matter how far the underlying raster actually extends.
+    //Distance-based opacity fall-off bounds for the LiDAR view. Full opacity inside
+    //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, smooth fade out at DEFAULT_DISPLAY_RADIUS_M. Both derive from
+    //the same shared display radius (see helios-config.ts) so buildings, raster shadows and the
+    //LiDAR overlay all stop at the same boundary.
     private _lidarViewFadeRange(): [fullMeters: number, fadeMeters: number]
     {
-        return [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, LIDAR_VIEW_DISPLAY_RADIUS_M];
+        return [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M];
     }
 
     private _lidarViewPointSizePx(): number
     {
-        const raw = this.cfg['lidar-view-point-size'];
-        const n = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(n) || n <= 0) return DEFAULT_LIDAR_VIEW_POINT_SIZE_PX;
-        return Math.min(6, n);
+        return 1.5;
     }
 
     //LiDAR View support, exposed to the card.
@@ -2417,14 +3106,14 @@ export class HeliosEngine
         }
     }
 
-    //Display radius is fixed at DEFAULT_BUILDING_RADIUS_M (300 m).
-    //The editor no longer exposes a slider for it; the constant is
-    //the single source of truth so every consumer (basemap bbox,
-    //LiDAR fetch extent, projection clip, MapLibre bounds) stays in
+    //Display radius is fixed at DEFAULT_DISPLAY_RADIUS_M (200 m), shared with the LiDAR overlay +
+    //raster shadow extent so the three layers stop at the same boundary. The editor no longer
+    //exposes a slider for it; the constant in helios-config.ts is the single source of truth so
+    //every consumer (basemap bbox, LiDAR fetch extent, projection clip, MapLibre bounds) stays in
     //lockstep.
     private _buildingRadiusMeters(): number
     {
-        return DEFAULT_BUILDING_RADIUS_M;
+        return DEFAULT_DISPLAY_RADIUS_M;
     }
 
     //Clamp MapLibre's camera bounds to a tight bbox around the home,
@@ -2437,7 +3126,10 @@ export class HeliosEngine
     //init path so the bounds always match the live display radius.
     private _applyMapBounds(): void
     {
-        if (!this.map) return;
+        if (!this.map)
+        {
+            return;
+        }
         const radiusM   = this._buildingRadiusMeters();
         const halfBbox  = radiusM * 2;   //2 x radius keeps the pitched horizon inside
         const D         = Math.PI / 180;
@@ -2521,7 +3213,10 @@ export class HeliosEngine
             'helios-buildings-home-outline-glow'
         ])
         {
-            if (this.map.getLayer(lid)) this.map.removeLayer(lid);
+            if (this.map.getLayer(lid))
+            {
+                this.map.removeLayer(lid);
+            }
         }
 
         //Suppress every native building layer the active style ships so they don't Z-fight against helios-buildings-* extrusions.
@@ -2582,7 +3277,10 @@ export class HeliosEngine
         const idCandidates = (layerId: string): string[] =>
         {
             const list = [layerId];
-            for (const iid of importIds) list.push(`${iid}\\${layerId}`);
+            for (const iid of importIds)
+            {
+                list.push(`${iid}\\${layerId}`);
+            }
             return list;
         };
 
@@ -2592,14 +3290,20 @@ export class HeliosEngine
             {
                 //Skip candidates that don't correspond to a real layer in the merged style. Calling set* on a missing layer makes MapLibre fire an
                 //"error" event the engine then echoes, gating at the source removes both the noise and the wasted dispatch.
-                if (!this.map.getLayer(cand)) continue;
+                if (!this.map.getLayer(cand))
+                {
+                    continue;
+                }
 
                 try { this.map.removeLayer(cand); }
                 catch (_) {}
 
                 //If removeLayer worked, the layer is gone, done. The paint / layout fallbacks below are for the rare case of imported layers where
                 //removeLayer is a silent no-op.
-                if (!this.map.getLayer(cand)) continue;
+                if (!this.map.getLayer(cand))
+                {
+                    continue;
+                }
 
                 try { this.map.setLayoutProperty(cand, 'visibility', 'none'); }
                 catch (_) {}
@@ -2694,8 +3398,11 @@ export class HeliosEngine
             paint:
             {
                 'fill-extrusion-color':   baseColor,
-                'fill-extrusion-height':  ['get', 'render_height'],
-                'fill-extrusion-base':    ['get', 'render_min_height'],
+                //coalesce: features missing render_height / render_min_height fall back to 0
+                //instead of evaluating the `get` to null, which MapLibre would otherwise log as
+                //"expected number, got null" once per missing feature on every paint.
+                'fill-extrusion-height':  ['coalesce', ['get', 'render_height'],     0],
+                'fill-extrusion-base':    ['coalesce', ['get', 'render_min_height'], 0],
                 'fill-extrusion-opacity': opacity
             }
         });
@@ -2713,8 +3420,8 @@ export class HeliosEngine
                 //surrounding. Surroundings keep the configured /
                 //default neutral baseColor.
                 'fill-extrusion-color':   '#488fc2',
-                'fill-extrusion-height':  ['get', 'render_height'],
-                'fill-extrusion-base':    ['get', 'render_min_height'],
+                'fill-extrusion-height':  ['coalesce', ['get', 'render_height'],     0],
+                'fill-extrusion-base':    ['coalesce', ['get', 'render_min_height'], 0],
                 'fill-extrusion-opacity': 1
             }
         });
@@ -2776,6 +3483,8 @@ export class HeliosEngine
         this._buildingsFetchKey = key;
         bumpStat('buildingFetchStarts');
 
+        try { this.onBuildingsFetchStart?.(); } catch (_) {}
+
         fetchBuildingsAroundHome(
         {
             homeLon:             this.homeLon,
@@ -2786,7 +3495,10 @@ export class HeliosEngine
         })
         .then(result =>
         {
-            if (ac.signal.aborted || !this.map) return;
+            if (ac.signal.aborted || !this.map)
+            {
+                return;
+            }
             this._buildingsData = result;
             _sharedBuildingsCache.set(key, { data: result, ts: Date.now() });
             this._pushRenderableSources();
@@ -2797,8 +3509,15 @@ export class HeliosEngine
         })
         .catch(err =>
         {
-            if ((err as { name?: string })?.name === 'AbortError') return;
+            if ((err as { name?: string })?.name === 'AbortError')
+            {
+                return;
+            }
             console.warn('[HELIOS] Buildings fetch failed:', err);
+        })
+        .finally(() =>
+        {
+            try { this.onBuildingsFetchEnd?.(); } catch (_) {}
         });
     }
 
@@ -2840,7 +3559,10 @@ export class HeliosEngine
 
     private _ensureLidarFetched(): void
     {
-        if (!this.map) return;
+        if (!this.map)
+        {
+            return;
+        }
 
         const provider = resolveLidarSource(this.homeLat, this.homeLon, this.cfg);
         //Bail when nothing wants the data: no provider covers the home, OR the user has shadows off AND no LiDAR View open. The View toggle lets the
@@ -2865,10 +3587,16 @@ export class HeliosEngine
         );
         const key = `${this.homeLat.toFixed(6)}|${this.homeLon.toFixed(6)}|${radius}|${rasterSize}|${provider.id ?? ''}`;
         //Bail if we already have a fresh successful payload for this key.
-        if (this._lidarShadowKey === key && this._lidarShadowFeatures) return;
+        if (this._lidarShadowKey === key && this._lidarShadowFeatures)
+        {
+            return;
+        }
         //Bail if we are inside the backoff window for the SAME failed key. A key change (user moved home / edited radius / etc.)
         //bypasses the backoff because it represents a fresh request the failed key knows nothing about.
-        if (this._lidarShadowFailedKey === key && Date.now() < this._lidarShadowBackoffUntil) return;
+        if (this._lidarShadowFailedKey === key && Date.now() < this._lidarShadowBackoffUntil)
+        {
+            return;
+        }
 
         //Shared module-level cache short-circuit. The LiDAR fetch is the heaviest single network + parse step in the engine boot,
         //a fresh-engine path after an editor commit re-pays that cost end-to-end unless we serve from the shared cache here.
@@ -2909,7 +3637,10 @@ export class HeliosEngine
         })
         .then(res =>
         {
-            if (ac.signal.aborted || !this.map) return;
+            if (ac.signal.aborted || !this.map)
+            {
+                return;
+            }
             this._lidarShadowFeatures    = res.features;
             this._lidarShadowDiagnostics = res.diagnostics;
             this._lidarRaster            = res.raster ?? null;
@@ -2944,7 +3675,10 @@ export class HeliosEngine
         })
         .catch(err =>
         {
-            if ((err as { name?: string })?.name === 'AbortError') return;
+            if ((err as { name?: string })?.name === 'AbortError')
+            {
+                return;
+            }
             //Persistent provider failure. Keep the _lidarShadowKey AS IS (so the cache check above doesn't keep flapping between
             //the failed key and empty) and record the failed key + a backoff window separately. The next _ensureLidarFetched call
             //will see the backoff window and bail without retrying, until the window expires or the user changes a config field
@@ -2961,7 +3695,10 @@ export class HeliosEngine
         })
         .finally(() =>
         {
-            if (ac.signal.aborted) return;
+            if (ac.signal.aborted)
+            {
+                return;
+            }
             try { this.onShadowComputeEnd?.(); }
             catch (_) {}
         });
@@ -2972,7 +3709,10 @@ export class HeliosEngine
     //used exclusively for shadow projection (see _refreshShadowsAndAtmosphere).
     private _pushRenderableSources(): void
     {
-        if (!this.map) return;
+        if (!this.map)
+        {
+            return;
+        }
         const homeSrc = this.map.getSource('helios-buildings-home-src')         as maplibregl.GeoJSONSource | undefined;
         const surrSrc = this.map.getSource('helios-buildings-surroundings-src') as maplibregl.GeoJSONSource | undefined;
         const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
@@ -3149,11 +3889,19 @@ export class HeliosEngine
                         this._shadowCanvas.width  = rasterSize;
                         this._shadowCanvas.height = rasterSize;
                     }
+                    //Shadow raster fade matches the LiDAR view fade radii (full opacity inside
+                    //LIDAR_VIEW_FULL_OPACITY_RADIUS_M, ramped to 0 at DEFAULT_DISPLAY_RADIUS_M) so the three
+                    //layers (buildings, LiDAR, shadow raster) share the same outer boundary and the shadow
+                    //disc no longer reads as a hard circular cut.
+                    const radiusM = this._buildingRadiusMeters();
                     paintShadowRaster(
                         this.map,
                         this._shadowCanvas,
                         projected,
-                        shadowBoundsCornersLL(this.homeLat, this.homeLon, this._buildingRadiusMeters())
+                        shadowBoundsCornersLL(this.homeLat, this.homeLon, radiusM),
+                        radiusM,
+                        LIDAR_VIEW_FULL_OPACITY_RADIUS_M,
+                        DEFAULT_DISPLAY_RADIUS_M,
                     );
                 }
             }
@@ -3192,9 +3940,12 @@ export class HeliosEngine
             );
             this._renderForCurrentSelection();
 
-            //Successful fetch: reset the rate-limit back-off so the
-            //next 429 (if any) starts again at the shortest delay.
-            this._rateLimitStreak = 0;
+            //Successful fetch: reset both back-off streaks so the next failure (if any) starts again
+            //at the shortest delay. Drop the rate-limit alert banner the moment a fetch lands so
+            //the user sees the all-clear without waiting for the next refresh tick.
+            this._rateLimitStreak  = 0;
+            this._otherErrorStreak = 0;
+            this._setRateLimited(false);
 
             if (this._selectedTime === null)
             {
@@ -3216,6 +3967,27 @@ export class HeliosEngine
                 return;
             }
 
+            //Open-Meteo unreachable (network down, CORS, 5xx). Push a fallback WeatherData so the card can
+            //still build its timeline + scrub PV history / battery, just without the cloud / irradiance /
+            //forecast traces. We emit a single update with neutral defaults; the retry below will replace
+            //these fields with real values once the fetch succeeds.
+            this.onWeatherUpdate?.(
+            {
+                cloudCover:       0,
+                cloudLow:         0,
+                cloudMid:         0,
+                cloudHigh:        0,
+                cloudIntensity:   'clear',
+                timeRange:        this._getTimeRange(),
+                isLiveTime:       this._selectedTime === null,
+                pvPower:          0,
+                pvPowerHaurwitz:  0,
+                pvPowerShortwave: -1,
+                irradianceSource: 'haurwitz',
+                temperatureC:     NaN,
+                windMs:           NaN,
+            });
+
             let retryDelay: number;
             if (e.status === 429)
             {
@@ -3226,6 +3998,10 @@ export class HeliosEngine
                 const idx = Math.min(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS.length - 1);
                 retryDelay = RATE_LIMIT_BACKOFF_MS[idx];
                 this._rateLimitStreak++;
+                //Surface the rate-limit state to the card so it can paint an alert banner under
+                //the loading banner. Idempotent; only fires the card callback on the 0 -> 1
+                //transition (the helper handles the dedup).
+                this._setRateLimited(true);
 
                 this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
@@ -3234,11 +4010,14 @@ export class HeliosEngine
             }
             else
             {
-                //Non-rate-limit error (network blip, 500, ...): try
-                //again in 1 minute, repeatedly. These usually clear up
-                //fast and don't merit the same back-off treatment.
-                retryDelay = 60_000;
-                this._weatherTimer = window.setInterval(
+                //Non-rate-limit error (network blip, 500, JSON parse): graduated back-off table
+                //(1 min, 5 min, 15 min, 60 min cap) instead of the previous flat 60 s setInterval.
+                //setTimeout (not setInterval) so we only schedule ONE retry: if it succeeds the
+                //streak resets, if it fails again we re-enter this branch and pick the next slot.
+                const idx = Math.min(this._otherErrorStreak, OTHER_ERROR_BACKOFF_MS.length - 1);
+                retryDelay = OTHER_ERROR_BACKOFF_MS[idx];
+                this._otherErrorStreak++;
+                this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),
                     retryDelay
                 );
@@ -3283,6 +4062,13 @@ export class HeliosEngine
     //In-flight detail-mode dive tween. Cancelled on every fresh setDetailMode call so a rapid click-exit-click can't stack two animations driving the
     //same camera.
     _detailDiveRaf?: number;
+    //Pre-dive pose snapshot, captured at the moment setDetailMode(true) fires so the symmetric exit
+    //transition restores EXACTLY the pose the user was on before opening the dashboard. Without this
+    //the exit ended at the hemisphere-aware default (CAMERA_PITCH_REST_DEG + initial bearing), which
+    //quietly broke users who had a camera-locked pose dialled in and now had to repoint manually
+    //every time they closed the dashboard. Undefined when no dive is in flight.
+    _detailEntryPitch?:   number;
+    _detailEntryBearing?: number;
     //Wall-clock timestamp until which fresh user gestures are
     //ignored. Bumped on detail-mode exit; the card reads it via
     //isUserGestureSuppressed() to filter timeline scrubs the same
@@ -3318,9 +4104,51 @@ export class HeliosEngine
     //scrolled out 10 minutes ago".
     public setPaused(paused: boolean): void
     {
-        if (this._paused === paused) return;
+        if (this._paused === paused)
+        {
+            return;
+        }
         this._paused = paused;
-        if (!paused) this._refreshShadowsAndAtmosphere();
+        if (paused)
+        {
+            //Drop the 60 s sky refresh interval entirely while paused. The interior of the callback already early-
+            //returns when `_paused` is true, but the timer itself still kept the page awake and showed up in profilers
+            //as a wakeup every minute for no work. Re-arm on un-pause below.
+            if (this._skyTimer !== undefined)
+            {
+                window.clearInterval(this._skyTimer);
+                this._skyTimer = undefined;
+            }
+            //Drop the weather refresh timer too. Until this fix, a card sitting in a hidden tab or
+            //scrolled off-screen kept hitting Open-Meteo every 10 min indefinitely, the timer
+            //callback fired and `_refreshWeather` ran end-to-end (cache miss after the 45 min TTL =
+            //a real network request). On a multi-monitor / multi-tab setup that could account for
+            //hundreds of requests per day per stale tab. _refreshWeather will re-arm naturally on
+            //un-pause via the normal success path.
+            this._clearWeatherTimer();
+        }
+        else
+        {
+            this._refreshShadowsAndAtmosphere();
+            if (this._skyTimer === undefined)
+            {
+                this._skyTimer = window.setInterval(() =>
+                {
+                    if (this._paused)
+                    {
+                        return;
+                    }
+                    this._refreshShadowsAndAtmosphere();
+                }, 60_000);
+            }
+            //Re-arm the weather refresh: one immediate fetch (which reads from localStorage cache
+            //inside its 45 min TTL so a quick visibility flip costs nothing) and the success path
+            //schedules the 10 min interval.
+            if (this._weatherTimer === undefined)
+            {
+                this._refreshWeather(this._fetchLat, this._fetchLon);
+            }
+        }
     }
 
     public isPaused(): boolean
@@ -3386,6 +4214,13 @@ export class HeliosEngine
         gridExportLabel:   { x: number; y: number };
         ringEdge:          { x: number; y: number };
         home:              { x: number; y: number };
+        //Projected screen position of the home building's roof top
+        //(home lat/lon at altitude `render_height`). The card uses
+        //this as the bottom endpoint of the drop leader so the line
+        //always lands exactly on the roof regardless of canvas size,
+        //pitch or zoom. Falls back to the ground home position when
+        //no home building has been resolved yet.
+        homeRoof:          { x: number; y: number };
         //SVG `polygon` `points` attribute for the PV home-anchor
         //ground disc. Built by projecting 48 points on a horizontal
         //circle of radius PV_HOME_ANCHOR_RADIUS_M metres around the
@@ -3458,23 +4293,68 @@ export class HeliosEngine
         //All four constants are scaled by `_heliosScale()` so the
         //cluster spreads on a fullscreen / kiosk layout instead of
         //clumping at the centre of an otherwise empty canvas. See
-        //issue #33. At standard Lovelace grid sizes scale = 1.0,
+        // At standard Lovelace grid sizes scale = 1.0,
         //so the cluster geometry stays exactly as before.
         const scale = this._heliosScale();
+        //Dedicated vertical-lift ramp, steeper than the horizontal
+        //chip-cluster ramp because the leaders from PV / battery /
+        //grid chips down to the home need more screen height on a
+        //fullscreen canvas to keep the connection visually readable.
+        //At standard Lovelace card sizes (<= 600 px) the lift ramp
+        //stays at 1.0 so nothing moves; on a kiosk-sized canvas the
+        //lift grows faster than the horizontal spread so the chips
+        //float higher and the leader lines breathe.
+        const liftScale = this._clusterLiftScale();
         const CHIP_SIDE_X_OFFSET_PX = 70 * scale;
         //Vertical distance between the top and bottom rows of chips.
         //Bumped to 60 so the L-shape leaders below have enough room
         //to render their rounded fillet without overlapping the
         //home pill.
         const CHIP_STACK_GAP_PX     = 60 * scale;
-        //Lift the entire home cluster (pill + chips) above the
-        //projected home centre so the icon sits above the roof
-        //silhouette, with enough breathing room for a visible solid
-        //leader to drop from the pill down to the building top below.
-        const CLUSTER_LIFT_PX = 60 * scale;
-        const clusterY = home.y - CLUSTER_LIFT_PX;
+        //Resolve the home roof Y by projecting the home lat/lon at
+        //the home building's tallest `render_height`. Used both for
+        //the drop-leader endpoint AND to anchor the chip cluster a
+        //fixed distance above the roof, so the cluster follows the
+        //building silhouette as the canvas grows instead of drifting
+        //up with a static screen-space lift. Falls back to the
+        //ground home position when no home building has been
+        //resolved yet (early frames before `_buildingsData` lands).
+        let roofY = home.y;
+        const homeFeatures = this._buildingsData?.home?.features;
+        if (homeFeatures && homeFeatures.length > 0)
+        {
+            let maxH = 0;
+            for (const feat of homeFeatures)
+            {
+                const props = (feat.properties ?? {}) as Record<string, unknown>;
+                const h     = typeof props['render_height'] === 'number'
+                    ? (props['render_height'] as number)
+                    : 0;
+                if (h > maxH)
+                {
+                    maxH = h;
+                }
+            }
+            if (maxH > 0)
+            {
+                const projectedRoof = this._projectScenePoint(this.homeLon, this.homeLat, maxH);
+                if (projectedRoof)
+                {
+                    roofY = projectedRoof.y;
+                }
+            }
+        }
+
+        //Cluster sits a fixed 28 px above the projected roof, with a
+        //modest screen-density ramp so the spacing scales with the
+        //rest of the cluster spread. Anchoring on the roof (instead
+        //of a static lift from the ground home position) keeps the
+        //home pill + chips visually attached to the building no
+        //matter how the user resizes the card.
+        const CLUSTER_ABOVE_ROOF_PX = 28 * liftScale;
+        const clusterY = roofY - CLUSTER_ABOVE_ROOF_PX;
         const pvX = home.x;
-        const pvY = clusterY - PV_CHIP_OFFSET_PX * scale;
+        const pvY = clusterY - PV_CHIP_OFFSET_PX * liftScale;
         //Battery column on the right.
         const batteryXRight     = home.x + CHIP_SIDE_X_OFFSET_PX;
         const batterySocY       = clusterY - CHIP_STACK_GAP_PX / 2;
@@ -3510,7 +4390,10 @@ export class HeliosEngine
         //auto-rotate, and the cumulative string allocations were a
         //measurable freeze source under longer rotations.
         const anchorPts = this._anchorPtsBuf;
-        if (anchorPts.length !== ANCHOR_SAMPLES) anchorPts.length = ANCHOR_SAMPLES;
+        if (anchorPts.length !== ANCHOR_SAMPLES)
+        {
+            anchorPts.length = ANCHOR_SAMPLES;
+        }
         for (let i = 0; i < ANCHOR_SAMPLES; i++)
         {
             const a = (i / ANCHOR_SAMPLES) * Math.PI * 2;
@@ -3535,6 +4418,7 @@ export class HeliosEngine
             gridExportLabel:   { x: gridXLeft,      y: gridExportY  },
             ringEdge:          { x: ringEdgeX,      y: ringEdgeY    },
             home:              { x: home.x,         y: clusterY     },
+            homeRoof:          { x: home.x,         y: roofY        },
             homeAnchorPoints:  anchorPts.join(' '),
         };
     }
@@ -3566,14 +4450,11 @@ export class HeliosEngine
     //based on how far they are from the viewer, bigger when close,
     //smaller when far, to give the otherwise flat top-down-ish view
     //a sense of perspective beyond what pitch alone provides.
-    //Per-frame projection caches and scratch buffers. These slots
-    //are mutated in place by _projectScenePoint(), which is called
-    //hundreds of times per map transform (sun arc 96 samples, cloud
-    //bands ~190 points, label anchors 49 points, shading-dome cells
-    //~2600 points, cloud dome ~290 points). Naive allocation in the
-    //hot path was the dominant source of GC pressure: 30k+ small
-    //arrays per second under auto-rotate, which is exactly the
-    //pattern that progressively bricks the M4 Pro after ~10 s.
+    //Per-frame projection caches and scratch buffers. These slots are mutated in place by
+    //_projectScenePoint(), called hundreds of times per map transform (sun arc 96 samples,
+    //cloud bands ~190 points, label anchors 49 points). Naive allocation in the hot path is
+    //the dominant source of GC pressure: 30k+ small arrays per second under auto-rotate,
+    //the pattern that progressively bricks the M4 Pro after ~10 s.
     //
     //_projCache caches the camera-side data (projection matrix,
     //canvas CSS dimensions) for the current frame; it is invalidated
@@ -3612,38 +4493,92 @@ export class HeliosEngine
     //staying pinned to the tuned-for-grid pixel sizes. Below
     //FLOOR the scale is fixed at 1.0 (standard Lovelace grid
     //cell); above FLOOR it ramps linearly to MAX at TOP. See
-    //issue #33.
+    //
     private _heliosScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
-        if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
+        if (!Number.isFinite(minDim) || minDim <= 0)
+        {
+            return 1.0;
+        }
         const FLOOR = 600;
         const TOP   = 1200;
         const MAX   = 1.6;
-        if (minDim <= FLOOR) return 1.0;
-        if (minDim >= TOP)   return MAX;
+        if (minDim <= FLOOR)
+        {
+            return 1.0;
+        }
+        if (minDim >= TOP)
+        {
+            return MAX;
+        }
         return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
     }
-    //Dedicated ramp for the sun arc. The chip cluster scale (1.6 max)
-    //is too conservative for the arc because the arc is computed in
-    //world metres, projected by MapLibre at a fixed zoom: at standard
-    //card sizes 40 m maps to ~120-160 CSS px which fills the lower
-    //half of the canvas nicely, but on a kiosk-sized canvas the same
-    //40 m still reads as ~120-160 px, lost in the empty space. The
-    //arc needs a bigger multiplier to keep its visual share of the
-    //canvas constant. Same FLOOR / TOP breakpoints as the chip
-    //scale so the two transitions happen on the same hinge.
+    //Steeper vertical lift ramp for the chip cluster. The horizontal
+    //chip-spread ramp (`_heliosScale()`) caps at 1.6x because beyond
+    //that the chips spread off the centre of the canvas; the vertical
+    //lift from chip to home benefits from a bigger multiplier so the
+    //leader line keeps pace with the canvas growth and the home stays
+    //visually anchored in the lower half of the scene. Same FLOOR /
+    //TOP breakpoints as the chip scale so the transitions hinge
+    //together.
+    private _clusterLiftScale(): number
+    {
+        const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
+        if (!Number.isFinite(minDim) || minDim <= 0)
+        {
+            return 1.0;
+        }
+        const FLOOR = 600;
+        const TOP   = 1200;
+        const MAX   = 2.4;
+        if (minDim <= FLOOR)
+        {
+            return 1.0;
+        }
+        if (minDim >= TOP)
+        {
+            return MAX;
+        }
+        return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
+    }
+    //Dedicated ramp for the sun arc + sun disc. The chip cluster
+    //scale (1.6 max) is too conservative for the arc because the
+    //arc is computed in world metres, projected by MapLibre at a
+    //fixed zoom: at standard card sizes 40 m maps to ~120-160 CSS
+    //px which fills the lower half of the canvas nicely, but on a
+    //kiosk-sized canvas the same 40 m still reads as ~120-160 px,
+    //lost in the empty space. The arc needs a bigger multiplier to
+    //keep its visual share of the canvas constant. The sun disc
+    //radius + halo gradient stops (rendered card-side) consume the
+    //same value via `getSunArcScale()` so the disc-to-arc ratio
+    //stays constant across canvas sizes.
     private _sunArcScale(): number
     {
         const minDim = Math.min(this._cachedCanvasCssW || Infinity, this._cachedCanvasCssH || Infinity);
-        if (!Number.isFinite(minDim) || minDim <= 0) return 1.0;
+        if (!Number.isFinite(minDim) || minDim <= 0)
+        {
+            return 1.0;
+        }
         const FLOOR = 600;
         const TOP   = 1200;
-        const MAX   = 3.0;
-        if (minDim <= FLOOR) return 1.0;
-        if (minDim >= TOP)   return MAX;
+        const MAX   = 2.2;
+        if (minDim <= FLOOR)
+        {
+            return 1.0;
+        }
+        if (minDim >= TOP)
+        {
+            return MAX;
+        }
         return 1.0 + (MAX - 1.0) * (minDim - FLOOR) / (TOP - FLOOR);
     }
+    //Public accessor for the sun-arc scale so the card-side render
+    //can scale the sun disc + halo together with the arc world-metres
+    //radius. Without this the disc would stay at its grid-tuned pixel
+    //size while the arc grows, the sun would read as a tiny dot on
+    //a gigantic curve on a fullscreen canvas.
+    public getSunArcScale(): number { return this._sunArcScale(); }
 
     private _projectScenePoint(
         lon: number, lat: number, altitudeM: number
@@ -3882,9 +4817,15 @@ export class HeliosEngine
         for (let i = 0; i < SUN_ARC_SAMPLES; i++)
         {
             const s = cache.samples[i];
-            if (!s) continue;
+            if (!s)
+            {
+                continue;
+            }
             const px = this._projectScenePoint(s.lon, s.lat, s.altitudeM);
-            if (!px) continue;
+            if (!px)
+            {
+                continue;
+            }
             raw.push({
                 x:            px.x,
                 y:            px.y,
@@ -3974,11 +4915,17 @@ export class HeliosEngine
         {
             const prev = cache.samples[i - 1];
             const curr = cache.samples[i];
-            if (!prev || !curr) continue;
+            if (!prev || !curr)
+            {
+                continue;
+            }
 
             const prevBelow = prev.belowHorizon;
             const currBelow = curr.belowHorizon;
-            if (prevBelow === currBelow) continue;
+            if (prevBelow === currBelow)
+            {
+                continue;
+            }
 
             //Linear interpolation on altitudeM (positive above
             //horizon, negative below). t=0 lands on prev, t=1 on
@@ -3993,7 +4940,10 @@ export class HeliosEngine
             const lerpLon = prev.lon + (curr.lon - prev.lon) * tClamped;
             const lerpLat = prev.lat + (curr.lat - prev.lat) * tClamped;
             const px = this._projectScenePoint(lerpLon, lerpLat, 0);
-            if (!px) continue;
+            if (!px)
+            {
+                continue;
+            }
 
             //Tangent: project both bracketing samples to screen and
             //take the angle of (curr - prev). The ring is drawn
@@ -4008,8 +4958,14 @@ export class HeliosEngine
             const time = new Date(dayStartMs + (i - 1 + tClamped) * stepMs);
             const marker = { x: px.x, y: px.y, angleRad, time };
 
-            if (prevBelow && !currBelow)      sunrise = marker;
-            else if (!prevBelow && currBelow) sunset  = marker;
+            if (prevBelow && !currBelow)
+            {
+                sunrise = marker;
+            }
+            else if (!prevBelow && currBelow)
+            {
+                sunset  = marker;
+            }
         }
 
         return {
@@ -4048,7 +5004,7 @@ export class HeliosEngine
         const a   = sun.altitude * D;
         const z   = sun.azimuth  * D;
 
-        //Scale the celestial radius on fullscreen / kiosk layouts so the arc reads from across the room instead of sitting at its grid-tuned size. See issue #33.
+        //Scale the celestial radius on fullscreen / kiosk layouts so the arc reads from across the room instead of sitting at its grid-tuned size. See
         const R = SUN_ARC_RADIUS_M * this._sunArcScale();
         const east  = R * Math.cos(a) * Math.sin(z);
         const north = R * Math.cos(a) * Math.cos(z);
@@ -4067,279 +5023,6 @@ export class HeliosEngine
 
     //Project an arbitrary (azimuth, altitude) angular position above
     //the home onto the same sphere the sun arc uses, then forward
-    //to screen pixels. Used by the shading-dome overlay to paint
-    //every populated cell of the learned residual grid on the
-    //celestial hemisphere the same way the sun is.
-    private _projectSpherePoint(
-        azimuthDeg: number, altitudeDeg: number
-    ): { x: number; y: number; depth: number } | null
-    {
-        const D = Math.PI / 180;
-        const a = altitudeDeg * D;
-        const z = azimuthDeg  * D;
-        //Same scale as the sun arc so the shading-dome cells line up with the arc on fullscreen layouts. See issue #33.
-        const R = SUN_ARC_RADIUS_M * this._sunArcScale();
-        const east  = R * Math.cos(a) * Math.sin(z);
-        const north = R * Math.cos(a) * Math.cos(z);
-        const up    = R * Math.sin(a);
-        const mPerDegLat = 111_320;
-        const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
-        const lon = this.homeLon + east  / mPerDegLon;
-        const lat = this.homeLat + north / mPerDegLat;
-        return this._projectScenePoint(lon, lat, up);
-    }
-
-
-    //Layout the shading-dome overlay: every populated cell of the learned residual grid projected onto the celestial hemisphere above the home, plus
-    //today's solar arc carrying the per-sample residual ratio so the user can see "the sun walks through this red cell at 17h, that's the tree".
-    //
-    //`cellPolys` , one entry per cell, four corner pixels of the
-    //               annular sector (az ± 5 deg × alt ± 2.5 deg)
-    //               projected onto the sphere; cells with any
-    //               corner behind the camera are dropped.
-    //`todayArc`  , sun-position samples for today, each with the
-    //               shading-map ratio looked up at its (az, alt,
-    //               liveCloud) coordinates and the kernel-smoothed
-    //               confidence.
-    //`homeScreen`, ground anchor reused by the SVG for centred
-    //               labels.
-    //
-    //`now` lets the caller pin the dome to a different day if it
-    //ever needs to (timeline scrubbing, debug). Defaults to wall
-    //clock so the bright arc is always today.
-    public projectShadingDome(opts: {
-        cellLookup: (azimuthDeg: number, altitudeDeg: number, cloudPct: number) =>
-            { ratio: number; confidence: number } | null;
-        decodedCells: Array<{ azimuthDeg: number; altitudeDeg: number; cloudBin: number; ratio: number; aged: number }>;
-        cloudBinForArc: number;   //0..7, which cloud-cover bin to sample for today's arc
-        liveCloudPct:   number;   //real-time cloud cover, used to pick the dome cells visualised
-        now:            Date;
-    }): {
-        homeScreen: { x: number; y: number };
-        cellPolys:  Array<{
-            path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number;
-        }>;
-        todayArc:   Array<{
-            x: number; y: number; ratio: number; confidence: number;
-            altitudeDeg: number; belowHorizon: boolean;
-        }>;
-        sun:        { x: number; y: number; altitudeDeg: number } | null;
-    } | null
-    {
-        if (!this.map) return null;
-        const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
-        if (!homeScreen) return null;
-
-        //--- Background dome: one annular-sector polygon per CELL
-        //of the full (azimuth, altitude) grid, regardless of
-        //whether the shading map has data for it. Cells with
-        //observed data carry their ratio + aged weight so the
-        //render layer paints them coloured; empty cells come
-        //through with aged = 0 and ratio = 1 so the render layer
-        //can stroke just the outline. This way the full lattice
-        //of the dome is visible (you see the structure even on
-        //day 1) and populated zones light up as the model learns.
-        const HALF_AZ  = 5;   //matches AZIMUTH_BIN_DEG  / 2 in shadingMap.ts
-        const HALF_ALT = 2.5; //matches ALTITUDE_BIN_DEG / 2
-        const AZ_BIN_COUNT  = 36;
-        const ALT_BIN_COUNT = 18;
-        //Index populated cells by (az, alt) for the chosen cloud
-        //bin so the grid loop can look them up in O(1) per cell.
-        const populated: Map<string, { ratio: number; aged: number }> = new Map();
-        for (const c of opts.decodedCells)
-        {
-            if (c.cloudBin !== opts.cloudBinForArc) continue;
-            const azBin  = Math.floor(c.azimuthDeg  / 10);
-            const altBin = Math.floor(c.altitudeDeg / 5);
-            populated.set(`${azBin}|${altBin}`, { ratio: c.ratio, aged: c.aged });
-        }
-        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number }> = [];
-        for (let azBin = 0; azBin < AZ_BIN_COUNT; azBin++)
-        {
-            const azCentre = azBin * 10 + 5;
-            for (let altBin = 0; altBin < ALT_BIN_COUNT; altBin++)
-            {
-                const altCentre = altBin * 5 + 2.5;
-                const az0 = azCentre  - HALF_AZ;
-                const az1 = azCentre  + HALF_AZ;
-                const al0 = Math.max(0.5, altCentre - HALF_ALT);
-                const al1 = Math.min(89,  altCentre + HALF_ALT);
-                const p1 = this._projectSpherePoint(az0, al0);
-                const p2 = this._projectSpherePoint(az1, al0);
-                const p3 = this._projectSpherePoint(az1, al1);
-                const p4 = this._projectSpherePoint(az0, al1);
-                if (!p1 || !p2 || !p3 || !p4) continue;
-                const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
-                const hit = populated.get(`${azBin}|${altBin}`);
-                cellPolys.push({
-                    path,
-                    ratio:    hit ? hit.ratio : 1,
-                    aged:     hit ? hit.aged  : 0,
-                    cloudBin: opts.cloudBinForArc,
-                    //Forwarded so the card-side renderer can drive the enter/exit wipe off altitude rather than a screen-space clip-path. Altitude
-                    //is camera-independent so the zenith (highest cells) stays the last drawn / first erased regardless of how the user has
-                    //rotated the map underneath the dome.
-                    altitudeDeg: altCentre,
-                });
-            }
-        }
-
-        //--- Foreground ribbon: today's sun arc, one polyline sample
-        //per 15 min. Each sample carries the residual ratio from the
-        //shading-map lookup at its (azimuth, altitude, liveCloud) so
-        //the ribbon literally bends red where the model over-
-        //predicts at this time of year, regardless of the season.
-        const todayArc: Array<{ x: number; y: number; ratio: number; confidence: number; altitudeDeg: number; belowHorizon: boolean }> = [];
-        const dayStart = new Date(opts.now);
-        dayStart.setHours(0, 0, 0, 0);
-        const N = SUN_ARC_SAMPLES;
-        const stepMs = (24 * 60 * 60 * 1000) / N;
-        for (let i = 0; i < N; i++)
-        {
-            const t = new Date(dayStart.getTime() + i * stepMs);
-            const sun = getSunPosition(t, this.homeLat, this.homeLon);
-            const belowHorizon = sun.altitude <= 0;
-            const proj = belowHorizon
-                ? null
-                : this._projectSpherePoint(sun.azimuth, sun.altitude);
-            if (!proj) continue;
-            const lookup = opts.cellLookup(sun.azimuth, sun.altitude, opts.liveCloudPct);
-            todayArc.push({
-                x:           proj.x,
-                y:           proj.y,
-                ratio:       lookup ? lookup.ratio : 1,
-                confidence:  lookup ? lookup.confidence : 0,
-                altitudeDeg: sun.altitude,
-                belowHorizon,
-            });
-        }
-
-        //--- Sun marker: present-position pin so the user can see
-        //"where the sun is right now" inside the dome view.
-        let sunScreen: { x: number; y: number; altitudeDeg: number } | null = null;
-        const sunNow = getSunPosition(opts.now, this.homeLat, this.homeLon);
-        if (sunNow.altitude > 0)
-        {
-            const p = this._projectSpherePoint(sunNow.azimuth, sunNow.altitude);
-            if (p) sunScreen = { x: p.x, y: p.y, altitudeDeg: sunNow.altitude };
-        }
-
-        return { homeScreen, cellPolys, todayArc, sun: sunScreen };
-    }
-
-
-    //Project the cloud-cover dome: a celestial hemisphere over the
-    //home, sliced into three horizontal bands stacked vertically:
-    //  - low band  (altitude angulaire 0 to 25 deg)  → cloudLow %
-    //  - mid band  (altitude angulaire 25 to 60 deg) → cloudMid %
-    //  - high band (altitude angulaire 60 to 89 deg) → cloudHigh %
-    //
-    //Each band is a closed polygon built by sampling 48 azimuths at
-    //the band's lower and upper bound, projected through the same
-    //_projectSpherePoint helper the shading dome uses. The card
-    //renderer fills each polygon with a translucent cloud-coloured
-    //tint whose opacity scales with the layer's cover percentage.
-    //
-    //`horizon` is the lower edge of the bottom band (closed ring at
-    //altitude 0): the renderer strokes it as a faint guideline so
-    //the dome reads as a 3D object even when all three covers are
-    //near zero.
-    //Three flat cloud-cover discs stacked along the local vertical
-    //axis above the home, one per atmospheric layer (low / mid /
-    //high). Each disc carries:
-    //  - `ringPath`: the reference 100 % polygon at altitude H
-    //                metres above the home;
-    //  - `fillPath`: the same circle scaled by cover / 100, so an
-    //                empty layer collapses to a point and a 100 %
-    //                layer fills the reference ring exactly.
-    //The card's render module animates each disc in sequentially
-    //(low → mid → high) on toggle-on and fades all three out on
-    //toggle-off. No volumetric dome, no fill 3D, just three flat
-    //discs in world space.
-    public projectCloudDome(opts: {
-        cloudLow:  number;
-        cloudMid:  number;
-        cloudHigh: number;
-    }): {
-        homeScreen: { x: number; y: number };
-        layers: Array<{
-            kind:     'low' | 'mid' | 'high';
-            cover:    number;
-            ringPath: string;
-            fillPath: string;
-        }>;
-    } | null
-    {
-        if (!this.map) return null;
-        const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
-        if (!homeScreen) return null;
-
-        const SEGMENTS = 96;
-        const RADIUS_M = CLOUD_DISC_RADIUS_M;
-
-        //Build the (lon, lat) ring once: every disc reuses the same
-        //horizontal geometry, only the altitude differs between them.
-        const refRingLL  = buildCirclePolygon(this.homeLon, this.homeLat, RADIUS_M, SEGMENTS);
-
-        const projectFlatRing = (
-            ringLL: Array<[number, number]>,
-            altitudeM: number,
-        ): string =>
-        {
-            let p = '';
-            let first = true;
-            for (const [lon, lat] of ringLL)
-            {
-                const pt = this._projectScenePoint(lon, lat, altitudeM);
-                if (!pt) continue;
-                p += (first ? 'M' : ' L') + ` ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
-                first = false;
-            }
-            if (!first) p += ' Z';
-            return p;
-        };
-
-        //Vertical spacing between the three discs, in metres above
-        //the home. 5 m gives a much clearer visual separation at
-        //pitch 55 deg (the previous 2 m made the high disc look
-        //like it was sitting on top of the mid one).
-        //
-        //Mapping is explicit so there's no chance of mis-ordering:
-        //  low  → cloudLow  at altitude 0  m (ground)
-        //  mid  → cloudMid  at altitude 5  m
-        //  high → cloudHigh at altitude 10 m
-        const DISC_STACK_HEIGHT_M = 5;
-        const discs: Array<{ kind: 'low' | 'mid' | 'high'; cover: number; altitudeM: number }> = [
-            { kind: 'low',  cover: opts.cloudLow,  altitudeM: 0                       },
-            { kind: 'mid',  cover: opts.cloudMid,  altitudeM: DISC_STACK_HEIGHT_M     },
-            { kind: 'high', cover: opts.cloudHigh, altitudeM: DISC_STACK_HEIGHT_M * 2 },
-        ];
-
-        const layers: Array<{
-            kind:     'low' | 'mid' | 'high';
-            cover:    number;
-            ringPath: string;
-            fillPath: string;
-        }> = [];
-        for (const d of discs)
-        {
-            const ringPath = projectFlatRing(refRingLL, d.altitudeM);
-            //Fill polygon: shrink the (lon, lat) ring radially by
-            //cover / 100 before projecting, so a 30 % layer renders
-            //as a small disc at altitude H, exactly the radial fill
-            //the user requested.
-            const t = Math.max(0, Math.min(100, d.cover)) / 100;
-            const fillRingLL = t <= 0
-                ? null
-                : buildCirclePolygon(this.homeLon, this.homeLat, RADIUS_M * t, SEGMENTS);
-            const fillPath = fillRingLL ? projectFlatRing(fillRingLL, d.altitudeM) : '';
-            layers.push({ kind: d.kind, cover: d.cover, ringPath, fillPath });
-        }
-
-        return { homeScreen, layers };
-    }
-
-
     public setSelectedTime(time: Date | null): void
     {
         this._selectedTime = time;
@@ -4359,7 +5042,7 @@ export class HeliosEngine
             this._clearWeatherTimer();
         }
 
-        if (this._mapReady && this._homeHourlyData)
+        if (this._mapReady)
         {
             //Force atmosphere refresh: the user just scrubbed time, so the "have we moved enough" guard would otherwise short-circuit.
             this._lastAtmosphereAlt = -999;
@@ -4436,7 +5119,10 @@ export class HeliosEngine
     } | null
     {
         const home = this._homeHourlyData;
-        if (!home || !home.times.length) return null;
+        if (!home || !home.times.length)
+        {
+            return null;
+        }
         return {
             times:       home.times,
             temperature: home.temperature,
@@ -4517,11 +5203,20 @@ export class HeliosEngine
               }
             : null;
         let shadowSource: string;
-        if (!shadowsOn)                                  shadowSource = 'disabled';
+        if (!shadowsOn)
+        {
+            shadowSource = 'disabled';
+        }
         else if (lidarFeatures && lidarFeatures.features.length > 0)
                                                           shadowSource = 'lidar';
-        else if (this._buildingsData)                    shadowSource = 'maptiler';
-        else                                              shadowSource = 'pending';
+        else if (this._buildingsData)
+        {
+            shadowSource = 'maptiler';
+        }
+        else
+        {
+            shadowSource = 'pending';
+        }
 
         return {
             mapReady:             this._mapReady,
@@ -4553,7 +5248,12 @@ export class HeliosEngine
             weather:
             {
                 samples:          this._homeHourlyData?.times.length ?? 0,
-                rateLimitStreak:  this._rateLimitStreak
+                rateLimitStreak:  this._rateLimitStreak,
+                //Module-level counters shared across every Helios card on the page (the localStorage
+                //cache + the inflight dedup map both live at module scope), so the figures reflect
+                //the COMBINED Open-Meteo traffic of this browser session. Most useful to read when
+                //debugging a rate-limit or audit complaint.
+                openMeteoStats:   getWeatherFetchStats()
             },
             timeline:
             {
@@ -4584,7 +5284,21 @@ export class HeliosEngine
         const prevPrecision   = this._lidarPrecisionLevel();
         const prevShadowOpa   = this._shadowOpacity();
         const prevShadowsOn   = this._shadowsEnabled();
+        const prevAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
+        const prevCameraLocked = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
         this.cfg = { ...cfg };
+
+        //Re-arm the auto-rotate rAF loop when either long-lived flag transitions back to a rotation-permitting
+        //state. The loop suspends itself when disabled to avoid burning 60 Hz of CPU on a no-op tick (see the early
+        //return inside tick() in src/engine/auto-rotate.ts).
+        const nextAutoRotateOn = this.cfg['auto-rotate-enabled'] === true;
+        const nextCameraLocked = (this.cfg as Record<string, unknown>)['camera-locked'] === true;
+        const nowPermitsRotation  = nextAutoRotateOn && !nextCameraLocked;
+        const prevPermitsRotation = prevAutoRotateOn && !prevCameraLocked;
+        if (nowPermitsRotation && !prevPermitsRotation && this.map)
+        {
+            startAutoRotateLoop(this);
+        }
 
         if (!this.map)
         {
@@ -4826,11 +5540,26 @@ export class HeliosEngine
                 {
                     this.map.off('move', this._mapPinHandler);
                 }
-                if (this._mapStyleLoadHandler)         this.map.off('style.load',         this._mapStyleLoadHandler);
-                if (this._mapLoadHandler)              this.map.off('load',               this._mapLoadHandler);
-                if (this._mapMoveHandler)              this.map.off('move',               this._mapMoveHandler);
-                if (this._mapErrorHandler)             this.map.off('error',              this._mapErrorHandler);
-                if (this._mapStyleImageMissingHandler) this.map.off('styleimagemissing',  this._mapStyleImageMissingHandler);
+                if (this._mapStyleLoadHandler)
+                {
+                    this.map.off('style.load',         this._mapStyleLoadHandler);
+                }
+                if (this._mapLoadHandler)
+                {
+                    this.map.off('load',               this._mapLoadHandler);
+                }
+                if (this._mapMoveHandler)
+                {
+                    this.map.off('move',               this._mapMoveHandler);
+                }
+                if (this._mapErrorHandler)
+                {
+                    this.map.off('error',              this._mapErrorHandler);
+                }
+                if (this._mapStyleImageMissingHandler)
+                {
+                    this.map.off('styleimagemissing',  this._mapStyleImageMissingHandler);
+                }
             }
             catch (_) {}
         }
@@ -4938,7 +5667,10 @@ export class HeliosEngine
         try
         {
             const w = window as unknown as { __heliosMap?: unknown };
-            if (w.__heliosMap !== undefined) delete w.__heliosMap;
+            if (w.__heliosMap !== undefined)
+            {
+                delete w.__heliosMap;
+            }
         }
         catch (_) {}
 

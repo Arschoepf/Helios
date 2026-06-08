@@ -13,12 +13,13 @@
 import type { HeliosConfig } from '../helios-config';
 import type { HeliosEngine } from '../helios-engine';
 import { callWSWithTimeout, WsTimeoutError } from './ws-timeout';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
 
 
 //-----------------------------------------------------------------
 //Module-level cache for the solar-radiation history fetch.
 //Mirrors the PV and battery patterns so a navigation away and back
-//does not re-trigger the WS round-trip. See #159.
+//does not re-trigger the WS round-trip.
 
 const RADIATION_CACHE_TTL_MS = 15 * 60_000;
 
@@ -33,7 +34,10 @@ const _radiationHistoryCache: Map<string, RadiationHistoryCacheEntry> = new Map(
 function radiationHistoryCacheGet(key: string): RadiationHistoryCacheEntry | null
 {
     const e = _radiationHistoryCache.get(key);
-    if (!e) return null;
+    if (!e)
+    {
+        return null;
+    }
     if (Date.now() - e.ts > RADIATION_CACHE_TTL_MS)
     {
         _radiationHistoryCache.delete(key);
@@ -54,12 +58,21 @@ export function clearRadiationModuleCaches(): void
 //module stays self-contained.
 function parseStatBoundary(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
     if (typeof raw === 'string')
     {
         const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
         const d = new Date(raw);
         const t = d.getTime();
         return isFinite(t) ? t : null;
@@ -75,7 +88,7 @@ function parseStatBoundary(raw: unknown): number | null
 //We deliberately do NOT fall back to the `state` field here. A small subset of installs surface their radiation source as a
 //cumulative MJ/m² counter (`state_class: total_increasing`) and `state` then carries monotonically increasing values. Pushing those
 //straight to `setSolarRadiationSamples` would feed the engine values that look like 10000+ W/m² and distort every downstream
-//derivation (shading map calibration, "affiné" forecast, irradiance chip). Buckets with null `mean` are skipped and, if the slot
+//derivation (5-day calibration ratio, "affiné" forecast, irradiance chip). Buckets with null `mean` are skipped and, if the slot
 //ends up empty, the consumer degrades to the raw-history fallback which has its own unit semantics handled.
 function parseRadiationStats(arr: any[]): RadiationHistory
 {
@@ -85,11 +98,20 @@ function parseRadiationStats(arr: any[]): RadiationHistory
     {
         const startMs = parseStatBoundary(item?.start);
         const endMs   = parseStatBoundary(item?.end);
-        if (startMs === null) continue;
+        if (startMs === null)
+        {
+            continue;
+        }
         const valueRaw = item?.mean;
-        if (valueRaw === null || valueRaw === undefined) continue;
+        if (valueRaw === null || valueRaw === undefined)
+        {
+            continue;
+        }
         const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
-        if (!isFinite(v) || v < 0) continue;
+        if (!isFinite(v) || v < 0)
+        {
+            continue;
+        }
         const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
         times.push(new Date(anchorMs));
         values.push(v);
@@ -108,7 +130,7 @@ export interface RadiationHistory
 }
 
 //Structural surface the host card exposes to this module.
-export interface RadiationHost
+export interface RadiationHost extends LoadingTrackerHost
 {
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
@@ -151,19 +173,16 @@ export function refreshSolarRadiation(host: RadiationHost): void
     {
         return;
     }
-    //Narrow raw window cap, mirrors the PV side (see fetchPvHistory):
-    //a Davis / Ecowitt W/m² sensor reporting every second over a
-    //multi-day visible timeline used to drag the HA recorder for the
-    //whole duration of the fetch, blocking every other card reading
-    //the same entity. The chart only needs accurate live data for
-    //the head of the curve; older past values are interpolated from
-    //the engine's resampled series. 6 h gives the W/m² tooltip
-    //enough resolution while keeping the recorder responsive.
-    //Cap anchored on NOW so fetchStart stays in the past even when
-    //the visible timeline end sits in the forecast horizon (next
-    //day). Anchoring on timeline end would place fetchStart in the
-    //future and the inner clamp at fetchSolarRadiationHistory
-    //would leave the slot empty.
+    //Narrow raw window cap, mirrors the PV side (see fetchPvHistory): a Davis / Ecowitt W/m²
+    //sensor reporting every second over a multi-day visible timeline would otherwise drag the
+    //HA recorder for the whole duration of the fetch and block every other card reading the
+    //same entity. The chart only needs accurate live data for the head of the curve; older
+    //past values are interpolated from the engine's resampled series. 6 h gives the W/m²
+    //tooltip enough resolution while keeping the recorder responsive.
+    //
+    //Cap anchored on NOW so fetchStart stays in the past even when the visible timeline end
+    //sits in the forecast horizon (next day). Anchoring on timeline end would place fetchStart
+    //in the future and the inner clamp at fetchSolarRadiationHistory would leave the slot empty.
     const RAW_WINDOW_H = 6;
     const visibleStart = host._timeRange.start;
     const cap          = new Date(Date.now() - RAW_WINDOW_H * 3_600_000);
@@ -177,7 +196,7 @@ export function refreshSolarRadiation(host: RadiationHost): void
     host._solarRadiationFetchKey = fetchKey;
 
     //Cache hit short-circuits the WS round-trip on the navigation case. Cache invalidates on TTL (15 min) or on any (entity / range)
-    //change since that flips the fetch key. See #159.
+    //change since that flips the fetch key.
     const cached = radiationHistoryCacheGet(fetchKey);
     if (cached)
     {
@@ -196,12 +215,10 @@ export function refreshSolarRadiation(host: RadiationHost): void
 //O(n log n) sort once.
 //
 //Dirty-flag gate: the inputs are stable between hass pushes and
-//history fetches, so we hash the (history identity, state identity,
-//entity) tuple and skip the whole rebuild when nothing changed.
-//Without this guard the function used to rebuild ~700 sample
-//objects per render under rotation (auto-rotate fires move events
-//which mutate overlay @state which retriggers updated() which
-//calls refreshSolarRadiation), creating a massive GC churn.
+//history fetches, so we hash the (history identity, state identity, entity) tuple and skip
+//the whole rebuild when nothing changed. Without this guard the function rebuilds ~700 sample
+//objects per render under auto-rotate (move events mutate overlay @state which retriggers
+//updated() which calls refreshSolarRadiation), creating a massive GC churn.
 const _pushedRadiationKey = new WeakMap<RadiationHost, {
     histRef: unknown;
     stateRef: unknown;
@@ -210,7 +227,10 @@ const _pushedRadiationKey = new WeakMap<RadiationHost, {
 
 export function pushSolarRadiationToEngine(host: RadiationHost): void
 {
-    if (!host._engine) return;
+    if (!host._engine)
+    {
+        return;
+    }
     const entity = String(host.config?.['solar-radiation-entity'] ?? '').trim();
     if (!entity || !host.hass)
     {
@@ -270,6 +290,7 @@ export async function fetchSolarRadiationHistory(
         return;
     }
     host._solarRadiationFetching = true;
+    beginLoadingPhase(host, 'solar-radiation');
     try
     {
         const now = new Date();
@@ -339,6 +360,7 @@ export async function fetchSolarRadiationHistory(
     finally
     {
         host._solarRadiationFetching = false;
+        endLoadingPhase(host, 'solar-radiation');
     }
 }
 

@@ -49,9 +49,18 @@ function extractAaiGridBody(text: string): string | null
     const rnrn = text.indexOf('\r\n\r\n', marker);
     const nn   = text.indexOf('\n\n',   marker);
     let bodyStart: number;
-    if (rnrn >= 0 && (nn < 0 || rnrn < nn)) bodyStart = rnrn + 4;
-    else if (nn >= 0)                       bodyStart = nn + 2;
-    else                                    return null;
+    if (rnrn >= 0 && (nn < 0 || rnrn < nn))
+    {
+        bodyStart = rnrn + 4;
+    }
+    else if (nn >= 0)
+    {
+        bodyStart = nn + 2;
+    }
+    else
+    {
+        return null;
+    }
     //The body ends at the next multipart boundary marker (`--wcs` or
     //similar). Scan forward for a line starting with `--`.
     const endIdx = text.indexOf('\n--', bodyStart);
@@ -73,7 +82,10 @@ function parseAaiGrid(body: string): {
     //Tokenise once, the body has at most a few hundred thousand
     //numbers and split() is comfortably faster than per-char scans.
     const tokens = body.split(/\s+/).filter(t => t.length > 0);
-    if (tokens.length < 2) return null;
+    if (tokens.length < 2)
+    {
+        return null;
+    }
 
     let ncols = 0;
     let nrows = 0;
@@ -83,27 +95,54 @@ function parseAaiGrid(body: string): {
     while (i + 1 < tokens.length)
     {
         const key = tokens[i].toLowerCase();
-        if (!HEADER_KEYS.has(key)) break;
+        if (!HEADER_KEYS.has(key))
+        {
+            break;
+        }
         const valStr = tokens[i + 1];
-        if      (key === 'ncols')        ncols  = parseInt(valStr, 10);
-        else if (key === 'nrows')        nrows  = parseInt(valStr, 10);
-        else if (key === 'nodata_value') nodata = parseFloat(valStr);
+        if (key === 'ncols')
+        {
+            ncols  = parseInt(valStr, 10);
+        }
+        else if (key === 'nrows')
+        {
+            nrows  = parseInt(valStr, 10);
+        }
+        else if (key === 'nodata_value')
+        {
+            nodata = parseFloat(valStr);
+        }
         //Other geometry keys are not needed by Helios, the upstream
         //bbox + SCALESIZE already fix the spatial extent.
         i += 2;
     }
-    if (ncols <= 0 || nrows <= 0) return null;
+    if (ncols <= 0 || nrows <= 0)
+    {
+        return null;
+    }
 
     const total = ncols * nrows;
-    if (tokens.length - i < total) return null;
+    if (tokens.length - i < total)
+    {
+        return null;
+    }
 
     const heights = new Float32Array(total);
     for (let k = 0; k < total; k++)
     {
         const v = parseFloat(tokens[i + k]);
-        if (!isFinite(v))                heights[k] = NaN;
-        else if (nodata !== null && v === nodata) heights[k] = NaN;
-        else                              heights[k] = v;
+        if (!isFinite(v))
+        {
+            heights[k] = NaN;
+        }
+        else if (nodata !== null && v === nodata)
+        {
+            heights[k] = NaN;
+        }
+        else
+        {
+            heights[k] = v;
+        }
     }
     return { ncols, nrows, heights };
 }
@@ -120,7 +159,10 @@ function resampleNearest(
     rasterSize: number,
 ): Float32Array
 {
-    if (srcCols === rasterSize && srcRows === rasterSize) return src;
+    if (srcCols === rasterSize && srcRows === rasterSize)
+    {
+        return src;
+    }
     const out = new Float32Array(rasterSize * rasterSize);
     for (let y = 0; y < rasterSize; y++)
     {
@@ -154,20 +196,32 @@ export async function fetchAaiGridHeights(
         resp = await fetch(lidarFetchUrl(url), { signal });
     }
     catch (_) { return null; }
-    if (!resp.ok) return null;
+    if (!resp.ok)
+    {
+        return null;
+    }
 
     let text: string;
     try { text = await resp.text(); }
     catch (_) { return null; }
 
     //A short body is most likely an XML ServiceException, not a grid.
-    if (text.length < 200) return null;
+    if (text.length < 200)
+    {
+        return null;
+    }
 
     const body = extractAaiGridBody(text);
-    if (!body) return null;
+    if (!body)
+    {
+        return null;
+    }
 
     const parsed = parseAaiGrid(body);
-    if (!parsed) return null;
+    if (!parsed)
+    {
+        return null;
+    }
 
     return resampleNearest(parsed.heights, parsed.ncols, parsed.nrows, rasterSize);
 }

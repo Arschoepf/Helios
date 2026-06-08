@@ -61,8 +61,14 @@ function bilinearSample(
     lat:    number,
 ): number | null
 {
-    if (lon <= raster.minLon || lon >= raster.maxLon) return null;
-    if (lat <= raster.minLat || lat >= raster.maxLat) return null;
+    if (lon <= raster.minLon || lon >= raster.maxLon)
+    {
+        return null;
+    }
+    if (lat <= raster.minLat || lat >= raster.maxLat)
+    {
+        return null;
+    }
 
     const N = raster.rasterSize;
     //Image convention: row 0 is the NORTH edge, so we flip latitude.
@@ -72,13 +78,19 @@ function bilinearSample(
     const y = v * (N - 1);
     const ix = Math.floor(x);
     const iy = Math.floor(y);
-    if (ix < 0 || ix >= N - 1 || iy < 0 || iy >= N - 1) return null;
+    if (ix < 0 || ix >= N - 1 || iy < 0 || iy >= N - 1)
+    {
+        return null;
+    }
 
     const h00 = band[iy       * N + ix];
     const h10 = band[iy       * N + ix + 1];
     const h01 = band[(iy + 1) * N + ix];
     const h11 = band[(iy + 1) * N + ix + 1];
-    if (!isFinite(h00) || !isFinite(h10) || !isFinite(h01) || !isFinite(h11)) return null;
+    if (!isFinite(h00) || !isFinite(h10) || !isFinite(h01) || !isFinite(h11))
+    {
+        return null;
+    }
 
     const dx = x - ix;
     const dy = y - iy;
@@ -113,7 +125,10 @@ export function sampleDtmAt(
     lat:    number,
 ): number | null
 {
-    if (!raster.terrain) return null;
+    if (!raster.terrain)
+    {
+        return null;
+    }
     return bilinearSample(raster.terrain, raster, lon, lat);
 }
 
@@ -168,8 +183,14 @@ export function computeLidarCellExposureRows(
     maxDistM:       number = 200,
 ): void
 {
-    if (sunAltitudeDeg <= 0) return;
-    if (jStart >= jEnd) return;
+    if (sunAltitudeDeg <= 0)
+    {
+        return;
+    }
+    if (jStart >= jEnd)
+    {
+        return;
+    }
 
     const altR  = sunAltitudeDeg * D;
     const azR   = sunAzimuthDeg  * D;
@@ -207,7 +228,10 @@ export function computeLidarCellExposureRows(
                 const lat = cLat + dLatPerM * d;
                 const lon = cLon + dLonPerM * d;
                 const sampleObstacle = sampleNdsmAt(raster, lon, lat);
-                if (sampleObstacle === null) continue;
+                if (sampleObstacle === null)
+                {
+                    continue;
+                }
                 let relGround = 0;
                 if (hasTerrain)
                 {
@@ -215,7 +239,10 @@ export function computeLidarCellExposureRows(
                     //relGround at 0 (flat-ground assumption) instead of skipping the step. Skipping made the ray see through real
                     //obstacles near LiDAR coverage edges; flat-ground here is a small bias next to the false-negative shading.
                     const sampleDtm = sampleDtmAt(raster, lon, lat);
-                    if (sampleDtm !== null) relGround = sampleDtm - cellDtm;
+                    if (sampleDtm !== null)
+                    {
+                        relGround = sampleDtm - cellDtm;
+                    }
                 }
                 const obstacleZ = relGround + sampleObstacle;
                 const rayZ      = cellH + d * tanAlt;
@@ -238,7 +265,10 @@ export function isPanelShaded(
     maxDistM:       number = 200,
 ): boolean
 {
-    if (!raster) return false;
+    if (!raster)
+    {
+        return false;
+    }
     if (sunAltitudeDeg <= 0) return false;       //below-horizon: caller's job
 
     const altR = sunAltitudeDeg * D;
@@ -284,7 +314,10 @@ export function isPanelShaded(
         }
         const obstacleZ = relGround + obstacleAboveGround;
         const rayZ      = panelHeightM + d * tanAlt;
-        if (obstacleZ > rayZ) return true;
+        if (obstacleZ > rayZ)
+        {
+            return true;
+        }
     }
     return false;
 }

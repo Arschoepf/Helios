@@ -64,7 +64,10 @@ export const austriaSteiermarkAls: LidarSource =
         }
 
         const epsg = getEpsg(32633);
-        if (!epsg) return emptyResult();
+        if (!epsg)
+        {
+            return emptyResult();
+        }
         const proj = projectBbox(bbox, epsg);
 
         //ArcGIS WCSServer advertises lowercase "x y" for both spatial and grid axes, regardless of the projection family.
@@ -88,7 +91,10 @@ export const austriaSteiermarkAls: LidarSource =
             fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
         ]);
-        if (!dom || !dtm) return emptyResult();
+        if (!dom || !dtm)
+        {
+            return emptyResult();
+        }
 
         const heights = subtractRasters(dom, dtm);
 

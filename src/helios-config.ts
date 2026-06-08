@@ -14,6 +14,11 @@
 //constants below provide the values used when a key is absent.
 export interface HeliosConfig
 {
+    //Index signature so consumers (and stale references to retired keys) can read arbitrary string keys off the config
+    //as `unknown` without TypeScript widening errors. The named keys below are the schema the editor + runtime know
+    //about; legacy YAML carrying retired keys is allowed through here and the migration path strips it on the next
+    //editor open.
+    [key: string]: unknown;
     //When false, all of OpenFreeMap's label layers
     //(road names, building numbers, POI labels, place names) are
     //hidden for a cleaner, minimalist basemap. Default: true.
@@ -26,30 +31,12 @@ export interface HeliosConfig
     //as "more" regardless of the chosen colour.
     'sun-color'?:             unknown;
     'cloud-color'?:           unknown;
-    //Optional photovoltaic production overlay.
-    //  pv-power-entity : Home Assistant entity id of a numeric sensor
-    //                    representing solar production (instantaneous
-    //                    power in W/kW for an impact-readable curve,
-    //                    or cumulative daily energy for a saw-tooth
-    //                    accumulation curve). When unset, the whole
-    //                    PV overlay (chip below the home, dedicated
-    //                    timeline graph) is hidden.
-    //  pv-color        : single colour used everywhere PV appears
-    //                    (chip icon tint, dedicated graph fill /
-    //                    stroke). Defaults to a vivid green chosen
-    //                    to read cleanly on the white chart card.
-    'pv-power-entity'?:       unknown;
+    //Optional photovoltaic production overlay. The PV entity itself is no longer wired here, the card resolves the
+    //solar source from the HA Energy dashboard global settings (Settings -> Dashboards -> Energy) directly. Only the
+    //tint stays as a per-card YAML setting.
+    //  pv-color : single colour used everywhere PV appears (chip icon tint, dedicated graph fill / stroke). Defaults
+    //             to a vivid green chosen to read cleanly on the white chart card.
     'pv-color'?:              unknown;
-    //Installed peak power of the PV array in kWp (kilowatt-peak).
-    //Optional; when set, it scales the predicted clear-sky percentage
-    //(0..100) into watts so the dotted forecast curve on the PV chart
-    //reflects the user's install. Without it, no prediction is drawn,
-    //but live observation, peak-of-day highlight and chart axes keep
-    //working off the actual PV entity.
-    //
-    //Superseded by per-string `pv-arrays[].peak-kwp`: when any array entry carries a `peak-kwp`, the total install power is the sum of those values
-    //and `pv-peak-kwp` is ignored. Existing configs that only set `pv-peak-kwp` keep working unchanged through the legacy share-based weighting.
-    'pv-peak-kwp'?:           unknown;
     //Inverter clipping cap in kW (kilowatts of AC). Optional; when
     //set, the forecast tops out at this value so an oversized DC
     //array hooked to a smaller inverter (e.g. 6.4 kWp panels behind a
@@ -100,105 +87,32 @@ export interface HeliosConfig
     //pitch roofs, and any other install where panels don't all
     //face the same way.
     'pv-arrays'?:             unknown;
-    //Optional home-battery overlay. A single chip below the
-    //home shows the battery State-of-Charge (%) and the live signed
-    //power draw (positive while charging, negative while discharging),
-    //mirroring the PV chip above the home. Either entity is optional;
-    //the chip renders as long as at least one is set, with a leader
-    //line whose flow direction follows the sign of the power.
-    //  battery-soc-entity   : Home Assistant entity id of a numeric
-    //                         sensor in % (typical: device_class
-    //                         "battery", or unit "%"). Out-of-range
-    //                         values are clamped to [0, 100].
-    //  battery-power-entity : Home Assistant entity id of a numeric
-    //                         power sensor in W or kW. Sign convention
-    //                         follows the entity itself; positive is
-    //                         interpreted as charging.
-    //  battery-color        : single colour used everywhere battery
-    //                         appears (chip text, border, leader,
-    //                         flow arrow). Defaults to a vivid purple.
-    'battery-soc-entity'?:    unknown;
-    'battery-power-entity'?:  unknown;
-    //Optional. Multi-bank battery support. When present, takes
-    //precedence over the flat battery-soc-entity / battery-power-
-    //entity / battery-power-invert keys above (which become a
-    //single-bank legacy fallback). Each entry:
-    //  - name        : optional, free text, used in the editor row
-    //                  header. Defaults to "Battery N".
-    //  - soc-entity  : required, HA entity id, % (0-100, clamped).
-    //  - power-entity: required, HA entity id, W or kW. Signed.
-    //  - power-invert: optional bool, flips the sign at ingest
-    //                  (per-bank). Default false.
-    //  - capacity-kwh: optional weight used to aggregate the
-    //                  banks' SoC into the single chip painted on
-    //                  the card (capacity-weighted average). Default
-    //                  1, meaning equal weight: leave unset when all
-    //                  banks are the same size. Set it explicitly
-    //                  when bank sizes differ so the displayed SoC
-    //                  reflects the real stored-energy ratio rather
-    //                  than a flat unweighted mean.
-    //Aggregation rules:
-    //  - SoC chip = Σ(soc_i × capacity_i) / Σ(capacity_i)
-    //  - Power chip = Σ(power_i)  (each bank inverted per its own
-    //                              power-invert flag first)
-    //  - inverter-cutoff-soc-pct: skips the trainer bucket when
-    //    ALL banks are at or above the threshold (min SoC across
-    //    banks ≥ cutoff), so a half-full bank correctly trains
-    //    even while a sibling bank is full.
-    'batteries'?:             unknown;
-    //Optional. When true, the live and historical battery power
-    //readings are multiplied by -1 before being stored. Use this
-    //when the upstream entity reports charging as negative and
-    //discharging as positive (some GivEnergy / GivTCP setups), so
-    //Helios's internal "positive = charging" convention keeps
-    //holding without a template sensor in front. Default false.
-    'battery-power-invert'?:  unknown;
-    //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops feeding the battery and clamps PV
-    //output (almost no production from the panels even when the sun is up). When set AND `battery-soc-entity` is also configured, the shading map
-    //trainer skips every observation bucket where the battery SoC reached or exceeded this value. Without the skip, those zero-production buckets
-    //get interpreted as 100 % shading at the matching sun azimuth / altitude / cloud bin and pollute the shading map for the next ~60 days of half-
-    //life decay. Threshold varies per inverter model (some cut at 95, some at 98, some at 100); the user configures their own. Leave unset to keep
-    //the legacy behaviour where every bucket trains.
+    //Display update frequency, in buckets per hour. Controls both the storage cadence of the unified
+    //data source (production / cloud / irradiance / battery / grid) and the rendering cadence of every
+    //graph that reads from it (radial dial, dashboard chart, timeline today). Range 1-60. Default 4 =
+    //15 min slots. Higher values give more precise curves at the cost of CPU per rebuild + memory per
+    //series. Forecast curve is independent: it always runs at the weather sample rate (hourly), then
+    //gets interpolated into the storage buckets.
+    'display-update-frequency-per-hour'?: unknown;
+    //Optional home-battery overlay. A single chip below the home shows the battery State-of-Charge (%) and the live
+    //signed power draw (positive charging, negative discharging), mirroring the PV chip above the home. Battery
+    //entities (SoC, power, per-bank sign inversion, multi-bank aggregation) are resolved exclusively from the HA
+    //Energy dashboard, no per-card entity slot. Only the tint stays as a per-card YAML setting.
+    //  battery-color : single colour used everywhere battery appears (chip text, border, leader, flow arrow).
+    //                  Defaults to a vivid purple.
+    //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops
+    //feeding the battery and clamps PV output (almost no production from the panels even when the sun is up). When
+    //set AND HA Energy has at least one battery SoC source declared, calibration consumers can skip observation buckets
+    //where the SoC reached or exceeded this value. Without the skip those zero-production buckets get interpreted as
+    //true zeros and pollute the rolling calibration ratio. Threshold varies per inverter model (some cut at 95, some
+    //at 98, some at 100); the user configures their own. Leave unset to feed every bucket into the calibration.
     'inverter-cutoff-soc-pct'?: unknown;
     'battery-color'?:         unknown;
-    //Optional. HA entity ids for the grid import / grid export
-    //meters the user already exposes through a sensor (or the HA
-    //Energy dashboard). The card reads the live values, the
-    //visual placement of the readouts is being reworked.
-    'grid-import-entity'?:    unknown;
-    'grid-export-entity'?:    unknown;
-    //Optional. Single COMBINED grid power/energy entity whose sign
-    //encodes the direction: many smart meters and inverters expose
-    //one signed sensor (Fronius P_Grid, Shelly EM, P1 net power,
-    //...) instead of two separate import / export indexes. When set,
-    //this entity drives BOTH chips: the card reads its sign and
-    //routes a positive value to the IMPORT chip and a negative value
-    //to the EXPORT chip (one direction at a time, the other chip is
-    //hidden). It takes precedence over grid-import-entity /
-    //grid-export-entity, which are ignored while it is configured.
-    //
-    //Accepts a power sensor (W / kW / MW, the value IS the signed
-    //watts) or a signed net-energy sensor (Wh / kWh / MWh whose
-    //running total can go down when exporting, the slope IS the
-    //signed watts). An array is summed (e.g. three signed per-phase
-    //power sensors -> net grid power).
-    //
-    //Default sign convention: positive = import (drawing from the
-    //grid), negative = export (feeding the grid), matching the most
-    //common meter / inverter convention. Flip it with
-    //grid-power-invert when the upstream sensor reports the opposite.
-    'grid-power-entity'?:     unknown;
-    //Optional boolean. When true, the combined grid-power-entity sign
-    //is flipped at ingest so a positive reading is treated as EXPORT
-    //and a negative reading as IMPORT. Use it when the meter reports
-    //grid feed-in as positive. Default false. Ignored when
-    //grid-power-entity is not set.
-    'grid-power-invert'?:     unknown;
-    'date-format'?:           unknown;
-    //'12h' | '24h'. Default: '24h'. Picks between locale-
-    //independent 12-hour ("11:23:45 PM") and 24-hour ("23:23:45")
-    //rendering of the date/time chip at the top-right of the card.
-    'time-format'?:           unknown;
+    //Grid import / export wiring is resolved exclusively from the HA Energy dashboard global settings: every grid
+    //source's `stat_energy_from` feeds the IMPORT scrub buffer, every `stat_energy_to` feeds the EXPORT scrub
+    //buffer, and the optional `stat_rate` / `power_config.stat_rate` overrides the live chip with HA's own
+    //signed-power read. No per-card grid entity slot, no per-card invert flag, the sign convention is honoured via
+    //HA Energy's own `power_config.stat_rate_inverted` switch on each source.
     //Picks the OpenFreeMap base style. 'streets' (default) renders
     //the full-colour Liberty style with street / POI labels suited to
     //urban areas; 'minimal' renders the muted-grey Positron style for
@@ -235,15 +149,10 @@ export interface HeliosConfig
     //Timeline visibility toggle. Default: true. When false the whole
     //time-bar (chart card, day labels, scrub cursors) is hidden so
     //the card focuses on the live scene only.
-    'timeline-enabled'?:       unknown;
     //Timeline width as a percentage of the card width, 50..100.
     //Default: 100 (current behaviour, hugs the card edges at 8 px).
     //Below 100, the time-bar stays centred horizontally and the
     //chart cards shrink proportionally.
-    'timeline-width-pct'?:     unknown;
-    //Show the per-day cumulative kWh chip next to each day label on the timeline. Default: true. When false, only the date is rendered, which keeps
-    //the chart cleaner when the user is not tracking production volumes.
-    'timeline-consumption-enabled'?: unknown;
     //Radius (m) around the home within which surrounding buildings are
     //rendered. Buildings outside are not drawn at all. Default 100 m.
     'building-radius'?:        unknown;
@@ -269,7 +178,6 @@ export interface HeliosConfig
     //forces 1.0 ignoring the device, the cheapest possible per-
     //frame fragment workload, useful for low-end devices or long
     //sessions where battery / heat matters more than crispness.
-    'pixel-ratio'?:           unknown;
     //Cast-shadow master toggle. Default true. When false, no shadows
     //are projected at all (neither LiDAR nor MapTiler).
     'shadows-enabled'?:        unknown;
@@ -343,9 +251,6 @@ export interface HeliosConfig
     //always on, colours are fixed (white) and the overall opacity is
     //controlled in-card via a bottom slider, not from config. Only
     //the point size remains configurable.
-    //  lidar-view-point-size: pixels (1..6). Square side length per
-    //                         point on the canvas. Default 1.
-    'lidar-view-point-size'?: unknown;
 }
 
 
@@ -387,10 +292,9 @@ export const DEFAULT_PV_COLOR_HEX:    string = '#ff9800';  //--energy-solar-colo
 //as battery-out in HA's energy graph. Live power direction adds
 //the in/out variants below via dual-tone leaders / chips.
 export const DEFAULT_BATTERY_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
-//Battery charging (positive power) uses the HA Energy pink. The
-//card splits the battery power leader colour by sign: charging =
-//pink, discharging = teal, the dual indicator the user requested
-//in the backlog.
+//Battery charging (positive power) uses the HA Energy pink; discharging stays on the teal
+//defined above. The leader colour reads the sign of battery power and picks one of the two
+//so charging vs discharging is a glanceable distinction.
 export const DEFAULT_BATTERY_IN_COLOR_HEX:  string = '#f06292';  //--energy-battery-in-color
 export const DEFAULT_BATTERY_OUT_COLOR_HEX: string = '#4db6ac';  //--energy-battery-out-color
 //Grid import (consumption from the grid) blue, grid return (export
@@ -401,13 +305,47 @@ export const DEFAULT_GRID_IMPORT_COLOR_HEX: string = '#488fc2';  //--energy-grid
 export const DEFAULT_GRID_EXPORT_COLOR_HEX: string = '#8353d1';  //--energy-grid-return-color
 
 
-//Display radius is locked at 300 m: past that the basemap + LiDAR fetch and the per-frame projection start to chug on mid-range
-//phones, and the home cluster stops reading as "near home" anyway. The constant stays exported so any leftover legacy reader sees
-//the new value; the editor radius slider is gone (the user no longer chooses).
-export const DEFAULT_BUILDING_RADIUS_M         = 300;
+//Single source of truth for the on-screen display radius across the three rendering layers:
+//buildings, LiDAR raster cells, and the raster shadow polygons. Earlier betas had two independent
+//constants (300 m for buildings + shadows, 150 m for the LiDAR overlay) which made it impossible to
+//reason about what the user actually saw when comparing layers, and changes in one drifted out of
+//sync with the other. Now everything reads from DEFAULT_DISPLAY_RADIUS_M.
+//
+//200 m is tuned so the home cluster reads as "the buildings around my house" without dragging the
+//basemap + per-frame projection on mid-range phones. The LiDAR overlay fades to zero opacity at the
+//outer boundary, see DISPLAY_FADE_DELTA_M below.
+export const DEFAULT_DISPLAY_RADIUS_M = 200;
+//Width of the LiDAR fade band, measured INWARD from DEFAULT_DISPLAY_RADIUS_M. Cells whose distance
+//is in [DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M, DEFAULT_DISPLAY_RADIUS_M] smoothstep-fade
+//from full opacity down to zero. Buildings + raster shadows are binary at the display radius (no
+//fade) because their footprints are clamped server-side at the tile boundary.
+export const DISPLAY_FADE_DELTA_M = 50;
 export const DEFAULT_BUILDING_OPACITY          = 0.25;
 export const DEFAULT_BUILDING_CLUSTER_RADIUS_M = 0;
 export const DEFAULT_BUILDING_COLOR_HEX        = '#d2d2d7';
+
+//Default and allowed range for the user-facing display update frequency (buckets per hour). 4 = a
+//bucket every 15 minutes, the sweet spot between visible curve precision and rebuild CPU cost. The
+//editor slider clamps to [1, 60] (1 = hourly, 60 = one per minute).
+export const DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR = 4;
+export const MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 1;
+export const MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR     = 60;
+
+//Resolve the bucket cadence (buckets per hour) the data source and every graph reads from. Reads
+//the user-facing config key, clamps to the allowed range, falls back to the default for missing /
+//invalid values. Same helper used by the store builder + by every consumer that needs the cadence
+//(SVG path builders, chart aspect ratio, etc.) so the value reaches every surface from a single
+//source of truth.
+export function displayUpdateFrequencyPerHour(config: HeliosConfig | undefined): number
+{
+    const raw = config?.['display-update-frequency-per-hour'];
+    const n   = typeof raw === 'number' ? raw : typeof raw === 'string' ? parseFloat(raw) : NaN;
+    if (!Number.isFinite(n)) { return DEFAULT_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    const r = Math.round(n);
+    if (r < MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MIN_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    if (r > MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR) { return MAX_DISPLAY_UPDATE_FREQUENCY_PER_HOUR; }
+    return r;
+}
 
 
 //Shadow precision levels. Each level is a multiplier on the active provider's native cell pitch:
@@ -441,28 +379,16 @@ export const DEFAULT_SHADOW_OPACITY = 0.32;
 export const DEFAULT_LIDAR_LOCAL_NDSM_ENABLED = false;
 
 
-//LiDAR View overlay defaults. The disc radius is taken from the
-//shared `building-radius` (the "Display radius" knob) so the View
-//and the rest of the card stay in sync. Colours are fixed to white
-//inside the layer; overall opacity is runtime state driven by the
-//in-card bottom slider (DEFAULT_LIDAR_VIEW_OPACITY is the value the
-//slider lands on the first time the user opens the view).
-export const DEFAULT_LIDAR_VIEW_POINT_SIZE_PX  = 1;
+//LiDAR View overlay defaults. The disc radius is now derived from DEFAULT_DISPLAY_RADIUS_M above
+//(single source of truth across buildings, LiDAR + shadows). Colours are fixed to white inside the
+//layer; overall opacity is runtime state driven by the in-card bottom slider
+//(DEFAULT_LIDAR_VIEW_OPACITY is the value the slider lands on the first time the user opens the view).
 export const DEFAULT_LIDAR_VIEW_OPACITY        = 0.25;
-//Distance from the home at which the LiDAR view is at full opacity.
-//Beyond this, alpha smoothstep-fades down to 0 at the display
-//radius below, so the cloud reads as anchored on the home and
-//dissolves into the basemap as you look further out. Decoupled from
-//building-radius on purpose: the building-radius controls the data
-//fetch (shadows, vegetation extent) and the LiDAR overlay shouldn't
-//inherit that bound, mixing the two knobs felt opaque in the editor.
-export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = 100;
-//Outer radius where the LiDAR view alpha hits zero. Fixed regardless of the configured fetch radius. Past this distance the shader fades cells to
-//zero, so we never paint a million dots for cells the user can barely see anyway, which keeps frame times stable on fullscreen layouts.
-export const LIDAR_VIEW_DISPLAY_RADIUS_M = 150;
+//Distance from the home where the LiDAR overlay alpha starts ramping down. Inside this radius the
+//cloud is at full opacity; in [LIDAR_VIEW_FULL_OPACITY_RADIUS_M, DEFAULT_DISPLAY_RADIUS_M] it
+//smoothstep-fades to zero. Derived from DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M so a single
+//edit at the top of this file rescales every layer consistently.
+export const LIDAR_VIEW_FULL_OPACITY_RADIUS_M = DEFAULT_DISPLAY_RADIUS_M - DISPLAY_FADE_DELTA_M;
 
 
 //Timeline defaults. Exposed so the editor placeholders + sliders land on the same values the runtime falls back to when the config key is absent.
-export const DEFAULT_TIMELINE_ENABLED              = true;
-export const DEFAULT_TIMELINE_WIDTH_PCT            = 100;
-export const DEFAULT_TIMELINE_CONSUMPTION_ENABLED  = true;

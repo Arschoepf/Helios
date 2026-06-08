@@ -19,17 +19,6 @@ export interface Translations
     cardName:        string;
     cardDescription: string;
     //Label on the always-visible LiDAR-view chip in the top-right
-    //corner of the card (the half of the LiDAR cluster that's
-    //purely a text label; the adjacent button carries the state
-    //icon). Stays short, ~10 chars max, to balance the clock chip
-    //width on the opposite corner.
-    lidarViewChipLabel: string;
-    //Label on the shading-dome chip in the top-centre cluster.
-    //Same short noun-phrase convention as lidarViewChipLabel; the
-    //chip toggles the dome overlay where the learned PV residuals
-    //are painted on the celestial hemisphere above the home.
-    shadingDomeChipLabel: string;
-
     //Detail dashboard, opened by clicking the home. The camera eases
     //in (zoom + pitch) and a full-card overlay takes over while the
     //pre-existing HUD fades out.
@@ -37,52 +26,44 @@ export interface Translations
     {
         exitHint:  string;       //close-button aria-label
 
-        //Section labels and short captions for the detail-mode
-        //dashboard. Each section is one factual block:
-        //  todayLabel      , top of the today section
-        //  todayProduced   , trailing text after the produced total
-        //  todayForecast   , trailing text after the projected total
-        //  todayPeak       , trailing text after the actual peak readout
-        //  todayPeakForecast , trailing text after the predicted peak
-        //                      readout (twin of todayPeak for the model)
-        //  todayNotStartedYet , status line shown when produced is
-        //                      effectively zero and the peak is still
-        //                      in the future (production hasn't begun)
-        //  tomorrowLabel   , top of the tomorrow card
-        //  tomorrowPeak    , prefix before the peak time chip
-        //  batteryLabel    , top of the battery vessel section
-        //  batteryCharged  , label under the charge total
-        //  batteryDischarged , label under the discharge total
-        //  actualShort     , short "Actual" label used in compact
-        //                    spaces (chart hover tooltip)
-        //  forecastShort   , short "Forecast" label used in compact
-        //                    spaces (chart hover tooltip)
-        //  deltaTooltip    , native title hover hint on the headline
-        //                    (+X % / -X %) chip, explaining the
-        //                    comparison reference
-        //  forecastRefined , label on the small annotation under
-        //                    PRÉVU showing the calibrated value
-        //                    (e.g. "affiné" in fr)
-        //  forecastCalibrationHint , hover hint explaining what the
-        //                    refined value means and how many days
-        //                    fed into it. Receives a {n} token to
-        //                    be replaced with the day count.
-        todayLabel:        string;
-        todayProduced:     string;
-        todayForecast:     string;
-        todayPeak:         string;
-        todayPeakForecast: string;
-        todayNotStartedYet: string;
-        tomorrowLabel:     string;
-        tomorrowPeak:      string;
-        batteryLabel:      string;
-        batteryCharged:    string;
-        batteryDischarged: string;
-        actualShort:       string;
-        forecastShort:     string;
-        deltaTooltip:      string;
-        forecastRefined:        string;
-        forecastCalibrationHint: string;
+        //CoverFlow dashboard panel. Each key is OPTIONAL because the renderer falls back to the
+        //English text below via `??` when the active locale has not been updated yet, so locale
+        //files only have to add these keys when ready.
+        tileProductionLabel?:   string; //'Production'
+        dayLabelToday?:         string; //'Today'
+        dayLabelYesterday?:     string; //'Yesterday'
+        dayLabelDayBefore?:     string; //'2 days ago'
+        dayLabelTomorrow?:      string; //'Tomorrow'
+        dayLabelDayAfter?:      string; //'In 2 days'
+        //Explanation block shown above the cloud-cover slider on the Shading Dome view, so the user
+        //understands what the dome represents without having to dig into docs.
+        shadingDomeHint?:       string; //'Each cell shows what the sun delivers from that sky position...'
+        //Label inside the top-of-card loading banner, visible while the first hydration wave of
+        //data fetches is still in flight.
+        loadingLabel?:          string; //'Fetching data...'
+        //Headline + body for the alert banner that appears under the loading banner when the
+        //Open-Meteo weather-data fetch hits HTTP 429 (rate limit). Goes away once a subsequent
+        //fetch succeeds, the user knows the card is temporarily without fresh weather data and
+        //why.
+        weatherRateLimitTitle?:   string; //'OpenMeteo rate limit'
+        weatherRateLimitMessage?: string; //'Too many requests, please wait'
+        //Badge labels on the dashboard radial dial chip strip (Production / Battery / Cloud /
+        //Irradiance).
+        radialProductionLabel?: string; //'Production'
+        radialBatteryLabel?:    string; //'Battery'
+        radialCloudLabel?:      string; //'Cloud'
+        radialIrradianceLabel?: string; //'Irradiance'
+        //Aria label + visible text on the "back to live" button that appears in the top-right corner
+        //of the radial card while a hover cursor is parked on the dial. Tapping it clears the cursor
+        //and snaps the dial back to its live read-out.
+        radialBackToLive?:      string; //'Back to live'
+        //Aria label + title on the view-mode toggle in the CoverFlow card bandeau. The visible icon
+        //is a glyph (radar dial vs chart line), the title carries the human-readable mode name.
+        dashViewRadialLabel?:   string; //'Radial view'
+        dashViewGraphLabel?:    string; //'Graph view'
+        //Mini-card label above the graph view's forecast value (kWh predicted for the day, OR the
+        //hovered hour's instantaneous W when the user parks the cursor on the chart).
+        dashForecastLabel?:     string; //'Forecast'
     };
 
     editor:
@@ -95,7 +76,9 @@ export interface Translations
         homeLatitude:             string;
         homeLongitude:            string;
         locationHint:             string;
-        mapSection:               string;
+        //Top section grouping the map style + label visibility + camera auto-rotate toggle. Title reads "UI & map" because it bundles the basemap
+        //chrome with the camera animation that drives the user-facing motion.
+        uiAndMapSection:          string;
         mapStyle:                 string;
         mapStyleHint:             string;
         mapStyleStreet:           string;
@@ -107,28 +90,19 @@ export interface Translations
         autoRotateHint:           string;
         autoRotateOn:             string;
         autoRotateOff:            string;
-        dateFormat:               string;
-        dateFormatHelp:           string;
-        timeFormat:               string;
-        timeFormat12:             string;
-        timeFormat24:             string;
-        //UI section, hosts the chrome-level customisation that
-        //doesn't belong to a specific data overlay: sun + cloud
-        //colours (the two phenomena that don't have their own
-        //section), plus the date and time format toggles for the
-        //clock chip + the timeline labels.
-        uiSection:                string;
-        //Optional photovoltaic production overlay.
-        pvSection:                string;
-        pvHint:                   string;
-        pvEntity:                 string;
-        pvEntityHelp:             string;
-        //Manual peak-power input (kWp). When set, drives the dotted
-        //prediction line on the PV chart and the PV→home leader's
-        //flow saturation. Optional; without it the card uses live
-        //observation only.
-        pvPeakPower:              string;
-        pvPeakPowerHelp:          string;
+        //Data display section: per-card knob that controls how dense the unified data source is
+        //(buckets per hour, 1-60). Single slider, one hint. Sits above the PV install section so
+        //the user sees the precision / cost knob before the install-level config.
+        dataDisplaySection:           string;
+        displayUpdateFrequency:       string;
+        displayUpdateFrequencyHelp:   string;
+        //Single section for the user's PV install. Bundles the inverter cap, the per-row panel orientation, the inverter-cutoff
+        //SoC guard and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy
+        //dashboard equivalent.
+        installationSection:      string;
+        //Hint rendered at the top of the section, telling the user every entity wiring (production, grid, battery) lives in
+        //the HA Energy dashboard now and this section only adds the install-level details that improve forecast accuracy.
+        installationHint:         string;
         //Inverter clipping cap, in kW of AC output. Optional. When set, the forecast tops out at this value so an over-sized DC array hooked to a
         //smaller inverter doesn't render a peak above what the hardware can actually deliver.
         pvInverterMaxKw:          string;
@@ -174,81 +148,24 @@ export interface Translations
         //per-array shading check.
         pvArrayHeight:            string;
         pvArrayHeightHelp:        string;
-        batterySection:           string;
-        batteryHint:              string;
-        //Multi-bank battery editor. The section renders one collapsible card per bank (same widget as pv-arrays) so a user with house +
-        //garage banks (or a hybrid + standalone) gets a dedicated row each. The chip on the card stays single, aggregating the banks as
-        //a capacity-weighted SoC + summed signed power. `batteryBankTitle` carries the auto-numbered fallback used when the user hasn't
-        //typed a name; `{n}` is substituted with the 1-based row index.
-        batteryBankTitle:         string;
-        batteryBankAdd:           string;
-        batteryBankRemove:        string;
-        batteryBankName:          string;
-        batteryBankNameHelp:      string;
-        batteryCapacityKwh:       string;
-        batteryCapacityKwhHelp:   string;
-        batterySocEntity:         string;
-        batterySocEntityHelp:     string;
-        batteryPowerEntity:       string;
-        batteryPowerEntityHelp:   string;
-        //Battery power sign-convention toggle. When the user's
-        //entity reports charging as negative (some GivEnergy /
-        //GivTCP setups), the inverted option flips the value once
-        //at ingest so the rest of the card stays on the
-        //"positive = charging" convention.
-        batteryPowerInvert:         string;
-        batteryPowerInvertStandard: string;
-        batteryPowerInvertInverted: string;
-        batteryPowerInvertHelp:     string;
+        //Sun-tracking selector on each pv-arrays row. 'none' (default) is a fixed install, 'dual-axis'
+        //has both tilt and azimuth following the sun, 'single-axis-h' keeps the azimuth fixed and tracks
+        //tilt only, 'single-axis-v' keeps the tilt fixed and tracks azimuth only.
+        pvArrayTracker:           string;
+        pvArrayTrackerNone:       string;
+        pvArrayTrackerDual:       string;
+        pvArrayTrackerSingleH:    string;
+        pvArrayTrackerSingleV:    string;
+        pvArrayTrackerHelp:       string;
         //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
         //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
-        //train as phantom shadow. Leave the field empty to keep the legacy "train every bucket" behaviour.
+        //train as phantom shadow.
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;
-        //Grid section: import / export power readouts. Both sides
-        //accept multiple entities; the chip displays whichever entity
-        //last changed (typical for peak / off-peak indexes that never
-        //increment at the same time).
-        gridSection:              string;
-        gridHint:                 string;
-        gridImportTitle:          string;
-        gridImportHint:           string;
-        gridExportTitle:          string;
-        gridExportHint:           string;
-        gridSourceAdd:            string;
-        gridSourceRemove:         string;
-        //Combined signed grid-power entity: one sensor whose sign
-        //routes to the import (>=0) or export (<0) chip, superseding
-        //the two directional slots. The invert toggle flips the sign
-        //convention for meters that report feed-in as positive.
-        gridCombinedTitle:        string;
-        gridCombinedHint:         string;
-        gridInvertLabel:          string;
-        gridInvertStandard:       string;
-        gridInvertInverted:       string;
-        gridInvertHelp:           string;
-        //Weather section. Hosts the optional solar-radiation entity
-        //override: when wired to a physical W/m² sensor at the home
-        //(typical Ecowitt / Davis / personal weather station), the
-        //card prefers it over Open-Meteo for the live + past
-        //irradiance values. Forecast hours always fall through to
-        //the model since a sensor only knows the present.
-        weatherSection:           string;
-        weatherHint:              string;
+        //Optional W/m² sensor override (Ecowitt / Davis / personal weather station). When wired, the card prefers it over Open-Meteo
+        //for the live + past irradiance values. Forecast hours always fall through to the model since a sensor only knows the present.
         solarRadiationEntity:     string;
         solarRadiationEntityHelp: string;
-        //Timeline sub-section, nested inside the UI section. Hosts the visibility toggle, the width slider and the per-day consumption-chip toggle.
-        timelineSection:          string;
-        timelineEnabled:          string;
-        timelineEnabledOn:        string;
-        timelineEnabledOff:       string;
-        timelineEnabledHint:      string;
-        timelineWidth:            string;
-        timelineWidthHint:        string;
-        timelineConsumption:      string;
-        timelineConsumptionOn:    string;
-        timelineConsumptionOff:   string;
-        timelineConsumptionHint:  string;
         //Surrounding buildings options. Cluster radius grows the home group to include attached outbuildings, opacity controls the transparency of
         //the neighbours and the colour is the base tint reused for every rendered building.
         buildingsSection:         string;
@@ -259,10 +176,6 @@ export interface Translations
         //switch. 'Auto' uses the device's devicePixelRatio capped at
         //2 / 1.25 (desktop / mobile). '1x' forces 1.0 for the
         //cheapest per-frame fragment workload.
-        pixelRatio:               string;
-        pixelRatioAuto:           string;
-        pixelRatio1x:             string;
-        pixelRatioHint:           string;
         //Third map-style segment: a curated minimal basemap (no POIs,
         //no place labels, no road shields) for low-end devices.
         mapStyleMinimal:          string;
@@ -284,16 +197,7 @@ export interface Translations
         //Opacity of the cast ground shadows, 0..1 slider in the editor.
         shadowOpacity:            string;
         shadowOpacityHint:        string;
-        //LiDAR View overlay (subsection inside Shading).
-        //Lets the user tune the LiDAR view overlay (wireframe + fill
-        //coloured by live solar exposure). Only the point size remains
-        //tunable from the editor; the overall opacity is exposed
-        //in-card via a bottom slider so the user can dial the layer
-        //in/out while looking at the result.
-        lidarViewSection:           string;
-        lidarViewHint:              string;
-        lidarViewPointSize:         string;
-        //Collapsible advanced section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
+        //Collapsible nested section that lets a power user point Helios at their own nDSM GeoTIFF for shadow data. Hidden by default behind a
         //<details>/<summary> toggle so the editor stays simple for the 99% of users who never need it.
         localLidarSection:        string;
         localLidarHint:           string;
@@ -334,40 +238,95 @@ export interface Translations
         aboutRepoLidar:           string;
         aboutCoffeeMessage:       string;
         aboutCoffeeLink:          string;
-        //Shading-map debug section. The scalar self-calibration
-        //multiplier captures static biases; the shading map sits
-        //on top of it and learns per-(sun-position, cloud-cover)
-        //residuals so structured shadows (a tree, a neighbouring
-        //roof) bend the forecast at the right times of day under
-        //the right weather. This section shows what the map has
-        //learned and offers export / import / reset.
-        shadingSection:           string;
-        shadingHint:              string;
-        shadingStatsCells:        string;
-        shadingStatsConfident:    string;
-        shadingStatsUnder:        string;
-        shadingStatsOver:         string;
-        shadingExport:            string;
-        shadingImport:            string;
-        shadingImportError:       string;
-        shadingReset:             string;
-        shadingResetConfirm:      string;
+        //Developer block: surfaces the person behind the card with links to a personal X profile +
+        //LinkedIn page. Sits right after the version row in the About section.
+        aboutDeveloperLabel:      string;
+        aboutDeveloperLinkedIn:   string;
     };
 }
 
-import { en } from './locales/en';
-import { fr } from './locales/fr';
+//Locale registry. Helios mirrors the 64 languages Home Assistant supports out of the box; pickTranslations walks the
+//hass.language tag through this map and falls back to English when no entry matches. Regional variants (en-GB, pt-BR,
+//es-419, sr-Latn, zh-Hans, zh-Hant) get their own entry so their dialect-specific phrasing wins over the language root.
+import { af } from './locales/af';
+import { ar } from './locales/ar';
+import { bg } from './locales/bg';
+import { bn } from './locales/bn';
+import { bs } from './locales/bs';
+import { ca } from './locales/ca';
+import { cs } from './locales/cs';
+import { cy } from './locales/cy';
+import { da } from './locales/da';
 import { de } from './locales/de';
+import { el } from './locales/el';
+import { en } from './locales/en';
+import { enGB } from './locales/en-GB';
+import { eo } from './locales/eo';
 import { es } from './locales/es';
+import { es419 } from './locales/es-419';
+import { et } from './locales/et';
+import { eu } from './locales/eu';
+import { fa } from './locales/fa';
+import { fi } from './locales/fi';
+import { fr } from './locales/fr';
+import { fy } from './locales/fy';
+import { gl } from './locales/gl';
+import { gsw } from './locales/gsw';
+import { he } from './locales/he';
+import { hi } from './locales/hi';
+import { hr } from './locales/hr';
+import { hu } from './locales/hu';
+import { hy } from './locales/hy';
+import { id } from './locales/id';
+//`is` is a TypeScript contextual keyword that confuses the parser at module scope; the locale file exports `is_`
+//(trailing underscore), the map below keys it as the natural `is` tag.
+import { is_ } from './locales/is';
 import { it } from './locales/it';
+import { ja } from './locales/ja';
+import { ka } from './locales/ka';
+import { ko } from './locales/ko';
+import { lb } from './locales/lb';
+import { lt } from './locales/lt';
+import { lv } from './locales/lv';
+import { ml } from './locales/ml';
+import { nb } from './locales/nb';
 import { nl } from './locales/nl';
-import { pt } from './locales/pt';
+import { nn } from './locales/nn';
 import { no } from './locales/no';
 import { pl } from './locales/pl';
-import { cs } from './locales/cs';
+import { pt } from './locales/pt';
+import { ptBR } from './locales/pt-BR';
+import { ro } from './locales/ro';
+import { ru } from './locales/ru';
+import { si } from './locales/si';
+import { sk } from './locales/sk';
+import { sl } from './locales/sl';
+import { sr } from './locales/sr';
+import { srLatn } from './locales/sr-Latn';
 import { sv } from './locales/sv';
+import { ta } from './locales/ta';
+import { te } from './locales/te';
+import { th } from './locales/th';
+import { tr } from './locales/tr';
+import { uk } from './locales/uk';
+import { ur } from './locales/ur';
+import { vi } from './locales/vi';
+import { zhHans } from './locales/zh-Hans';
+import { zhHant } from './locales/zh-Hant';
 
-const LOCALES: Record<string, Translations> = { en, fr, de, es, it, nl, pt, no, pl, cs, sv };
+const LOCALES: Record<string, Translations> =
+{
+    af, ar, bg, bn, bs, ca, cs, cy, da, de, el, en, eo, es, et, eu, fa, fi, fr, fy, gl, gsw,
+    he, hi, hr, hu, hy, id, it, ja, ka, ko, lb, lt, lv, ml, nb, nl, nn, no, pl, pt, ro, ru, si,
+    sk, sl, sr, sv, ta, te, th, tr, uk, ur, vi,
+    'is':      is_,
+    'en-GB':   enGB,
+    'es-419':  es419,
+    'pt-BR':   ptBR,
+    'sr-Latn': srLatn,
+    'zh-Hans': zhHans,
+    'zh-Hant': zhHant,
+};
 
 const FALLBACK: Translations = en;
 

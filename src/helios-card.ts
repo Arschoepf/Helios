@@ -22,6 +22,7 @@ import
     computePvPowerWeighted,
     wipeLegacyPvCalibStorage,
     formatPvValue,
+    resolvePvLiveEntity,
     clearPvModuleCaches
 } from './card/pv';
 import
@@ -29,9 +30,8 @@ import
     refreshBattery,
     batterySampleAtTime,
     formatBatteryPower,
-    effectiveBatteryBanks,
-    clearBatteryModuleCaches,
-    type BatteryBank
+    resolveBatteryEntities,
+    clearBatteryModuleCaches
 } from './card/battery';
 import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
 import { computeForecastCalibration } from './card/calibration';
@@ -44,14 +44,14 @@ import
     renderTimelineNightZones,
     renderTimelineFutureMask,
     renderTimelineHoverTooltip,
-    renderTimelineBackToLiveTab,
     handleChartHoverMove,
     handleChartHoverLeave
 } from './card/charts';
 import
 {
     renderDashboard,
-    handleHomeClick
+    handleHomeClick,
+    handleDashGlobalKey
 } from './card/dashboard';
 import
 {
@@ -68,29 +68,26 @@ import
     tick,
     onTimelinePointerDown,
     onTimelinePointerMove,
-    onTimelinePointerUp,
-    resetToLive,
-    timelineEnabled,
-    timelineWidthPct
+    onTimelinePointerUp
 } from './card/timeline';
-import { toggleLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
-import { refreshGrid, formatGridValue, gridWattsAtTime, isGridCombined, gridCombinedWattsAtTime, clearGridModuleCaches } from './card/grid';
+import { enterLidarView, exitLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
+import type { CardMode } from './card/card-mode';
+import { renderLoadingBanner, renderWeatherRateLimitBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
+import { refreshGrid, formatGridValue, gridWattsAtTime, clearGridModuleCaches } from './card/grid';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
+    refreshHaDailyTotals,
     EMPTY_ENERGY_DEFAULTS,
     type EnergyDefaults,
 } from './card/energy-prefs';
 import {
-    renderShadingDomeOverlay,
-    renderShadingDomeCloudPicker,
-    toggleShadingDome,
-    refreshShadingDomeScene,
-} from './card/shadingDome';
-import {
-    cloudCoverIcon,
-    cloudLayerIcon,
-} from './card/cloudDome';
+    renderWeatherOverlay,
+    enterWeatherMode,
+    exitWeatherMode,
+} from './card/weatherMode';
+import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
+import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
     computeConfigSig,
@@ -121,25 +118,30 @@ declare global
 //Card name and description in the HA card picker, shown before any hass instance is available, so we read the language from navigator.
 const _bootI18n = pickTranslations(typeof navigator !== 'undefined' ? navigator.language : 'en');
 
+//OVERWRITE rather than insert-if-missing. The previous insert-if-missing pattern protected against a
+//double registration in the same page lifetime but also meant that a stale entry already pushed by
+//some other code (HACS placeholder, dev-tools mock, an older Helios bundle on the same page) would
+//keep the catalog showing whatever name + flags it had set. Overwriting lets the freshly-loaded
+//bundle's metadata always win, so 'Helios' + preview: true land regardless of what was there
+//before.
 window.customCards = window.customCards || [];
-if (!window.customCards.some(c => c.type === 'helios-card'))
 {
-    window.customCards.push(
+    const heliosEntry =
     {
         type:        'helios-card',
         name:        _bootI18n.cardName,
         description: _bootI18n.cardDescription,
-        //preview:false: tells HA NOT to mount a live helios-card
-        //instance in the "Add card" picker thumbnail. Each live
-        //preview was spawning a full MapLibre engine + WebGL context
-        //of its own; combined with HA's hui-card-edit-mode re-parent
-        //cycle, the picker was the entry-point for the infinite
-        //load/unload loop reported in the editor mode of the
-        //dashboard. Trading the thumbnail for a static name + icon
-        //(HA falls back to that automatically) stops the cascade
-        //at the source.
-        preview:     false
-    });
+        preview:     true,
+    };
+    const existingIdx = window.customCards.findIndex(c => c.type === 'helios-card');
+    if (existingIdx >= 0)
+    {
+        window.customCards[existingIdx] = heliosEntry;
+    }
+    else
+    {
+        window.customCards.push(heliosEntry);
+    }
 }
 
 //Install banner. Same shape as the styled "X-CARD vY.Z IS INSTALLED"
@@ -188,7 +190,10 @@ const _liveCards = new Set<HeliosCard>();
 //the listener per card.
 window.addEventListener('helios-data-cache-reset', () =>
 {
-    for (const card of _liveCards) card.resetDataCache();
+    for (const card of _liveCards)
+    {
+        card.resetDataCache();
+    }
 });
 
 //Public diagnostic command, exposed once on first bundle load. Returns
@@ -280,7 +285,10 @@ window.addEventListener('helios-data-cache-reset', () =>
             console.info(
                 `%c☀ HELIOS%c location override → ${lat.toFixed(5)}, ${lon.toFixed(5)} (refresh page to revert)`,
                 label, 'color:#6b7280;');
-            for (const card of _liveCards) card.invalidateLocation();
+            for (const card of _liveCards)
+            {
+                card.invalidateLocation();
+            }
         };
     }
 
@@ -297,7 +305,10 @@ window.addEventListener('helios-data-cache-reset', () =>
             console.info(
                 `%c☀ HELIOS%c location override cleared, reverting to hass.config`,
                 label, 'color:#6b7280;');
-            for (const card of _liveCards) card.invalidateLocation();
+            for (const card of _liveCards)
+            {
+                card.invalidateLocation();
+            }
         };
     }
 }
@@ -346,14 +357,18 @@ export class HeliosCard extends LitElement
     //recomputed via engine.projectHomeLabelLayout() on every map
     //transform. null while the map is still loading.
     @state() _labelLayout: LabelLayout | null = null;
-    //Photovoltaic production state, populated when `pv-power-entity` is configured. Live value from hass.states + historical series from HA's history
-    //API for the dedicated chart.
+    //Photovoltaic production state, populated when the HA Energy dashboard exposes at least one solar source. Live value from hass.states +
+    //historical series from HA's history API for the dedicated chart.
     @state() _pvCurrent: number | null = null;
     @state() _pvUnit:    string        = '';
     @state() _pvHistory: {
         times:  Date[];
         values: number[];
     } | null = null;
+    //Per-entity histories preserved alongside `_pvHistory` so the chart can render one curve per source (the
+    //feature LBDG_ asked for after the multi-source agg pass) and the scrub tooltip can show a per-entity
+    //breakdown. Keyed by entity id; cleared + repopulated in `fetchPvHistory` on every fresh fetch.
+    _pvHistoryPerEntity: Map<string, { times: Date[]; values: number[] }> = new Map();
     _pvFetchKey  = '';
     _pvFetching  = false;
     //Most recent PV history fetch outcome, surfaced via
@@ -370,18 +385,15 @@ export class HeliosCard extends LitElement
     @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
     _pvCalibStatsFetchKey  = '';
     _pvCalibStatsFetching  = false;
-    //5-minute long-term-statistics series feeding the 30-day
-    //shading-map trainer. Same contract as `_pvCalibStats`, just at
-    //a finer period and over a longer window. ~8.6k rows for 30
-    //days, vs the legacy raw 30-day path.
+    //5-minute long-term-statistics series feeding the unified data source's past-production curve (5 days). Same contract as `_pvCalibStats`, just at a finer
+    //period. ~1.4k rows for 5 days.
     @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
     _pvTrainerStatsFetchKey  = '';
     _pvTrainerStatsFetching  = false;
-    //Per-bank companion battery SoC histories fetched alongside PV history when the user has at least one battery configured AND armed
-    //the inverter-cutoff guard (`inverter-cutoff-soc-pct`). One entry per bank, parallel to parseBatteryBanks(config). Empty when the
-    //guard is off or no battery is configured; the shading trainer reads it to skip buckets where ALL banks were at or above the cutoff
-    //(min across banks). Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
-    _batteryHistories: { times: Date[]; values: number[] }[] = [];
+    //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
+    //(`inverter-cutoff-soc-pct`). Reserved for future use after the shading-map trainer retirement. Null when the guard is
+    //off or no battery is configured. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
+    _batteryHistory: { times: Date[]; values: number[] } | null = null;
     //Idempotency flag for the one-time wipe of legacy PV calibration
     //buffers (see _wipeLegacyPvCalibStorage). Per-instance so we
     //attempt the cleanup at most once per card mount; the persisted
@@ -390,18 +402,15 @@ export class HeliosCard extends LitElement
     //Rolling buffer of state samples. For cumulative-energy sensors this gives a "last minute" instantaneous rate, fresher than the historical fetch
     //which only refreshes per timeline range.
     _pvSampleBuffer: Array<{ t: number; v: number }> = [];
-    //Home-battery state, populated when at least one of
-    //`battery-soc-entity` / `battery-power-entity` is configured.
-    //Live readings; historical series lives in the *History fields
-    //below. Units are kept alongside the values so the chip can
-    //format kW vs W without re-reading the state.
+    //Home-battery state, populated when the HA Energy dashboard exposes at least one battery source (`stat_rate`,
+    //`stat_energy_from`, `stat_energy_to` or `stat_soc`). Live readings; historical series lives in the *History fields
+    //below. Units are kept alongside the values so the chip can format kW vs W without re-reading the state.
     @state() _batterySoc:        number | null = null;
     @state() _batteryPower:      number | null = null;
     @state() _batteryPowerUnit:  string        = '';
-    //Grid import / export live values, populated by refreshGrid()
-    //from the configured grid-import-entity / grid-export-entity.
-    //Unit is captured alongside the value so the chip formats the
-    //correct W / kWh / m³ suffix without re-reading hass.states.
+    //Grid import / export live values, populated by refreshGrid() from the HA Energy dashboard grid source's
+    //`stat_energy_from` (import) and `stat_energy_to` (export) slots. Unit is captured alongside the value so the chip
+    //formats the correct W / kWh / m³ suffix without re-reading hass.states.
     @state() _gridImportValue:   number | null = null;
     @state() _gridImportUnit:    string        = '';
     @state() _gridExportValue:   number | null = null;
@@ -426,12 +435,9 @@ export class HeliosCard extends LitElement
     //independently of the slot's overall normalised unit.
     _gridImportUnits: Map<string, string> = new Map();
     _gridExportUnits: Map<string, string> = new Map();
-    //Combined signed grid-power slot (grid-power-entity). When wired,
-    //refreshGrid derives the net signed watts from these buffers and
-    //routes the sign to the import / export chips; the directional
-    //slots above stay empty.
-    _gridCombinedSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
-    _gridCombinedUnits:   Map<string, string> = new Map();
+    //Combined signed grid-power slot driven by the HA Energy grid source's `stat_rate`. When wired, refreshGrid derives
+    //the net signed watts from these buffers and routes the sign to the import / export chips; the directional slots
+    //above stay empty.
     //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
     //when both are set.
     @state() _batterySocHistory: {
@@ -483,16 +489,27 @@ export class HeliosCard extends LitElement
     //in the card YAML / editor is empty.
     @state() _energyDefaults: EnergyDefaults = EMPTY_ENERGY_DEFAULTS;
     _energyPrefsUnsub?: () => void;
+    //HA Energy daily-total alignment cache populated by `refreshHaDailyTotals()` against the recorder. Five headline
+    //figures: PV produced today, grid imported today, grid exported today, battery charged today, battery discharged
+    //today. Null while no HA stat is configured or the recorder call has not yet landed, the consumer chips collapse
+    //silently in that case (the refonte dropped every local-integration fallback).
+    @state() _haSolarTodayKwh:        number | null = null;
+    @state() _haGridImportTodayKwh:   number | null = null;
+    @state() _haGridExportTodayKwh:   number | null = null;
+    @state() _haBatteryChargedKwh:    number | null = null;
+    @state() _haBatteryDischargedKwh: number | null = null;
     //Projected screen-space positions of each configured PV array
     //marker. Refreshed on every map transform via projectPvArray
     //Markers(); the SVG overlay renders one lollipop per entry.
     //Hover state on the home hitbox. Drives a sun-coloured glow halo around the home silhouette so the user reads the focal building as interactive
     //before clicking.
     @state() _homeHover = false;
-    //Hover state for the today-cumulative chart in the dashboard. ms
-    //epoch of the cursor position on the X axis; null when the pointer
-    //is outside the chart or the chart isn't shown.
-    @state() _dashChartHoverTs: number | null = null;
+    //Hover state for the radial dial in the dashboard. Hour fraction in [0..24) when the cursor sits
+    //over the SVG, null otherwise. Front card only, the rear cards never wire pointer handlers.
+    @state() _dashRadialHoverHour: number | null = null;
+    //Mouse wheel accumulator for the dashboard radial dial day-navigation gesture. Not a @state on
+    //purpose: every wheel event mutates this slot and a @state would re-render on every tick.
+    _dashRadialWheelAcc: number = 0;
     //Hover position on the timeline chart cards, expressed as a
     //percent of the visible time range. Null when the pointer is
     //outside the cards; drives the hover guide line, the per-curve
@@ -507,7 +524,6 @@ export class HeliosCard extends LitElement
         temperature:  number[];
         windSpeed:    number[];
     } | null = null;
-    @state() _fetching        = false;
     @state() _timeRange:    { start: Date; end: Date } | null = null;
     @state() _selectedTime: Date | null = null;
     @state() _isLiveMode    = true;
@@ -519,6 +535,35 @@ export class HeliosCard extends LitElement
     //mode-bar LiDAR icon swap (icon -> spinner) and the mode-switch
     //lock so the user cannot change modes mid-compute.
     @state() _lidarExposureBusy = false;
+
+    //True while the Open-Meteo home-point fetch is stuck in HTTP 429 back-off. Driven by the
+    //engine's onWeatherRateLimitChange callback (wired in init.ts). Flips back to false the
+    //moment the next refresh tick succeeds; in the meantime the alert banner under the loading
+    //banner tells the user why the weather data is not updating.
+    @state() _weatherRateLimited = false;
+
+    //Per-band visibility flags for the weather-mode SVG cloud overlay. The three chips under
+    //the mode-bar double as toggle buttons: tapping a chip flips its flag, which gates the
+    //matching `<g>` band's render output in renderWeatherOverlay. Default all-on so the user
+    //sees every layer the moment they enter weather mode; flags reset on every mode entry.
+    @state() _weatherShowHigh = true;
+    @state() _weatherShowMid  = true;
+    @state() _weatherShowLow  = true;
+
+    //Flag flipped by `fetchEnergyPrefs` after the first parse lands. The card uses it to kick `refreshHaDailyTotals`
+    //immediately when the HA Energy defaults snapshot first appears, instead of waiting up to 30 s for the next
+    //tick. Boot-time loading overlay is gone (the raw 6 h `history/history_during_period` fetch, which was the
+    //heavy round-trip the overlay was waiting on, is also gone, so the visible boot delay is now sub-second and
+    //the overlay was just flashing for nothing).
+    _energyDefaultsLoaded   = false;
+    private _dailyTotalsKicked = false;
+    //Loading-tracker state. _loadingPhases maps each registered phase id to its progress (started /
+    //done). _loadingHasCompleted latches once every started phase reaches done for the FIRST time,
+    //after that the banner stays hidden for the rest of the card lifetime so routine background
+    //refreshes do not flash the "Fetching data..." card up again. See src/card/loading-tracker.ts
+    //for the helpers that mutate these.
+    @state() _loadingPhases:       ReadonlyMap<LoadingPhaseId, LoadingPhaseState> = new Map();
+    @state() _loadingHasCompleted: boolean = false;
     //True while the home is "focused": the existing overlay HUD is
     //hidden, the camera is eased to a closer / more pitched pose,
     //and a detail dashboard panel takes over. Toggled by clicking
@@ -526,26 +571,46 @@ export class HeliosCard extends LitElement
     //(on → off). Engine.setDetailMode drives the camera lerp;
     //CSS class .detail-active on ha-card fades out every overlay.
     @state() _detailMode    = false;
-    //Count-up animation state for the dashboard headline kWh figures.
-    //Timestamp the panel last opened at; the dashboard helpers tick
-    //requestUpdate() until the phase saturates so the figures animate
-    //from 0 to their real value over 700 ms each time the user enters
-    //detail mode. Reset to null on exit so a re-open replays the
-    //animation. _dashCountUpRaf holds the rAF token of the in-flight
-    //tick loop, also set by the dashboard helpers.
-    _dashOpenedAtMs: number | null = null;
-    _dashCountUpRaf?: number;
-    //True while the LiDAR View overlay is showing: the map UI fades
-    //out, the engine's WebGL custom layer paints every loaded LiDAR
-    //cell as a dot, and the same toggle button (top-right) brings the
-    //regular UI back when clicked again. Independent of detail mode;
-    //both can't be on at once (the button is hidden in detail).
-    @state() _lidarViewMode = false;
-    //Fade timestamps. On enter the dot cloud eases in from alpha 0 to
-    //1 over LIDAR_FADE_IN_MS; on exit it eases back out before the
-    //regular HUD fade-in. Null when no fade is in flight; the layer
-    //alpha then stays at its resting value (1 while active, 0 while
-    //inactive).
+    //CoverFlow active day offset (0 = today, ±1 = ±1 day, etc.). Reset to 0 every time the dashboard opens via
+    //`handleHomeClick`. Swipe gesture state captured between pointerdown / pointerup so the dashboard renderer
+    //can navigate the stack without a stateful child component.
+    @state() _dashDayOffset:        number       = 0;
+    _dashSwipeStartX:               number | null = null;
+    _dashSwipeStartTime:            number       = 0;
+    //Enter / exit animation phase. Lasts 1 s; controls a class on the stage that drives the staged keyframe
+    //animations per card.
+    @state() _dashAnimPhase:        'idle' | 'entering' | 'exiting' = 'idle';
+    _dashAnimTimer?:                number;
+    //Shared view mode across every CoverFlow card. Flipped from the bandeau toggle on the front card,
+    //the change applies to every card simultaneously. Radial default surfaces the chip strip + sundial
+    //layout; the graph alternative trades the dial for the multi-day production curve.
+    @state() _dashViewMode:         'radial' | 'graph' = 'radial';
+    //Unified 5-day data store. Populated after the initial weather + PV + battery + grid fetches
+    //land, rebuilt every time any of those refresh, sliced / interpolated by the radial dial, the
+    //graph view AND the main UI timeline. Live numeric chips deliberately stay on the direct
+    //hass.states path: the store carries bucketed historical and forecast curves, the chips show
+    //sample-accurate live values that would lose precision if forced through a 15 min bucket
+    //aggregation.
+    @state() _unifiedStore: import('./card/unifiedStore').UnifiedDataStore | null = null;
+    //Single source of truth for which mode the card is in. Drives every transition (slider slide-in
+    /// slide-out, chip + leader + arc fade, timeline slide, WebGL dot-cloud fade-in / out, Weather mode
+    //SVG fade-in / out). Set imperatively by the mode-bar click handlers, reacted to by
+    //_handleCardModeChange in updated() which kicks the engine fades and toggles the overlay mask.
+    //Modes are mutually exclusive (the mode-bar lets the user pick exactly one).
+    @state() _cardMode: CardMode = 'base';
+    //True while the chips / leaders / arcs / timeline are masked behind a non-base mode. Decoupled
+    //from _cardMode on the EXIT path so the HUD doesn't pop back through still-visible LiDAR dots: on
+    //LiDAR -> base, the mask stays ON until the WebGL fade-out completes (the LiDAR fade loop sets it
+    //to false on completion); on Weather -> base, the mask flips OFF immediately because the
+    //weather raster is faint enough that the HUD chips reading through it during the fade is fine.
+    @state() _overlayMaskActive = false;
+    //WebGL dot-cloud lifecycle. Set true on lidar enter, the LiDAR fade loop flips it back to false on
+    //fade-out completion. Decoupled from _cardMode so the engine layer keeps drawing dots during the
+    //exit fade after the user already clicked away.
+    _lidarLayerActive:    boolean = false;
+    //Fade timestamps. On enter the dot cloud eases in from alpha 0 to 1 over LIDAR_FADE_IN_MS; on exit
+    //it eases back out over LIDAR_FADE_OUT_MS, then engine.setLidarViewActive(false) tears the layer
+    //down. Null when no fade is in flight.
     _lidarFadeInStartMs:  number | null = null;
     _lidarFadeOutStartMs: number | null = null;
     _lidarFadeRaf?:       number;
@@ -560,35 +625,14 @@ export class HeliosCard extends LitElement
     //the user always lands on a sensible-looking opacity.
     _lidarViewOpacity = DEFAULT_LIDAR_VIEW_OPACITY;
 
-    //Shading-dome overlay state. Mutually exclusive with the LiDAR
-    //view (the click handlers below close one before opening the
-    //other). _shadingDomeCloudBin persists the user's bin pick
-    //inside the card lifetime so a toggle off/on keeps the slice.
-    @state() _shadingDomeMode = false;
-    //Mirrors _shadingDomeMode at toggle-on time but flips OFF the
-    //instant the user clicks to exit dome mode. Decouples the CSS
-    //chip / timeline hide rule from the dome SVG render gating so
-    //the HUD transitions fire from the same paint as the click.
-    @state() _shadingDomeChipMask = false;
-    _shadingDomeFadeInStartMs:  number | null = null;
-    _shadingDomeFadeOutStartMs: number | null = null;
-    _shadingDomeFadeRaf?:       number;
-    //Cloud cover percentage selected by the continuous slider in
-    //the bottom-left of the dome view. 0 = clear sky, 100 = full
-    //overcast. The engine's lookup is bin-based; the bin is
-    //derived from this pct so the user reads the slider as a
-    //continuous knob even though the underlying data is binned.
-    _shadingDomeCloudPct = 0;
-    _shadingDomeScene: import('./card/shadingDome').ShadingDomeScene | null = null;
+    //Weather mode overlay lifecycle. Lets the cloud-cover canvas keep painting through its exit fade
+    //after _cardMode already moved off 'weather'. Flipped to false by the weather fade loop on
+    //fade-out completion. Same role as _lidarLayerActive for the LiDAR view.
+    _weatherOverlayVisible: boolean = false;
+    _weatherFadeInStartMs:  number | null = null;
+    _weatherFadeOutStartMs: number | null = null;
+    _weatherFadeRaf?:       number;
 
-    //Cloud-cover dome overlay state. Mutually exclusive with the
-    //LiDAR view and the shading dome (click handlers below close
-    //any other active mode before opening this one).
-    @state() _cloudDomeMode = false;
-    _cloudDomeFadeInStartMs:  number | null = null;
-    _cloudDomeFadeOutStartMs: number | null = null;
-    _cloudDomeFadeRaf?:       number;
-    _cloudDomeScene: unknown = null;
 
     private _timer?:           number;
     _lastHomeKey       = '';
@@ -626,13 +670,10 @@ export class HeliosCard extends LitElement
     private _arcFrontBuf:     ArcSegment[] = [];
     private _arcFrontNearBuf: ArcSegment[] = [];
 
-    //Cached SVG point strings for the home silhouettes. The home
-    //silhouette is a stable feature of the (lon, lat, building shape)
-    //triple but the cards used to re-serialize every vertex to a
-    //"x,y" string on every render via Array.map + join. The cache
-    //below mirrors host._homeSilhouettes by reference, so when
-    //refreshOverlays substitutes a fresh array the cache rebuilds;
-    //otherwise the same pre-built strings are returned untouched.
+    //Cached SVG point strings for the home silhouettes. The silhouette is a stable feature of
+    //the (lon, lat, building shape) triple; the cache mirrors host._homeSilhouettes by reference
+    //so a fresh array from refreshOverlays rebuilds the cache, and the same pre-built strings
+    //come back untouched otherwise. Saves the Array.map + join per vertex on every render.
     private _silhouetteCacheKey: unknown = null;
     private _silhouettePtsCache: Array<{ base: string; top: string; walls: string[] } | null> = [];
 
@@ -647,6 +688,76 @@ export class HeliosCard extends LitElement
             throw new Error('Invalid HELIOS configuration');
         }
         this.config = { ...config };
+        this._warnIfLegacyEntityKeys(config);
+    }
+
+    //Retired YAML entity keys. The card reads these entirely from the HA Energy dashboard global settings; any value
+    //still set on the card config is silently ignored at runtime. Detected here only so the user gets a one-shot
+    //persistent notification telling them what was retired and where the replacement lives, instead of staring at a chip
+    //that no longer reacts to the entity they wired.
+    private static readonly _LEGACY_ENTITY_KEYS: ReadonlyArray<string> =
+    [
+        'pv-power-entity',
+        'grid-import-entity',
+        'grid-export-entity',
+        'grid-power-entity',
+        'grid-power-invert',
+        'battery-soc-entity',
+        'battery-power-entity',
+        'battery-power-invert',
+        'batteries',
+    ];
+    private _legacyKeyWarningFired = false;
+
+    //Fire a one-shot HA persistent notification when the card YAML carries any of the keys the entity refonte retired.
+    //Silent when none are present, when hass is not yet attached (Lit's setConfig can land before the hass property
+    //setter), or when the persistent_notification service is denied for RBAC reasons. The flag prevents repeated
+    //notifications on subsequent setConfig calls during the same card lifetime; HA dedupes by notification_id anyway,
+    //the flag is a belt-and-braces.
+    private _warnIfLegacyEntityKeys(config: HeliosConfig): void
+    {
+        if (this._legacyKeyWarningFired)
+        {
+            return;
+        }
+        if (!this.hass?.callService)
+        {
+            return;
+        }
+        const detected: string[] = [];
+        for (const key of HeliosCard._LEGACY_ENTITY_KEYS)
+        {
+            const v = (config as Record<string, unknown>)[key];
+            if (v !== undefined && v !== null && v !== '')
+            {
+                detected.push(key);
+            }
+        }
+        if (detected.length === 0)
+        {
+            return;
+        }
+        this._legacyKeyWarningFired = true;
+        const message =
+              `The Helios card no longer reads its PV, grid and battery entities from the card YAML. `
+            + `The following key${detected.length > 1 ? 's are' : ' is'} silently ignored: ${detected.map(k => '`' + k + '`').join(', ')}. `
+            + `Helios now resolves these directly from the official Home Assistant Energy dashboard `
+            + `(Settings → Dashboards → Energy → your sources). The PV install configuration (peak kWp, `
+            + `panel tilt and azimuth via \`pv-arrays\`, optional inverter cap, LiDAR providers, visual options) `
+            + `still lives in the card YAML, only the entity slots were retired.`;
+        try
+        {
+            this.hass.callService('persistent_notification', 'create', {
+                notification_id: 'helios-legacy-entity-config',
+                title:           'Helios card: deprecated entity keys ignored',
+                message,
+            });
+        }
+        catch (_)
+        {
+            //Service call denied or unavailable; the chips still light up from the HA Energy resolution and the user
+            //will eventually find the deprecation note via the CHANGELOG or the README.
+        }
     }
 
     static getConfigElement(): HTMLElement
@@ -654,8 +765,40 @@ export class HeliosCard extends LitElement
         return document.createElement('helios-card-editor');
     }
 
-    static getStubConfig(): HeliosConfig
+    //Signature documented by HA's <hui-card-picker>: (hass, entities, entitiesFallback). HA calls this
+    //in two situations:
+    //  - 'All cards' / 'Toutes les cartes' tab: entities is empty, we return an empty stub config and
+    //    the card falls back to hass.config.latitude / longitude at runtime (zone.home implicitly).
+    //  - 'By entity' / 'Par entité' tab: HA passes the entity the user clicked. If a zone entity is in
+    //    the list, we lift its latitude + longitude attributes into the card config as
+    //    home-latitude / home-longitude so the catalog shows Helios as a card that can be created
+    //    for that zone, with the lat / lon pre-filled. The card already supports the two override
+    //    keys at runtime so no schema change is needed.
+    //hass is loosely typed because the rest of the codebase types it as any (HA has no public types
+    //package for this surface).
+    static getStubConfig(hass?: { states?: Record<string, { attributes?: Record<string, unknown> }> }, entities?: string[]): HeliosConfig
     {
+        if (hass && Array.isArray(entities) && entities.length > 0)
+        {
+            for (const entityId of entities)
+            {
+                if (typeof entityId !== 'string' || !entityId.startsWith('zone.'))
+                {
+                    continue;
+                }
+                const state = hass.states?.[entityId];
+                const lat   = state?.attributes?.latitude;
+                const lon   = state?.attributes?.longitude;
+                if (typeof lat === 'number' && Number.isFinite(lat)
+                 && typeof lon === 'number' && Number.isFinite(lon))
+                {
+                    return {
+                        'home-latitude':  lat,
+                        'home-longitude': lon,
+                    };
+                }
+            }
+        }
         return {};
     }
 
@@ -679,7 +822,10 @@ export class HeliosCard extends LitElement
             for (const [k, v] of Object.entries(this.config))
             {
                 //Skip user-supplied home coordinates so the snapshot stays PII-free, matching the engine-side stripping.
-                if (k === 'home-latitude' || k === 'home-longitude') continue;
+                if (k === 'home-latitude' || k === 'home-longitude')
+                {
+                    continue;
+                }
                 cfg[k] = v;
             }
         }
@@ -688,8 +834,7 @@ export class HeliosCard extends LitElement
             engine: this._engine ? this._engine.getStatsSnapshot() : null,
             pv:
             {
-                entityConfigured: typeof this.config?.['pv-power-entity'] === 'string'
-                    && (this.config['pv-power-entity'] as string).length > 0,
+                entityConfigured: resolvePvLiveEntity(this._energyDefaults) !== '',
                 unit:             this._pvUnit || null,
                 lastHistory:      this._pvHistoryDiagnostics,
                 calibrationK:     pvCalibK(this.config)
@@ -731,7 +876,7 @@ export class HeliosCard extends LitElement
         this._batterySocHistory           = null;
         this._batteryPowerHistory         = null;
         this._batteryFetchKey             = '';
-        this._batteryHistories            = [];
+        this._batteryHistory              = null;
         this._solarRadiationHistory       = null;
         this._solarRadiationFetchKey      = '';
         //Drop the module-level caches too. Without these calls the per-LitElement state above is reset but the next refresh hits the
@@ -742,6 +887,9 @@ export class HeliosCard extends LitElement
         clearGridModuleCaches();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
+        //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.
+        this._loadingPhases       = new Map();
+        this._loadingHasCompleted = false;
         this.requestUpdate();
     }
 
@@ -756,15 +904,12 @@ export class HeliosCard extends LitElement
     }
 
     //Sizing for sections view (current). 1 row ≈ 56 px and 1 col ≈ 30 px
-    //(at section width 360 px). Default 9 columns x 11 rows ≈ 540 x 624 px.
-    //
-    //min_columns is kept at 6 (not 9) because Home Assistant will
-    //refuse to render the card with an "Invalid configuration"
-    //placeholder when the containing section happens to have fewer
-    //than min_columns slots available. 6 is the sweet spot: still a
-    //multiple of 3 (HA's recommended granularity), small enough to
-    //fit any section, large enough that the 11-day timeline labels
-    //stay readable when the user resizes down to that minimum.
+    //(at section width 360 px). Default 12 columns x 8 rows = the
+    //section editor's actual ceiling, and ALSO the minimum the card
+    //will accept now: the CoverFlow needs the full editor width to fan
+    //its five cards without overlap, and the bandeau + 2x2 stats grid
+    //+ chart placeholder need the full 8 rows of height to render
+    //readably. Resizing below that produced unreadable squished cards.
     public getGridOptions(): {
         rows:        number;
         columns:     number;
@@ -775,20 +920,11 @@ export class HeliosCard extends LitElement
     }
     {
         return {
-            //Default to the section editor's actual ceiling (12 cols
-            //wide, 8 rows tall) so the slot HA carves out matches
-            //what its layout UI lets the user resize to. Asking for
-            //11 rows by default (the old value) lands a slider handle
-            //past the editor's max-row limit, which reads as a buggy
-            //"the card wants more space than I can give it" mismatch.
-            //Min rows lowered to 4 so the card still fits inside a
-            //compact two-row "info strip" layout if a power user
-            //really wants that.
             rows:        8,
             columns:     12,
-            min_rows:    4,
+            min_rows:    8,
             max_rows:    24,
-            min_columns: 6,
+            min_columns: 12,
             max_columns: 12
         };
     }
@@ -810,11 +946,23 @@ export class HeliosCard extends LitElement
     //HA dashboard edit-mode wrapping cycle.
     private _connectSettleTimer: number | undefined;
 
+    //Bound document-level keydown reference so the listener can be added at connect time and removed at
+    //disconnect time without leaking a fresh closure on every mount.
+    private _onDashGlobalKey = (e: KeyboardEvent) => handleDashGlobalKey(this, e);
+
     public connectedCallback(): void
     {
         super.connectedCallback();
         _liveCards.add(this);
         this._connectedAt = performance.now();
+        if (typeof document !== 'undefined')
+        {
+            document.addEventListener('keydown', this._onDashGlobalKey);
+        }
+        //Reset the daily-totals kickoff flag so a remount re-fires `refreshHaDailyTotals` the moment the HA Energy
+        //defaults snapshot lands again. The early kickoff was the load-bearing piece of the previous boot overlay,
+        //and it stays around as a perf win even after the overlay was removed.
+        this._dailyTotalsKicked = false;
         tick(this);
         //30 s tick: the clock displays HH:MM only (seconds dropped),
         //the sun moves ~0.13° per refresh (visually smooth at that
@@ -823,13 +971,28 @@ export class HeliosCard extends LitElement
         //readings update on hass state changes, not on this tick, so
         //they remain real-time regardless. Cuts the per-second wake-
         //ups by 30× compared to the previous 1 Hz cadence.
-        this._timer = window.setInterval(() => tick(this), 30_000);
+        this._timer = window.setInterval(() =>
+        {
+            tick(this);
+            //Same 30 s cadence as the timeline clock tick refreshes
+            //the HA Energy daily-total cache. The recorder query is a
+            //single WS round-trip per non-empty entity list and the
+            //result moves by single-watt-hour increments on real
+            //installs, so 30 s is plenty fast for the headline to
+            //track the dashboard tile without piling on WS traffic.
+            refreshHaDailyTotals(this);
+        }, 30_000);
         initVisibilityObserver(this);
         if (typeof document !== 'undefined')
         {
             document.addEventListener('visibilitychange', this._onPageVisibilityForTheme);
         }
         subscribeEnergyPrefs(this);
+        //One-shot refresh at connect time so the headline lights up
+        //on the first render rather than waiting up to 30 s for the
+        //tick. The helper short-circuits when no HA stat is wired,
+        //so a standalone install pays a no-op.
+        refreshHaDailyTotals(this);
     }
 
     public disconnectedCallback(): void
@@ -847,6 +1010,7 @@ export class HeliosCard extends LitElement
         if (typeof document !== 'undefined')
         {
             document.removeEventListener('visibilitychange', this._onPageVisibilityForTheme);
+            document.removeEventListener('keydown', this._onDashGlobalKey);
         }
         unsubscribeEnergyPrefs(this);
         if (this._lidarFadeRaf !== undefined)
@@ -854,30 +1018,19 @@ export class HeliosCard extends LitElement
             cancelAnimationFrame(this._lidarFadeRaf);
             this._lidarFadeRaf = undefined;
         }
-        //Same treatment for the dome fade and the dashboard count-up
-        //loops: both self-resubmit via requestAnimationFrame and close
-        //over `this`, so a detached card would otherwise keep ticking
-        //and calling requestUpdate() against the disconnected element.
-        if (this._shadingDomeFadeRaf !== undefined)
+        //Same treatment for the weather overlay fade and the dashboard count-up loops: both
+        //self-resubmit via requestAnimationFrame and close over `this`, so a detached card would
+        //otherwise keep ticking and calling requestUpdate() against the disconnected element.
+        if (this._weatherFadeRaf !== undefined)
         {
-            cancelAnimationFrame(this._shadingDomeFadeRaf);
-            this._shadingDomeFadeRaf = undefined;
-        }
-        if (this._cloudDomeFadeRaf !== undefined)
-        {
-            cancelAnimationFrame(this._cloudDomeFadeRaf);
-            this._cloudDomeFadeRaf = undefined;
+            cancelAnimationFrame(this._weatherFadeRaf);
+            this._weatherFadeRaf = undefined;
         }
         if (this._lidarOpacityRaf)
         {
             cancelAnimationFrame(this._lidarOpacityRaf);
             this._lidarOpacityRaf = 0;
             this._pendingLidarOpacity = null;
-        }
-        if (this._dashCountUpRaf !== undefined)
-        {
-            cancelAnimationFrame(this._dashCountUpRaf);
-            this._dashCountUpRaf = undefined;
         }
         cancelPendingRespawn(this);
         if (this._connectSettleTimer !== undefined)
@@ -886,10 +1039,10 @@ export class HeliosCard extends LitElement
             this._connectSettleTimer = undefined;
         }
         //Engine cleanup on disconnect. Home Assistant's editor preview pane destroys + re-creates the helios-card element on every
-        //`config-changed` commit (see `hui-card.ts:195`, the rebuild is hard-coded and no opt-out hook exists, confirmed by
-        //investigation in #162). We accept the cost of allocating a fresh MapLibre + WebGL context per commit, which is the same
-        //trade-off apexcharts-card, mini-graph-card and Mushroom make. The live dashboard tile is NOT recreated (`hui-card` takes
-        //the `_updateElement` branch when `preview === false`), so the user-facing surface stays smooth.
+        //`config-changed` commit (`hui-card.ts:195`, the rebuild is hard-coded and no opt-out hook exists). We accept the cost of
+        //allocating a fresh MapLibre + WebGL context per commit, which is the same trade-off apexcharts-card, mini-graph-card and
+        //Mushroom make. The live dashboard tile is NOT recreated (`hui-card` takes the `_updateElement` branch when
+        //`preview === false`), so the user-facing surface stays smooth.
         if (this._engine !== undefined)
         {
             this._engine.cleanup();
@@ -922,6 +1075,28 @@ export class HeliosCard extends LitElement
     //dashboard editor.
     protected updated(_changedProperties: PropertyValues): void
     {
+        //Unified data store refresh. Walks the lengths of every underlying source and rebuilds the
+        //store whenever any of them changed since the last build, so the radial dial + graph view +
+        //timeline always read the latest data without needing per-consumer cache invalidation. Cheap
+        //when nothing changed (one hash compare returns early), measurable but bounded when a real
+        //refresh lands (~50 ms for a full 480 × 7 bucketization + forecast pass).
+        this._maybeRebuildUnifiedStore();
+
+        //Mode-transition state machine. When the user clicks a different mode on the mode-bar,
+        //_onModeLayer / _onModeLidar / _onModeWeather set _cardMode directly; the click handler
+        //does nothing else. The rest of the transition (engine fade-in / fade-out kick, overlay mask
+        //flip) is centralised here so a single switch on _cardMode drives every side effect, and the
+        //picker .is-active classes are decoupled from the WebGL / SVG fade timestamps so they animate
+        //reliably on the same render as the mode flip.
+        if (_changedProperties.has('_cardMode'))
+        {
+            const prev = (_changedProperties.get('_cardMode') as CardMode | undefined) ?? 'base';
+            if (prev !== this._cardMode)
+            {
+                this._handleCardModeChange(prev, this._cardMode);
+            }
+        }
+
         //Lazy Energy WS subscribe: HA can attach hass AFTER
         //connectedCallback, in which case our connect-time
         //subscribeEnergyPrefs call bailed out without callWS. The
@@ -933,13 +1108,41 @@ export class HeliosCard extends LitElement
             subscribeEnergyPrefs(this);
         }
 
+        //Daily-totals kickoff: `refreshHaDailyTotals` at connectedCallback time is a no-op because the parsed HA
+        //Energy defaults have not landed yet (`subscribeEnergyPrefs` is async). The 30 s tick is too far in the
+        //future for the user-perceived first paint, so the moment we see `_energyDefaultsLoaded` flip true here we
+        //fire one immediate refresh so the three `*_today` slots land before the user has a chance to notice. The
+        //flag prevents a second fire on subsequent cycles.
+        if (this._energyDefaultsLoaded && !this._dailyTotalsKicked)
+        {
+            this._dailyTotalsKicked = true;
+            refreshHaDailyTotals(this);
+        }
+
+        //Toggle the is-scrollable class on the FRONT CoverFlow card after each render so the bottom-fade
+        //mask only shows when the card actually overflows. Done here rather than inside the render
+        //function because Lit's render path runs before layout, scrollHeight/clientHeight are only valid
+        //after the browser has flushed layout.
+        if (this._detailMode)
+        {
+            const front = this.shadowRoot?.querySelector('.dash-cf-card-front') as HTMLElement | null;
+            if (front)
+            {
+                const overflows = front.scrollHeight > front.clientHeight + 1;
+                front.classList.toggle('is-scrollable', overflows);
+            }
+        }
+
         if (!this.hass?.config || !this.config)
         {
             return;
         }
 
         const coords = getHomeCoords(this.config, this.hass);
-        if (!coords) return;
+        if (!coords)
+        {
+            return;
+        }
 
         const { lat, lon } = coords;
 
@@ -964,7 +1167,10 @@ export class HeliosCard extends LitElement
             //would still spawn a fresh engine for a card the DOM
             //already discarded, and the cycle could repeat once HA
             //re-attaches.
-            if (!this.isConnected) return;
+            if (!this.isConnected)
+            {
+                return;
+            }
             if (this._initInflight)
             {
                 return;
@@ -991,29 +1197,32 @@ export class HeliosCard extends LitElement
                 this._connectSettleTimer = window.setTimeout(() =>
                 {
                     this._connectSettleTimer = undefined;
-                    if (!this.isConnected) return;
+                    if (!this.isConnected)
+                    {
+                        return;
+                    }
                     this.requestUpdate();
                 }, CONNECT_SETTLE_MS - sinceConnect + 16);
                 return;
             }
-            //Reset mode flags on identity change. Mode state lives on
-            //the card (`_lidarViewMode`, `_shadingDomeMode`, `_detailMode`)
-            //and survives the engine respawn, but the engine's
-            //corresponding active flags reset to false on every fresh
-            //instance. Without this reset, a card that was in
-            //LiDAR-View mode at the previous home would carry the
-            //`is-on` chrome over to the new home while the new engine
-            //quietly skips the LiDAR fetch, the user then clicks the
-            //LiDAR button expecting a refresh and instead toggles the
-            //view off because the card-side flag was already "on".
-            //Resetting to defaults forces a clean re-enter when the
-            //user clicks the mode they want at the new location.
+            //Reset mode flags on identity change. Mode state lives on the card (`_cardMode`,
+            //`_detailMode`) and survives the engine respawn, but the engine's corresponding active
+            //flags reset to false on every fresh instance. Without this reset, a card that was in
+            //LiDAR mode at the previous home would carry the `is-on` chrome over to the new home while
+            //the new engine quietly skips the LiDAR fetch, the user then clicks the LiDAR button
+            //expecting a refresh and instead toggles the view off because the card-side flag was
+            //already "on". Resetting to defaults forces a clean re-enter when the user clicks the mode
+            //they want at the new location.
             if (identityChanged)
             {
-                this._lidarViewMode   = false;
-                this._shadingDomeMode = false;
-                this._cloudDomeMode   = false;
-                this._detailMode      = false;
+                this._cardMode           = 'base';
+                this._overlayMaskActive  = false;
+                this._lidarLayerActive   = false;
+                this._weatherOverlayVisible = false;
+                this._detailMode         = false;
+                //New home means a fresh hydration wave, surface the loading banner again.
+                this._loadingPhases       = new Map();
+                this._loadingHasCompleted = false;
             }
             this._lastHomeKey   = homeKey;
             this._lastConfigSig = computeConfigSig(this.config);
@@ -1033,13 +1242,11 @@ export class HeliosCard extends LitElement
             this._engine.updateConfig(this.config);
         }
 
-        //Refresh chain gate: the per-entity refresh helpers read
-        //hass.states + config and are pure functions of those two
-        //inputs plus the live time range. Lit calls updated() on
-        //every @state mutation (so every overlay reprojection during
-        //auto-rotate fires updated() again), which used to re-run
-        //the whole chain at 60+ Hz for zero new data. Skip it when
-        //neither hass nor config moved since the previous pass.
+        //Refresh chain gate: the per-entity refresh helpers read hass.states + config and are
+        //pure functions of those two inputs plus the live time range. Lit calls updated() on
+        //every @state mutation (every overlay reprojection during auto-rotate fires updated()
+        //again), so without this gate the chain re-runs at 60+ Hz for zero new data. Skip it
+        //when neither hass nor config moved since the previous pass.
         if (this.hass === this._lastRefreshHassRef
             && this.config === this._lastRefreshConfigRef
             && this._timeRange === this._lastRefreshTimeRangeRef
@@ -1128,7 +1335,10 @@ export class HeliosCard extends LitElement
         try
         {
             const bg = getComputedStyle(this).getPropertyValue('--primary-background-color').trim();
-            if (!bg) return false;
+            if (!bg)
+            {
+                return false;
+            }
             const hexMatch = bg.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
             let r = 0, g = 0, b = 0;
             if (hexMatch)
@@ -1181,7 +1391,10 @@ export class HeliosCard extends LitElement
     private _getSilhouettePoints(): Array<{ base: string; top: string; walls: string[] } | null>
     {
         const sils = this._homeSilhouettes;
-        if (this._silhouetteCacheKey === sils) return this._silhouettePtsCache;
+        if (this._silhouetteCacheKey === sils)
+        {
+            return this._silhouettePtsCache;
+        }
 
         const out: Array<{ base: string; top: string; walls: string[] } | null> = [];
         for (const sil of sils)
@@ -1218,20 +1431,11 @@ export class HeliosCard extends LitElement
 
     protected render(): TemplateResult
     {
-        //Precondition for rendering the live card chrome: home
-        //coordinates resolved (HA config or the lat/lon override).
-        //The basemap itself is OpenFreeMap and needs no credentials.
-        //Variable name kept as `hasApiKey` because every conditional
-        //branch below already keys off it; only the meaning is "we
-        //have what we need to project the home onto the map".
-        const hasApiKey = getHomeCoords(this.config, this.hass) !== null;
+        //Precondition for rendering the live card chrome: home coordinates resolved (HA config or the
+        //card-level lat / lon override). The basemap itself is OpenFreeMap and needs no credentials,
+        //so this flag is purely about "do we have what we need to project the home onto the map".
+        const hasHomeCoords = getHomeCoords(this.config, this.hass) !== null;
 
-
-        //The on-ground disc self-encodes the low/mid/high breakdown
-        //via three concentric bands (proportional radial widths,
-        //three shades of the cloud colour); no hover tooltip
-        //needed.
-        const cloudPctRound    = Math.max(0, Math.round(this._cloudCover));
 
         //Always-visible cloud-cover percentage label, overlaid in HTML
         //above the home marker, with an SVG leader line tying it to
@@ -1242,9 +1446,9 @@ export class HeliosCard extends LitElement
         const layout         = this._labelLayout;
 
         //Photovoltaic production chip, pinned above the home, tinted in the configured production colour and tied to the home with an animated leader
-        //line whose dashes flow from the house up to the chip. Only renders when the user has set the optional `pv-power-entity` config and the live
-        //state read produced a finite numeric value.
-        const pvEntityId   = String(this.config?.['pv-power-entity'] ?? '').trim();
+        //line whose dashes flow from the house up to the chip. Only renders when the HA Energy dashboard exposes a solar source and the live state
+        //read produced a finite numeric value.
+        const pvEntityId   = resolvePvLiveEntity(this._energyDefaults);
         //Colour configs (pv-color / battery-color / sun-color / cloud-color / building-color) are no longer
         //consulted, the card inherits the active HA theme's Energy palette via CSS tokens. Defaults below
         //are the matching hex for any inline SVG attribute that still expects a string colour, the YAML
@@ -1324,7 +1528,7 @@ export class HeliosCard extends LitElement
         const isPvPredicted = pvScrubFuture && pvPredictedRate !== null;
         const pvActiveRate  = isPvPredicted ? pvPredictedRate : pvRate;
 
-        const showPvLabel = hasApiKey
+        const showPvLabel = hasHomeCoords
             && layout !== null
             && pvEntityId !== ''
             && pvActiveRate !== null
@@ -1371,13 +1575,12 @@ export class HeliosCard extends LitElement
         //hass.states; past-scrub mode reads from the historical
         //series fetched via WS; future-scrub hides both chips
         //because no battery data exists past "now".
-        //Bank-aware gates. A chip is allowed to render when AT LEAST one configured bank exposes the corresponding entity (SoC for the
-        //SoC chip, power for the Power chip), so a multi-bank install with one bank reporting still gets the aggregated chip painted.
-        //Falls back transparently to legacy single-bank configs because parseBatteryBanks wraps the flat keys into a one-row list when
-        //the `batteries:` array is absent.
-        const batteryBanks       = this._getBatteryBanks();
-        const hasAnyBankSoc      = batteryBanks.some(b => b.socEntity   !== '');
-        const hasAnyBankPower    = batteryBanks.some(b => b.powerEntity !== '');
+        //Chip eligibility comes off the HA Energy defaults: a SoC source (`stat_soc`) lights the SoC chip, a power source (`stat_rate`,
+        //or `stat_energy_from` / `stat_energy_to` when the source did not declare a power_config block) lights the Power chip. The
+        //chips render independently so a SoC-only install still gets the vessel painted.
+        const batteryEntities    = resolveBatteryEntities(this._energyDefaults);
+        const hasAnyBankSoc      = batteryEntities.socEntity   !== null;
+        const hasAnyBankPower    = batteryEntities.powerEntity !== null;
         const batteryScrubbing   = !this._isLiveMode && this._selectedTime !== null;
         const batteryScrubFuture = batteryScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
@@ -1396,40 +1599,14 @@ export class HeliosCard extends LitElement
         //quantises in the "wrong" direction by one Wh. A negative
         //IMPORT at scrub time is an EXPORT moment that the export
         //chip already reports; clamping to 0 keeps the slot honest.
-        //
-        //Combined mode (grid-power-entity) derives ONE signed net
-        //from a single buffer set and splits the sign across the two
-        //chips, exactly mirroring the live readCombined split: a
-        //non-negative net shows on import only, a negative net on
-        //export only. Live values already carry that split in
-        //_gridImportValue / _gridExportValue.
-        let gridImportDisplayWatts: number | null;
-        let gridExportDisplayWatts: number | null;
-        if (isGridCombined(this.config))
-        {
-            if (gridScrubTimeMs !== null)
-            {
-                const signed = gridCombinedWattsAtTime(this, gridScrubTimeMs);
-                gridImportDisplayWatts = signed === null ? null : (signed >= 0 ? signed : null);
-                gridExportDisplayWatts = signed === null ? null : (signed <  0 ? -signed : null);
-            }
-            else
-            {
-                gridImportDisplayWatts = this._gridImportValue;
-                gridExportDisplayWatts = this._gridExportValue;
-            }
-        }
-        else
-        {
-            const rawImport = gridScrubTimeMs !== null
-                ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
-                : this._gridImportValue;
-            const rawExport = gridScrubTimeMs !== null
-                ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
-                : this._gridExportValue;
-            gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
-            gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
-        }
+        const rawImport = gridScrubTimeMs !== null
+            ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
+            : this._gridImportValue;
+        const rawExport = gridScrubTimeMs !== null
+            ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
+            : this._gridExportValue;
+        const gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
+        const gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
         const gridImportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridImportUnit;
         const gridExportDisplayUnit = gridScrubTimeMs !== null ? 'W' : this._gridExportUnit;
 
@@ -1445,11 +1622,11 @@ export class HeliosCard extends LitElement
         //from the live state cache regardless of mode.
         const activeBatteryUnit = this._batteryPowerUnit;
 
-        const showSocChip = (hasApiKey && layout !== null)
+        const showSocChip = (hasHomeCoords && layout !== null)
             && !batteryScrubFuture
             && hasAnyBankSoc
             && activeBatterySoc !== null;
-        const showPowerChip = (hasApiKey && layout !== null)
+        const showPowerChip = (hasHomeCoords && layout !== null)
             && !batteryScrubFuture
             && hasAnyBankPower
             && activeBatteryPower !== null;
@@ -1534,7 +1711,10 @@ export class HeliosCard extends LitElement
         //pill border.
         const buildLPathToHome = (chipX: number, chipY: number, chipNudgePx: number): string =>
         {
-            if (!layout) return '';
+            if (!layout)
+            {
+                return '';
+            }
             const homeX = layout.home.x;
             const homeY = layout.home.y;
             //Chip-side start: nudge horizontally toward home.
@@ -1614,7 +1794,7 @@ export class HeliosCard extends LitElement
         //pre-projected to screen space by the engine via
         //projectSunScene(). Hidden until the engine is ready.
         const sunScene  = this._sunScene;
-        const showSun   = hasApiKey && sunScene !== null && sunScene.arc.length >= 2;
+        const showSun   = hasHomeCoords && sunScene !== null && sunScene.arc.length >= 2;
 
         //Fixed colour design system. The configured sun
         //colour paints the arc, the outer rim of the sun disc,
@@ -1645,9 +1825,18 @@ export class HeliosCard extends LitElement
         for (let i = 0; i < arcSegments.length; i++)
         {
             const s = arcSegments[i];
-            if (s.belowHorizon)            arcSegmentsBack.push(s);
-            else if (s.nearness >= 0.50)   arcSegmentsFrontNear.push(s);
-            else                           arcSegmentsFrontFar.push(s);
+            if (s.belowHorizon)
+            {
+                arcSegmentsBack.push(s);
+            }
+            else if (s.nearness >= 0.50)
+            {
+                arcSegmentsFrontNear.push(s);
+            }
+            else
+            {
+                arcSegmentsFrontFar.push(s);
+            }
         }
 
         //The incidence ray only renders when the sun is actually above the horizon, drawing a ray from below the ground towards the home would be
@@ -1750,12 +1939,27 @@ export class HeliosCard extends LitElement
         //provider covers the active home. Read off the engine, falls
         //back to null until the engine has resolved its first home.
         const lidarSourceId    = this._engine?.getActiveLidarSourceId() ?? null;
+        //ha-card classes: theme + detail (dashboard dive) + one mode-* class derived directly from
+        //_cardMode + an overlay-masked class for the chip / leader / arc / timeline hide rules. The
+        //mask LAGS the _cardMode flip on lidar -> base so the HUD does not pop back through the still-
+        //visible dot cloud (see _handleCardModeChange + the LiDAR fade loop completion handler), AND
+        //is unconditionally ON while detail mode is on so the same chip + timeline transitions fire
+        //when the user opens / closes the dashboard via a home click. The weather mode is an
+        //exception: chips / leaders / arcs hide but the BOTTOM TIMELINE STAYS VISIBLE so the user
+        //can scrub through the day and the weather overlay tracks the cursor. CSS opts the timeline
+        //out of the mask via a `mode-weather` exception (see helios-card-css.ts).
+        const overlayMasked = this._overlayMaskActive || this._detailMode;
+        //camera-locked drives the CSS rule that swaps the MapLibre grab cursor for the default
+        //arrow when the user has the camera pinned: drag pan + rotate are both disabled in that
+        //state so the open-hand cursor was misleading. Re-evaluated every render so the cursor
+        //flips the moment the user toggles the lock chip.
+        const cameraLocked = this._isCameraLocked();
         const cardClasses = [
             cardThemeClass,
-            this._detailMode      ? 'detail-active'        : '',
-            this._lidarViewMode   ? 'lidar-view-active'    : '',
-            this._shadingDomeChipMask ? 'shading-dome-active'  : '',
-            this._cloudDomeMode   ? 'cloud-dome-active'    : '',
+            this._detailMode  ? 'detail-active'  : '',
+            `mode-${this._cardMode}`,
+            overlayMasked     ? 'overlay-masked' : '',
+            cameraLocked      ? 'camera-locked'  : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -1763,15 +1967,17 @@ export class HeliosCard extends LitElement
 
                 <div id="map-container"></div>
 
-                ${hasApiKey && this._timeRange && timelineEnabled(this.config) ? html`
+                ${renderLoadingBanner(this)}
+                ${renderWeatherRateLimitBanner(this)}
+
+                ${hasHomeCoords && this._timeRange ? html`
                     <div
                         class="time-bar"
-                        style="--timeline-width-frac:${timelineWidthPct(this.config) / 100}"
                         @pointerdown="${(e: PointerEvent) => onTimelinePointerDown(this, e)}"
                     >
                         <!--  Optional PV production graph, only
-                              rendered when the user has set the
-                              pv-power-entity config. Same chip
+                              rendered when the HA Energy dashboard
+                              exposes a solar source. Same chip
                               styling as the main chart card; sits
                               just above it with a 4 px gap so the
                               two read as a stacked instrument. The
@@ -1780,7 +1986,6 @@ export class HeliosCard extends LitElement
                               area and the PV area visually balance
                               each other.  -->
                         ${renderTimelineHoverTooltip(this)}
-                        ${renderTimelineBackToLiveTab(this, () => resetToLive(this))}
                         ${pvEntityId ? html`
                             <div
                                 class="tb-chart-card tb-pv-card"
@@ -1794,15 +1999,11 @@ export class HeliosCard extends LitElement
                             </div>
                         ` : nothing}
 
-                        <!--  Chart card: hosts the area chart, the
-                              dotted day separators, the night-zone
-                              diagonal hatch overlay (one rect per
-                              sunset, next sunrise window) and the
-                              live + scrub cursors as HTML overlays.
-                              The day-label chip row used to overlay
-                              the midline of this card; it's now a
-                              sibling block below so the chips never
-                              cover the curves they describe.  -->
+                        <!--  Chart card: hosts the area chart, the dotted day separators, the
+                              night-zone diagonal hatch overlay (one rect per sunset, next
+                              sunrise window) and the live + scrub cursors as HTML overlays.
+                              Day-label chip row sits as a sibling block below so the chips
+                              never cover the curves they describe.  -->
                         <div
                             class="tb-chart-card"
                             @pointermove="${(e: PointerEvent) => handleChartHoverMove(this, e)}"
@@ -1817,34 +2018,7 @@ export class HeliosCard extends LitElement
                     </div>
                 ` : nothing}
 
-                ${hasApiKey ? html`
-                    <div class="spinner-center ${this._fetching ? 'spinning' : ''}">
-                        <svg class="spinner-sun" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <!--  Rotating ray bundle, 12 spokes around the disc.
-                                  Painted in the configured sun colour via the
-                                  CSS variable so the spinner stays on-brand
-                                  even when the user themes the sun. -->
-                            <g class="spinner-sun-rays">
-                                ${[0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330].map(deg => svg`
-                                    <line
-                                        x1="32" y1="6"
-                                        x2="32" y2="14"
-                                        stroke="var(--helios-sun-color, #f59e0b)"
-                                        stroke-width="3"
-                                        stroke-linecap="round"
-                                        transform="rotate(${deg} 32 32)"
-                                    />
-                                `)}
-                            </g>
-                            <!--  Steady inner disc, doesn't spin (otherwise the
-                                  rotation reads "the sun is wobbly", not
-                                  "we're loading"). -->
-                            <circle cx="32" cy="32" r="10" fill="var(--helios-sun-color, #f59e0b)" />
-                        </svg>
-                    </div>
-                ` : nothing}
-
-                <!--  Top-right mode bar: three glued segments picking
+<!--  Top-right mode bar: three glued segments picking
                       which canvas state the card is in. The default
                       Layer UI is the regular HUD (sun arc, clouds,
                       leader lines, chips), LiDAR View paints the
@@ -1858,7 +2032,7 @@ export class HeliosCard extends LitElement
                       scrub-blue plate the clock chip uses while
                       scrubbing, for visual consistency with the
                       other mode-indicating chips.                   -->
-                ${hasApiKey ? (() => {
+                ${hasHomeCoords ? (() => {
                     const isLocal     = lidarSourceId === 'local-ndsm';
                     const hasProvider = lidarSourceId !== null;
                     //LiDAR readiness: an online provider needs its
@@ -1873,7 +2047,7 @@ export class HeliosCard extends LitElement
                     //busy). Either keeps the spinner up.
                     const lidarLoading = hasProvider
                                        && ((!isLocal && this._shadowBusy)
-                                           || (this._lidarViewMode && this._lidarExposureBusy));
+                                           || (this._cardMode === 'lidar' && this._lidarExposureBusy));
                     const lidarReady   = hasProvider && (isLocal || !this._shadowBusy);
                     const lidarIcon   = !hasProvider ? 'mdi:cloud-off-outline'
                                        : lidarLoading ? 'mdi:loading'
@@ -1883,21 +2057,34 @@ export class HeliosCard extends LitElement
                                        : lidarLoading ? 'LiDAR view, loading shadows...'
                                        : isLocal      ? 'LiDAR view, local nDSM'
                                                       : 'LiDAR view, online provider';
-                    const isLayer = !this._lidarViewMode && !this._shadingDomeMode && !this._cloudDomeMode;
-                    //Lock mode-switching while the exposure sweep is in
-                    //flight: the user cannot exit / re-enter / swap
-                    //modes until the LiDAR view has finished computing.
-                    //Same guard applied to all 3 mode-bar buttons so a
-                    //race between "user clicks home" and "sweep midway"
-                    //can't leave the layer in a half-built state.
-                    const modeLocked = this._lidarViewMode && this._lidarExposureBusy;
+                    //Cloud mode is a soft per-layer reveal, not a mutually-exclusive view mode: it does NOT replace the
+                    //default Layer UI, the user can keep the layer on AND inspect the cloud breakdown. So the Layer
+                    //button stays lit while the cloud chips are revealed.
+                    const isLayer    = this._cardMode === 'base';
+                    const isLidar    = this._cardMode === 'lidar';
+                    const isWeather  = this._cardMode === 'weather';
+                    //modeLocked is true while a LiDAR exposure sweep is in flight (sun crossed
+                    //the 1.5 deg refresh gate, or the user just entered the mode). It gates the
+                    //LiDAR button's `?disabled` so the user does not stack a second sweep on top
+                    //of one already running, but the Layer + Weather EXIT buttons stay fully
+                    //enabled: the user must always be able to leave the mode, even mid-sweep.
+                    //
+                    //Root cause of the long-running "stuck in LiDAR after touching the opacity
+                    //slider" report: when ?disabled was wired on the Layer / Weather buttons
+                    //too, the browser silently ignored every @click on them as soon as the
+                    //atmosphere refresh timer kicked an exposure sweep (~every few minutes of
+                    //solar motion). The user's slider drag was a red herring; the timer was
+                    //firing in the background and locking the exit buttons. Dropping ?disabled
+                    //on the exits lets the click always land; the exit fade + the engine's
+                    //setLidarViewActive(false) cancel the in-flight sweep on the way out.
+                    const modeLocked = isLidar && this._lidarExposureBusy;
                     //Mode-bar click handlers bound once as class fields
                     //(see _onModeLayer etc.) so Lit does not see a fresh
                     //closure identity on every render and re-attach the
                     //@click handler four times per cycle.
-                    const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar        : undefined;
-                    const onLayer    = !modeLocked                  ? this._onModeLayer        : undefined;
-                    const onShading  = !modeLocked                  ? this._onModeShadingDome  : undefined;
+                    const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar   : undefined;
+                    const onLayer    = this._onModeLayer;
+                    const onWeather  = this._onModeWeather;
                     //Live cloud-cover icon for the cloud-dome button:
                     //sun, partly-cloudy, cloudy or pouring depending on
                     //the current home reading. The user reads the sky
@@ -1908,25 +2095,67 @@ export class HeliosCard extends LitElement
                     //useless.
                     const cameraLocked  = this._isCameraLocked();
                     const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
+                    //Lock button is hidden entirely in weather mode: the engine force-locks the
+                    //camera on weather-mode enter to keep the top-down satellite view framed, so
+                    //the toggle would have no effect anyway. The pre-enter state is restored on
+                    //exit, so the button returning when the user leaves weather mode shows the
+                    //right state.
                     return html`
                         <div class="overlay-top-left">
-                            <button
-                                type="button"
-                                class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
-                                aria-pressed="${cameraLocked ? 'true' : 'false'}"
-                                @click="${this._onCameraLockToggle}"
-                            >
-                                <ha-icon icon="${lockIcon}"></ha-icon>
-                            </button>
+                            ${isWeather ? nothing : html`
+                                <button
+                                    type="button"
+                                    class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
+                                    aria-pressed="${cameraLocked ? 'true' : 'false'}"
+                                    @click="${this._onCameraLockToggle}"
+                                >
+                                    <ha-icon icon="${lockIcon}"></ha-icon>
+                                </button>
+                            `}
+                            ${isWeather ? html`
+                                <!--  Per-altitude cloud band toggles. Same visual recipe as the mode bar in the top-
+                                      right corner: vertical column of identical 40 px round icon-only buttons sharing
+                                      the .mode-bar-seg style. State does not persist across mode entries,
+                                      enterWeatherMode resets all three to ON so the user always lands on a complete
+                                      view of every band the first time the mode opens.                                -->
+                                <div class="mode-bar" role="group" aria-label="Cloud band toggles">
+                                    <button
+                                        type="button"
+                                        class="mode-bar-seg ${this._weatherShowHigh ? 'is-on' : ''}"
+                                        aria-pressed="${this._weatherShowHigh ? 'true' : 'false'}"
+                                        aria-label="Toggle high cloud layer"
+                                        @click="${() => { this._weatherShowHigh = !this._weatherShowHigh; }}"
+                                    >
+                                        <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="mode-bar-seg ${this._weatherShowMid ? 'is-on' : ''}"
+                                        aria-pressed="${this._weatherShowMid ? 'true' : 'false'}"
+                                        aria-label="Toggle mid cloud layer"
+                                        @click="${() => { this._weatherShowMid = !this._weatherShowMid; }}"
+                                    >
+                                        <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="mode-bar-seg ${this._weatherShowLow ? 'is-on' : ''}"
+                                        aria-pressed="${this._weatherShowLow ? 'true' : 'false'}"
+                                        aria-label="Toggle low cloud layer"
+                                        @click="${() => { this._weatherShowLow = !this._weatherShowLow; }}"
+                                    >
+                                        <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
+                                    </button>
+                                </div>
+                            ` : nothing}
                         </div>
                         <div class="overlay-top-right">
                             <div class="mode-bar" role="radiogroup" aria-label="View mode">
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
+                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''}"
                                     role="radio"
                                     aria-checked="${isLayer ? 'true' : 'false'}"
-                                    ?disabled="${modeLocked}"
                                     aria-label="Default layer UI"
                                     @click="${onLayer}"
                                 >
@@ -1934,9 +2163,9 @@ export class HeliosCard extends LitElement
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${this._lidarViewMode ? 'is-on' : ''} ${(!lidarReady || modeLocked) ? 'is-disabled' : ''} ${lidarLoading ? 'is-loading' : ''}"
+                                    class="mode-bar-seg ${isLidar ? 'is-on' : ''} ${(!lidarReady || modeLocked) ? 'is-disabled' : ''} ${lidarLoading ? 'is-loading' : ''}"
                                     role="radio"
-                                    aria-checked="${this._lidarViewMode ? 'true' : 'false'}"
+                                    aria-checked="${isLidar ? 'true' : 'false'}"
                                     ?disabled="${!lidarReady || modeLocked}"
                                     aria-label="${lidarTitle}"
                                     @click="${onLidar}"
@@ -1945,14 +2174,13 @@ export class HeliosCard extends LitElement
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${this._shadingDomeMode ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
+                                    class="mode-bar-seg ${isWeather ? 'is-on' : ''}"
                                     role="radio"
-                                    aria-checked="${this._shadingDomeMode ? 'true' : 'false'}"
-                                    ?disabled="${modeLocked}"
-                                    aria-label="Adaptive shading dome"
-                                    @click="${onShading}"
+                                    aria-checked="${isWeather ? 'true' : 'false'}"
+                                    aria-label="Weather view"
+                                    @click="${onWeather}"
                                 >
-                                    <ha-icon icon="mdi:radar"></ha-icon>
+                                    <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
                                 </button>
                             </div>
                         </div>
@@ -1995,53 +2223,6 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                ${hasApiKey && this._cloudCover >= 0 ? html`
-                    <button class="cloud-pct-label${this._cloudDomeMode ? ' is-on' : ''}"
-                            type="button"
-                            @click="${this._onCloudChipToggle}"
-                            aria-pressed="${this._cloudDomeMode ? 'true' : 'false'}"
-                            aria-label="Per-layer cloud cover">
-                        <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
-                        <span>${cloudPctRound}%</span>
-                    </button>
-                ` : nothing}
-                ${hasApiKey && this._cloudScene ? html`
-                    <svg class="cloud-layer-leaders${this._cloudDomeMode ? ' is-on' : ''}"
-                         viewBox="0 0 180 22" preserveAspectRatio="xMidYMid meet">
-                        <!--  Four-segment leader system:
-                              - Trunk: a single vertical from the toggle
-                                bottom (x=90 y=0) down to a central
-                                junction point (x=90 y=11), the halfway
-                                line between the toggle and the layer
-                                chips.
-                              - From the junction, three branches reach
-                                each chip: an L (with Q fillet) toward
-                                the low chip on the left, a straight
-                                vertical to the mid chip, and a mirrored
-                                L toward the high chip on the right.
-                              Chip-center x positions: low at 27, mid at
-                              90, high at 153 (fixed-width chips, see
-                              .cloud-layer-chip min-width).             -->
-                        <path d="M 90,0 L 90,11"                          class="cloud-layer-leader cloud-layer-leader--trunk" fill="none" stroke="currentColor"/>
-                        <path d="M 90,11 L 35,11 Q 27,11 27,19 L 27,22"   class="cloud-layer-leader cloud-layer-leader--low"   fill="none" stroke="currentColor"/>
-                        <path d="M 90,11 L 90,22"                          class="cloud-layer-leader cloud-layer-leader--mid"   fill="none" stroke="currentColor"/>
-                        <path d="M 90,11 L 145,11 Q 153,11 153,19 L 153,22" class="cloud-layer-leader cloud-layer-leader--high" fill="none" stroke="currentColor"/>
-                    </svg>
-                    <div class="cloud-layer-chips${this._cloudDomeMode ? ' is-on' : ''}">
-                        <div class="cloud-layer-chip cloud-layer-chip--low">
-                            <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
-                            <span>${Math.round(this._cloudScene.cloudLow)}%</span>
-                        </div>
-                        <div class="cloud-layer-chip cloud-layer-chip--mid">
-                            <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
-                            <span>${Math.round(this._cloudScene.cloudMid)}%</span>
-                        </div>
-                        <div class="cloud-layer-chip cloud-layer-chip--high">
-                            <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
-                            <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
-                        </div>
-                    </div>
-                ` : nothing}
 
                 <!--  PV → home animated leader. Vertical dashed line
                       from the PV chip's bottom edge down to the home
@@ -2188,7 +2369,7 @@ export class HeliosCard extends LitElement
                       column on the right. Renders only when the
                       matching entity is configured AND has a finite
                       reading.                                       -->
-                ${hasApiKey && layout !== null && gridImportDisplayWatts !== null && !batteryScrubFuture ? html`
+                ${hasHomeCoords && layout !== null && gridImportDisplayWatts !== null && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-import-leader-line" d="${gridImportLeaderPath}" />
                         <!--  Moving bead, same vocabulary as the PV
@@ -2213,7 +2394,7 @@ export class HeliosCard extends LitElement
                         <span>${formatGridValue(gridImportDisplayWatts, gridImportDisplayUnit)}</span>
                     </div>
                 ` : nothing}
-                ${hasApiKey && layout !== null && gridExportDisplayWatts !== null && !batteryScrubFuture ? html`
+                ${hasHomeCoords && layout !== null && gridExportDisplayWatts !== null && !batteryScrubFuture ? html`
                     <svg class="grid-leader-svg">
                         <path class="grid-export-leader-line" d="${gridExportLeaderPath}" />
                         <!--  Export bead: travels FROM the home OUT to
@@ -2382,8 +2563,19 @@ export class HeliosCard extends LitElement
                             //     colour) so the disc has a clear edge
                             //     against the basemap regardless of
                             //     contrast.
-                            const r = HeliosCard.SUN_R_FAR
-                                    + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene!.sun.nearness;
+                            //Scale the disc + halo with the same ramp the
+                            //sun arc consumes engine-side. Without this
+                            //the disc stays at its grid-tuned pixel size
+                            //while the arc grows on a fullscreen canvas,
+                            //the sun reads as a tiny dot on a gigantic
+                            //curve. Multiplying here keeps the disc-to-arc
+                            //ratio constant across canvas sizes; at
+                            //standard Lovelace grid sizes the scale is
+                            //1.0 and the disc keeps its current size.
+                            const sunArcScale = this._engine?.getSunArcScale() ?? 1;
+                            const r = (HeliosCard.SUN_R_FAR
+                                    + (HeliosCard.SUN_R_NEAR - HeliosCard.SUN_R_FAR) * sunScene!.sun.nearness)
+                                    * sunArcScale;
                             const rInner = r * sunFillRatio;
                             //Halo proportional to live irradiance,
                             //saturating at 1000 W/m² (clear-sky noon).
@@ -2467,7 +2659,7 @@ export class HeliosCard extends LitElement
                       shadow filter for the bloom. The opacity is
                       flipped via a class so the appearance / fade is
                       a pure CSS transition, no per-frame work.  -->
-                ${hasApiKey && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
+                ${hasHomeCoords && this._homeSilhouettes.length > 0 && !this._detailMode ? (() => {
                     const sunColor = DEFAULT_SUN_COLOR_HEX;
                     const silhouettePts = this._getSilhouettePoints();
                     //Static hover-only halo. The earlier pulse-on-bead-
@@ -2502,9 +2694,9 @@ export class HeliosCard extends LitElement
                       ready AND we're not already in detail mode.
                       Clicking it eases the camera into the detail
                       pose and triggers the dashboard overlay.  -->
-                ${hasApiKey && layout !== null && !this._detailMode ? html`
+                ${hasHomeCoords && layout !== null && !this._detailMode ? html`
                     <div
-                        class="home-hitbox"
+                        class="home-hitbox ${this._loadingHasCompleted ? '' : 'is-loading'}"
                         style="left:${layout!.home.x}px; top:${layout!.home.y}px"
                         @click="${(e: Event) => handleHomeClick(this, e)}"
                         @mouseenter="${this._onHomeEnter}"
@@ -2518,7 +2710,7 @@ export class HeliosCard extends LitElement
                       a single energy hub, the same vocabulary HA's
                       Energy distribution card uses for its central
                       home node.                                       -->
-                ${hasApiKey && layout !== null && !this._detailMode ? html`
+                ${hasHomeCoords && layout !== null && !this._detailMode ? html`
                     <!--  Solid drop-leader from the home pill DOWN to
                           the projected ground at the home (lat, lon).
                           Same vocabulary as the other home-anchored
@@ -2528,7 +2720,7 @@ export class HeliosCard extends LitElement
                     <svg class="home-drop-leader-svg">
                         <line class="home-drop-leader-line"
                               x1="${layout!.home.x}" y1="${layout!.home.y + 14}"
-                              x2="${layout!.home.x}" y2="${layout!.home.y + 60}" />
+                              x2="${layout!.homeRoof.x}" y2="${layout!.homeRoof.y}" />
                     </svg>
                     <div
                         class="home-pill"
@@ -2549,20 +2741,13 @@ export class HeliosCard extends LitElement
                       internal scroll / tap would close the panel.  -->
                 ${this._detailMode ? renderDashboard(this) : nothing}
 
-                <!--  Adaptive shading-dome overlay. SVG is full-card,
-                      absolutely positioned, pointer-events disabled
-                      so it never intercepts clicks meant for the
-                      map. Fades in via inline opacity driven by the
-                      fade RAF loop. The cloud-bin picker rides
-                      flush against the top-right chip cluster so
-                      the slice selector is right next to the chip
-                      that opened the view.                          -->
-                ${renderShadingDomeOverlay(this)}
-                ${this._shadingDomeMode ? renderShadingDomeCloudPicker(this, (pct) => {
-                    this._shadingDomeCloudPct = pct;
-                    refreshShadingDomeScene(this);
-                    this.requestUpdate();
-                }) : nothing}
+                <!--  Weather overlay. Full-card HTML overlay above the MapLibre canvas, painted
+                      with a per-altitude cloud-cover raster sampled from the multi-point Open-
+                      Meteo grid at the SELECTED instant. Pointer-events disabled so it never
+                      intercepts clicks meant for the map. Fades in via inline opacity driven by
+                      the fade RAF loop, then the engine.enterWeatherCamera tilts the camera to
+                      top-down + zooms out so the user reads the area like a satellite plan. -->
+                ${renderWeatherOverlay(this)}
                 ${renderLidarViewOpacityPicker(this, this._onLidarOpacityChange)}
 
             </ha-card>
@@ -2572,25 +2757,6 @@ export class HeliosCard extends LitElement
 
     //Per-card unique id used to namespace SVG <defs> ids so multiple Helios cards on the same dashboard don't clash on gradient / filter references.
     _instanceId = `h${Math.floor(Math.random() * 1e9).toString(36)}`;
-
-    //Memoised parseBatteryBanks result, keyed on the config object identity. parseBatteryBanks walks the YAML, allocates a fresh array
-    //and N objects, and re-trims every entity string on each call, expensive when the Lit render fires at 60-120 Hz during scrub.
-    //Hass swaps the config reference whenever the user edits it, so identity equality is the right invalidation signal.
-    private _cachedBatteryBanks?: BatteryBank[];
-    private _cachedBatteryBanksCfg?: HeliosConfig;
-    private _cachedBatteryBanksDefaults?: EnergyDefaults;
-    private _getBatteryBanks(): BatteryBank[]
-    {
-        if (this.config !== this._cachedBatteryBanksCfg
-            || this._energyDefaults !== this._cachedBatteryBanksDefaults
-            || !this._cachedBatteryBanks)
-        {
-            this._cachedBatteryBanks         = effectiveBatteryBanks(this.config, this._energyDefaults);
-            this._cachedBatteryBanksCfg      = this.config;
-            this._cachedBatteryBanksDefaults = this._energyDefaults;
-        }
-        return this._cachedBatteryBanks;
-    }
 
     //Hover handlers on the home hitbox. Toggle the sun-coloured glow halo around the home silhouette so the focal building reads as interactive
     //before the user clicks. Cleared on exit so the glow doesn't get stuck on if the cursor leaves while the detail overlay is fading in.
@@ -2615,14 +2781,33 @@ export class HeliosCard extends LitElement
     private _onLidarOpacityChange = (opacity: number): void =>
     {
         this._pendingLidarOpacity = opacity;
-        if (this._lidarOpacityRaf) return;
+        if (this._lidarOpacityRaf)
+        {
+            return;
+        }
         this._lidarOpacityRaf = requestAnimationFrame(() =>
         {
             this._lidarOpacityRaf = 0;
             const v = this._pendingLidarOpacity;
-            if (v === null) return;
+            if (v === null)
+            {
+                return;
+            }
             this._lidarViewOpacity = v;
             this._engine?.setLidarViewOpacity(v);
+            //Kick a Lit render so the picker's `${pct}%` text node updates through the normal
+            //Lit pipeline. The previous design did an imperative `span.textContent =` write to
+            //skip the re-render cost, which DESTROYED Lit's marker comments inside the span
+            //(textContent replaces every child node, including Lit's tracking markers). Once
+            //the markers were gone, the next Lit render of the card crashed with
+            //"null is not an object (evaluating 'this._$AA.nextSibling.data=ae')" and aborted
+            //updated() partway through. The aborted updated() then never reached
+            //_handleCardModeChange, which is why clicking the Layer / Weather button after
+            //touching the slider visually flipped the mode bar (the click handler ran fine,
+            //it's a separate code path) but never fired exitLidarView, so the dot cloud kept
+            //drawing. requestUpdate is rAF-coalesced upstream by the slider's own throttle
+            //so the render fires at most once per frame.
+            this.requestUpdate();
         });
     };
 
@@ -2631,37 +2816,125 @@ export class HeliosCard extends LitElement
     //expressions inside render() so Lit sees a stable identity and
     //does not re-attach the four @click handlers on every render
     //cycle (template re-attach cost + closure allocation).
+    //
+    //Each handler drops the scrub state up front via `_exitScrubMode`:
+    //a mode switch repositions the timeline visually (the dashboard
+    //panel shifts when the mode changes) and the absolutely-positioned
+    //scrub tooltip would otherwise stay pinned to the previous
+    //timeline location, floating orphaned at the bottom of the card.
+    //Returning to live before the mode swap hides the tooltip cleanly
+    //in the same render cycle.
     private _onModeLayer = (): void =>
     {
-        if (this._lidarViewMode)   toggleLidarView(this);
-        if (this._shadingDomeMode) toggleShadingDome(this);
-        //Cloud detail toggle is a simple ON/OFF, not a full-screen
-        //mode: leaving it on while the user switches back to the
-        //default layer keeps the 3 layer chips visible.
-    };
-    //Cloud cover detail toggle. ON reveals 3 chips (low / mid /
-    //high) under the central cloud chip; OFF leaves only the
-    //aggregate cloud chip. The aggregate chip itself doubles as the
-    //toggle button (see render block + _onCloudChipToggle below).
-    private _onCloudChipToggle = (): void =>
-    {
-        this._cloudDomeMode = !this._cloudDomeMode;
+        this._exitScrubMode();
+        this._cardMode = 'base';
     };
     private _onModeLidar = (): void =>
     {
-        if (this._shadingDomeMode) toggleShadingDome(this);
-        //LiDAR and Shading replace the whole HUD; force the per-layer
-        //cloud expansion back to OFF so the 3 layer chips don't leak
-        //through. The aggregate cloud chip itself is already hidden
-        //by the .cloud-dome-active CSS family.
-        this._cloudDomeMode = false;
-        if (!this._lidarViewMode)  toggleLidarView(this);
+        this._exitScrubMode();
+        this._cardMode = 'lidar';
     };
-    private _onModeShadingDome = (): void =>
+    private _onModeWeather = (): void =>
     {
-        if (this._lidarViewMode)   toggleLidarView(this);
-        this._cloudDomeMode = false;
-        if (!this._shadingDomeMode) toggleShadingDome(this);
+        this._exitScrubMode();
+        this._cardMode = 'weather';
+    };
+    //Mode-transition state machine. Called from updated() when _cardMode changed. Single switch on
+    //the (prev, next) pair drives:
+    //  1. _overlayMaskActive: ON the moment we leave base. OFF on weather -> base immediately
+    //     (the dome SVG is faint, the HUD can fade in through it). OFF on lidar -> base only AFTER
+    //     the WebGL dot-cloud fade-out completes (see the LiDAR fade loop completion handler) so the
+    //     HUD chips do not pop back through the still-visible cloud.
+    //  2. LiDAR enter / exit: enterLidarView() activates the engine layer + kicks the alpha ramp;
+    //     exitLidarView() starts the fade-out, the engine layer is torn down at end-of-fade.
+    //  3. Weather enter / exit: enterWeatherMode() kicks the fade-in + the camera ease + the
+    //     multi-point grid fetch; exitWeatherMode() starts the fade-out + restores the camera.
+    //
+    //CSS animations (slider slide-in / slide-out, chip + leader + arc fade, timeline slide) run on
+    //their own classes (.is-active on the sliders, .overlay-masked on ha-card) which derive directly
+    //Unified store refresh check. Called from updated() on every Lit cycle: short-circuits when the
+    //store already on the host matches the current data version (cheap hash compare of array lengths),
+    //rebuilds otherwise and assigns to the @state so the next render picks up the new bucketization.
+    //Setting the @state during updated() schedules a follow-up render but does NOT loop because the
+    //rebuild result has the same dataVersion, so the next isStoreFresh check short-circuits.
+    private _maybeRebuildUnifiedStore(): void
+    {
+        const host = this as unknown as UnifiedStoreHost;
+        if (isStoreFresh(host, this._unifiedStore))
+        {
+            return;
+        }
+        this._unifiedStore = buildUnifiedStore(host);
+    }
+
+    //from _cardMode / _overlayMaskActive in the render output. No keyframes, no animation: forwards,
+    //no rAF defers, just transitions on the CSS rule's base style that fire on class change.
+    private _handleCardModeChange(prev: CardMode, next: CardMode): void
+    {
+        if (next !== 'base')
+        {
+            this._overlayMaskActive = true;
+        }
+
+        if (prev === 'lidar' && next !== 'lidar')
+        {
+            //Always run exitLidarView when leaving LiDAR mode, no _lidarLayerActive guard. The
+            //old guard skipped the exit fade when the flag was false, which left the engine
+            //layer drawing if the card-side flag ever desync'd from the engine layer's actual
+            //alphaFade. exitLidarView is cheap to call when the layer was never activated: the
+            //fade tick's alpha formula has _lidarLayerActive as a multiplier, so a false flag
+            //collapses alpha to 0 on the first tick and the engine layer immediately
+            //short-circuits its draw call.
+            exitLidarView(this);
+        }
+        else if (prev !== 'lidar' && next === 'lidar')
+        {
+            const entered = enterLidarView(this);
+            if (!entered)
+            {
+                //Engine reports no LiDAR provider covers the active home, bail back to base so the
+                //mode-bar chrome does not stay lit on a mode the user cannot actually be in. Reset
+                //the overlay mask too so the chips do not flash hidden for one render frame.
+                this._overlayMaskActive = false;
+                this._cardMode          = 'base';
+                return;
+            }
+        }
+
+        if (prev === 'weather' && next !== 'weather')
+        {
+            if (this._weatherOverlayVisible)
+            {
+                exitWeatherMode(this);
+            }
+            if (next === 'base')
+            {
+                //Weather overlay is faint, lift the overlay mask immediately so the chips +
+                //timeline slide back in while the overlay fades out and the camera eases back to
+                //the pre-enter pose.
+                this._overlayMaskActive = false;
+            }
+        }
+        else if (prev !== 'weather' && next === 'weather')
+        {
+            enterWeatherMode(this);
+        }
+    }
+    //Reset the timeline scrub state so the absolutely-positioned
+    //scrub tooltip element disappears in the next render. Called
+    //from the mode-bar handlers because a mode swap shifts the
+    //timeline geometry and the tooltip would otherwise stay
+    //pinned to the previous on-screen position.
+    private _exitScrubMode = (): void =>
+    {
+        if (this._selectedTime !== null)
+        {
+            this._selectedTime = null;
+        }
+        if (!this._isLiveMode)
+        {
+            this._isLiveMode = true;
+        }
     };
     //Camera lock state used by the top-left lock button. Delegates
     //to the engine, which itself prefers localStorage over the legacy
@@ -2669,7 +2942,10 @@ export class HeliosCard extends LitElement
     //actually doing.
     private _isCameraLocked(): boolean
     {
-        if (this._engine) return this._engine.isCameraLocked();
+        if (this._engine)
+        {
+            return this._engine.isCameraLocked();
+        }
         return false;
     }
     //Lock-button click handler. Asks the engine to flip its lock
@@ -2680,7 +2956,10 @@ export class HeliosCard extends LitElement
     //same localStorage entry and restores the pose.
     private _onCameraLockToggle = (): void =>
     {
-        if (!this._engine) return;
+        if (!this._engine)
+        {
+            return;
+        }
         this._engine.setCameraLocked(!this._engine.isCameraLocked());
         this.requestUpdate();
     };

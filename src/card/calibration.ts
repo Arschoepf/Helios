@@ -103,30 +103,48 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
 
     //Walk back day by day starting at yesterday. For each day, compute the model's "would-have-predicted" kWh from the hourly weather samples and the
     //user's actual produced kWh from the PV history. Keep going up to WINDOW_DAYS or until we run out of weather samples.
-    const HOUR_MS = 3_600_000;
     const today0 = new Date();
     today0.setHours(0, 0, 0, 0);
 
     const ratios: number[] = [];
     //Raster fetched above for the cache key; reused here so each
-    //past-day integration sees identical shading geometry as the
+    //past-day integration sees identical LiDAR-shadow geometry as the
     //upcoming days. Null on installs without LiDAR coverage, in
     //which case predictedKwhForDay skips the raycast.
 
     for (let dayOffset = 1; dayOffset <= WINDOW_DAYS; dayOffset++)
     {
-        const dayStartMs = today0.getTime() - dayOffset * 24 * HOUR_MS;
-        const dayEndMs   = dayStartMs + 24 * HOUR_MS;
+        //Walk back by calendar days, not by a fixed 24 h offset, so spring-forward (23 h) and fall-back (25 h) DST
+        //days line up on local midnight instead of landing at 01:00 or 23:00 of the prior day. The two `setDate`
+        //calls are evaluated on fresh Date instances so the loop state is not mutated across iterations.
+        const dayStart   = new Date(today0);
+        dayStart.setDate(dayStart.getDate() - dayOffset);
+        const dayEnd     = new Date(dayStart);
+        dayEnd.setDate(dayEnd.getDate() + 1);
+        const dayStartMs = dayStart.getTime();
+        const dayEndMs   = dayEnd.getTime();
 
         const predictedKwh = predictedKwhForDay(host.config, series, coords, dayStartMs, dayEndMs, raster);
-        if (predictedKwh < MIN_DAY_PREDICTED_KWH) continue;
+        if (predictedKwh < MIN_DAY_PREDICTED_KWH)
+        {
+            continue;
+        }
 
         const actualKwh = actualKwhForDay(hist, host._pvUnit, dayStartMs, dayEndMs);
-        if (actualKwh <= 0) continue;
+        if (actualKwh <= 0)
+        {
+            continue;
+        }
 
         const r = actualKwh / predictedKwh;
-        if (!isFinite(r) || r <= 0) continue;
-        ratios.push(Math.max(RATIO_MIN, Math.min(RATIO_MAX, r)));
+        if (!isFinite(r) || r <= 0)
+        {
+            continue;
+        }
+        //Push the raw daily ratio. The single clamp on the final mean below is enough; clamping per-day on the way in
+        //artificially drags the mean toward 1.0 on outlier days, so a string of true-2.0-ratio days reads as 1.5 (the
+        //per-day clamp) averaged with 1.0 baseline = 1.25 instead of the correct 1.5.
+        ratios.push(r);
     }
 
     let result: ForecastCalibration | null;
@@ -137,7 +155,10 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
     else
     {
         let sum = 0;
-        for (const r of ratios) sum += r;
+        for (const r of ratios)
+        {
+            sum += r;
+        }
         const mean = sum / ratios.length;
         result = {
             ratio:    Math.max(RATIO_MIN, Math.min(RATIO_MAX, mean)),
@@ -162,19 +183,28 @@ function predictedKwhForDay(
 ): number
 {
     const k = pvCalibK(config);
-    if (k === null || k <= 0) return 0;
+    if (k === null || k <= 0)
+    {
+        return 0;
+    }
     let kwh = 0;
     for (let i = 0; i < series.times.length; i++)
     {
         const tMs = series.times[i].getTime();
-        if (tMs < startMs || tMs >= endMs) continue;
+        if (tMs < startMs || tMs >= endMs)
+        {
+            continue;
+        }
         const cloud = series.cloud[i] ?? 0;
         const pct = computePvPowerWeighted(config, series.times[i], coords.lat, coords.lon, cloud, {
             airTempC: series.temperature?.[i] ?? NaN,
             windMs:   series.windSpeed?.[i]   ?? NaN,
             raster,
         });
-        if (pct <= 0) continue;
+        if (pct <= 0)
+        {
+            continue;
+        }
         kwh += (pct * k) / 1000;
     }
     return kwh;
@@ -191,7 +221,10 @@ function actualKwhForDay(
     endMs:   number
 ): number
 {
-    if (hist.times.length < 2) return 0;
+    if (hist.times.length < 2)
+    {
+        return 0;
+    }
     const unit = (pvUnit || '').toLowerCase();
     const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
     const energyFactor = unit === 'wh' ? 1 / 1000
@@ -211,10 +244,19 @@ function actualKwhForDay(
         {
             const tMs     = hist.times[i].getTime();
             const tPrevMs = hist.times[i - 1].getTime();
-            if (tMs < startMs || tMs >= endMs) continue;
-            if (tPrevMs < startMs - HOUR_MS) continue;
+            if (tMs < startMs || tMs >= endMs)
+            {
+                continue;
+            }
+            if (tPrevMs < startMs - HOUR_MS)
+            {
+                continue;
+            }
             const dv = hist.values[i] - hist.values[i - 1];
-            if (!isFinite(dv) || dv < 0) continue;
+            if (!isFinite(dv) || dv < 0)
+            {
+                continue;
+            }
             kwh += dv * energyFactor;
         }
         return kwh;
@@ -225,13 +267,22 @@ function actualKwhForDay(
     for (let i = 1; i < hist.times.length; i++)
     {
         const tCurrMs = hist.times[i].getTime();
-        if (tCurrMs < startMs || tCurrMs >= endMs) continue;
+        if (tCurrMs < startMs || tCurrMs >= endMs)
+        {
+            continue;
+        }
         const tPrevMs = hist.times[i - 1].getTime();
         const dtH = (tCurrMs - tPrevMs) / HOUR_MS;
-        if (dtH <= 0 || dtH > 6) continue;
+        if (dtH <= 0 || dtH > 6)
+        {
+            continue;
+        }
         const wPrev = pvNormalizeToWatts(hist.values[i - 1], pvUnit);
         const wCurr = pvNormalizeToWatts(hist.values[i],     pvUnit);
-        if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+        if (!isFinite(wPrev) || !isFinite(wCurr))
+        {
+            continue;
+        }
         kwh += ((wPrev + wCurr) / 2) * dtH / 1000;
     }
     return kwh;

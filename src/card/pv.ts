@@ -8,12 +8,32 @@
 //re-render exactly as the inline version did.
 
 import type { HeliosConfig } from '../helios-config';
-import { resolveEffectiveEntity } from './energy-prefs';
+import type { EnergyDefaults } from './energy-prefs';
 import { computePvPower, getSunPosition, type PanelOrientation } from '../engine/sun';
 import { isPanelShaded, type NdsmRaster } from '../engine/pv-shading';
 import { formatLocalisedNumber } from './format';
-import { parseBatteryBanks } from './battery';
+import { resolveBatteryEntities } from './battery';
 import { callWSWithTimeout, WsTimeoutError, scheduleIdle } from './ws-timeout';
+import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './loading-tracker';
+
+
+//Resolve the live PV entity from the HA Energy dashboard solar source. Prefers the optional `stat_rate` (signed W or kW)
+//over the cumulative `stat_energy_from` (kWh) so the chart and chip plot the live power directly instead of going
+//through the trapezoidal differentiation path that reads as flat-topped plateaus on sparse meters. Returns an empty
+//string when no solar source is configured, the caller treats that as "chip + chart hidden". Multi-source installs
+//collapse to the first entry today; full per-source aggregation across all solar sources lands in a follow-up.
+export function resolvePvLiveEntity(defaults: EnergyDefaults): string
+{
+    if (defaults.solarStatRates.length > 0)
+    {
+        return defaults.solarStatRates[0];
+    }
+    if (defaults.solarStatEnergyFroms.length > 0)
+    {
+        return defaults.solarStatEnergyFroms[0];
+    }
+    return '';
+}
 
 //Default panel height above ground in metres when the user didn't
 //set a per-array `height`. 5 m matches the eaves of a single-storey
@@ -50,7 +70,7 @@ export interface PvRate
 //mutable `_pv*` fields are typed non-readonly so the refresh / fetch
 //helpers can assign them; Lit's @state reactivity is preserved
 //because the assignment hits the same setter the decorator installed.
-export interface PvHost
+export interface PvHost extends LoadingTrackerHost
 {
     readonly config:     HeliosConfig | undefined;
     readonly hass:       any;
@@ -60,21 +80,25 @@ export interface PvHost
     _pvCurrent:             number | null;
     _pvUnit:                string;
     _pvHistory:             PvHistory | null;
+    //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
+    //source (LBDG_'s feature request) and the scrub tooltip can show a per-entity breakdown next to the summed
+    //value. The map is keyed by entity id; on single-source installs it carries a single entry that equals
+    //`_pvHistory`. Empty map = aggregated only (single-source or pre-fetch boot window).
+    _pvHistoryPerEntity:    Map<string, PvHistory>;
     _pvSampleBuffer:        PvSample[];
     _pvFetchKey:            string;
     _pvFetching:            boolean;
     _pvHistoryDiagnostics:  { rawEntries: number; samples: number; windowH: number } | null;
-    //Parallel per-bank SoC histories fetched alongside _pvHistory when at least one battery bank is configured AND `inverter-cutoff-soc-pct`
-    //is set. One entry per bank (indices parallel to parseBatteryBanks(config)). The shading-map trainer scans them to detect inverter-
-    //cutoff buckets (every bank full + production blocked) and skip them so the map doesn't accumulate phantom shadow at the matching sun
-    //bin. Empty array when the guard is off or no battery is configured; the trainer then falls back to the legacy "train every bucket"
-    //path.
-    _batteryHistories:      PvHistory[];
+    //Companion battery SoC history fetched alongside _pvHistory when a battery is wired AND `inverter-cutoff-soc-pct` is set. The
+    //shading-map trainer scans it to detect inverter-cutoff buckets (battery full + production blocked) and skip them so the map
+    //doesn't accumulate phantom shadow at the matching sun bin. Null when the guard is off or no battery is configured; the
+    //trainer then trains every bucket without the guard.
+    _batteryHistory:        PvHistory | null;
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. Same parallel times[] / values[] shape as `_pvHistory`,
-    //but populated via `recorder/statistics_during_period` with `period: 'hour'` over the past 5 days. Power sensors land here as bucket
-    //means; cumulative-energy sensors land as the bucket-end `state` field. Carries roughly 120 rows where the legacy raw-history path
-    //would have carried ~430k on a 1 Hz Victron, an order-of-magnitude lighter recorder load. Null when statistics are unavailable
-    //(entity has no `state_class`, LTS disabled), the calibration then degrades to the narrower `_pvHistory` window.
+    //populated via `recorder/statistics_during_period` with `period: 'hour'` over the past 5 days. Power sensors land here as bucket
+    //means; cumulative-energy sensors land as the bucket-end `state` field. Carries roughly 120 rows, an order of magnitude lighter
+    //recorder load than the raw history path on a high-frequency BMS. Null when statistics are unavailable (entity has no
+    //`state_class`, LTS disabled), the calibration then degrades to the narrower `_pvHistory` window.
     _pvCalibStats:          PvHistory | null;
     _pvCalibStatsFetchKey:  string;
     _pvCalibStatsFetching:  boolean;
@@ -97,7 +121,7 @@ const PV_CALIB_WIPE_FLAG_KEY = 'helios-pv-calib:wiped-v1';
 //element unmount + remount (the user navigating away from the card
 //and back), which is the lifecycle event that the per-instance
 //`_pv*FetchKey` gate cannot catch. Without this, every navigation
-//restarted the heavy fetch from zero, see #155 / #158.
+//restarted the heavy fetch from zero
 //
 //Each entry carries the parsed series + the fetched-at timestamp.
 //TTL keeps stale data from drifting forever, the next refresh
@@ -110,7 +134,11 @@ const PV_CACHE_TTL_MS = 15 * 60_000;
 interface PvHistoryCacheEntry
 {
     history:          PvHistory;
-    batteryHistories: PvHistory[];
+    //Per-entity snapshots preserved in the cache so a cross-mount cache hit also primes the per-entity curves on the
+    //chart without a fresh round-trip. Stored as a plain object map for JSON-friendliness; the Map ↔ object coercion
+    //lives at the cache-set / cache-get boundary.
+    historyPerEntity: Record<string, PvHistory>;
+    batteryHistory:   PvHistory | null;
     diagnostics:      { rawEntries: number; samples: number; windowH: number };
     ts:               number;
 }
@@ -126,22 +154,13 @@ const _pvCalibStatsCache:     Map<string, PvStatsCacheEntry>   = new Map();
 const _pvTrainerStatsCache:   Map<string, PvStatsCacheEntry>   = new Map();
 
 
-function pvHistoryCacheGet(key: string): PvHistoryCacheEntry | null
-{
-    const e = _pvHistoryCache.get(key);
-    if (!e) return null;
-    if (Date.now() - e.ts > PV_CACHE_TTL_MS)
-    {
-        _pvHistoryCache.delete(key);
-        return null;
-    }
-    return e;
-}
-
 function pvStatsCacheGet(cache: Map<string, PvStatsCacheEntry>, key: string): PvStatsCacheEntry | null
 {
     const e = cache.get(key);
-    if (!e) return null;
+    if (!e)
+    {
+        return null;
+    }
     if (Date.now() - e.ts > PV_CACHE_TTL_MS)
     {
         cache.delete(key);
@@ -167,7 +186,7 @@ export function clearPvModuleCaches(): void
 //when the (entity, range) tuple matches the last successful fetch.
 export function refreshPv(host: PvHost): void
 {
-    const entity = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
+    const entity = resolvePvLiveEntity(host._energyDefaults);
 
     if (!entity || !host.hass)
     {
@@ -183,34 +202,105 @@ export function refreshPv(host: PvHost): void
         return;
     }
 
+    //Seed `_pvHistory` as an empty pair so the boot gate clears immediately on entity resolution
+    //and the live tail extension below can append without a null guard each cycle. The chart
+    //pulls its past portion from `_pvCalibStats` / `_pvTrainerStats` LTS and the right-edge
+    //live tail from the `hass.states[entity]` pushes appended here.
+    if (host._pvHistory === null)
+    {
+        host._pvHistory = { times: [], values: [] };
+    }
+
+    //Multi-source LIVE aggregation. A user with a split E/W install (or any other multi-string install with one
+    //solar source per string in HA Energy) sees the SUM of every wired stat_rate / stat_energy_from sensor on the
+    //chip, the tooltip, the dashboard headline, instead of just the first entry the previous resolver returned. The
+    //history fetch + scrub-past path stays single-entity for now (uses `entity` resolved above) until the recorder
+    //+ interpolation refactor that turns `_pvHistory` into a summed series lands.
+    const liveEntities = host._energyDefaults.solarStatRates.length > 0
+        ? host._energyDefaults.solarStatRates
+        : host._energyDefaults.solarStatEnergyFroms;
+    const isMultiEntity = liveEntities.length > 1;
+
     //Live state read, always cheap, runs on every Lit cycle.
     const stateObj = host.hass.states?.[entity];
     if (stateObj)
     {
-        const v = parseFloat(stateObj.state);
-        const next = isFinite(v) ? v : null;
-        if (next !== host._pvCurrent)
+        let nextValue:    number | null = null;
+        let nextUnit:     string        = '';
+        let liveTs:       number        = 0;
+        if (isMultiEntity)
         {
-            host._pvCurrent = next;
+            //Sum the raw value across every configured live entity and keep the unit of the first valid sample. The
+            //downstream consumer (currentPvRate / pvRateAtTime) classifies cumulative vs measurement off `_pvUnit` so
+            //a kWh-only HA Energy install (4 stat_energy_from sources, no stat_rate) lands as a summed kWh stream and
+            //the buffer differentiation derives total W exactly as it does for a single source; a stat_rate-on-every-
+            //source install lands as a summed W stream and the chip skips the buffer path. The unit is taken from the
+            //first valid entity; multi-source installs where the per-source units disagree are an HA config error
+            //(one source in W, another in kW would mis-sum), so this path trusts the single-unit assumption a single
+            //HA Energy block enforces and skips the per-sample normalisation helper.
+            let sumValue  = 0;
+            let firstUnit = '';
+            let anyValid  = false;
+            for (const id of liveEntities)
+            {
+                const so = host.hass.states?.[id];
+                if (!so)
+                {
+                    continue;
+                }
+                const v = parseFloat(so.state);
+                if (!isFinite(v))
+                {
+                    continue;
+                }
+                if (!firstUnit)
+                {
+                    firstUnit = String(so.attributes?.unit_of_measurement ?? '');
+                }
+                sumValue += v;
+                anyValid = true;
+                const ts = so.last_updated
+                    ? new Date(so.last_updated).getTime()
+                    : Date.now();
+                if (ts > liveTs)
+                {
+                    liveTs = ts;
+                }
+            }
+            if (anyValid)
+            {
+                nextValue = sumValue;
+                nextUnit  = firstUnit;
+            }
         }
-        const unit = stateObj.attributes?.unit_of_measurement ?? '';
-        if (unit !== host._pvUnit)
+        else
         {
-            host._pvUnit = unit;
+            const v = parseFloat(stateObj.state);
+            nextValue = isFinite(v) ? v : null;
+            nextUnit  = stateObj.attributes?.unit_of_measurement ?? '';
+            liveTs    = stateObj.last_updated
+                ? new Date(stateObj.last_updated).getTime()
+                : Date.now();
+        }
+        if (nextValue !== host._pvCurrent)
+        {
+            host._pvCurrent = nextValue;
+        }
+        if (nextUnit !== host._pvUnit)
+        {
+            host._pvUnit = nextUnit;
         }
 
         //Append the freshly-read state to the rolling buffer if the entity timestamp moved forward since last cycle. We trim entries older than 5 min
         //so the buffer stays tiny even on entities that update many times per second.
-        if (next !== null)
+        if (nextValue !== null)
         {
-            const ts = stateObj.last_updated
-                ? new Date(stateObj.last_updated).getTime()
-                : Date.now();
+            const ts = liveTs || Date.now();
             const buf = host._pvSampleBuffer;
             const last = buf.length > 0 ? buf[buf.length - 1] : null;
             if (!last || ts > last.t)
             {
-                buf.push({ t: ts, v: next });
+                buf.push({ t: ts, v: nextValue });
                 const cutoff = Date.now() - 5 * 60 * 1000;
                 while (buf.length > 1 && buf[0].t < cutoff)
                 {
@@ -233,17 +323,20 @@ export function refreshPv(host: PvHost): void
             {
                 const lastIdx = hist.times.length - 1;
                 const lastTs  = lastIdx >= 0 ? hist.times[lastIdx].getTime() : 0;
-                if (ts > lastTs)
+                if (ts > lastTs && nextValue !== null)
                 {
                     hist.times.push(new Date(ts));
-                    hist.values.push(next);
+                    hist.values.push(nextValue);
                     //Drop the leading samples that have aged out of the chart's visible window. Guards the array against
                     //unbounded growth on long-uptime sessions where the fetch key stays stable for many hours.
                     if (host._timeRange)
                     {
                         const rangeStartMs = host._timeRange.start.getTime();
                         let drop = 0;
-                        while (drop < hist.times.length && hist.times[drop].getTime() < rangeStartMs) drop++;
+                        while (drop < hist.times.length && hist.times[drop].getTime() < rangeStartMs)
+                        {
+                            drop++;
+                        }
                         if (drop > 0)
                         {
                             hist.times.splice(0, drop);
@@ -268,16 +361,18 @@ export function refreshPv(host: PvHost): void
     }
 
     //Three-fetch staging, gated independently so each piece reissues only when its (entity, window) tuple changes:
-    //  1. Raw history bounded to the chart's visible past (~2 days). This is the only call that has historically saturated the recorder
-    //     on high-frequency installs (Victron Cerbo at >1 Hz returns millions of rows over a 30-day window, see #155). Keeping it
-    //     narrow is the structural fix.
-    //  2. Hourly long-term statistics over 5 days, feeding `calibration.ts`. ~120 rows per fetch, vs ~430k on the legacy raw path for a
-    //     1 Hz Victron, two orders of magnitude lighter on the recorder.
+    //  1. Raw history bounded to the chart's visible past (~2 days). High-frequency installs (Victron Cerbo at >1 Hz) would return
+    //     millions of rows over a wider window, so the narrow cap is the structural ceiling on recorder load.
+    //  2. Hourly long-term statistics over 5 days, feeding `calibration.ts`. ~120 rows per fetch, two orders of magnitude lighter
+    //     on the recorder than the equivalent raw path.
     //  3. 5-minute long-term statistics over 30 days, feeding `shadingTrainer.ts`. ~8.6k rows per fetch.
     //
     //All three exit cheaply on subsequent Lit cycles (clock ticks, hass updates) because the fetch key cache short-circuits
     //identical-range re-fetches, mirroring the existing behaviour.
-    if (!host._timeRange) return;
+    if (!host._timeRange)
+    {
+        return;
+    }
     const fetchEnd = host._timeRange.end;
     const HOUR_MS  = 3_600_000;
     const today0   = new Date();
@@ -295,53 +390,29 @@ export function refreshPv(host: PvHost): void
     //orders of magnitude faster. Raw only needs to cover the live
     //tail accurately enough for the tooltip and the head of the
     //chart curve.
-    const RAW_WINDOW_H = 6;
-    if (!host._pvFetching)
-    {
-        //Cap anchored on NOW, not on the visible timeline end. The
-        //timeline end is the forecast horizon (e.g. tomorrow 23:59),
-        //so anchoring the cap there would place fetchStart in the
-        //future, fetchPvHistory would see `start >= fetchEnd` after
-        //its own "clamp end to now" pass, blank `_pvHistory` and
-        //leave the chart's past portion empty until live state
-        //pushes start landing. The window we actually want is
-        //"the last 6 h of real wall-clock time".
-        const visibleStart = host._timeRange.start;
-        const cap          = new Date(Date.now() - RAW_WINDOW_H * HOUR_MS);
-        const fetchStart   = visibleStart < cap ? cap : visibleStart;
-        const rangeKey   = `${fetchStart.getTime()}|${fetchEnd.getTime()}`;
-        //Optional per-bank battery SoC companion fetch. We only ask HA for the SoC histories when the user has explicitly armed the
-        //inverter-cutoff guard (cutoff percent configured AND at least one bank); otherwise the trainer doesn't need them and the extra
-        //entities in the WS payload would be a waste of HA recorder bandwidth. The fetch key includes the joined bank entity ids so
-        //swapping any bank forces a re-fetch on the next refresh.
-        const batteryEntities = batterySocEntitiesForInhibit(host.config);
-        const fullFetchKey = `${entity}@${rangeKey}`
-            + (batteryEntities.length > 0 ? '|bsoc:' + batteryEntities.join(',') : '');
-        if (fullFetchKey !== host._pvFetchKey)
-        {
-            host._pvFetchKey = fullFetchKey;
-            //Cache hit short-circuits the WS round-trip: the user navigates away from the card and back, the module-level cache still
-            //has the previous fetch parsed and ready, no recorder hit. Cache invalidates on TTL (15 min) or on any (entity / range /
-            //SoC bank) change since that flips the key.
-            const cached = pvHistoryCacheGet(fullFetchKey);
-            if (cached)
-            {
-                host._pvHistory             = cached.history;
-                host._batteryHistories      = cached.batteryHistories;
-                host._pvHistoryDiagnostics  = cached.diagnostics;
-            }
-            else
-            {
-                fetchPvHistory(host, entity, fetchStart, fetchEnd, batteryEntities, fullFetchKey);
-            }
-        }
-    }
+    //Hoisted out of the LTS fetch blocks below so the calibration + trainer paths see the same entity set for
+    //their cache keys. A drift between the keys would re-fetch one path on every refresh, defeating the hourly /
+    //5-min cadence guarantees.
+    const sortedLive   = [...liveEntities].sort();
+    const fetchKeyPart = sortedLive.length > 0 ? sortedLive.join(',') : entity;
 
-    //Hourly LTS for calibration (5 days).
+    //Raw `history/history_during_period` fetch removed. The card is now wired to the HA Energy dashboard end-to-end
+    //(daily totals via recorder `change`, headlines via `_haSolarTodayKwh`, calibration via `_pvCalibStats`,
+    //shading-map trainer via `_pvTrainerStats`, and the live chip via `hass.states[entity]` direct read), so the
+    //raw 6 h scan that was kept around to feed the chart tail + scrub past at 1 Hz precision is no longer load-
+    //bearing for any single feature. It was also the single heaviest WS round-trip the card fired (4-source 1 Hz
+    //Victron install = ~5-10 MB payload, single-threaded SQLite recorder scan on every card mount). The chart
+    //rendering already blends `_pvCalibStats` for any portion `_pvHistory` does not cover; with `_pvHistory` empty
+    //the whole past portion of the curve flows through LTS. The right-edge live tail is still extended via the
+    //`hass.states[entity]` push appended directly to `_pvHistory.times` / `.values` higher up in this function,
+    //so the curve still tracks the live state at the cadence HA fires state_changed events.
+
+    //Hourly LTS for calibration (5 days). Multi-source aggregation matches the raw-history path so the calibration
+    //ratio is learned against the SUMMED predicted-vs-actual instead of the first-entity-only fraction.
     if (!host._pvCalibStatsFetching)
     {
         const calibStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
-        const calibKey   = `${entity}@h|${calibStart.getTime()}|${fetchEnd.getTime()}`;
+        const calibKey   = `${fetchKeyPart}@h|${calibStart.getTime()}|${fetchEnd.getTime()}`;
         if (calibKey !== host._pvCalibStatsFetchKey)
         {
             host._pvCalibStatsFetchKey = calibKey;
@@ -352,16 +423,21 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                fetchPvStatistics(host, entity, calibStart, fetchEnd, 'hour', 'calib', calibKey);
+                const calibIds     = sortedLive.length > 0 ? sortedLive : [entity];
+                const unitLow      = (host._pvUnit || '').toLowerCase();
+                const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
+                fetchPvStatistics(host, calibIds, calibStart, fetchEnd, 'hour', 'calib', calibKey, isCumulative);
             }
         }
     }
 
-    //5-min LTS for shading-map trainer (30 days).
+    //5-min LTS for the unified data source's past-production curve (5 days, matching the data
+    //source window). Same multi-source aggregation as the calib path so the curve sees total
+    //production rather than the first-entity share. Window scoped to the store's J-2 to J+2 span.
     if (!host._pvTrainerStatsFetching)
     {
-        const trainerStart = new Date(today0.getTime() - 30 * 24 * HOUR_MS);
-        const trainerKey   = `${entity}@5m|${trainerStart.getTime()}|${fetchEnd.getTime()}`;
+        const trainerStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
+        const trainerKey   = `${fetchKeyPart}@5m|${trainerStart.getTime()}|${fetchEnd.getTime()}`;
         if (trainerKey !== host._pvTrainerStatsFetchKey)
         {
             host._pvTrainerStatsFetchKey = trainerKey;
@@ -372,12 +448,15 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                //Defer to browser idle time so the user-facing fetches (raw PV history + calib stats) land first and the chart paints
-                //quickly. The trainer feeds the shading-map heuristic which the engine can rebuild from any non-empty sample stream, so
-                //the trainer is effectively a background optimisation, not a blocker for the chip / chart render. See #160.
+                //Defer to browser idle time so the user-facing fetches (calib stats + live state)
+                //land first and the chart paints quickly. The trainer 5-min stats then refine the
+                //past production curve once they arrive, no blocker for the initial chart render.
+                const trainerIds   = sortedLive.length > 0 ? sortedLive : [entity];
+                const unitLow      = (host._pvUnit || '').toLowerCase();
+                const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';
                 scheduleIdle(() =>
                 {
-                    fetchPvStatistics(host, entity, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey);
+                    fetchPvStatistics(host, trainerIds, trainerStart, fetchEnd, '5minute', 'trainer', trainerKey, isCumulative);
                 });
             }
         }
@@ -385,17 +464,15 @@ export function refreshPv(host: PvHost): void
 }
 
 
-//Returns the per-bank SoC entity ids only when the inverter-cutoff guard is armed (cutoff percent set AND at least one bank configured),
-//empty array otherwise. Centralises the gate so both the trainer and the fetch path agree on when the SoC histories are needed and on
-//which bank order. Indices stay parallel to parseBatteryBanks(config).
-export function batterySocEntitiesForInhibit(cfg: HeliosConfig | undefined): string[]
+//Returns the SoC entity id only when the inverter-cutoff guard is armed (cutoff percent set AND a battery SoC source resolved from the HA
+//Energy defaults), null otherwise. Centralises the gate so both the trainer and the fetch path agree on when the SoC history is needed.
+export function batterySocEntityForInhibit(cfg: HeliosConfig | undefined, defaults: EnergyDefaults): string | null
 {
-    if (!cfg) return [];
-    const cutoff = cfg['inverter-cutoff-soc-pct'];
-    const cutoffN = typeof cutoff === 'number' ? cutoff : typeof cutoff === 'string' ? parseFloat(cutoff) : NaN;
-    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return [];
-    const banks = parseBatteryBanks(cfg);
-    return banks.map(b => b.socEntity).filter(e => e.length > 0);
+    if (inverterCutoffSocPct(cfg) === null)
+    {
+        return null;
+    }
+    return resolveBatteryEntities(defaults).socEntity;
 }
 
 
@@ -403,10 +480,16 @@ export function batterySocEntitiesForInhibit(cfg: HeliosConfig | undefined): str
 //read both values without re-validating the config tree twice.
 export function inverterCutoffSocPct(cfg: HeliosConfig | undefined): number | null
 {
-    if (!cfg) return null;
+    if (!cfg)
+    {
+        return null;
+    }
     const cutoff = cfg['inverter-cutoff-soc-pct'];
     const cutoffN = typeof cutoff === 'number' ? cutoff : typeof cutoff === 'string' ? parseFloat(cutoff) : NaN;
-    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100) return null;
+    if (!isFinite(cutoffN) || cutoffN <= 0 || cutoffN > 100)
+    {
+        return null;
+    }
     return cutoffN;
 }
 
@@ -422,9 +505,15 @@ function parseHistoryEntries(arr: any[]): PvHistory
     for (const item of arr)
     {
         const sRaw = item?.s ?? item?.state;
-        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '') continue;
+        if (sRaw === null || sRaw === undefined || sRaw === 'unavailable' || sRaw === 'unknown' || sRaw === '')
+        {
+            continue;
+        }
         const v = parseFloat(String(sRaw));
-        if (!isFinite(v)) continue;
+        if (!isFinite(v))
+        {
+            continue;
+        }
 
         let ts: Date | null = null;
         const tsRaw = item?.lu ?? item?.lc ?? item?.last_updated ?? item?.last_changed ?? null;
@@ -448,7 +537,10 @@ function parseHistoryEntries(arr: any[]): PvHistory
         {
             ts = new Date(lastTsMs);
         }
-        if (!ts || isNaN(ts.getTime())) continue;
+        if (!ts || isNaN(ts.getTime()))
+        {
+            continue;
+        }
 
         lastTsMs = ts.getTime();
         times.push(ts);
@@ -463,44 +555,145 @@ function parseHistoryEntries(arr: any[]): PvHistory
 //at a bucket midpoint, but generic enough for any time-keyed series.
 export function valueAtMs(series: PvHistory | null, ms: number): number | null
 {
-    if (!series || series.times.length === 0) return null;
+    if (!series || series.times.length === 0)
+    {
+        return null;
+    }
     const t = series.times;
     const v = series.values;
-    if (ms < t[0].getTime() || ms > t[t.length - 1].getTime()) return null;
+    if (ms < t[0].getTime() || ms > t[t.length - 1].getTime())
+    {
+        return null;
+    }
     //Binary search for the right-hand bracket; samples are inserted in order so the search is sound.
     let lo = 0, hi = t.length - 1;
     while (lo < hi - 1)
     {
         const mid = (lo + hi) >> 1;
-        if (t[mid].getTime() <= ms) lo = mid;
-        else                        hi = mid;
+        if (t[mid].getTime() <= ms)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid;
+        }
     }
     const t0 = t[lo].getTime();
     const t1 = t[hi].getTime();
-    if (t1 === t0) return v[lo];
+    if (t1 === t0)
+    {
+        return v[lo];
+    }
     const f = (ms - t0) / (t1 - t0);
     return v[lo] + (v[hi] - v[lo]) * f;
 }
 
 
+//Last-known-carry-forward aggregator. Walks the union of all per-entity timestamps and at each tick reads each
+//entity's most recent sample at or before the cursor, then sums. The cursor monotonicity (every series is sorted by
+//time) makes the walk O((entities + timestamps) total) instead of O(entities * timestamps). Works equally well for
+//power sensors (instantaneous reading at each tick) and cumulative kWh sensors.
+//
+//`cumulative` flag enables per-entity baselining: each entity is baselined at its first observed value within the
+//window before its contribution is summed. Without this, a multi-source install where one entity comes online
+//mid-window (e.g., a Victron MPPT that boots up at 13:00 with a lifetime cumulative of 1000 kWh) would inject a
+//phantom 1000 kWh jump into the aggregated series at 13:00, and the dashboard's today-kWh integration would
+//attribute that whole jump to "today's production starting at 13:00". With baselining each entity contributes 0 at
+//its first appearance and only its delta-since-arrival from there, so the aggregated curve grows smoothly. Power
+//sensors must use `cumulative: false` because baselining a W reading turns it into "delta-W since the first sample",
+//which is meaningless.
+function aggregatePvHistoriesLkcf(perEntity: PvHistory[], cumulative: boolean = false): PvHistory
+{
+    if (perEntity.length === 0)
+    {
+        return { times: [], values: [] };
+    }
+    if (perEntity.length === 1)
+    {
+        return perEntity[0];
+    }
+    //Union of all timestamps, sorted ascending. Set + sort beats a merge-of-sorted because the entity histories can
+    //carry tens of thousands of samples each on 1 Hz sensors and the explicit Set dedupes coincident timestamps.
+    const tsSet = new Set<number>();
+    for (const h of perEntity)
+    {
+        for (const t of h.times)
+        {
+            tsSet.add(t.getTime());
+        }
+    }
+    const sortedTs = Array.from(tsSet).sort((a, b) => a - b);
+    //One walking index per entity; advances monotonically through the sorted timestamps.
+    const cursors   = new Array<number>(perEntity.length).fill(-1);
+    //Per-entity baseline captured at the first observed value when `cumulative` mode is on. `null` means the
+    //entity has not yet contributed a sample within the window.
+    const baselines = cumulative ? new Array<number | null>(perEntity.length).fill(null) : null;
+    const summed:   number[] = [];
+    for (const ts of sortedTs)
+    {
+        let sum = 0;
+        for (let i = 0; i < perEntity.length; i++)
+        {
+            const h = perEntity[i];
+            //Advance cursor while the next sample is at or before the cursor timestamp.
+            let c = cursors[i];
+            while (c + 1 < h.times.length && h.times[c + 1].getTime() <= ts)
+            {
+                c++;
+            }
+            cursors[i] = c;
+            if (c >= 0 && isFinite(h.values[c]))
+            {
+                if (baselines)
+                {
+                    if (baselines[i] === null)
+                    {
+                        baselines[i] = h.values[c];
+                    }
+                    sum += h.values[c] - baselines[i]!;
+                }
+                else
+                {
+                    sum += h.values[c];
+                }
+            }
+        }
+        summed.push(sum);
+    }
+    return {
+        times:  sortedTs.map(t => new Date(t)),
+        values: summed,
+    };
+}
+
+
 //Pull a historical series from HA's `history/history_during_period` WebSocket command, coerce the heterogeneous payload into parallel times[] /
 //values[] arrays, and snapshot the fetch outcome for `window.heliosStats()`. Fires off `host._pvFetching` for the duration; the gate in refreshPv
-//prevents overlapping calls. When `batterySocEntityIds` is non-empty we fold them all into the same WS request and store the parsed
-//per-bank series on `host._batteryHistories`, the shading-map trainer scans them to skip buckets where every bank reached the cutoff.
+//prevents overlapping calls. When `batterySocId` is non-null we fold it into the same WS request and store the parsed series on
+//`host._batteryHistory`, the shading-map trainer scans it to skip buckets where SoC reached the cutoff. Accepts an
+//array of PV entity ids so multi-source HA Energy installs (split E / W arrays declared as separate solar sources)
+//land an entity-summed `_pvHistory` instead of the previous first-entry-only collapse.
 export async function fetchPvHistory(
     host: PvHost,
-    entityId: string,
+    entityIds: string[],
     start: Date,
     end: Date,
-    batterySocEntityIds: string[] = [],
+    batterySocId: string | null = null,
     cacheKey: string = '',
+    //Whether the wired entities are cumulative energy counters (Wh/kWh/MWh). Multi-source aggregation baselines
+    //each entity at its first observed value within the window before summing, so a source that comes online
+    //mid-window cannot inject its lifetime cumulative as a phantom jump. Power entities pass false and the
+    //aggregator falls back to a plain raw sum.
+    cumulative: boolean = false,
 ): Promise<void>
 {
-    if (!host.hass?.callWS)
+    if (!host.hass?.callWS || entityIds.length === 0)
     {
         return;
     }
     host._pvFetching = true;
+    beginLoadingPhase(host, 'pv-history');
     try
     {
         //History only exists up to "now", anything past that is the forecast half of the timeline and has no production data. Clamp the fetch end so
@@ -510,54 +703,78 @@ export async function fetchPvHistory(
         if (start >= fetchEnd)
         {
             host._pvHistory = { times: [], values: [] };
-            host._batteryHistories = [];
+            host._batteryHistory = null;
             return;
         }
 
-        const entityIds = batterySocEntityIds.length > 0
-            ? [entityId, ...batterySocEntityIds]
-            : [entityId];
+        const wsEntityIds = batterySocId
+            ? [...entityIds, batterySocId]
+            : [...entityIds];
         const result: any = await callWSWithTimeout<any>(host.hass, {
             type:                     'history/history_during_period',
             start_time:               start.toISOString(),
             end_time:                 fetchEnd.toISOString(),
-            entity_ids:               entityIds,
+            entity_ids:               wsEntityIds,
             minimal_response:         true,
             no_attributes:            true,
             //Lets HA drop bucket-internal duplicates server-side. On a Victron MPPT at >1 Hz that trims roughly 30-70 % of the rows
-            //without affecting the calibration / chart since both consumers walk neighbour-pair deltas. See #157.
+            //without affecting the calibration / chart since both consumers walk neighbour-pair deltas.
             significant_changes_only: true,
         });
 
-        const arr: any[] = (result && result[entityId]) ?? [];
-        const parsed = parseHistoryEntries(arr);
-        const times = parsed.times;
-        const values = parsed.values;
+        //Per-entity parse, then LKCF aggregate across the union of timestamps. Single-source installs go through the
+        //fast path inside `aggregatePvHistoriesLkcf` (one history, returned as-is) so the cost stays at the existing
+        //single-entry parse. The per-entity parsed histories are also preserved on the host so the chart can render
+        //one curve per source and the scrub tooltip can show a per-entity breakdown next to the summed value.
+        const perEntity:        PvHistory[] = [];
+        const perEntityById:    Record<string, PvHistory> = {};
+        let totalRawEntries = 0;
+        for (const id of entityIds)
+        {
+            const arr: any[] = (result && result[id]) ?? [];
+            totalRawEntries += arr.length;
+            const parsed = parseHistoryEntries(arr);
+            perEntity.push(parsed);
+            perEntityById[id] = parsed;
+        }
+        const history: PvHistory = aggregatePvHistoriesLkcf(perEntity, cumulative);
 
-        //Per-bank parse for battery SoC when requested. Failure for any one bank is silent: the trainer just sees an empty series for
-        //that bank and the min-SoC computation skips it, no need to fail the whole PV fetch over an optional companion entity.
-        const batteryHistories: PvHistory[] = batterySocEntityIds.length > 0
-            ? batterySocEntityIds.map(id => parseHistoryEntries((result && result[id]) ?? []))
-            : [];
-        host._batteryHistories = batteryHistories;
+        const batteryHistory: PvHistory | null = batterySocId
+            ? parseHistoryEntries((result && result[batterySocId]) ?? [])
+            : null;
+        host._batteryHistory = batteryHistory;
 
-        const history: PvHistory = { times, values };
         host._pvHistory = history;
+        //Refresh the per-entity map: clear, then repopulate with the freshly parsed series. Mutation in place keeps
+        //the Map identity stable across Lit cycles so downstream reactivity sees the change through the value reads
+        //rather than the reference flip (other state writes in the same refresh chain already drive re-render).
+        host._pvHistoryPerEntity.clear();
+        for (const id of entityIds)
+        {
+            host._pvHistoryPerEntity.set(id, perEntityById[id]);
+        }
         //Snapshot the fetch outcome so `window.heliosStats()` can
         //surface it without us logging on every fetch.
         const diagnostics =
         {
-            rawEntries: arr.length,
-            samples:    times.length,
+            rawEntries: totalRawEntries,
+            samples:    history.times.length,
             windowH:    Number(((fetchEnd.getTime() - start.getTime()) / 3_600_000).toFixed(1))
         };
         host._pvHistoryDiagnostics = diagnostics;
 
         //Persist for the next mount. The TTL covers stale-read protection; the cache lives at module scope so nav-away / nav-back
-        //picks it up without a fresh recorder hit.
+        //picks it up without a fresh recorder hit. The per-entity snapshot also rides along so the per-source curves
+        //paint immediately on the cached path without re-parsing.
         if (cacheKey)
         {
-            _pvHistoryCache.set(cacheKey, { history, batteryHistories, diagnostics, ts: Date.now() });
+            _pvHistoryCache.set(cacheKey, {
+                history,
+                historyPerEntity: perEntityById,
+                batteryHistory,
+                diagnostics,
+                ts: Date.now()
+            });
         }
     }
     catch (e)
@@ -575,13 +792,14 @@ export async function fetchPvHistory(
     finally
     {
         host._pvFetching = false;
+        endLoadingPhase(host, 'pv-history');
     }
 }
 
 
 //Pull a long-term-statistics series from HA's `recorder/statistics_during_period` WebSocket command. Trades raw resolution for a two-orders-of-
 //magnitude reduction in payload size, which keeps the recorder responsive on installs whose PV entity reports several samples per second (Victron
-//Cerbo and friends, see #155).
+//Cerbo and friends).
 //
 //`role` selects the target slot: `'calib'` populates `host._pvCalibStats` for the 5-day forecast calibration, `'trainer'` populates
 //`host._pvTrainerStats` for the 30-day shading-map trainer. The two paths are independent so a slow trainer fetch does not delay the calibration
@@ -594,7 +812,7 @@ export async function fetchPvHistory(
 //`mean` only and a cumulative-energy entity would have returned all-null buckets, leaving the slot empty.
 //
 //Anchoring: cumulative samples (taken from `state`) anchor at the bucket midpoint to match the power-sensor convention. The slight
-//attribution drift across the day boundary is absorbed by `calibration.ts:actualKwhForDay`'s guard widening (see #155 follow-ups).
+//attribution drift across the day boundary is absorbed by `calibration.ts:actualKwhForDay`'s guard widening.
 //Power samples (taken from `mean`) anchor at the bucket midpoint so the trapezoidal integration in `calibration.ts` and
 //`shadingTrainer.ts` matches the existing semantics. Buckets with both `mean` AND `state` null are dropped silently.
 //
@@ -602,15 +820,22 @@ export async function fetchPvHistory(
 //entity is not LTS-tracked HA returns an empty array; we surface that as an empty `PvHistory` and let the consumer fall back to `_pvHistory`.
 export async function fetchPvStatistics(
     host: PvHost,
-    entityId: string,
+    entityIds: string[],
     start: Date,
     end: Date,
     period: '5minute' | 'hour' | 'day' | 'week' | 'month',
     role: 'calib' | 'trainer',
     cacheKey: string = '',
+    //Same `cumulative` flag as fetchPvHistory. For LTS this matters because cumulative entities populate the `state`
+    //field with the bucket-end lifetime value, which mirrors the multi-source phantom-jump risk if one source comes
+    //online mid-window. Power entities populate `mean` directly and stay on the raw-sum path.
+    cumulative: boolean = false,
 ): Promise<void>
 {
-    if (!host.hass?.callWS) return;
+    if (!host.hass?.callWS || entityIds.length === 0)
+    {
+        return;
+    }
 
     const fetchingFlag    = role === 'calib' ? '_pvCalibStatsFetching'    : '_pvTrainerStatsFetching';
     const targetSlot      = role === 'calib' ? '_pvCalibStats'            : '_pvTrainerStats';
@@ -632,42 +857,62 @@ export async function fetchPvStatistics(
             type:           'recorder/statistics_during_period',
             start_time:     start.toISOString(),
             end_time:       fetchEnd.toISOString(),
-            statistic_ids:  [entityId],
+            statistic_ids:  entityIds,
             period,
             //Request both `mean` and `state`. Power sensors populate `mean`, cumulative-energy sensors populate `state`. The parser
             //below prefers `mean` and falls back to `state`, so a single round-trip covers both wirings without depending on the
             //user-facing unit having reached `host._pvUnit` yet.
             types:          ['mean', 'state'],
+            //Normalise to kWh / W so installs reporting in Wh, MWh or kW land on the same scale the calibration + chart
+            //expect. The `pvNormalizeToWatts` helper still handles the live state read where this hint is unavailable.
+            units:          { energy: 'kWh', power: 'W' },
         });
 
-        const arr: any[] = (result && result[entityId]) ?? [];
-        const times:  Date[]   = [];
-        const values: number[] = [];
-
-        for (const item of arr)
+        //Per-entity bucket parse, then LKCF aggregation over the union of bucket midpoints. LTS buckets typically
+        //align across same-period entities (every entity has a 14:00 hour bucket etc.), in which case the LKCF
+        //walker collapses to a clean per-bucket sum; on misaligned series the carry-forward keeps the per-source
+        //contribution stable across gaps.
+        const perEntity: PvHistory[] = [];
+        for (const id of entityIds)
         {
-            //Bucket boundaries arrive as ISO 8601 strings or millisecond epochs depending on the HA version; coerce both.
-            const startRaw = item?.start;
-            const endRaw   = item?.end;
-            const startMs  = parseStatBoundary(startRaw);
-            const endMs    = parseStatBoundary(endRaw);
-            if (startMs === null) continue;
-            //Prefer `mean` (populated for power / measurement entities); fall back to `state` (populated for cumulative-energy
-            //entities). Both buckets null is treated as a gap and skipped silently.
-            let valueRaw: unknown = item?.mean;
-            if (valueRaw === null || valueRaw === undefined) valueRaw = item?.state;
-            if (valueRaw === null || valueRaw === undefined) continue;
-            const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
-            if (!isFinite(v)) continue;
-            //Bucket midpoint anchor for both flavours. Aligns with the trapezoidal integration in `calibration.ts` and
-            //`shadingTrainer.ts`. Mid-bucket attribution averages out across the day boundary for cumulative sensors when the
-            //calibration's cross-day guard tolerates the trailing slice.
-            const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
-            times.push(new Date(anchorMs));
-            values.push(v);
+            const arr: any[] = (result && result[id]) ?? [];
+            const times:  Date[]   = [];
+            const values: number[] = [];
+            for (const item of arr)
+            {
+                const startRaw = item?.start;
+                const endRaw   = item?.end;
+                const startMs  = parseStatBoundary(startRaw);
+                const endMs    = parseStatBoundary(endRaw);
+                if (startMs === null)
+                {
+                    continue;
+                }
+                let valueRaw: unknown = item?.mean;
+                if (valueRaw === null || valueRaw === undefined)
+                {
+                    valueRaw = item?.state;
+                }
+                if (valueRaw === null || valueRaw === undefined)
+                {
+                    continue;
+                }
+                const v = typeof valueRaw === 'number' ? valueRaw : parseFloat(String(valueRaw));
+                if (!isFinite(v))
+                {
+                    continue;
+                }
+                //Bucket midpoint anchor for both flavours. Aligns with the trapezoidal integration in `calibration.ts` and
+                //`shadingTrainer.ts`. Mid-bucket attribution averages out across the day boundary for cumulative sensors when the
+                //calibration's cross-day guard tolerates the trailing slice.
+                const anchorMs = endMs !== null ? (startMs + endMs) / 2 : startMs;
+                times.push(new Date(anchorMs));
+                values.push(v);
+            }
+            perEntity.push({ times, values });
         }
 
-        const stats: PvHistory = { times, values };
+        const stats: PvHistory = aggregatePvHistoriesLkcf(perEntity, cumulative);
         host[targetSlot] = stats;
         if (cacheKey)
         {
@@ -698,12 +943,21 @@ export async function fetchPvStatistics(
 //since HA's payload shape has changed between releases. Returns null on anything unparseable.
 function parseStatBoundary(raw: unknown): number | null
 {
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'number') return raw > 1e12 ? raw : raw * 1000;
+    if (raw === null || raw === undefined)
+    {
+        return null;
+    }
+    if (typeof raw === 'number')
+    {
+        return raw > 1e12 ? raw : raw * 1000;
+    }
     if (typeof raw === 'string')
     {
         const asNum = Number(raw);
-        if (Number.isFinite(asNum) && asNum > 1e9) return asNum > 1e12 ? asNum : asNum * 1000;
+        if (Number.isFinite(asNum) && asNum > 1e9)
+        {
+            return asNum > 1e12 ? asNum : asNum * 1000;
+        }
         const d = new Date(raw);
         const t = d.getTime();
         return isFinite(t) ? t : null;
@@ -727,11 +981,17 @@ function pickPvHistoryAt(host: PvHost, tMs: number): PvHistory | null
 {
     const bracketed = (h: PvHistory | null): PvHistory | null =>
     {
-        if (!h || h.times.length === 0) return null;
+        if (!h || h.times.length === 0)
+        {
+            return null;
+        }
         const firstMs = h.times[0].getTime();
         const lastMs  = h.times[h.times.length - 1].getTime();
         //Allow a 60 s grace at the tail so a "live" scrub to "now" still resolves on a series whose last sample is a few seconds old.
-        if (tMs < firstMs || tMs > lastMs + 60_000) return null;
+        if (tMs < firstMs || tMs > lastMs + 60_000)
+        {
+            return null;
+        }
         return h;
     };
     return bracketed(host._pvHistory)
@@ -755,12 +1015,15 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
 
     //Pick the slot that brackets the scrub timestamp. The raw `_pvHistory` window is bounded to the chart's visible past (~2 days), so any
     //scrub older than that would return null without this fallback. `_pvTrainerStats` carries the same data at 5-min resolution over 30
-    //days, which is enough for chip-level accuracy when the cursor lands past the raw window. See #161.
+    //days, which is enough for chip-level accuracy when the cursor lands past the raw window.
     const hist = pickPvHistoryAt(host, tMs);
-    if (!hist) return null;
+    if (!hist)
+    {
+        return null;
+    }
 
     //Classification, same logic as currentPvRate. Repeated inline so each helper is self-contained.
-    const entity   = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
+    const entity   = resolvePvLiveEntity(host._energyDefaults);
     const stateObj = host.hass?.states?.[entity];
     const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
     const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
@@ -768,27 +1031,73 @@ export function pvRateAtTime(host: PvHost, time: Date): PvRate | null
     const lu       = u.toLowerCase();
 
     let isCumulative: boolean;
-    if (sc === 'total_increasing' || sc === 'total') isCumulative = true;
-    else if (sc === 'measurement') isCumulative = false;
-    else if (dc === 'energy') isCumulative = true;
-    else if (dc === 'power') isCumulative = false;
+    if (sc === 'total_increasing' || sc === 'total')
+    {
+        isCumulative = true;
+    }
+    else if (sc === 'measurement')
+    {
+        isCumulative = false;
+    }
+    else if (dc === 'energy')
+    {
+        isCumulative = true;
+    }
+    else if (dc === 'power')
+    {
+        isCumulative = false;
+    }
     else isCumulative = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
 
     let rateUnit: string;
-    if (lu === 'wh')       rateUnit = 'W';
-    else if (lu === 'kwh') rateUnit = 'kW';
-    else if (lu === 'mwh') rateUnit = 'MW';
-    else                   rateUnit = u ? `${u}/h` : '';
-
-    //Locate the index of the sample at or before `time`, linear scan is fine for the ~96 samples a typical 4-day window carries.
-    let idx = hist.times.length - 1;
-    for (let i = 0; i < hist.times.length; i++)
+    if (lu === 'wh')
     {
-        if (hist.times[i].getTime() > tMs)
+        rateUnit = 'W';
+    }
+    else if (lu === 'kwh')
+    {
+        rateUnit = 'kW';
+    }
+    else if (lu === 'mwh')
+    {
+        rateUnit = 'MW';
+    }
+    else
+    {
+        rateUnit = u ? `${u}/h` : '';
+    }
+
+    //Locate the index of the sample at or before `time`. Binary search over the monotonically ascending `times`
+    //array, called from the scrub tooltip on every Lit render; on 1 Hz Victron / Shelly installs `_pvHistory` can
+    //carry ~21,600 entries over a 6 h raw window, where the previous linear scan was the dominant cost on the
+    //tooltip path.
+    const len = hist.times.length;
+    let idx: number;
+    if (len === 0 || tMs < hist.times[0].getTime())
+    {
+        idx = 0;
+    }
+    else if (tMs >= hist.times[len - 1].getTime())
+    {
+        idx = len - 1;
+    }
+    else
+    {
+        let lo = 0;
+        let hi = len - 1;
+        while (hi - lo > 1)
         {
-            idx = i - 1;
-            break;
+            const mid = (lo + hi) >> 1;
+            if (hist.times[mid].getTime() <= tMs)
+            {
+                lo = mid;
+            }
+            else
+            {
+                hi = mid;
+            }
         }
+        idx = lo;
     }
     if (idx < 0)
     {
@@ -852,7 +1161,7 @@ export function currentPvRate(host: PvHost): PvRate | null
         return null;
     }
 
-    const entity   = resolveEffectiveEntity(host.config, host._energyDefaults, 'pv-power-entity');
+    const entity   = resolvePvLiveEntity(host._energyDefaults);
     const stateObj = host.hass?.states?.[entity];
     const sc       = String(stateObj?.attributes?.state_class  ?? '').toLowerCase();
     const dc       = String(stateObj?.attributes?.device_class ?? '').toLowerCase();
@@ -899,10 +1208,22 @@ export function currentPvRate(host: PvHost): PvRate | null
     //is unknown, append "/h" so the user still sees a sensible
     //label (e.g. "12 units/h") instead of a bare number.
     let rateUnit: string;
-    if (lu === 'wh')       rateUnit = 'W';
-    else if (lu === 'kwh') rateUnit = 'kW';
-    else if (lu === 'mwh') rateUnit = 'MW';
-    else                   rateUnit = u ? `${u}/h` : '';
+    if (lu === 'wh')
+    {
+        rateUnit = 'W';
+    }
+    else if (lu === 'kwh')
+    {
+        rateUnit = 'kW';
+    }
+    else if (lu === 'mwh')
+    {
+        rateUnit = 'MW';
+    }
+    else
+    {
+        rateUnit = u ? `${u}/h` : '';
+    }
 
     //Cumulative path: from this point on we MUST return a rate
     //object, never null. Showing the raw cumulative state on
@@ -1010,61 +1331,59 @@ export function currentPvRate(host: PvHost): PvRate | null
 export function pvNormalizeToWatts(value: number, unit: string): number
 {
     const lu = (unit || '').toLowerCase();
-    if (lu === 'kw') return value * 1000;
-    if (lu === 'mw') return value * 1_000_000;
-    if (lu === 'w')  return value;
+    if (lu === 'kw')
+    {
+        return value * 1000;
+    }
+    if (lu === 'mw')
+    {
+        return value * 1_000_000;
+    }
+    if (lu === 'w')
+    {
+        return value;
+    }
     return 0;
 }
 
 
-//Manual PV peak power.
+//Total installed peak power for the forecast scaling, derived from the sum of per-string `pv-arrays[].peak-kwp` values.
+//We convert kWp to the calibration scalar k (W per percent of STC) by k = kWp * 1000 / 100 = kWp * 10, then multiply by
+//the clear-sky percentage to draw the dotted forecast line on the PV chart. Returns null when no array is configured or
+//every row is blank, callers then skip the prediction line and the peak-of-day highlights for future days.
 //
-//Total installed peak power for the forecast scaling. Two sources, in priority order:
-//
-//  1. Sum of per-string `pv-arrays[].peak-kwp` values. Preferred
-//     because each user enters the real nameplate for each string
-//     and the total is derived automatically. Drops the "60/40
-//     share with 5 kWp total" abstraction users found confusing.
-//  2. Top-level `pv-peak-kwp` legacy value. Kept for back-compat;
-//     existing configs work unchanged.
-//
-//We convert kWp to the calibration scalar k (W per percent of STC)
-//by k = kWp * 1000 / 100 = kWp * 10, then multiply by the clear-
-//sky percentage to draw the dotted forecast line on the PV chart.
-//
-//Returns null when neither source is set or both are invalid;
-//callers then skip the prediction line and the peak-of-day
-//highlights for future days.
-//WeakMap cache: pvCalibK is a pure function of the config object's
-//identity. It used to be called 5+ times per render (chip + chart +
-//dashboard + calibration), each call walking pvArrays(config) which
-//parses every array entry. WeakMap-by-config absorbs every repeat
-//call until setConfig hands a fresh config object.
+//WeakMap cache keyed on the config identity, the resolver runs on every chip / chart / dashboard / calibration render
+//cycle and the parsed pv-arrays walk is cheap but not free.
 const _pvCalibKCache = new WeakMap<HeliosConfig, number | null>();
 
 export function pvCalibK(config: HeliosConfig | undefined): number | null
 {
-    if (!config) return null;
+    if (!config)
+    {
+        return null;
+    }
     if (_pvCalibKCache.has(config))
     {
         return _pvCalibKCache.get(config) ?? null;
     }
-    const arraysTotal = pvArrays(config).totalKwp;
-    let kwp: number;
-    if (arraysTotal > 0)
+    //Preferred path: sum of per-row `peak-kwp` values. Drops back to the legacy top-level `pv-peak-kwp` when no row carries
+    //a peak-kwp (typical install with `pv-tilt` + `pv-azimuth` + `pv-peak-kwp`, no per-row breakdown). Either path lights
+    //the forecast curve; the editor surfaces the per-row field as the documented entry point but YAML configs that pre-
+    //date the per-row field keep working.
+    let kwp = pvArrays(config).totalKwp;
+    if (kwp <= 0)
     {
-        kwp = arraysTotal;
-    }
-    else
-    {
-        const raw = config['pv-peak-kwp'];
-        const v   = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
-        if (!isFinite(v) || v <= 0)
+        const rawTop = (config as Record<string, unknown>)['pv-peak-kwp'];
+        const topKwp = typeof rawTop === 'number' ? rawTop : parseFloat(String(rawTop ?? ''));
+        if (isFinite(topKwp) && topKwp > 0)
         {
-            _pvCalibKCache.set(config, null);
-            return null;
+            kwp = topKwp;
         }
-        kwp = v;
+    }
+    if (kwp <= 0)
+    {
+        _pvCalibKCache.set(config, null);
+        return null;
     }
     const result = kwp * 10;
     _pvCalibKCache.set(config, result);
@@ -1085,9 +1404,15 @@ const _pvInverterMaxWCache = new WeakMap<HeliosConfig, number>();
 
 export function pvInverterMaxW(config: HeliosConfig | undefined): number
 {
-    if (!config) return Infinity;
+    if (!config)
+    {
+        return Infinity;
+    }
     const cached = _pvInverterMaxWCache.get(config);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined)
+    {
+        return cached;
+    }
     const raw = config['pv-inverter-max-kw'];
     const kw  = typeof raw === 'number' ? raw : parseFloat(String(raw ?? ''));
     const result = (!isFinite(kw) || kw <= 0) ? Infinity : kw * 1000;
@@ -1129,7 +1454,10 @@ export function wipeLegacyPvCalibStorage(
                     stale.push(k);
                 }
             }
-            for (const k of stale) ls.removeItem(k);
+            for (const k of stale)
+            {
+                ls.removeItem(k);
+            }
             ls.setItem(PV_CALIB_WIPE_FLAG_KEY, '1');
         }
     }
@@ -1164,7 +1492,12 @@ export function wipeLegacyPvCalibStorage(
 //  3. Otherwise empty result, caller uses the horizontal-panel
 //     fast path inside computePvPower.
 export function pvArrays(
-    config: HeliosConfig | undefined
+    config: HeliosConfig | undefined,
+    //Home latitude in degrees, used only to pick the default azimuth when a row leaves it blank. A south-facing default
+    //(180) is right for the northern hemisphere where the sun crosses the southern sky; for the southern hemisphere we
+    //flip to north-facing (0) so an Aussie / NZ / South-American install that leaves the field empty doesn't get a
+    //systematically wrong forecast. `undefined` (no caller hint) preserves the historical 180 default.
+    homeLat?: number,
 ): {
     orientations: PanelOrientation[];
     shares:       number[];
@@ -1174,10 +1507,8 @@ export function pvArrays(
     //Per-array height above ground in metres. Used by the LiDAR raycast shading check: a panel high on a south-facing roof clears a low garden fence
     //that a ground-mounted array of the same orientation would sit in the shadow of.
     heightsM:     number[];
-    //Total installed peak power of the configured arrays in kWp.
-    //Derived from per-string `peak-kwp` values when any are set;
-    //zero otherwise (legacy share-only configs leave the top-level
-    //`pv-peak-kwp` as the source of truth, see pvCalibK).
+    //Total installed peak power of the configured arrays in kWp. Sum of the per-string `peak-kwp` values; zero when no
+    //entry supplied a peak-kwp (no forecast then, the chip + chart still render off the live observation).
     totalKwp:     number;
 }
 {
@@ -1187,6 +1518,11 @@ export function pvArrays(
     const he:  number[]           = [];
     const kw:  number[]           = [];
 
+    //Hemisphere-aware default azimuth for blank entries. Falls back to 180 (south) when the caller does not pass a
+    //home latitude, preserving the historical default for callers that only care about totalKwp (where azimuth is
+    //unused anyway).
+    const defaultAz = (typeof homeLat === 'number' && isFinite(homeLat) && homeLat < 0) ? 0 : 180;
+
     //Parse a single coord value (lat or lon) from the editor's
     //free-form input. Empty / non-numeric / out-of-range values
     //return null so the caller falls back cleanly. The range
@@ -1194,10 +1530,19 @@ export function pvArrays(
     //typo into the forecast model.
     const parseCoord = (v: unknown, max: number): number | null =>
     {
-        if (v === undefined || v === null || v === '') return null;
+        if (v === undefined || v === null || v === '')
+        {
+            return null;
+        }
         const n = typeof v === 'number' ? v : parseFloat(String(v));
-        if (!isFinite(n)) return null;
-        if (n < -max || n > max) return null;
+        if (!isFinite(n))
+        {
+            return null;
+        }
+        if (n < -max || n > max)
+        {
+            return null;
+        }
         return n;
     };
 
@@ -1206,21 +1551,21 @@ export function pvArrays(
     {
         for (const entry of rawList)
         {
-            if (!entry || typeof entry !== 'object') continue;
+            if (!entry || typeof entry !== 'object')
+            {
+                continue;
+            }
             const e = entry as Record<string, unknown>;
 
-            //Missing / blank tilt is the editor's "flat install" state,
-            //and matches the legacy `pv-tilt` default. Default to 0;
-            //computePvPower then takes the horizontal fast path for
-            //this entry, leaving every other entry's transposition
-            //intact.
+            //Missing / blank tilt is the editor's "flat install" state. Default to 0; computePvPower then takes the horizontal
+            //fast path for this entry, leaving every other entry's transposition intact.
             const rawTilt = e['tilt'];
             const tiltRaw = typeof rawTilt === 'number' ? rawTilt : parseFloat(String(rawTilt ?? ''));
             const tilt    = isFinite(tiltRaw) ? tiltRaw : 0;
 
             const rawAz = e['azimuth'];
             const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
-            const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : 180;
+            const azDeg = isFinite(az) ? ((az % 360) + 360) % 360 : defaultAz;
 
             //Per-string peak power in kWp (preferred path).
             //NaN when blank; the caller's pv-peak-kwp covers it.
@@ -1229,7 +1574,10 @@ export function pvArrays(
             if (rawPeakKwp !== undefined && rawPeakKwp !== null && rawPeakKwp !== '')
             {
                 const k = typeof rawPeakKwp === 'number' ? rawPeakKwp : parseFloat(String(rawPeakKwp));
-                if (isFinite(k) && k > 0) peakKwp = k;
+                if (isFinite(k) && k > 0)
+                {
+                    peakKwp = k;
+                }
             }
 
             const rawShare = e['share'];
@@ -1246,7 +1594,10 @@ export function pvArrays(
                 {
                     //A zero / negative share kills the entry only when no per-string peak-kwp is provided. Otherwise the peak-kwp carries the weight
                     //and the share is ignored, so we still want to keep the entry.
-                    if (!isFinite(peakKwp)) continue;
+                    if (!isFinite(peakKwp))
+                    {
+                        continue;
+                    }
                     share = NaN;
                 }
                 else
@@ -1275,9 +1626,20 @@ export function pvArrays(
                 ? Math.min(60, heightRaw)
                 : DEFAULT_PANEL_HEIGHT_M;
 
+            //Optional sun-tracking on this row. Accepts 'none' (default, fixed install), 'dual-axis'
+            //(both tilt + azimuth follow the sun), 'single-axis-h' (horizontal axis tracker, only the
+            //tilt follows), 'single-axis-v' (vertical axis tracker, only the azimuth follows). Any
+            //other value parses as 'none' so a typo in the YAML never silently changes the math.
+            const rawTracker = typeof e['tracker'] === 'string' ? (e['tracker'] as string).trim() : '';
+            const tracker: PanelOrientation['tracker'] | undefined =
+                rawTracker === 'dual-axis'     ? 'dual-axis'
+              : rawTracker === 'single-axis-h' ? 'single-axis-h'
+              : rawTracker === 'single-axis-v' ? 'single-axis-v'
+              : undefined;
             out.push({
                 tiltDeg:    Math.max(0, Math.min(90, tilt)),
-                azimuthDeg: azDeg
+                azimuthDeg: azDeg,
+                tracker
             });
             sh.push(share);
             co.push(coords);
@@ -1315,7 +1677,10 @@ export function pvArrays(
                 : 1;
             for (let i = 0; i < sh.length; i++)
             {
-                if (!isFinite(sh[i])) sh[i] = fillVal;
+                if (!isFinite(sh[i]))
+                {
+                    sh[i] = fillVal;
+                }
             }
         }
     }
@@ -1331,7 +1696,7 @@ export function pvArrays(
             const az    = typeof rawAz === 'number' ? rawAz : parseFloat(String(rawAz ?? ''));
             out.push({
                 tiltDeg:    Math.max(0, Math.min(90, tilt)),
-                azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : 180
+                azimuthDeg: isFinite(az) ? ((az % 360) + 360) % 360 : defaultAz
             });
             sh.push(1);
             co.push(null);
@@ -1351,7 +1716,10 @@ export function pvArrays(
     const total = sh.reduce((a, b) => a + b, 0);
     if (total > 0)
     {
-        for (let i = 0; i < sh.length; i++) sh[i] /= total;
+        for (let i = 0; i < sh.length; i++)
+        {
+            sh[i] /= total;
+        }
     }
 
     return { orientations: out, shares: sh, coords: co, heightsM: he, totalKwp };
@@ -1374,11 +1742,8 @@ export interface PvWeightedContext
 }
 
 
-//Forecast PV percentage at a single sample, summed across every
-//configured array weighted by its share of the total kWp. Falls
-//through to the horizontal-panel fast path inside computePvPower
-//when no array is configured (returns the GHI-normalised value
-//the legacy code used to produce).
+//Forecast PV percentage at a single sample, summed across every configured array weighted by its share of the total kWp. Falls
+//through to the horizontal-panel fast path inside computePvPower when no array is configured (returns the GHI-normalised value).
 export function computePvPowerWeighted(
     config: HeliosConfig | undefined,
     t: Date,
@@ -1388,10 +1753,18 @@ export function computePvPowerWeighted(
     ctx?: PvWeightedContext,
 ): number
 {
-    const { orientations, shares, coords, heightsM } = pvArrays(config);
+    const { orientations, shares, coords, heightsM } = pvArrays(config, lat);
     const baseCtx = (ctx && (isFinite(ctx.airTempC ?? NaN) || isFinite(ctx.windMs ?? NaN)))
         ? { airTempC: ctx.airTempC, windMs: ctx.windMs }
         : undefined;
+
+    //Defensive guard: pvArrays must keep its four output arrays in lockstep. If a future edit ever drifts that
+    //invariant we'd silently read past the share array's end, propagating NaN through the forecast. Fall back to the
+    //horizontal-panel path so the curve still renders.
+    if (orientations.length !== shares.length || orientations.length !== coords.length || orientations.length !== heightsM.length)
+    {
+        return computePvPower(t, lat, lon, cloudPct, undefined, baseCtx);
+    }
 
     if (orientations.length === 0)
     {

@@ -93,6 +93,14 @@ export function startAutoRotateLoop(host: AutoRotateHost): void
         //lock is "the camera stays exactly where I dialled it in", so a
         //slow idle orbit would defeat the user's intent.
         const cameraLocked      = (host.cfg as Record<string, unknown>)['camera-locked'] === true;
+        //Long-lived disable: the user explicitly opted OUT or locked the camera. Suspend the rAF loop entirely
+        //instead of self-resubmitting at 60 Hz forever. The engine re-arms the loop from `updateConfig` whenever
+        //either flag flips back to its rotation-permitting state, so toggling the editor switch resumes seamlessly.
+        if (!autoRotateEnabled || cameraLocked)
+        {
+            host._autoRotateRaf = undefined;
+            return;
+        }
         if (autoRotateEnabled
             && !cameraLocked
             && !host._detailMode

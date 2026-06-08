@@ -39,6 +39,9 @@ export function lidarFetchUrl(upstreamUrl: string): string
     {
         return upstreamUrl;
     }
-    if (!HOSTS_REQUIRING_RELAY.has(host)) return upstreamUrl;
+    if (!HOSTS_REQUIRING_RELAY.has(host))
+    {
+        return upstreamUrl;
+    }
     return `${PROXY_BASE_URL}?upstream=${encodeURIComponent(upstreamUrl)}`;
 }

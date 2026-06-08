@@ -61,7 +61,10 @@ export function cellTemperatureC(
     windMs:     number,
 ): number
 {
-    if (!isFinite(airTempC)) return NaN;
+    if (!isFinite(airTempC))
+    {
+        return NaN;
+    }
     const g = Math.max(0, ghiWm2);
     const w = isFinite(windMs) ? Math.max(0, windMs) : 0;
     return airTempC
@@ -75,7 +78,10 @@ export function cellTemperatureC(
 //gains are surfaced honestly.
 export function thermalDerating(cellTempC: number): number
 {
-    if (!isFinite(cellTempC)) return 1;
+    if (!isFinite(cellTempC))
+    {
+        return 1;
+    }
     const factor = 1 + GAMMA_PMP_PER_C * (cellTempC - STC_REF_C);
     return Math.max(0.6, factor);
 }

@@ -78,7 +78,10 @@ export const vermontVcgiNdsm: LidarSource =
             rasterSize,
             opts.signal
         );
-        if (!heights) return emptyResult();
+        if (!heights)
+        {
+            return emptyResult();
+        }
 
         return processHeightRaster(heights, {
             rasterSize,

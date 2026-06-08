@@ -80,7 +80,10 @@ export const franceLidarHd: LidarSource =
         {
             return emptyResult();
         }
-        if (!resp.ok) return emptyResult();
+        if (!resp.ok)
+        {
+            return emptyResult();
+        }
 
         let buf: ArrayBuffer;
         try { buf = await resp.arrayBuffer(); }
@@ -90,7 +93,10 @@ export const franceLidarHd: LidarSource =
         //XML rather than the binary raster (typical when the layer name
         //drifts); bail rather than read garbage as floats.
         const expectedBytes = rasterSize * rasterSize * 4;
-        if (buf.byteLength < expectedBytes) return emptyResult();
+        if (buf.byteLength < expectedBytes)
+        {
+            return emptyResult();
+        }
 
         const heights = new Float32Array(buf, 0, rasterSize * rasterSize);
 

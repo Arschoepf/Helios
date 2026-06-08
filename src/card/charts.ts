@@ -22,35 +22,18 @@ import
     computePvPowerWeighted,
     type PvHistory
 } from './pv';
-import { timelineConsumptionEnabled } from './timeline';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
 import { computeForecastCalibration } from './calibration';
-import { currentShadingMap, trainShadingMap } from './shadingTrainer';
-import { lookupRatio, blendedRatio, type ShadingMap } from '../engine/shadingMap';
+import { sliceForRange } from './unifiedStore';
 
 
-//Resolve the per-point forecast multiplier: blend the learned
-//shading-map ratio (if the corresponding cell is confident
-//enough) with the scalar 5-day calibration ratio (always
-//available as a fallback). Same shape at every call site so the
-//instant tooltip + the hourly chart + the per-day kWh totals all
-//apply identical corrections; that's how a tree's late-afternoon
-//shadow ends up showing in both the dashboard headline and the
-//refined curve simultaneously.
-export function effectiveForecastRatio(
-    map:    ShadingMap,
-    time:   Date,
-    lat:    number,
-    lon:    number,
-    cloud:  number,
-    calR:   number,
-    nowMs:  number,
-): number
+//Per-point forecast multiplier. Identity on calR today; kept as a single hook so a future
+//multiplier (weather grid contribution, hourly bias correction, etc.) can re-wire through
+//the call sites without a sweep.
+export function effectiveForecastRatio(calR: number): number
 {
-    const sun = getSunPosition(time, lat, lon);
-    if (!sun || sun.altitude <= 0) return calR;
-    return blendedRatio(lookupRatio(map, sun.azimuth, sun.altitude, cloud, nowMs), calR);
+    return calR;
 }
 
 
@@ -95,7 +78,10 @@ function findSunCrossing(
         }
         prevAlt = alt;
     }
-    if (!found) return null;
+    if (!found)
+    {
+        return null;
+    }
     for (let i = 0; i < 12; i++)
     {
         const mid = (bracketLo + bracketHi) / 2;
@@ -125,13 +111,22 @@ function findSunCrossing(
 function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPct: number }>
 {
     const range = host._timeRange;
-    if (!range) return [];
+    if (!range)
+    {
+        return [];
+    }
     const coords = getHomeCoords(host.config, host.hass);
-    if (!coords) return [];
+    if (!coords)
+    {
+        return [];
+    }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
     const rangeMs = endMs - startMs;
-    if (rangeMs <= 0) return [];
+    if (rangeMs <= 0)
+    {
+        return [];
+    }
 
     type Crossing = { ms: number; kind: 'sunrise' | 'sunset' };
     const crossings: Crossing[] = [];
@@ -146,8 +141,14 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
         const dayEnd   = dayStart + 24 * 60 * 60 * 1000;
         const rise = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'rising');
         const setT = findSunCrossing(coords.lat, coords.lon, dayStart, dayEnd, 'setting');
-        if (rise) crossings.push({ ms: rise.getTime(), kind: 'sunrise' });
-        if (setT) crossings.push({ ms: setT.getTime(), kind: 'sunset' });
+        if (rise)
+        {
+            crossings.push({ ms: rise.getTime(), kind: 'sunrise' });
+        }
+        if (setT)
+        {
+            crossings.push({ ms: setT.getTime(), kind: 'sunset' });
+        }
         cursor.setDate(cursor.getDate() + 1);
     }
     crossings.sort((a, b) => a.ms - b.ms);
@@ -212,7 +213,10 @@ function computeNightIntervals(host: ChartHost): Array<{ startPct: number; endPc
 export function renderTimelineNightZones(host: ChartHost): TemplateResult
 {
     const intervals = computeNightIntervals(host);
-    if (intervals.length === 0) return html``;
+    if (intervals.length === 0)
+    {
+        return html``;
+    }
     return html`
         ${intervals.map(iv => html`
             <div
@@ -236,13 +240,22 @@ export function renderTimelineNightZones(host: ChartHost): TemplateResult
 export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 {
     const range = host._timeRange;
-    if (!range) return html``;
+    if (!range)
+    {
+        return html``;
+    }
     const startMs = range.start.getTime();
     const endMs   = range.end.getTime();
     const rangeMs = endMs - startMs;
-    if (rangeMs <= 0) return html``;
+    if (rangeMs <= 0)
+    {
+        return html``;
+    }
     const nowMs = Date.now();
-    if (nowMs <= startMs || nowMs >= endMs) return html``;
+    if (nowMs <= startMs || nowMs >= endMs)
+    {
+        return html``;
+    }
     const nowPct = (nowMs - startMs) / rangeMs * 100;
     return html`
         <div
@@ -262,10 +275,40 @@ export function renderTimelineFutureMask(host: ChartHost): TemplateResult
 //window. Returns NaN value when neither source can supply a
 //number at the cursor instant (no entity configured, sample gap,
 //etc).
-function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit: string; isPredicted: boolean }
+//Hue-rotated palette built around the HA Energy `--energy-solar-color` theme token. The first source keeps the
+//base hue (so single-source installs reading this index get the exact theme colour), siblings step the hue by
+//`360 / N` degrees so a 2-source split E / W lands on opposite hues, a 3-source install on 120 ° spacing, and so
+//on. The CSS HSL `from` syntax lets us derive the rotation in pure CSS so the actual colour follows the user's
+//live theme without us having to parse the resolved RGB. Falls back to a fixed orange on browsers that don't
+//support the relative-colour syntax. Exported so the dashboard chart tooltip can reuse the same per-source
+//colours next to the friendly-name rows.
+export function pvSourceColor(index: number, total: number): string
+{
+    if (total <= 1)
+    {
+        return 'var(--energy-solar-color, #ff9800)';
+    }
+    const step = 360 / total;
+    return `hsl(from var(--energy-solar-color, #ff9800) calc(h + ${index * step}) s l)`;
+}
+
+
+export function pvValueAtTime(
+    host: ChartHost,
+    targetMs: number,
+    //Optional per-source history override. When supplied, the function reads from this series instead of the
+    //aggregated `_pvHistory`, used by the multi-source per-entity tooltip rows so each source displays its own
+    //value at the scrub instant. The calibration / LTS fallback is skipped in override mode (no per-entity LTS is
+    //fetched yet); the forecast pass on the aggregated path stays as-is, so a per-entity row simply reads "—" when
+    //the cursor lands past the per-entity history's tail.
+    seriesOverride?: { times: Date[]; values: number[] },
+): { value: number; unit: string; isPredicted: boolean }
 {
     const luRaw = (host._pvUnit || '').trim();
-    if (!luRaw) return { value: NaN, unit: '', isPredicted: false };
+    if (!luRaw)
+    {
+        return { value: NaN, unit: '', isPredicted: false };
+    }
     const lu             = luRaw.toLowerCase();
     const isCumulative   = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
     const displayUnit    = isCumulative
@@ -305,7 +348,7 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     //observed value would mean the tooltip reads "3 W" for noon
     //tomorrow just because that was the panel's reading at 16:00
     //yesterday (the late-afternoon tail of the last seen day).
-    const hist = host._pvHistory;
+    const hist = seriesOverride ?? host._pvHistory;
     const rawFirstMs = (hist && hist.times.length >= 1)
         ? hist.times[0].getTime()
         : Infinity;
@@ -319,13 +362,25 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
             for (let i = 1; i < hist.times.length; i++)
             {
                 const t1 = hist.times[i].getTime();
-                if (targetMs > t1) continue;
+                if (targetMs > t1)
+                {
+                    continue;
+                }
                 const t0 = hist.times[i - 1].getTime();
-                if (targetMs < t0) break;
+                if (targetMs < t0)
+                {
+                    break;
+                }
                 const dtH = (t1 - t0) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) break;
+                if (dtH <= 0 || dtH > 6)
+                {
+                    break;
+                }
                 const dv = hist.values[i] - hist.values[i - 1];
-                if (!isFinite(dv) || dv < 0) break;
+                if (!isFinite(dv) || dv < 0)
+                {
+                    break;
+                }
                 return { value: Math.max(0, dv / dtH), unit: displayUnit, isPredicted: false };
             }
         }
@@ -344,14 +399,27 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     //power sensors, differentiated state for cumulative-energy
     //sensors) so a linear interpolation at the cursor instant is
     //the right thing to do regardless of the source entity type.
-    const calib = host._pvCalibStats;
-    if (calib && calib.times.length >= 2 && targetMs <= lastObsMs)
+    //Skipped in `seriesOverride` mode because no per-entity LTS is fetched alongside the per-entity raw history yet
+    //(the override carries only the 6 h raw window). Per-entity rows simply read "—" for older past until a
+    //per-entity LTS path is added.
+    if (!seriesOverride)
     {
-        const v = interpAt(calib.times, calib.values, targetMs);
-        if (isFinite(v))
+        const calib = host._pvCalibStats;
+        if (calib && calib.times.length >= 2 && targetMs <= lastObsMs)
         {
-            return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
+            const v = interpAt(calib.times, calib.values, targetMs);
+            if (isFinite(v))
+            {
+                return { value: Math.max(0, v), unit: displayUnit, isPredicted: false };
+            }
         }
+    }
+
+    //Per-entity override mode has no per-source forecast yet (the model is single-aggregate), so we stop here on a
+    //future cursor and let the caller show "—". The aggregated path below stays unchanged for the headline forecast.
+    if (seriesOverride)
+    {
+        return { value: NaN, unit: displayUnit, isPredicted: false };
     }
 
     //Forecast for future hours. Reuses the per-array PV power model + thermal / shading hooks the chart already feeds, plus the 5-day rolling
@@ -361,9 +429,6 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
     const k      = pvCalibK(host.config);
     const cal    = computeForecastCalibration(host);
     const calR   = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading = currentShadingMap();
-    const nowMs   = Date.now();
     const capW    = pvInverterMaxW(host.config);
     if (k !== null && series && coords && series.times.length >= 2)
     {
@@ -371,13 +436,19 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
         for (let i = 1; i < series.times.length; i++)
         {
             const t1 = series.times[i].getTime();
-            if (targetMs > t1) continue;
+            if (targetMs > t1)
+            {
+                continue;
+            }
             const t0 = series.times[i - 1].getTime();
-            if (targetMs < t0) break;
+            if (targetMs < t0)
+            {
+                break;
+            }
             const cloud0 = series.cloud[i - 1] ?? 0;
             const cloud1 = series.cloud[i] ?? 0;
-            const eff0   = effectiveForecastRatio(shading, series.times[i - 1], coords.lat, coords.lon, cloud0, calR, nowMs);
-            const eff1   = effectiveForecastRatio(shading, series.times[i],     coords.lat, coords.lon, cloud1, calR, nowMs);
+            const eff0   = effectiveForecastRatio(calR);
+            const eff1   = effectiveForecastRatio(calR);
             const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, cloud0, {
                 airTempC: series.temperature[i - 1],
                 windMs:   series.windSpeed[i - 1],
@@ -389,7 +460,10 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
                 raster,
             }) * k * eff1);
             const dt = t1 - t0;
-            if (dt <= 0) return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
+            if (dt <= 0)
+            {
+                return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
+            }
             const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
             return { value: Math.max(0, w) * nativeFromW, unit: displayUnit, isPredicted: true };
         }
@@ -399,145 +473,208 @@ function pvValueAtTime(host: ChartHost, targetMs: number): { value: number; unit
 }
 
 
-//Hover tooltip chip, sits above the chart-card stack inside the
-//time-bar. Shows the hover timestamp + one colour-coded row per
-//series. Position clamps to [8 %, 92 %] so the chip never
-//overflows the timeline rails at the edges of the visible range.
-//The PV row is skipped silently when the entity isn't configured
-//(or no value is available at the cursor instant), so the chip
-//stays useful for forecast-only setups.
+//Hover tooltip block, sits above the chart-card stack inside the
+//time-bar. Shows the hover timestamp + one icon-coded row per
+//series, plus the day's kWh production (observed past + today
+//so-far) or forecast (future days) on a dedicated row. A small
+//magnet-snap tab appears above the tooltip the moment the scrub
+//pointer enters the narrow band around the live cursor, signalling
+//the imminent auto-snap back to live mode (see applyTimelinePointer
+//in timeline.ts for the actual snap logic). The PV row is skipped
+//silently when the entity isn't configured or no value is available
+//at the cursor instant, so the chip stays useful for forecast-only
+//setups.
 export function renderTimelineHoverTooltip(host: ChartHost): TemplateResult
 {
     const range    = host._timeRange;
     const series   = host._chartSeries;
-    if (!range || !series) return html``;
-
-    const startMs = range.start.getTime();
-    const rangeMs = range.end.getTime() - startMs;
-    if (rangeMs <= 0) return html``;
-
-    //Two-mode anchor. Hover pin (cursor inside the chart) takes
-    //precedence so the user always sees readings under their finger
-    //or mouse; otherwise the tooltip parks itself on the scrubbed
-    //instant so the moment the user clicked stays labeled (date +
-    //time + values). In live mode with no hover, no tooltip.
-    const hoverPct  = host._chartHoverPct;
-    const scrubbing = !host._isLiveMode && host._selectedTime !== null;
-    let pct:  number;
-    let atMs: number;
-    if (hoverPct !== null && hoverPct >= 0 && hoverPct <= 100)
-    {
-        pct  = hoverPct;
-        atMs = startMs + (pct / 100) * rangeMs;
-    }
-    else if (scrubbing)
-    {
-        atMs = host._selectedTime!.getTime();
-        pct  = ((atMs - startMs) / rangeMs) * 100;
-        if (pct < 0 || pct > 100) return html``;
-    }
-    else
+    //Tooltip stays available even when _chartSeries is null (Open-Meteo unreachable). The PV +
+    //per-entity rows read from the recorder and render fine; the irradiance + cloud cells just go
+    //missing for that hover, falling back to NaN handled below.
+    if (!range)
     {
         return html``;
     }
 
-    const irrV = interpAt(series.times, series.irradiance, atMs);
-    const cldV = interpAt(series.times, series.cloud,      atMs);
+    const startMs = range.start.getTime();
+    const rangeMs = range.end.getTime() - startMs;
+    if (rangeMs <= 0)
+    {
+        return html``;
+    }
+
+    //Tooltip shows ONLY while the pointer is actively over the chart
+    //(or actively dragging the scrub, which keeps _chartHoverPct in
+    //sync). Once the gesture ends, _chartHoverPct goes null and the
+    //tooltip disappears, leaving only the scrub line behind so the
+    //user reads the locked instant without a floating callout.
+    const hoverPct = host._chartHoverPct;
+    if (hoverPct === null || hoverPct < 0 || hoverPct > 100)
+    {
+        return html``;
+    }
+    const pct  = hoverPct;
+    const atMs = startMs + (pct / 100) * rangeMs;
+
+    const irrV = series ? interpAt(series.times, series.irradiance, atMs) : NaN;
+    const cldV = series ? interpAt(series.times, series.cloud,      atMs) : NaN;
     const pv   = pvValueAtTime(host, atMs);
+
+    //Per-entity breakdown rows for multi-source installs (LBDG_'s feature). Each row carries the friendly name from
+    //hass.states + a colour pastille derived by hue-rotating the theme PV colour, so the chip ↔ row visual link
+    //matches the per-source curve drawn on the chart underneath. Single-source installs skip the breakdown entirely
+    //(the per-entity map carries one entry equal to the aggregate, which would duplicate the headline row).
+    const perEntityMap     = host._pvHistoryPerEntity;
+    const perEntityIds     = perEntityMap.size > 1 ? Array.from(perEntityMap.keys()).sort() : [];
+    const perEntityRows: Array<{ id: string; label: string; valueText: string; colorIdx: number }> = [];
+    for (let i = 0; i < perEntityIds.length; i++)
+    {
+        const id    = perEntityIds[i];
+        const ph    = perEntityMap.get(id);
+        if (!ph)
+        {
+            continue;
+        }
+        const val   = pvValueAtTime(host, atMs, ph);
+        if (!isFinite(val.value))
+        {
+            continue;
+        }
+        const stateObj    = host.hass?.states?.[id];
+        const friendly    = String(stateObj?.attributes?.friendly_name ?? id);
+        const localDec    = val.unit === 'W' ? 0 : (Math.abs(val.value) < 100 ? 1 : 0);
+        const valueText   = `${formatLocalisedNumber(host.hass, val.value, localDec)} ${val.unit}`;
+        perEntityRows.push({ id, label: friendly, valueText, colorIdx: i });
+    }
     const hasPv = isFinite(pv.value);
 
-    //Colour configs no longer consulted, HA Energy palette via the
-    //defaults. Charts.ts keeps the locals so its blend/lerp logic
-    //downstream stays unchanged.
-    const sunColor    = DEFAULT_SUN_COLOR_HEX;
-    const cloudColor  = DEFAULT_CLOUD_COLOR_HEX;
-    const pvBaseColor = DEFAULT_PV_COLOR_HEX;
-    //Predicted PV reads "off-shade" from observed. Theme-aware so
-    //it stays readable on both backgrounds: light theme blends
-    //toward BLACK (darker, contrasts with white card), dark theme
-    //blends toward WHITE (lighter, contrasts with dark card). Mirrors
-    //the predictedColor logic in dashboard.ts.
-    const isDarkTheme = !!(host.hass as { themes?: { darkMode?: boolean } } | undefined)?.themes?.darkMode;
-    const pvColor = pv.isPredicted
-        ? (isDarkTheme
-            ? lerpHexToward(pvBaseColor, '#ffffff', 0.55)
-            : lerpHexToward(pvBaseColor, '#000000', 0.35))
-        : pvBaseColor;
+    //The scrub tooltip icons now inherit the active HA theme colour
+    //(see .tb-hover-tooltip-icon), so the per-series tints from the
+    //legacy DEFAULT_*_COLOR_HEX constants are no longer applied here.
 
-    const atDate    = new Date(atMs);
-    const timeLabel = atDate.toLocaleTimeString([], {
-        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
-    });
-    const dateLabel = formatDate(atDate, host.config?.['date-format']);
+    const atDate     = new Date(atMs);
+    const haLanguage = (host.hass?.language as string | undefined) || undefined;
+    const timeLabel  = new Intl.DateTimeFormat(haLanguage, {
+        hour: '2-digit', minute: '2-digit',
+    }).format(atDate);
 
-    const clampedPct = Math.max(8, Math.min(92, pct));
+    //Day total split into observed (past scrub) and forecast (future scrub). The split key is the cursor instant vs
+    //"now", not the day boundary, so scrubbing later-today hours shows the day's forecast projection (full-day kWh) and
+    //scrubbing earlier-today hours shows the observed production so far. Today's past bucket prefers the recorder-backed
+    //`_haSolarTodayKwh` so the tooltip matches the dashboard "produced today" chip to the watt-hour, falling back to the
+    //local trapezoidal integration when the HA Energy preference is not wired. Today's future bucket and every other
+    //future day stay on `computeDailyKwhTotals`, which adds the forecast model's remaining hours to the observed past.
+    const dayKey = new Date(atDate);
+    dayKey.setHours(0, 0, 0, 0);
+    const todayKey = new Date();
+    todayKey.setHours(0, 0, 0, 0);
+    const isToday        = dayKey.getTime() === todayKey.getTime();
+    const isFutureCursor = atMs > Date.now();
+    const dayTotals      = computeDailyKwhTotals(host);
+    let dayKwh: number | undefined = dayTotals.get(dayKey.getTime());
+    if (isToday && !isFutureCursor && typeof host._haSolarTodayKwh === 'number' && isFinite(host._haSolarTodayKwh))
+    {
+        dayKwh = host._haSolarTodayKwh;
+    }
+    const showProduction = !isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    const showForecast   =  isFutureCursor && dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05;
+    const dayKwhText = (dayKwh !== undefined && isFinite(dayKwh) && dayKwh >= 0.05)
+        ? formatLocalisedNumber(host.hass, dayKwh, 1) + ' kWh'
+        : '';
 
-    //PV decimals: 1 for kW/MW under three digits, 0 otherwise. The user reads "1.2 kW" on residential gear but "1234 W" on the raw W entity, both
-    //compact.
+    //Magnet-snap detection. When the scrub pointer lands within a
+    //narrow band around the live cursor, applyTimelinePointer in
+    //timeline.ts auto-releases back to live mode. A small restore
+    //tab surfaces above the tooltip the moment the pointer enters
+    //that band so the user reads the upcoming snap visually. The
+    //px-based scrub check uses 8 px, this pct equivalent is sized to
+    //match at typical chart widths (8 px on a 700 px chart ~= 1.2 %).
+    const MAGNET_PCT   = 1.2;
+    const nowMsRef     = Date.now();
+    const inMagnetZone = nowMsRef >= startMs && nowMsRef <= startMs + rangeMs
+        && Math.abs(pct - ((nowMsRef - startMs) / rangeMs) * 100) <= MAGNET_PCT;
+
+    //PV decimals: 1 for kW/MW under three digits, 0 otherwise.
     const pvDecimals = !hasPv ? 0
                      : pv.unit === 'W' ? 0
                      : (Math.abs(pv.value) < 100 ? 1 : 0);
 
+    const haLang   = (host.hass?.language as string | undefined) || '';
+    //Short label inside the magnet-snap tab. The tooltip title + aria-label still carry the long phrase for screen readers
+    //and hover hint; the inline label stays single-word so the tab does not bloat the tooltip width.
+    const liveLabel = 'Live';
+    const liveText  = haLang.toLowerCase().startsWith('fr')
+        ? 'Retour au live'
+        : 'Back to live';
+
+    //Tooltip horizontal anchor: a continuous left-to-right slide
+    //driven by translateX(-${pct}%), so the tooltip's left edge sits
+    //at 0 when the scrub is at 0 % and its right edge sits at 100 %
+    //when the scrub is at 100 %. Net result: the tooltip never goes
+    //off-screen yet there's no jump-to-edge magnet at any threshold,
+    //the box just slides smoothly along with the scrub.
     return html`
         <div
-            class="tb-hover-tooltip"
-            style="left:${clampedPct.toFixed(2)}%"
+            class="tb-hover-tooltip-tail ${inMagnetZone ? 'is-magnet-snap' : ''}"
+            style="left:${pct.toFixed(2)}%"
+        ></div>
+        <div
+            class="tb-hover-tooltip-wrapper"
+            style="left:${pct.toFixed(2)}%; transform: translateX(-${pct.toFixed(2)}%)"
         >
-            <div class="tb-hover-tooltip-date">${dateLabel}</div>
-            <div class="tb-hover-tooltip-time">${timeLabel}</div>
-            ${isFinite(irrV) ? html`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny" style="color:${sunColor}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+            <div class="tb-hover-tooltip">
+                <div class="tb-hover-tooltip-time">
+                    <ha-icon class="tb-hover-tooltip-time-icon" icon="mdi:clock-outline"></ha-icon>
+                    <span class="tb-hover-tooltip-time-label">${timeLabel}</span>
+                    <span
+                        class="tb-hover-tooltip-live-chip ${inMagnetZone ? 'is-visible' : ''}"
+                        title="${liveText}"
+                        aria-label="${liveText}"
+                        aria-hidden="${inMagnetZone ? 'false' : 'true'}"
+                    >
+                        <ha-icon class="tb-hover-tooltip-live-chip-dot" icon="mdi:circle-medium"></ha-icon>
+                        <span class="tb-hover-tooltip-live-chip-label">${liveLabel}</span>
+                    </span>
                 </div>
-            ` : nothing}
-            ${isFinite(cldV) ? html`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline" style="color:${cloudColor}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
-                </div>
-            ` : nothing}
-            ${hasPv ? html`
-                <div class="tb-hover-tooltip-row">
-                    <ha-icon class="tb-hover-tooltip-icon" icon="mdi:flash" style="color:${pvColor}"></ha-icon>
-                    <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
-                </div>
-            ` : nothing}
+                ${showProduction && dayKwhText ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power-variant"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${dayKwhText}</span>
+                    </div>
+                ` : nothing}
+                ${showForecast && dayKwhText ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:crystal-ball"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${dayKwhText}</span>
+                    </div>
+                ` : nothing}
+                ${isFinite(irrV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:white-balance-sunny"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, irrV))} W/m²</span>
+                    </div>
+                ` : nothing}
+                ${isFinite(cldV) ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:cloud-outline"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${Math.round(Math.max(0, Math.min(100, cldV)))} %</span>
+                    </div>
+                ` : nothing}
+                ${hasPv ? html`
+                    <div class="tb-hover-tooltip-row">
+                        <ha-icon class="tb-hover-tooltip-icon" icon="mdi:solar-power"></ha-icon>
+                        <span class="tb-hover-tooltip-value">${formatLocalisedNumber(host.hass, pv.value, pvDecimals)} ${pv.unit}</span>
+                    </div>
+                ` : nothing}
+                ${perEntityRows.map(row => html`
+                    <div class="tb-hover-tooltip-row tb-hover-tooltip-row-sub">
+                        <span class="tb-hover-tooltip-dot" style="background:${pvSourceColor(row.colorIdx, perEntityIds.length)}"></span>
+                        <span class="tb-hover-tooltip-sublabel">${row.label}</span>
+                        <span class="tb-hover-tooltip-value">${row.valueText}</span>
+                    </div>
+                `)}
+            </div>
         </div>
-    `;
-}
-
-
-//Back-to-live tab. Rendered inside the time-bar overlay only when
-//the user is scrubbing (selected an instant that is not live), as
-//a true tab attached to the top edge of the time-bar (rounded top
-//corners only, flat bottom merging with the time-bar border).
-//Anchors at the OPPOSITE end of the timeline from the scrub
-//tooltip so the two never collide: scrub on the left half, tab on
-//the right; scrub on the right half, tab on the left. The click
-//and pointerdown both stop propagation so they don't bubble up to
-//the time-bar's scrub handler (`onTimelinePointerDown`), which
-//would otherwise re-scrub to the tab's X coordinate and the tap
-//would feel like a no-op.
-export function renderTimelineBackToLiveTab(host: ChartHost, onClick: () => void): TemplateResult
-{
-    if (host._isLiveMode || host._selectedTime === null || !host._timeRange) return html``;
-    const startMs = host._timeRange.start.getTime();
-    const rangeMs = host._timeRange.end.getTime() - startMs;
-    if (rangeMs <= 0) return html``;
-    const selPct  = ((host._selectedTime.getTime() - startMs) / rangeMs) * 100;
-    const onLeft  = selPct >= 50;
-    return html`
-        <button
-            type="button"
-            class="tb-back-to-live ${onLeft ? 'is-left' : 'is-right'}"
-            aria-label="Back to live"
-            @pointerdown="${(e: PointerEvent) => { e.stopPropagation(); }}"
-            @click="${(e: MouseEvent) => { e.stopPropagation(); onClick(); }}"
-        >
-            <ha-icon icon="mdi:restore"></ha-icon>
-            <span>Live</span>
-        </button>
     `;
 }
 
@@ -564,19 +701,29 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
+    //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
+    //source and the scrub tooltip can show a per-source breakdown next to the summed value. Single-source installs
+    //carry a single entry equal to the aggregate; multi-source installs carry one entry per HA Energy source.
+    readonly _pvHistoryPerEntity: Map<string, PvHistory>;
     //Hourly long-term-statistics series feeding the 5-day forecast calibration. `calibration.ts` prefers this over `_pvHistory` because it
     //carries the same 5-day window with two orders of magnitude fewer rows on high-frequency installs. Null while the stats fetch is in
     //flight, or empty when the entity is not LTS-tracked, in both cases the consumer degrades to `_pvHistory`.
     readonly _pvCalibStats:   PvHistory | null;
     //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same fallback contract as `_pvCalibStats`.
     readonly _pvTrainerStats: PvHistory | null;
-    //Optional per-bank companion battery SoC histories, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
-    //One entry per bank (parallel to parseBatteryBanks(config)); empty when the guard is off or no battery is configured. The shading
-    //trainer reads it to skip buckets where ALL banks reached the cutoff (min SoC across banks).
-    readonly _batteryHistories: PvHistory[];
+    //Optional companion battery SoC history, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
+    //Null when the guard is off or no battery is configured. The shading trainer reads it to skip buckets where SoC reached the cutoff.
+    readonly _batteryHistory: PvHistory | null;
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
+    //HA Energy daily-total alignment: today's produced kWh as queried
+    //from the recorder `change` statistic on every `stat_energy_from`
+    //array, so the scrub tooltip lands on the same figure the dashboard
+    //chip shows. Null when not configured or before the first recorder
+    //call lands, in which case the tooltip falls back to the local
+    //trapezoidal integration over `_pvHistory`.
+    readonly _haSolarTodayKwh?: number | null;
     //Mutable hover-cursor position as a percent inside the visible
     //time range (0..100), null when no hover is active. Written by
     //the pointer handlers defined below.
@@ -586,6 +733,10 @@ export interface ChartHost
     //Optional because the chart still renders fine without the
     //engine reference (shading just falls back to "no obstacle").
     readonly _engine?:      { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
+    //Unified 5-day data source, single point of truth for the production + forecast curves the
+    //timeline + radial + dashboard charts read from. Null only between mount and the first build,
+    //the chart degrades to an empty curve until then.
+    readonly _unifiedStore: import('./unifiedStore').UnifiedDataStore | null;
 }
 
 
@@ -596,10 +747,13 @@ export interface ChartHost
 //Used by the hover tooltip + dot positions across the irradiance,
 //cloud and PV curves so all three readouts share the same
 //interpolation contract.
-function interpAt(times: Date[], values: number[], targetMs: number): number
+export function interpAt(times: Date[], values: number[], targetMs: number): number
 {
     const n = Math.min(times.length, values.length);
-    if (n === 0) return NaN;
+    if (n === 0)
+    {
+        return NaN;
+    }
     if (targetMs <= times[0].getTime())
     {
         return isFinite(values[0]) ? values[0] : NaN;
@@ -609,19 +763,38 @@ function interpAt(times: Date[], values: number[], targetMs: number): number
         const v = values[n - 1];
         return isFinite(v) ? v : NaN;
     }
-    for (let i = 1; i < n; i++)
+    //Binary search over the monotonically ascending `times` array. The early returns above already handled the
+    //out-of-range cases, so here we know times[0] < targetMs < times[n - 1] and we narrow lo/hi to the bracketing
+    //pair in O(log n). The previous linear scan walked from index 1 on every render, hot on 1 Hz sensors where
+    //`_pvHistory` reaches ~21,600 entries over a 6 h window and the tooltip re-runs interpAt twice per render.
+    let lo = 0;
+    let hi = n - 1;
+    while (hi - lo > 1)
     {
-        const t1 = times[i].getTime();
-        if (targetMs > t1) continue;
-        const t0 = times[i - 1].getTime();
-        const v0 = values[i - 1];
-        const v1 = values[i];
-        if (!isFinite(v0) || !isFinite(v1)) return NaN;
-        const dt = t1 - t0;
-        if (dt <= 0) return v1;
-        return v0 + (v1 - v0) * (targetMs - t0) / dt;
+        const mid = (lo + hi) >> 1;
+        if (times[mid].getTime() <= targetMs)
+        {
+            lo = mid;
+        }
+        else
+        {
+            hi = mid;
+        }
     }
-    return NaN;
+    const t0 = times[lo].getTime();
+    const t1 = times[hi].getTime();
+    const v0 = values[lo];
+    const v1 = values[hi];
+    if (!isFinite(v0) || !isFinite(v1))
+    {
+        return NaN;
+    }
+    const dt = t1 - t0;
+    if (dt <= 0)
+    {
+        return v1;
+    }
+    return v0 + (v1 - v0) * (targetMs - t0) / dt;
 }
 
 
@@ -639,9 +812,15 @@ export function handleChartHoverMove(host: ChartHost, e: PointerEvent): void
         return;
     }
     const card = e.currentTarget as HTMLElement | null;
-    if (!card) return;
+    if (!card)
+    {
+        return;
+    }
     const rect = card.getBoundingClientRect();
-    if (rect.width <= 0) return;
+    if (rect.width <= 0)
+    {
+        return;
+    }
     const frac = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
     host._chartHoverPct = frac * 100;
 }
@@ -733,8 +912,14 @@ export function renderChart(host: ChartHost): TemplateResult
         const hoverMs = startMs + (hoverPct / 100) * rangeMs;
         const irrV    = interpAt(series.times, series.irradiance, hoverMs);
         const cldV    = interpAt(series.times, series.cloud,      hoverMs);
-        if (isFinite(irrV)) hoverYIrr = yIrr(irrV);
-        if (isFinite(cldV)) hoverYCld = yCloud(cldV);
+        if (isFinite(irrV))
+        {
+            hoverYIrr = yIrr(irrV);
+        }
+        if (isFinite(cldV))
+        {
+            hoverYCld = yCloud(cldV);
+        }
         showHover = isFinite(hoverYIrr) || isFinite(hoverYCld);
     }
 
@@ -826,26 +1011,12 @@ export function renderChart(host: ChartHost): TemplateResult
                     x1="${hoverX.toFixed(2)}" y1="0"
                     x2="${hoverX.toFixed(2)}" y2="${H}"
                 ></line>
-                ${isFinite(hoverYCld) ? svg`
-                    <circle
-                        class="hc-hover-dot"
-                        cx="${hoverX.toFixed(2)}"
-                        cy="${hoverYCld.toFixed(2)}"
-                        r="2.4"
-                        fill="${cloudColor}"
-                    ></circle>
-                ` : ''}
-                ${isFinite(hoverYIrr) ? svg`
-                    <circle
-                        class="hc-hover-dot"
-                        cx="${hoverX.toFixed(2)}"
-                        cy="${hoverYIrr.toFixed(2)}"
-                        r="2.4"
-                        fill="${sunColor}"
-                    ></circle>
-                ` : ''}
             ` : nothing}
         </svg>
+        ${showHover ? html`
+            ${isFinite(hoverYCld) ? html`<div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverYCld / H * 100).toFixed(2)}%; background: ${cloudColor};"></div>` : nothing}
+            ${isFinite(hoverYIrr) ? html`<div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverYIrr / H * 100).toFixed(2)}%; background: ${sunColor};"></div>` : nothing}
+        ` : nothing}
     `;
 }
 
@@ -904,165 +1075,19 @@ export function renderPvChart(host: ChartHost): TemplateResult
         dCursor.setTime(next.getTime());
     }
 
-    //If we have no history yet, render the empty frame (axis
-    //grid + day separators) so the graph card never looks
-    //"broken" while data is being fetched.
-    //
-    //If the entity reports a cumulative energy (Wh / kWh / MWh)
-    //we differentiate it into a power-rate series so the curve
-    //reflects production at each instant rather than the
-    //ever-climbing daily total. The user said it best: "produc-
-    //tion par minute, pas totale". Negative deltas (a daily
-    //"energy today" sensor flipping back to 0 at midnight) are
-    //treated as resets and dropped, and abnormally large gaps
-    //are skipped to avoid smearing one big jump across an hour
-    //of empty time.
+    //Single-source read: the unified data source (src/card/unifiedStore.ts) carries the production
+    //series for the full J-2 to J+2 window in watts, interpolated linearly between real samples,
+    //never mixed with the forecast model. sliceForRange returns one sample per DISPLAY bucket within
+    //the visible window. Empty when the source isn't built yet (first paint), the chart renders the
+    //empty frame in that case.
     const lu = (host._pvUnit || '').toLowerCase();
     const isCumulativeEnergy = lu === 'wh' || lu === 'kwh' || lu === 'mwh';
-
-    let rawTimes:  Date[]   = hist?.times  ?? [];
-    let rawValues: number[] = hist?.values ?? [];
-
-    if (isCumulativeEnergy && rawTimes.length >= 2)
-    {
-        //Quantization fix: cumulative-energy sensors typically report integer Wh, so two samples a few seconds apart look like "0 then 1 Wh delta
-        //over 10 s", which divides to a fake 360 W spike when the true rate is closer to 100 W. Hold the previous anchor until at least MIN_DTH of
-        //clock time has accumulated so dv / dtH averages over a window where quantization is negligible. Skip samples before that, don't advance the
-        //anchor, so the next iteration compares against the same baseline.
-        const MIN_DTH = 0.05;   //3 minutes
-        const dTimes:  Date[]   = [];
-        const dValues: number[] = [];
-        let prevIdx = 0;
-        for (let i = 1; i < rawTimes.length; i++)
-        {
-            const dtH = (rawTimes[i].getTime() - rawTimes[prevIdx].getTime()) / 3_600_000;
-            if (dtH <= 0)
-            {
-                continue;
-            }
-            if (dtH > 6)
-            {
-                //Sensor outage, abandon this anchor and start a fresh one at the current sample.
-                prevIdx = i;
-                continue;
-            }
-            const dv = rawValues[i] - rawValues[prevIdx];
-            if (dv < 0)
-            {
-                //Counter reset (typical for "energy today"
-                //sensors that zero out at midnight). Reset the
-                //anchor to the new low value.
-                prevIdx = i;
-                continue;
-            }
-            if (dtH < MIN_DTH)
-            {
-                continue;
-            }
-            dTimes.push(rawTimes[i]);
-            dValues.push(dv / dtH);
-            prevIdx = i;
-        }
-        rawTimes  = dTimes;
-        rawValues = dValues;
-    }
-
-    const samples: Array<{ t: Date; v: number }> = [];
-    //Blend in the hourly LTS slot (`_pvCalibStats`, 5 days) for the
-    //past portion of the timeline that the narrow raw window does
-    //not cover. The raw fetch is capped at the last 6 hours so the
-    //recorder stays responsive on 1 Hz installs (Victron Cerbo and
-    //friends); without the LTS fallback the chart would just stop
-    //at the head of the raw window and leave the rest of the past
-    //blank. The LTS series carries a mean per hour, so we feed it
-    //in below the raw samples and let the raw samples paint over
-    //them where the two overlap. Already in native power units
-    //(the LTS path picks `mean` for power sensors, differentiates
-    //`state` for cumulative-energy sensors), so the values feed the
-    //chart Y axis on the same scale as the raw samples.
-    const rawFirstMs = rawTimes.length > 0 ? rawTimes[0].getTime() : Infinity;
-    const calib      = host._pvCalibStats;
-    if (calib && calib.times.length > 0)
-    {
-        for (let i = 0; i < calib.times.length; i++)
-        {
-            const t  = calib.times[i];
-            const tMs = t.getTime();
-            if (tMs < startMs)    continue;
-            if (tMs > endMsAbs)   continue;
-            //The raw fetch already carries the live tail at full
-            //resolution; the LTS row would just double up the
-            //paint underneath. Drop LTS rows once we cross into
-            //the raw window.
-            if (tMs >= rawFirstMs) continue;
-            const v = calib.values[i];
-            if (!isFinite(v))     continue;
-            samples.push({ t, v });
-        }
-    }
-    for (let i = 0; i < rawTimes.length; i++)
-    {
-        const t = rawTimes[i];
-        const v = rawValues[i];
-        if (t.getTime() < startMs || t.getTime() > endMsAbs) continue;
-        if (!isFinite(v))                                     continue;
-        samples.push({ t, v });
-    }
-    //Sort by time so the painted line and area trace monotonically
-    //left-to-right; the LTS pass and the raw pass append in their
-    //natural orders but interleave around the boundary if a stats
-    //bucket midpoint sits just inside the raw window.
-    samples.sort((a, b) => a.t.getTime() - b.t.getTime());
-
-    //Decimate to at most MAX_POINTS samples before serialising into
-    //the SVG `d` attribute. A 1 Hz power sensor over 6 hours alone
-    //produces 21 600 samples; the resulting path string overflows
-    //Safari / Firefox SVG rasterisers (the path silently renders
-    //nothing) and burns layout time on every frame. We bucket by
-    //pixel column at the chart's viewBox width and keep the local
-    //min + max per bucket so the visible curve still reflects the
-    //peaks and troughs even at heavy compression.
-    const MAX_POINTS = 1500;
-    if (samples.length > MAX_POINTS)
-    {
-        const buckets = Math.floor(MAX_POINTS / 2);
-        const bucketMs = rangeMs / buckets;
-        const slim: Array<{ t: Date; v: number }> = [];
-        let bIdx = 0;
-        let bMinV = Infinity, bMaxV = -Infinity;
-        let bMinT: Date | null = null, bMaxT: Date | null = null;
-        const flush = (): void =>
-        {
-            if (bMinT && bMaxT)
-            {
-                if (bMinT.getTime() <= bMaxT.getTime())
-                {
-                    slim.push({ t: bMinT, v: bMinV });
-                    if (bMinT.getTime() !== bMaxT.getTime()) slim.push({ t: bMaxT, v: bMaxV });
-                }
-                else
-                {
-                    slim.push({ t: bMaxT, v: bMaxV });
-                    slim.push({ t: bMinT, v: bMinV });
-                }
-            }
-            bMinV = Infinity; bMaxV = -Infinity; bMinT = null; bMaxT = null;
-        };
-        for (const s of samples)
-        {
-            const idx = Math.min(buckets - 1, Math.floor((s.t.getTime() - startMs) / bucketMs));
-            if (idx !== bIdx)
-            {
-                flush();
-                bIdx = idx;
-            }
-            if (s.v < bMinV) { bMinV = s.v; bMinT = s.t; }
-            if (s.v > bMaxV) { bMaxV = s.v; bMaxT = s.t; }
-        }
-        flush();
-        samples.length = 0;
-        samples.push(...slim);
-    }
+    //Reference the cumulative-detection flag so the unused-variable warning stays silent (the
+    //branch lives in the legacy code path now, the store handles cumulative->W internally).
+    void isCumulativeEnergy;
+    void hist;
+    const store = host._unifiedStore;
+    const rangeSlice = store ? sliceForRange(store, startMs, endMsAbs) : null;
 
     const xOf = (t: Date): number =>
         ((t.getTime() - startMs) / rangeMs) * W;
@@ -1081,53 +1106,42 @@ export function renderPvChart(host: ChartHost): TemplateResult
         const native = isCumulativeEnergy
             ? (lu === 'kwh' ? 'kw' : lu === 'mwh' ? 'mw' : lu === 'wh' ? 'w' : '')
             : lu;
-        if (native === 'kw') return 1 / 1000;
-        if (native === 'mw') return 1 / 1_000_000;
+        if (native === 'kw')
+        {
+            return 1 / 1000;
+        }
+        if (native === 'mw')
+        {
+            return 1 / 1_000_000;
+        }
         return 1;
     })();
 
-    //Predicted PV for hours from "now" forward, scales the
-    //clear-sky percentage by the user-configured peak power
-    //(kWp -> W per percent of STC). Skipped silently when the
-    //peak power isn't set in the editor.
-    const k = pvCalibK(host.config);
-    const coords = getHomeCoords(host.config, host.hass);
-    const lat = coords?.lat;
-    const lon = coords?.lon;
-    const series = host._chartSeries;
-    //Apply the same 5-day rolling forecast calibration the dashboard
-    //already shows in its "refined" headline, so the dotted forecast
-    //curve below matches the number the user sees on the dash. Null
-    //(less than 2 valid past days) leaves the ratio at 1 and the
-    //curve is the raw model output. The optional inverter PMax then
-    //clips the resulting watts so the curve doesn't shoot above the
-    //user's hardware ceiling.
-    const cal     = computeForecastCalibration(host);
-    const calR    = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading = currentShadingMap();
-    const capW    = pvInverterMaxW(host.config);
-    const predictedSamples: Array<{ t: Date; v: number }> = [];
-    if (k !== null && series && typeof lat === 'number' && typeof lon === 'number')
+    //Production samples: read from the data source in watts, multiplied by nativeFromW so the value
+    //feeds the Y axis on the same scale the entity's native unit uses (rest of the chart still draws
+    //in native units, the data source is the single conversion point).
+    const samples: Array<{ t: Date; v: number }> = [];
+    if (rangeSlice)
     {
-        const nowMs  = Date.now();
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let i = 0; i < series.times.length; i++)
+        for (let i = 0; i < rangeSlice.times.length; i++)
         {
-            const tMs = series.times[i].getTime();
-            if (tMs <  nowMs)   continue;             //future only
-            if (tMs <  startMs) continue;
-            if (tMs >  endMsAbs) continue;
-            const cloud = series.cloud[i] ?? 0;
-            const pct = computePvPowerWeighted(host.config, series.times[i], lat, lon, cloud, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            });
-            if (pct <= 0) continue;
-            const eff = effectiveForecastRatio(shading, series.times[i], lat, lon, cloud, calR, nowMs);
-            const wattsClipped = Math.min(capW, pct * k * eff);
-            predictedSamples.push({ t: series.times[i], v: wattsClipped * nativeFromW });
+            const v = rangeSlice.production[i];
+            if (v === null || !isFinite(v)) { continue; }
+            samples.push({ t: rangeSlice.times[i], v: v * nativeFromW });
+        }
+    }
+
+    //Forecast curve: same source, same unit conversion. The forecast series in the store already
+    //carries the cap-clipped, calibration-applied, shading-aware watts at every DISPLAY bucket. No
+    //local computePvPowerWeighted loop here, the data source is the single point of truth.
+    const predictedSamples: Array<{ t: Date; v: number }> = [];
+    if (rangeSlice)
+    {
+        for (let i = 0; i < rangeSlice.times.length; i++)
+        {
+            const v = rangeSlice.forecast[i];
+            if (v === null || !isFinite(v) || v <= 0) { continue; }
+            predictedSamples.push({ t: rangeSlice.times[i], v: v * nativeFromW });
         }
     }
 
@@ -1156,6 +1170,93 @@ export function renderPvChart(host: ChartHost): TemplateResult
         const xN = xOf(samples[samples.length - 1].t);
         area = `M ${x0},${H} L ${points.join(' L ')} L ${xN},${H} Z`;
         line = `M ${points.join(' L ')}`;
+    }
+
+    //Per-source curves. One light polyline per HA Energy source, drawn UNDER the aggregate line so the eye reads the
+    //total as the dominant trace and the breakdown as background context. Hue rotates around the theme PV colour so
+    //a split E / W lands on opposite hues; the same colour shows up in the tooltip pastille for the matching row,
+    //giving the user a row ↔ curve visual link. Skipped on single-source installs where the per-entity map carries
+    //one entry equal to the aggregate (drawing it would just paint a duplicate trace at lower opacity under the
+    //headline curve). The per-entity series uses the same cumulative-differentiation rule as the aggregate path so
+    //a 4 × stat_energy_from / no stat_rate setup paints as 4 power curves, not 4 monotonically climbing kWh ramps.
+    const perEntityIdsForCurves = host._pvHistoryPerEntity.size > 1
+        ? Array.from(host._pvHistoryPerEntity.keys()).sort()
+        : [];
+    const perEntityCurves: Array<{ id: string; line: string; color: string }> = [];
+    for (let idx = 0; idx < perEntityIdsForCurves.length; idx++)
+    {
+        const id = perEntityIdsForCurves[idx];
+        const ph = host._pvHistoryPerEntity.get(id);
+        if (!ph)
+        {
+            continue;
+        }
+        let eTimes:  Date[]   = ph.times;
+        let eValues: number[] = ph.values;
+        if (isCumulativeEnergy && eTimes.length >= 2)
+        {
+            const MIN_DTH = 0.05;
+            const dT: Date[]   = [];
+            const dV: number[] = [];
+            let prevIdx = 0;
+            for (let i = 1; i < eTimes.length; i++)
+            {
+                const dtH = (eTimes[i].getTime() - eTimes[prevIdx].getTime()) / 3_600_000;
+                if (dtH <= 0)
+                {
+                    continue;
+                }
+                if (dtH > 6)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                const dv = eValues[i] - eValues[prevIdx];
+                if (dv < 0)
+                {
+                    prevIdx = i;
+                    continue;
+                }
+                if (dtH < MIN_DTH)
+                {
+                    continue;
+                }
+                dT.push(eTimes[i]);
+                dV.push(dv / dtH);
+                prevIdx = i;
+            }
+            eTimes  = dT;
+            eValues = dV;
+        }
+        const ePoints: string[] = [];
+        //Lighter decimation than the aggregate: per-entity curves are background context, half the resolution is
+        //plenty and keeps the SVG path strings short on 4-source / 1 Hz installs (4 × 750 points stays under the
+        //browser path limit).
+        const stride = Math.max(1, Math.floor(eTimes.length / 750));
+        for (let i = 0; i < eTimes.length; i += stride)
+        {
+            const t = eTimes[i];
+            const v = eValues[i];
+            const tMs = t.getTime();
+            if (tMs < startMs || tMs > endMsAbs)
+            {
+                continue;
+            }
+            if (!isFinite(v))
+            {
+                continue;
+            }
+            ePoints.push(`${xOf(t).toFixed(2)},${yOf(v).toFixed(2)}`);
+        }
+        if (ePoints.length < 2)
+        {
+            continue;
+        }
+        perEntityCurves.push({
+            id,
+            line:  `M ${ePoints.join(' L ')}`,
+            color: pvSourceColor(idx, perEntityIdsForCurves.length),
+        });
     }
 
     let predictedLine = '';
@@ -1230,6 +1331,15 @@ export function renderPvChart(host: ChartHost): TemplateResult
                     fill="${pvColor}"
                     fill-opacity="0.25"
                 ></path>
+            ` : nothing}
+            ${perEntityCurves.map(c => svg`
+                <path
+                    class="hc-chart-line hc-chart-line-source"
+                    d="${c.line}"
+                    stroke="${c.color}"
+                ></path>
+            `)}
+            ${line ? svg`
                 <path
                     class="hc-chart-line"
                     d="${line}"
@@ -1249,15 +1359,11 @@ export function renderPvChart(host: ChartHost): TemplateResult
                     x1="${hoverX.toFixed(2)}" y1="0"
                     x2="${hoverX.toFixed(2)}" y2="${H}"
                 ></line>
-                <circle
-                    class="hc-hover-dot"
-                    cx="${hoverX.toFixed(2)}"
-                    cy="${hoverY.toFixed(2)}"
-                    r="2.4"
-                    fill="${pvColor}"
-                ></circle>
             ` : nothing}
         </svg>
+        ${showHover && isFinite(hoverY) ? html`
+            <div class="hc-hover-dot-html" style="left: ${(hoverX / W * 100).toFixed(2)}%; top: ${(hoverY / H * 100).toFixed(2)}%; background: ${pvColor};"></div>
+        ` : nothing}
     `;
 }
 
@@ -1313,18 +1419,19 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     const today0 = new Date(now);
     today0.setHours(0, 0, 0, 0);
 
-    //Pre-compute the daily kWh totals once per render (cheap; the
-    //helper itself caches the observed bucketing). Past + today-
-    //so-far is integrated from the actual PV history; today-
-    //remainder + future days come from the kWp × clear-sky
-    //model. The map is keyed by the day's local-midnight ms.
-    //Skip the integration entirely when the user has the per-day
-    //consumption chip turned off: the chip is the only consumer
-    //here, no reason to spend cycles on the integration.
-    const showConsumption = timelineConsumptionEnabled(host.config);
-    const dailyKwh = showConsumption
-        ? computeDailyKwhTotals(host)
-        : new Map<number, number>();
+    //Active day during hover or scrub. The strip cell matching the
+    //pointer's day-bucket gets a faint brand-blue tint so the user
+    //reads "I am on this day" at a glance. Falls back to null when
+    //no hover or scrub is active, leaving every cell at rest.
+    const hoverPctRef = host._chartHoverPct;
+    let activeDayKey: number | null = null;
+    if (hoverPctRef !== null && hoverPctRef >= 0 && hoverPctRef <= 100)
+    {
+        const hoverMs   = start.getTime() + (hoverPctRef / 100) * rangeMs;
+        const hoverDate = new Date(hoverMs);
+        hoverDate.setHours(0, 0, 0, 0);
+        activeDayKey = hoverDate.getTime();
+    }
 
     //Build the per-day cells + the vertical separators between
     //them. Cells use absolute positioning over the strip so each
@@ -1332,7 +1439,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     //when the first or last day is only partially visible. The
     //separator list collects the right edge of each day except the
     //last (no separator at the strip's outer right edge).
-    type Cell = { isToday: boolean; centrePct: number; widthPct: number; label: string; kwhText: string; isForecast: boolean };
+    type Cell = { isToday: boolean; isActive: boolean; centrePct: number; widthPct: number; label: string };
     const cells: Cell[] = [];
     const sepPcts: number[] = [];
     const cursor = new Date(start);
@@ -1353,25 +1460,16 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
             const w        = pEnd - pStart;
             const dayDelta = Math.round((cursor.getTime() - today0.getTime()) / 86_400_000);
             const isToday  = dayDelta === 0;
+            const isActive = activeDayKey !== null && cursor.getTime() === activeDayKey;
 
-            const label    = formatDate(cursor, host.config?.['date-format']);
-
-            const kwh   = dailyKwh.get(cursor.getTime());
-            //Forecast days (future + today's not-yet-produced
-            //share) are flagged so the cell can render the kWh
-            //in italic. Past days stay concrete.
-            const isForecast = kwh !== undefined && cursor.getTime() > today0.getTime();
-            const kwhText = (kwh !== undefined && isFinite(kwh) && kwh >= 0.05)
-                ? formatLocalisedNumber(host.hass, kwh, 1) + ' kWh'
-                : '';
+            const label    = formatDate(cursor, host.hass);
 
             cells.push({
                 isToday,
+                isActive,
                 centrePct: pStart + w / 2,
                 widthPct:  w,
                 label,
-                kwhText,
-                isForecast,
             });
             //Right edge of the day; becomes a separator unless
             //this day is the last one visible. We record it
@@ -1383,19 +1481,19 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
     }
     //The final entry is the right edge of the strip (not a
     //between-day boundary), drop it.
-    if (sepPcts.length > 0) sepPcts.pop();
+    if (sepPcts.length > 0)
+    {
+        sepPcts.pop();
+    }
 
     return html`
         <div class="tb-day-strip">
             ${cells.map(c => html`
                 <div
-                    class="tb-day-strip-cell ${c.isToday ? 'is-today' : ''}"
+                    class="tb-day-strip-cell ${c.isToday ? 'is-today' : ''} ${c.isActive ? 'is-active' : ''}"
                     style="left:${(c.centrePct - c.widthPct / 2).toFixed(2)}%; width:${c.widthPct.toFixed(2)}%"
                 >
                     <span class="tb-day-strip-date">${c.label}</span>
-                    ${c.kwhText ? html`
-                        <span class="tb-day-strip-kwh ${c.isForecast ? 'is-forecast' : ''}">${c.kwhText}</span>
-                    ` : nothing}
                 </div>
             `)}
             ${sepPcts.map(p => html`
@@ -1404,6 +1502,7 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
         </div>
     `;
 }
+
 
 
 //Compute kWh-per-day totals over the active timeline range. The helper integrates two sources:
@@ -1421,7 +1520,10 @@ export function renderTimelineDayLabels(host: ChartHost): TemplateResult
 export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
 {
     const out = new Map<number, number>();
-    if (!host._timeRange) return out;
+    if (!host._timeRange)
+    {
+        return out;
+    }
     const { start, end } = host._timeRange;
     const startMs  = start.getTime();
     const endMsAbs = end.getTime();
@@ -1459,10 +1561,19 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             for (let i = 1; i < h.times.length; i++)
             {
                 const tMs = h.times[i].getTime();
-                if (tMs < startMs || tMs > endMsAbs) continue;
-                if (!bucketGuard(tMs)) continue;
+                if (tMs < startMs || tMs > endMsAbs)
+                {
+                    continue;
+                }
+                if (!bucketGuard(tMs))
+                {
+                    continue;
+                }
                 const dv = h.values[i] - h.values[i - 1];
-                if (!isFinite(dv) || dv < 0) continue;
+                if (!isFinite(dv) || dv < 0)
+                {
+                    continue;
+                }
                 const kwh = unit === 'mwh' ? dv * 1000
                           : unit === 'wh'  ? dv / 1000
                           : dv;
@@ -1479,14 +1590,26 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
             for (let i = 1; i < h.times.length; i++)
             {
                 const tCurrMs = h.times[i].getTime();
-                if (tCurrMs < startMs || tCurrMs > endMsAbs) continue;
-                if (!bucketGuard(tCurrMs)) continue;
+                if (tCurrMs < startMs || tCurrMs > endMsAbs)
+                {
+                    continue;
+                }
+                if (!bucketGuard(tCurrMs))
+                {
+                    continue;
+                }
                 const tPrevMs = h.times[i - 1].getTime();
                 const dtH = (tCurrMs - tPrevMs) / 3_600_000;
-                if (dtH <= 0 || dtH > 6) continue;
+                if (dtH <= 0 || dtH > 6)
+                {
+                    continue;
+                }
                 const wPrev = pvNormalizeToWatts(h.values[i - 1], host._pvUnit);
                 const wCurr = pvNormalizeToWatts(h.values[i],     host._pvUnit);
-                if (!isFinite(wPrev) || !isFinite(wCurr)) continue;
+                if (!isFinite(wPrev) || !isFinite(wCurr))
+                {
+                    continue;
+                }
                 const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
                 const k = dayKey(tCurrMs);
                 out.set(k, (out.get(k) ?? 0) + kwh);
@@ -1505,7 +1628,10 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         //Stats slot fills the wider days only. A sample whose timestamp falls within the raw window is already counted; skip it.
         integrate(calib, (tMs) =>
         {
-            if (rawFirstMs === null || rawLastMs === null) return true;
+            if (rawFirstMs === null || rawLastMs === null)
+            {
+                return true;
+            }
             return tMs < rawFirstMs || tMs > rawLastMs;
         });
     }
@@ -1523,8 +1649,6 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
     const coords   = getHomeCoords(host.config, host.hass);
     const cal      = computeForecastCalibration(host);
     const calR     = cal ? cal.ratio : 1;
-    trainShadingMap(host);
-    const shading  = currentShadingMap();
     const capW     = pvInverterMaxW(host.config);
     if (k !== null && k > 0 && series && coords)
     {
@@ -1535,7 +1659,10 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         for (let i = 0; i < series.times.length; i++)
         {
             const tMs   = series.times[i].getTime();
-            if (tMs < startMs || tMs > endMsAbs) continue;
+            if (tMs < startMs || tMs > endMsAbs)
+            {
+                continue;
+            }
             if (tMs < nowMs) continue;   //past covered by Pass 1
             const cloud = series.cloud[i] ?? 0;
             const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
@@ -1543,11 +1670,14 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
                 windMs:   series.windSpeed[i],
                 raster,
             });
-            if (pct <= 0) continue;
+            if (pct <= 0)
+            {
+                continue;
+            }
             //pct × k = watts at this hour midpoint × 1h = Wh.
             //Divide by 1000 to land in kWh; clip first so the
             //daily total honours the inverter cap.
-            const eff   = effectiveForecastRatio(shading, series.times[i], coords.lat, coords.lon, cloud, calR, nowMs);
+            const eff   = effectiveForecastRatio(calR);
             const watts = Math.min(capW, pct * k * eff);
             const kwh   = watts / 1000;
             const dk    = dayKey(tMs);

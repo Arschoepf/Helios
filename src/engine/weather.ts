@@ -53,22 +53,39 @@ export const RATE_LIMIT_BACKOFF_MS = [
     60 * 60_000
 ];
 
+//Graduated back-off for non-429 failures (network down, 5xx, JSON parse). Same shape as the 429
+//table but starting at 1 min so a transient network blip recovers quickly. Caps at 60 min so a
+//sustained outage cannot pile up high-cadence retry traffic that ends up triggering a per-IP rate
+//limit even without a direct 429 from the API.
+export const OTHER_ERROR_BACKOFF_MS = [
+    1  * 60_000,
+    5  * 60_000,
+    15 * 60_000,
+    60 * 60_000
+];
+
 
 //Median of a numeric array, ignoring null/undefined/NaN. Used to
 //combine concurrent forecasts from multiple weather models into a
 //single robust value per timestep. Median over mean: individual
 //models occasionally emit gross outliers (typical: cloud_cover_low
 //pegged at 100 % from the Sundqvist parametrisation hitting an
-//underground pressure level, open-meteo issue #416).
+//underground pressure level).
 export function medianOfNumbers(values: ReadonlyArray<number | null | undefined>): number | null
 {
     const clean: number[] = [];
     for (const v of values)
     {
-        if (v == null || Number.isNaN(v)) continue;
+        if (v == null || Number.isNaN(v))
+        {
+            continue;
+        }
         clean.push(v);
     }
-    if (clean.length === 0) return null;
+    if (clean.length === 0)
+    {
+        return null;
+    }
     clean.sort((a, b) => a - b);
     const mid = clean.length >> 1;
     return clean.length % 2 === 0
@@ -148,7 +165,49 @@ export function pickModelsForLocation(lat: number, lon: number, precision: 'stan
 //stays in the key so that re-introducing a precision toggle later
 //won't collide with existing cached payloads.
 const CACHE_KEY_PREFIX = 'helios-weather-cache:';
-const CACHE_TTL_MS     = 30 * 60_000;
+//Cache TTL bumped to 45 min from the historical 30 min so the periodic refresh interval (10 min)
+//hits the localStorage cache for the first 4 cycles, then triggers a fresh network fetch on the 5th.
+//Open-Meteo's underlying models refresh every 15 min server-side and the timezone-anchored payload
+//is fully replaced on local midnight regardless, so 45 min stays well within "fresh enough" for the
+//forecast horizon while cutting network volume by another third on long-running sessions.
+const CACHE_TTL_MS     = 45 * 60_000;
+//Cache key precision in decimal degrees. Three decimals = 110 m, well below Open-Meteo's coarsest
+//grid cell (25 km for ECMWF, ~1.3 km for the AROME-France HD national model). Cards sitting at
+//almost the same home (multi-card dashboards, editor preview during a lat / lon drag) round to one
+//entry and share the fetch. The URL sent to the API is rounded to the same precision so the API
+//also sees one canonical request, friendly to any CDN cache on the Open-Meteo edge.
+const CACHE_KEY_DECIMALS = 3;
+
+
+//Module-level diagnostics. window.heliosStats() walks these so a power user can audit how many
+//times the card has actually talked to Open-Meteo over a session, plus the cache + dedup ratios.
+//Pure counters, no behavioural effect.
+const _weatherStats =
+{
+    cacheHits:             0,
+    networkFetches:        0,
+    inflightDedups:        0,
+    rateLimit429:          0,
+    otherErrors:           0,
+};
+export function getWeatherFetchStats(): {
+    cacheHits:      number;
+    networkFetches: number;
+    inflightDedups: number;
+    rateLimit429:   number;
+    otherErrors:    number;
+}
+{
+    return { ..._weatherStats };
+}
+
+
+//Module-level inflight Promise map keyed on cache key (`<precision>:<lat>,<lon>`). When several
+//engines (multi-card dashboard) or several call sites in the same engine (initial spawn + interval
+//tick racing on a cold cache) ask for the same (lat, lon, precision) tuple while a fetch is already
+//in flight, they all await the SAME Promise instead of each firing its own network round-trip.
+//Cleared in a finally block so an error path frees the slot for the next attempt.
+const _inflightFetches: Map<string, Promise<SampleHourly | null>> = new Map();
 
 interface CachedPayload
 {
@@ -170,7 +229,7 @@ interface CachedPayload
 
 function cacheKey(lat: number, lon: number, precision: 'standard' | 'high'): string
 {
-    return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(3)},${lon.toFixed(3)}`;
+    return `${CACHE_KEY_PREFIX}${precision}:${lat.toFixed(CACHE_KEY_DECIMALS)},${lon.toFixed(CACHE_KEY_DECIMALS)}`;
 }
 
 
@@ -186,12 +245,18 @@ export function clearWeatherCache(): number
     try
     {
         const ls = window.localStorage;
-        if (!ls) return 0;
+        if (!ls)
+        {
+            return 0;
+        }
         const stale: string[] = [];
         for (let i = 0; i < ls.length; i++)
         {
             const k = ls.key(i);
-            if (k && k.startsWith(CACHE_KEY_PREFIX)) stale.push(k);
+            if (k && k.startsWith(CACHE_KEY_PREFIX))
+            {
+                stale.push(k);
+            }
         }
         for (const k of stale) { ls.removeItem(k); cleared++; }
     }
@@ -204,9 +269,15 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
     try
     {
         const raw = window.localStorage?.getItem(cacheKey(lat, lon, precision));
-        if (!raw) return null;
+        if (!raw)
+        {
+            return null;
+        }
         const obj = JSON.parse(raw);
-        if (Date.now() - obj.storedAt > CACHE_TTL_MS) return null;
+        if (Date.now() - obj.storedAt > CACHE_TTL_MS)
+        {
+            return null;
+        }
         //Even within the TTL, reject the cache if we crossed a local midnight since it was written. Open-Meteo anchors past_days / forecast_days to
         //"today" in the location's timezone, so the forecast window slides at midnight and stale cache from yesterday would otherwise pin the
         //timeline to the old day.
@@ -215,7 +286,10 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             return null;
         }
         const p = obj.payload;
-        if (!p || Array.isArray(p) || !Array.isArray(p.times)) return null;
+        if (!p || Array.isArray(p) || !Array.isArray(p.times))
+        {
+            return null;
+        }
         return {
             lat:         p.lat,
             lon:         p.lon,
@@ -276,7 +350,7 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //variables let us:
 //  - keep the total `cloud_cover` for visual rendering
 //  - detect the well-known "fog spike" failure mode of low-layer
-//    parametrisations (open-meteo issue #416).
+//    parametrisations.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
     'cloud_cover',
@@ -306,10 +380,16 @@ function readSeries(row: any, varName: string, models: string[]): Array<number |
     for (const m of models)
     {
         const arr = row?.hourly?.[`${varName}_${m}`];
-        if (!Array.isArray(arr)) continue;
+        if (!Array.isArray(arr))
+        {
+            continue;
+        }
         series.push(arr.map((v: any) => (v == null || Number.isNaN(v)) ? null : Number(v)));
     }
-    if (series.length === 0) return [];
+    if (series.length === 0)
+    {
+        return [];
+    }
     const len = Math.max(...series.map(s => s.length));
     const out: Array<number | null> = new Array(len);
     for (let i = 0; i < len; i++)
@@ -370,82 +450,136 @@ export async function fetchHomePointData(
     signal:    AbortSignal
 ): Promise<SampleHourly | null>
 {
-    const cached = readCache(lat, lon, precision);
-    if (cached) return cached;
+    //Round to the cache-key precision up front so every downstream operation (localStorage lookup,
+    //inflight dedup key, URL submitted to the API) uses the EXACT same coordinates. Without this the
+    //URL would carry 5-decimal precision while the cache key carried 3-decimal precision, so two
+    //cards 80 m apart would hit the network with different URLs but share a cache entry, defeating
+    //the CDN-friendliness goal AND fragmenting our own inflight dedup.
+    const fLat = Number(lat.toFixed(CACHE_KEY_DECIMALS));
+    const fLon = Number(lon.toFixed(CACHE_KEY_DECIMALS));
 
-    const models = pickModelsForLocation(lat, lon, precision);
-
-    let url =
-        `https://api.open-meteo.com/v1/forecast` +
-        `?latitude=${lat.toFixed(5)}` +
-        `&longitude=${lon.toFixed(5)}` +
-        `&hourly=${HOURLY_VARS.join(',')}` +
-        `&models=${models.join(',')}` +
-        `&past_days=${PAST_DAYS}&forecast_days=${FORECAST_DAYS}` +
-        `&timezone=auto`;
-
-    if (elevation !== undefined)
+    const cached = readCache(fLat, fLon, precision);
+    if (cached)
     {
-        url += `&elevation=${elevation.toFixed(0)}`;
+        _weatherStats.cacheHits++;
+        return cached;
     }
 
-    try
+    //Inflight dedup: if another caller is already fetching the same (lat, lon, precision), await
+    //the same Promise instead of starting a fresh network round-trip. Critical on multi-card
+    //dashboards where every helios-card spawns its own engine; without this every card would race
+    //on a cold cache and each one would hit Open-Meteo once.
+    const inflightKey = cacheKey(fLat, fLon, precision);
+    const pending = _inflightFetches.get(inflightKey);
+    if (pending)
     {
-        const res = await fetch(url, { signal });
-        if (!res.ok)
+        _weatherStats.inflightDedups++;
+        return pending;
+    }
+
+    const fetchPromise = (async (): Promise<SampleHourly | null> =>
+    {
+        const models = pickModelsForLocation(fLat, fLon, precision);
+
+        let url =
+            `https://api.open-meteo.com/v1/forecast` +
+            `?latitude=${fLat.toFixed(CACHE_KEY_DECIMALS)}` +
+            `&longitude=${fLon.toFixed(CACHE_KEY_DECIMALS)}` +
+            `&hourly=${HOURLY_VARS.join(',')}` +
+            `&models=${models.join(',')}` +
+            `&past_days=${PAST_DAYS}&forecast_days=${FORECAST_DAYS}` +
+            `&timezone=auto`;
+
+        if (elevation !== undefined)
         {
-            //Re-throw HTTP 429 with the status code attached so the engine catch can route it to the exponential back-off table
-            //(`RATE_LIMIT_BACKOFF_MS`). Returning `null` here would short-circuit the engine's catch and the back-off would never
-            //arm, leaving the card hammering Open-Meteo at the normal cadence under a rate-limit. Other non-OK statuses fall
-            //through to the silent null path, treated the same as a generic network error.
-            if (res.status === 429)
+            url += `&elevation=${elevation.toFixed(0)}`;
+        }
+
+        try
+        {
+            _weatherStats.networkFetches++;
+            const res = await fetch(url, { signal });
+            if (!res.ok)
             {
-                const err: Error & { status?: number } = new Error('Open-Meteo rate limit (HTTP 429)');
-                err.status = 429;
-                throw err;
+                //Re-throw HTTP 429 with the status code attached so the engine catch can route it to the exponential back-off table
+                //(`RATE_LIMIT_BACKOFF_MS`). Returning `null` here would short-circuit the engine's catch and the back-off would never
+                //arm, leaving the card hammering Open-Meteo at the normal cadence under a rate-limit. Other non-OK statuses fall
+                //through to the silent null path, treated the same as a generic network error.
+                if (res.status === 429)
+                {
+                    _weatherStats.rateLimit429++;
+                    const err: Error & { status?: number } = new Error('Open-Meteo rate limit (HTTP 429)');
+                    err.status = 429;
+                    throw err;
+                }
+                _weatherStats.otherErrors++;
+                return null;
+            }
+            const json = await res.json();
+            const row = Array.isArray(json) ? json[0] : json;
+
+            const tArr  = row?.hourly?.time ?? [];
+            const times: Date[] = tArr.map((t: string) => new Date(t));
+
+            const lowSeries  = fillCloud(readSeries(row, 'cloud_cover_low',  models));
+            const midSeries  = fillCloud(readSeries(row, 'cloud_cover_mid',  models));
+            const highSeries = fillCloud(readSeries(row, 'cloud_cover_high', models));
+
+            //Clamp each layer to [0, 100] before weighting so an upstream API quirk that returns > 100 on one layer does
+            //not bleed into the weighted sum with the wrong relative contribution (the final Math.min would catch the
+            //total but the layer mix would already be wrong).
+            const cloudEffective = lowSeries.map((lo, i) =>
+            {
+                const lc = Math.max(0, Math.min(100, lo ?? 0));
+                const mc = Math.max(0, Math.min(100, midSeries[i]  ?? 0));
+                const hc = Math.max(0, Math.min(100, highSeries[i] ?? 0));
+                return Math.min(100, lc + 0.6 * mc + 0.2 * hc);
+            });
+
+            const data: SampleHourly = {
+                lat: fLat,
+                lon: fLon,
+                times,
+                cloudCover:  cloudEffective,
+                cloudLow:    lowSeries,
+                cloudMid:    midSeries,
+                cloudHigh:   highSeries,
+                weatherCode: readWeatherCode(row, models),
+                shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
+                temperature: fillNaN(readSeries(row, 'temperature_2m',  models)),
+                windSpeed:   fillNaN(readSeries(row, 'wind_speed_10m',  models)),
+            };
+
+            writeCache(fLat, fLon, precision, data);
+            return data;
+        }
+        catch (e)
+        {
+            //AbortError on cancellation, network errors, JSON parse errors, all swallowed silently. The caller treats null as "no data
+            //available" and renders the timeline ramps as empty. Rate-limit errors (HTTP 429) are NOT swallowed: they propagate to the
+            //engine so the back-off table arms.
+            if (e && typeof e === 'object' && (e as { status?: number }).status === 429)
+            {
+                throw e;
+            }
+            if (e && typeof e === 'object' && (e as { name?: string }).name !== 'AbortError')
+            {
+                _weatherStats.otherErrors++;
             }
             return null;
         }
-        const json = await res.json();
-        const row = Array.isArray(json) ? json[0] : json;
+    })();
 
-        const tArr  = row?.hourly?.time ?? [];
-        const times: Date[] = tArr.map((t: string) => new Date(t));
-
-        const lowSeries  = fillCloud(readSeries(row, 'cloud_cover_low',  models));
-        const midSeries  = fillCloud(readSeries(row, 'cloud_cover_mid',  models));
-        const highSeries = fillCloud(readSeries(row, 'cloud_cover_high', models));
-
-        const cloudEffective = lowSeries.map((lo, i) =>
-        {
-            const mi = midSeries[i]  ?? 0;
-            const hi = highSeries[i] ?? 0;
-            return Math.min(100, (lo ?? 0) + 0.6 * mi + 0.2 * hi);
-        });
-
-        const data: SampleHourly = {
-            lat,
-            lon,
-            times,
-            cloudCover:  cloudEffective,
-            cloudLow:    lowSeries,
-            cloudMid:    midSeries,
-            cloudHigh:   highSeries,
-            weatherCode: readWeatherCode(row, models),
-            shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
-            temperature: fillNaN(readSeries(row, 'temperature_2m',  models)),
-            windSpeed:   fillNaN(readSeries(row, 'wind_speed_10m',  models)),
-        };
-
-        writeCache(lat, lon, precision, data);
-        return data;
-    }
-    catch (e)
+    _inflightFetches.set(inflightKey, fetchPromise);
+    try
     {
-        //AbortError on cancellation, network errors, JSON parse errors, all swallowed silently. The caller treats null as "no data
-        //available" and renders the timeline ramps as empty. Rate-limit errors (HTTP 429) are NOT swallowed: they propagate to the
-        //engine so the back-off table arms.
-        if (e && typeof e === 'object' && (e as { status?: number }).status === 429) throw e;
-        return null;
+        return await fetchPromise;
+    }
+    finally
+    {
+        //Release the slot so the next fetch (after the result is cached) doesn't dedup against a
+        //stale Promise. The cached payload is what later callers should see, not a leftover
+        //reference to the network round-trip we just finished.
+        _inflightFetches.delete(inflightKey);
     }
 }

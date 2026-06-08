@@ -60,7 +60,10 @@ export const austriaTirolAls: LidarSource =
         }
 
         const epsg = getEpsg(31254);
-        if (!epsg) return emptyResult();
+        if (!epsg)
+        {
+            return emptyResult();
+        }
         const proj = projectBbox(bbox, epsg);
 
         //ArcGIS WCSServer advertises lowercase axes "x y" for both
@@ -87,7 +90,10 @@ export const austriaTirolAls: LidarSource =
             fetchFloat32GeoTiff(buildUrl(DOM_COV), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DGM_COV), rasterSize, opts.signal)
         ]);
-        if (!dom || !dgm) return emptyResult();
+        if (!dom || !dgm)
+        {
+            return emptyResult();
+        }
 
         const heights = subtractRasters(dom, dgm);
 

@@ -85,7 +85,10 @@ export const brandenburgBerlinDom: LidarSource =
             fetchFloat32GeoTiff(buildUrl(DOM_URL, DOM_COV), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DGM_URL, DGM_COV), rasterSize, opts.signal)
         ]);
-        if (!dom || !dgm) return emptyResult();
+        if (!dom || !dgm)
+        {
+            return emptyResult();
+        }
 
         const heights = subtractRasters(dom, dgm);
 

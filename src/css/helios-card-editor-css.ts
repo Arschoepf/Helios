@@ -99,6 +99,17 @@ export const editorStyles = css`
     {
         transform: rotate(90deg);
     }
+    /*  Per-section icon, sits between the chevron and the label so each accordion row reads at a glance. Inherits the
+        section title's primary-colour tint and shrinks to match the title's vertical rhythm without overpowering it. */
+    .section-icon
+    {
+        --mdc-icon-size: 16px;
+        color: inherit;
+        display: inline-flex;
+        align-items: center;
+        margin-right: 2px;
+        flex-shrink: 0;
+    }
 
     /*  Vertical rhythm: a positive top margin pushes the help
         visibly away from its field above, and a generous bottom
@@ -469,8 +480,11 @@ export const editorStyles = css`
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 0 14px;
+        gap: 12px;
+        padding: 4px 0;
     }
+    .about-row + .about-row { padding-top: 4px; }
+    .about-row:first-of-type { padding-top: 8px; }
     .about-label
     {
         font-weight: 500;
@@ -483,6 +497,51 @@ export const editorStyles = css`
         font-size: 13px;
         color: var(--primary-text-color, #18181b);
     }
+    /*  Identity rows. Every row uses the same label-left, content-right layout the version row
+        established: flex layout with the label squeezed left + the value or link pushed right.
+        about-row already has the base flex container; the per-content variants below tune the
+        right-side style (link, plain value, version chip). */
+    .about-row-value
+    {
+        font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
+        font-size: 14px;
+        font-weight: var(--ha-font-weight-medium, 500);
+        color: var(--primary-text-color, #18181b);
+        text-align: right;
+    }
+    .about-row-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
+        font-size: 14px;
+        font-weight: var(--ha-font-weight-medium, 500);
+        color: var(--primary-color, #3b82f6);
+        text-decoration: none;
+    }
+    .about-row-link:hover { text-decoration: underline; }
+    .about-row-link ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+    }
+    /*  X brand mark: inline SVG so the post-rebrand glyph renders properly (mdi:twitter would
+        mis-label the platform). Sized to match the ha-icon glyphs in adjacent rows. */
+    .about-row-svg
+    {
+        width:  18px;
+        height: 18px;
+        flex-shrink: 0;
+    }
+    /*  Version chip: HA frontend body font, bold, primary text colour, decorated as a link (the
+        anchor jumps to the matching GitHub release page). */
+    .about-version-link
+    {
+        font-weight: var(--ha-font-weight-bold, 700);
+        color: var(--primary-text-color, #18181b);
+    }
+    .about-version-link:hover { text-decoration: underline; }
     .about-block
     {
         margin-top: 14px;
@@ -552,79 +611,5 @@ export const editorStyles = css`
     {
         outline: 2px solid #ffcc00;
         outline-offset: 2px;
-    }
-    /*  Shading-map debug section: stat strip + 4-up polar grid +
-        action row. Grid wraps from a 4-up row to a 2x2 / 1-up
-        stack via the auto-fit template, so the section reads
-        cleanly in both the side panel and a narrow mobile view.  */
-    .shading-stats
-    {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 4px 14px;
-        font-size: 12px;
-        color: var(--secondary-text-color, #5f6368);
-        margin: 6px 0 10px;
-    }
-    .shading-grid
-    {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 8px;
-        margin-bottom: 12px;
-    }
-    .shading-disc
-    {
-        background: rgba(0, 0, 0, 0.12);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 6px;
-        padding: 6px 4px 4px;
-        text-align: center;
-    }
-    .shading-disc-title
-    {
-        font-size: 11px;
-        font-weight: 600;
-        letter-spacing: 0.4px;
-        text-transform: uppercase;
-        color: var(--secondary-text-color, #5f6368);
-        margin-bottom: 2px;
-    }
-    .shading-disc-svg
-    {
-        display: block;
-        width: 100%;
-        height: auto;
-    }
-    .shading-actions
-    {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-    }
-    .shading-actions button
-    {
-        background: transparent;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: inherit;
-        border-radius: 4px;
-        padding: 4px 10px;
-        font-size: 12px;
-        font-weight: 600;
-        font-family: inherit;
-        cursor: pointer;
-    }
-    .shading-actions button:hover
-    {
-        background: rgba(255, 255, 255, 0.06);
-    }
-    .shading-actions .shading-reset
-    {
-        border-color: #ef4444;
-        color: #ef4444;
-    }
-    .shading-actions .shading-reset:hover
-    {
-        background: rgba(239, 68, 68, 0.08);
     }
 `;

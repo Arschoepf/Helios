@@ -142,7 +142,10 @@ export function findLidarSource(lat: number, lon: number): LidarSource | null
 {
     for (const src of LIDAR_SOURCES)
     {
-        if (src.covers(lat, lon)) return src;
+        if (src.covers(lat, lon))
+        {
+            return src;
+        }
     }
     return null;
 }
@@ -155,44 +158,79 @@ export function findLidarSource(lat: number, lon: number): LidarSource | null
 //invalidates the rest of the card config.
 export function validateLocalNdsmConfig(cfg: HeliosConfig | undefined | null): LocalNdsmConfig | null
 {
-    if (!cfg) return null;
-    if (cfg['lidar-local-ndsm-enabled'] !== true) return null;
+    if (!cfg)
+    {
+        return null;
+    }
+    if (cfg['lidar-local-ndsm-enabled'] !== true)
+    {
+        return null;
+    }
 
     const rawUrl = cfg['lidar-local-ndsm-url'];
-    if (typeof rawUrl !== 'string') return null;
+    if (typeof rawUrl !== 'string')
+    {
+        return null;
+    }
     const url = rawUrl.trim();
-    if (url.length === 0) return null;
+    if (url.length === 0)
+    {
+        return null;
+    }
 
     const minLat = numFromCfg(cfg['lidar-local-ndsm-min-lat']);
     const maxLat = numFromCfg(cfg['lidar-local-ndsm-max-lat']);
     const minLon = numFromCfg(cfg['lidar-local-ndsm-min-lon']);
     const maxLon = numFromCfg(cfg['lidar-local-ndsm-max-lon']);
-    if (minLat === null || maxLat === null || minLon === null || maxLon === null) return null;
+    if (minLat === null || maxLat === null || minLon === null || maxLon === null)
+    {
+        return null;
+    }
 
-    if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90) return null;
-    if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180) return null;
-    if (!(minLat < maxLat)) return null;
-    if (!(minLon < maxLon)) return null;
+    if (minLat < -90 || minLat > 90 || maxLat < -90 || maxLat > 90)
+    {
+        return null;
+    }
+    if (minLon < -180 || minLon > 180 || maxLon < -180 || maxLon > 180)
+    {
+        return null;
+    }
+    if (!(minLat < maxLat))
+    {
+        return null;
+    }
+    if (!(minLon < maxLon))
+    {
+        return null;
+    }
 
     return { url, minLat, maxLat, minLon, maxLon };
 }
 
 function numFromCfg(v: unknown): number | null
 {
-    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'number' && Number.isFinite(v))
+    {
+        return v;
+    }
     if (typeof v === 'string')
     {
         const s = v.trim();
-        if (s.length === 0) return null;
+        if (s.length === 0)
+        {
+            return null;
+        }
         const n = Number(s);
         return Number.isFinite(n) ? n : null;
     }
     return null;
 }
 
-//One-shot warning latch. When the user enables the local provider but leaves the config incomplete or invalid, log exactly once per session so the
-//silent fall-through is diagnosable without spamming the console on every shadow refresh.
+//One-shot warning latches. When the user enables the local provider but leaves the config incomplete or invalid, log exactly once per session so the
+//silent fall-through is diagnosable without spamming the console on every shadow refresh. Same one-shot pattern for the "bbox valid but does not
+//cover the home" case (typical lat / lon swap) and for the silent fall-through onto a public provider.
 let _warnedInvalidLocalNdsm = false;
+let _warnedBboxDoesNotCoverHome = false;
 
 //Config-aware provider resolver. Behaviour:
 //
@@ -233,7 +271,28 @@ export function resolveLidarSource(
     if (localCfg)
     {
         const local = createLocalNdsmSource(localCfg);
-        if (local.covers(lat, lon)) return local;
+        if (local.covers(lat, lon))
+        {
+            return local;
+        }
+        //Bbox validates but the home is OUTSIDE the rectangle. Most common
+        //case is a lat / lon swap in the config (the user pasted longitudes
+        //into the *-lat keys and latitudes into the *-lon keys, both pass
+        //the bare -90..90 / -180..180 range check). Surface the actual
+        //numbers so the user can spot the swap from the console without
+        //digging into the source.
+        if (!_warnedBboxDoesNotCoverHome)
+        {
+            _warnedBboxDoesNotCoverHome = true;
+            console.warn(
+                '[HELIOS] local-nDSM bbox does not cover the home, falling back to public providers.\n'
+              + '  home:     lat ' + lat.toFixed(5) + ', lon ' + lon.toFixed(5) + '\n'
+              + '  bbox lat: [' + localCfg.minLat + ', ' + localCfg.maxLat + ']\n'
+              + '  bbox lon: [' + localCfg.minLon + ', ' + localCfg.maxLon + ']\n'
+              + '  If the lat / lon ranges look swapped (latitudes in the lon fields or vice versa), '
+              + 'check the four lidar-local-ndsm-{min,max}-{lat,lon} keys.'
+            );
+        }
     }
 
     return findLidarSource(lat, lon);

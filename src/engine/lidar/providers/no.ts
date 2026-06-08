@@ -83,14 +83,20 @@ export const norwayKartverketNhm: LidarSource =
             fetchFloat32GeoTiff(buildUrl(DOM_URL), rasterSize, opts.signal),
             fetchFloat32GeoTiff(buildUrl(DTM_URL), rasterSize, opts.signal)
         ]);
-        if (!dom || !dtm) return emptyResult();
+        if (!dom || !dtm)
+        {
+            return emptyResult();
+        }
 
         //Replace the noData sentinel with NaN before subtracting so a missing ground sample doesn't pollute the surface delta.
         const cleanseNoData = (a: Float32Array): Float32Array =>
         {
             for (let i = 0; i < a.length; i++)
             {
-                if (a[i] <= -9000) a[i] = NaN;
+                if (a[i] <= -9000)
+                {
+                    a[i] = NaN;
+                }
             }
             return a;
         };

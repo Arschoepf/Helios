@@ -139,11 +139,21 @@ export function createLocalNdsmSource(cfg: LocalNdsmConfig): LidarSource
                 terrain = r ? r.terrain : null;
                 noData  = r ? r.noData  : null;
             }
-            catch (_)
+            catch (err)
             {
+                console.warn('[HELIOS] local-nDSM fetch threw at', url, err);
                 return emptyResult();
             }
-            if (!band || band.length < rasterSize * rasterSize) return emptyResult();
+            if (!band)
+            {
+                console.warn('[HELIOS] local-nDSM fetch returned no data for', url, '(check the URL is reachable from the browser and serves a Float32 GeoTIFF / COG).');
+                return emptyResult();
+            }
+            if (band.length < rasterSize * rasterSize)
+            {
+                console.warn('[HELIOS] local-nDSM raster too small at', url, '(got', band.length, 'cells, expected', rasterSize * rasterSize, '). The GeoTIFF is likely below the minimum resolution for the requested precision.');
+                return emptyResult();
+            }
 
             normaliseLocalNdsmRaster(band, noData);
             //Same nodata sentinel for both bands; the single noData

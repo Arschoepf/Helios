@@ -16,10 +16,13 @@
 //it back to 18 once the exit transition lands.
 
 import type { Map as MapLibreMap } from 'maplibre-gl';
+import { CAMERA_PITCH_MIN_DEG, CAMERA_PITCH_REST_DEG } from './camera-bounds';
 
 
 const DETAIL_MODE_ZOOM_TARGET     = 19.5;
-const DETAIL_MODE_PITCH_TARGET    = 80;
+//Detail-mode dive ends at the in-card pitch min so the house reads as a mostly top-down 3D model. At
+//80 deg (an earlier value) the ground was nearly edge-on and the house read as a flat smudge.
+const DETAIL_MODE_PITCH_TARGET    = CAMERA_PITCH_MIN_DEG;
 const DETAIL_MODE_TRANSITION_MS   = 800;
 //Window during which fresh user gestures are swallowed after a
 //detail-mode exit. The exit click that dismisses the dashboard
@@ -46,6 +49,10 @@ export interface DetailModeHost
 
     _detailMode:               boolean;
     _detailDiveRaf?:           number;
+    //Pre-dive pose snapshot used to restore the user's exact pose on exit. See _detailEntryPitch /
+    //_detailEntryBearing on HeliosEngine for the full rationale.
+    _detailEntryPitch?:        number;
+    _detailEntryBearing?:      number;
     _postExitCooldownUntil:    number;
     _autoRotateLastUserAction: number;
 }
@@ -73,6 +80,11 @@ export function setDetailMode(host: DetailModeHost, on: boolean): void
 
     if (on)
     {
+        //Capture the user's pose BEFORE the dive so the symmetric exit restores EXACTLY the pose
+        //on screen, not the hemisphere-aware default. Matters most for users running with the
+        //camera-locked chip on: their custom pitch / bearing survives every dashboard dive.
+        host._detailEntryPitch   = host.map.getPitch();
+        host._detailEntryBearing = host.map.getBearing();
         //Widen the zoom ceiling so easeTo can actually reach the
         //dive target (the resting maxZoom is 18, which would
         //otherwise clamp the animation flat).
@@ -91,11 +103,22 @@ export function setDetailMode(host: DetailModeHost, on: boolean): void
         //consults isUserGestureSuppressed() will swallow input
         //until POST_EXIT_COOLDOWN_MS has elapsed.
         host._postExitCooldownUntil = Date.now() + POST_EXIT_COOLDOWN_MS;
+        //Restore the captured entry pose. Falls back to the hemisphere-aware default when the entry
+        //snapshot is missing (engine respawn while in detail mode is the only path that hits this).
+        const exitPitch   = host._detailEntryPitch   ?? CAMERA_PITCH_REST_DEG;
+        const exitBearing = host._detailEntryBearing;
+        //Bearing is interpolated as startBearing + bearingSweep * e by diveCamera. To LAND at a
+        //specific target bearing we compute the sweep on the fly = (target - start). Falls back to
+        //the legacy fixed -DETAIL_MODE_BEARING_SWEEP when no entry bearing was captured, preserving
+        //the historical behaviour for the engine-respawn edge case above.
+        const sweepBack = exitBearing !== undefined
+            ? exitBearing - host.map.getBearing()
+            : -DETAIL_MODE_BEARING_SWEEP;
         diveCamera(
             host,
             18,
-            55,
-            -DETAIL_MODE_BEARING_SWEEP,
+            exitPitch,
+            sweepBack,
             false,
             () =>
             {
@@ -103,6 +126,9 @@ export function setDetailMode(host: DetailModeHost, on: boolean): void
                 {
                     try { host.map?.setMaxZoom(18); } catch (_) {}
                 }
+                //Clear the snapshot so a fresh entry captures a fresh pose.
+                host._detailEntryPitch   = undefined;
+                host._detailEntryBearing = undefined;
             }
         );
     }
@@ -127,7 +153,10 @@ export function diveCamera(
     onComplete?:  () => void
 ): void
 {
-    if (!host.map) return;
+    if (!host.map)
+    {
+        return;
+    }
     if (host._detailDiveRaf !== undefined)
     {
         cancelAnimationFrame(host._detailDiveRaf);

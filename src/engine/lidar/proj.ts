@@ -426,10 +426,22 @@ export function projectBbox(
     let minY = Infinity, maxY = -Infinity;
     for (const c of corners)
     {
-        if (c.x < minX) minX = c.x;
-        if (c.x > maxX) maxX = c.x;
-        if (c.y < minY) minY = c.y;
-        if (c.y > maxY) maxY = c.y;
+        if (c.x < minX)
+        {
+            minX = c.x;
+        }
+        if (c.x > maxX)
+        {
+            maxX = c.x;
+        }
+        if (c.y < minY)
+        {
+            minY = c.y;
+        }
+        if (c.y > maxY)
+        {
+            maxY = c.y;
+        }
     }
 
     return { minX, minY, maxX, maxY };

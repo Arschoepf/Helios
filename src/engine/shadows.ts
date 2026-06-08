@@ -41,7 +41,10 @@ export function projectExtrusionShadows(
     const empty: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] };
 
     const minAlt = opts.minAltitudeDeg ?? 1.5;
-    if (opts.sunAltitudeDeg <= minAlt) return empty;
+    if (opts.sunAltitudeDeg <= minAlt)
+    {
+        return empty;
+    }
 
     const D    = Math.PI / 180;
     const azR  = opts.sunAzimuthDeg  * D;
@@ -75,13 +78,19 @@ export function projectExtrusionShadows(
     for (const feat of extrusions.features)
     {
         const geom = feat.geometry;
-        if (!geom) continue;
+        if (!geom)
+        {
+            continue;
+        }
 
         const props = (feat.properties ?? {}) as Record<string, unknown>;
         const top   = typeof props['render_height']     === 'number' ? props['render_height']     as number : 0;
         const base  = typeof props['render_min_height'] === 'number' ? props['render_min_height'] as number : 0;
         const h     = Math.max(0, top - base);
-        if (h < minH) continue;
+        if (h < minH)
+        {
+            continue;
+        }
 
         const lenM    = h / tanAlt;
         const dLatDeg = shadowDy * lenM / M_PER_DEG_LAT;
@@ -89,15 +98,30 @@ export function projectExtrusionShadows(
 
         //Defend against MultiPolygon for portability even though our pipelines only emit single-polygon Features.
         let polygons: number[][][][] | null = null;
-        if      (geom.type === 'Polygon')      polygons = [geom.coordinates as number[][][]];
-        else if (geom.type === 'MultiPolygon') polygons = geom.coordinates as number[][][][];
-        if (!polygons) continue;
+        if (geom.type === 'Polygon')
+        {
+            polygons = [geom.coordinates as number[][][]];
+        }
+        else if (geom.type === 'MultiPolygon')
+        {
+            polygons = geom.coordinates as number[][][][];
+        }
+        if (!polygons)
+        {
+            continue;
+        }
 
         for (const poly of polygons)
         {
-            if (!poly.length) continue;
+            if (!poly.length)
+            {
+                continue;
+            }
             const outer = poly[0] as number[][];
-            if (outer.length < 3) continue;
+            if (outer.length < 3)
+            {
+                continue;
+            }
 
             //One flat-opacity shadow polygon per casting region: the
             //convex hull of (original vertices + opposite-of-sun
@@ -112,7 +136,10 @@ export function projectExtrusionShadows(
                 cloud.push([lon + dLonDeg,  lat + dLatDeg]);
             }
             const hull = convexHull(cloud);
-            if (hull.length < 3) continue;
+            if (hull.length < 3)
+            {
+                continue;
+            }
 
             //Optional clip-to-disc. The shadow trail can extend well
             //past the building visibility radius for a tall region
@@ -122,7 +149,10 @@ export function projectExtrusionShadows(
             if (clipBundle)
             {
                 const clipped = clipConvexPolygon(hull, clipBundle);
-                if (clipped.length < 3) continue;
+                if (clipped.length < 3)
+                {
+                    continue;
+                }
                 ring = clipped;
             }
             ring = ring.slice();
@@ -203,7 +233,10 @@ function clipConvexPolygon(
 ): Array<[number, number]>
 {
     const ring = clip.ring;
-    if (subject.length < 3 || ring.length < 3) return [];
+    if (subject.length < 3 || ring.length < 3)
+    {
+        return [];
+    }
     let output: Array<[number, number]> = subject.slice();
 
     const dxArr = clip.dx;
@@ -211,7 +244,10 @@ function clipConvexPolygon(
 
     for (let e = 0; e < ring.length; e++)
     {
-        if (output.length === 0) return [];
+        if (output.length === 0)
+        {
+            return [];
+        }
         const e1x = ring[e][0];
         const e1y = ring[e][1];
         const edx = dxArr[e];
@@ -268,7 +304,10 @@ function clipConvexPolygon(
 //Andrew's monotone chain. Returns vertices CCW, NOT closed. Exported for the LiDAR pipeline which uses it to wrap each consolidated region.
 export function convexHull(pts: Array<[number, number]>): Array<[number, number]>
 {
-    if (pts.length < 3) return pts.slice();
+    if (pts.length < 3)
+    {
+        return pts.slice();
+    }
 
     const arr   = pts.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]);
     const cross = (o: [number, number], a: [number, number], b: [number, number]) =>
