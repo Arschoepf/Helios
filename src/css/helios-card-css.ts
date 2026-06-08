@@ -2787,9 +2787,12 @@ export const heliosCardStyles = css`
         transition: width 0.35s ease;
     }
 
-    /*  Alert banner painted under the loading banner whenever the Open-Meteo home-point fetch is
-        stuck in HTTP 429 back-off. Same width / centering as the loading banner so the two read
-        as a stacked column; themed with --error-color so the alert nature reads at a glance. */
+    /*  Alert banner painted under the loading banner whenever the Open-Meteo home-point fetch
+        is stuck in HTTP 429 back-off. Same width / centering as the loading banner so the two
+        read as a stacked column. Themed with the HA frontend alert vocabulary: a soft tinted
+        background derived from --warning-color (HA's standard yellow-orange alert hue for
+        rate-limit / advisory states, distinct from --error-color which is the red error tier)
+        plus a matching border. Falls back to a sensible amber if --warning-color is unset. */
     .weather-rate-limit-banner
     {
         position: absolute;
@@ -2798,11 +2801,11 @@ export const heliosCardStyles = css`
         right: 64px;
         max-width: 260px;
         margin: 0 auto;
-        padding: 6px 12px 8px;
-        background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
-        color: var(--error-color, #db4437);
-        border: 1px solid var(--error-color, #db4437);
-        border-radius: 16px;
+        padding: 8px 12px;
+        background: color-mix(in srgb, var(--warning-color, #ff9800) 18%, transparent);
+        color: var(--warning-color, #ff9800);
+        border: 1px solid var(--warning-color, #ff9800);
+        border-radius: 8px;
         font-size: var(--ha-font-size-s, 12px);
         line-height: 1.4;
         z-index: 60;
@@ -2826,7 +2829,7 @@ export const heliosCardStyles = css`
     .weather-rate-limit-banner-message
     {
         text-align: center;
-        opacity: 0.85;
+        opacity: 0.9;
     }
 
     /*  LiDAR View opacity slider. Painted at the bottom of the card while the LiDAR view is

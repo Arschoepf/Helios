@@ -33,6 +33,36 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Critical fixes: B&W radar, LiDAR slider, chart scale, MapLibre error (#210)
+
+- **Radar finally renders as black & white**: `saturate(0)` in the canvas filter was being
+  silently ignored on Safari when stacked with `blur()`. Swapped to `grayscale(1)` (the
+  WHATWG-canonical name that Safari handles cleanly) AND added `raster-saturation: -1` to
+  MapLibre's paint stage as a GPU-side belt-and-suspenders so the desaturation always
+  lands regardless of what the canvas pipeline managed to bake in.
+- **Raster opacity 0.60 -> 0.50**: per user feedback, basemap streets / districts now read
+  fully through dense rain cells.
+- **MapLibre worker classRegistryKey error fixed**: switched the image source from a data
+  URL (1-2 MB string crossing the worker boundary) to a `URL.createObjectURL(blob)` blob
+  URL (short opaque reference the browser resolves internally). The class-registry serial-
+  isation error and the map stalls that came with it are gone.
+- **LiDAR mode-bar exit no longer "blocked" by slider drag**: a sequence of "drag the
+  opacity slider, immediately click Layer / Weather button" left an in-flight rAF
+  callback scheduled. The rAF fired one frame after the mode click, called the engine's
+  setLidarViewOpacity which mutated the WebGL layer's u_color.a uniform mid-exit-fade and
+  visually re-anchored the dot cloud to the new opacity while the fade alpha was racing
+  to zero. The mode-bar click handlers now cancel the pending opacity rAF + clear the
+  pending value before flipping `_cardMode`.
+- **Dashboard chart Y-axis locked to total peak power**: the production curve now scales
+  against `pvArrays(config).totalKwp * 1000 W` (fallback to `pv-peak-kwp`) rather than
+  the data-driven max-of-actual-and-forecast x 1.25. Every day reads on the same vertical
+  scale so a sunny day curve stretches close to the top and a cloudy day curve sits
+  visibly lower, the user reads the day's quality at a glance.
+- **Rate-limit banner switched to HA warning palette**: uses the standard
+  `--warning-color` (amber) with a tinted background derived via `color-mix` rather than
+  raw `--error-color` (red), matching HA's frontend alert conventions for rate-limit /
+  advisory states.
+
 ### Weather polish + LiDAR mode-bar fix + rate-limit alert (#210)
 
 Bundle of follow-ups on the v1.8.3-beta.97-beta.101 weather mode work plus a long-standing

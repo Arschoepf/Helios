@@ -2787,18 +2787,38 @@ export class HeliosCard extends LitElement
     //timeline location, floating orphaned at the bottom of the card.
     //Returning to live before the mode swap hides the tooltip cleanly
     //in the same render cycle.
+    //Cancel any in-flight LiDAR opacity rAF so it cannot reapply the slider value to the
+    //WebGL layer after the exit fade has started tearing it down. Without this, a sequence of
+    //"drag the LiDAR opacity slider, immediately click the Layer / Weather mode button" left
+    //the rAF callback scheduled, fired one frame later, called setLidarViewOpacity on the
+    //engine, which mutated the layer's u_color.a uniform mid-fade and visually re-anchored
+    //the dot cloud to the new opacity while the fade alpha was racing to zero. Net effect:
+    //the LiDAR view felt like it was "stuck" because the cloud kept repainting at the new
+    //opacity for a frame or two after the user thought they had switched modes.
+    private _cancelLidarOpacityRaf(): void
+    {
+        if (this._lidarOpacityRaf)
+        {
+            cancelAnimationFrame(this._lidarOpacityRaf);
+            this._lidarOpacityRaf = 0;
+            this._pendingLidarOpacity = null;
+        }
+    }
     private _onModeLayer = (): void =>
     {
+        this._cancelLidarOpacityRaf();
         this._exitScrubMode();
         this._cardMode = 'base';
     };
     private _onModeLidar = (): void =>
     {
+        this._cancelLidarOpacityRaf();
         this._exitScrubMode();
         this._cardMode = 'lidar';
     };
     private _onModeWeather = (): void =>
     {
+        this._cancelLidarOpacityRaf();
         this._exitScrubMode();
         this._cardMode = 'weather';
     };

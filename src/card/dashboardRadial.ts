@@ -30,7 +30,7 @@ import { formatLocalisedNumber } from './format';
 import { pickTranslations } from '../i18n';
 import { sliceForDay, displayUpdateFrequencyPerHour } from './unifiedStore';
 import { pvValueAtTime, interpAt, type ChartHost } from './charts';
-import { pvNormalizeToWatts } from './pv';
+import { pvNormalizeToWatts, pvArrays } from './pv';
 import { cfgHex, lerpHexToward } from './format';
 import { DEFAULT_PV_COLOR_HEX } from '../helios-config';
 import { hasPvConfigured, hasBatteryConfigured } from './equipment';
@@ -579,13 +579,26 @@ export function prepareRadialDayData(host: DashboardHost, cardOffset: number): R
     const hourlyCloud    = slice.hourlyCloud.slice();
     const hourlyIrr      = slice.hourlyIrradiance.slice();
 
-    //Scale max accounts for BOTH the realised + forecast curves so the past fill and the forecast
-    //outline share the same radial space, the forecast line at peak hour reads at the same height
-    //regardless of how the day's actual production ended up.
-    let prodMax = 0;
-    for (const v of hourlyProd)     { if (v !== null && v > prodMax) { prodMax = v; } }
-    for (const v of hourlyForecast) { if (v !== null && v > prodMax) { prodMax = v; } }
-    const prodScaleMax  = Math.max(1, prodMax * 1.25, 500);
+    //Scale max is locked to the total installed peak power (sum of per-string peak-kwp values,
+    //fallback to the legacy top-level pv-peak-kwp), expressed in watts. Every day reads on the
+    //same vertical scale so a sunny day curve stretches up close to the top of the chart and a
+    //cloudy day curve sits visibly lower, the user reads the day's quality at a glance without
+    //having to compare two charts side-by-side. The data-driven path (max actual + forecast x
+    //1.25, floored at 500 W) survives as a fallback for installs that have not declared their
+    //peak (legacy YAML with neither pv-arrays nor pv-peak-kwp).
+    const totalPeakWatts = pvArrays(host.config).totalKwp * 1000;
+    let prodScaleMax: number;
+    if (totalPeakWatts > 0)
+    {
+        prodScaleMax = totalPeakWatts;
+    }
+    else
+    {
+        let prodMax = 0;
+        for (const v of hourlyProd)     { if (v !== null && v > prodMax) { prodMax = v; } }
+        for (const v of hourlyForecast) { if (v !== null && v > prodMax) { prodMax = v; } }
+        prodScaleMax = Math.max(1, prodMax * 1.25, 500);
+    }
     let battMax = 0;
     for (const v of hourlyBatt) { if (v !== null && Math.abs(v) > battMax) { battMax = Math.abs(v); } }
     const battScaleMax  = Math.max(1, battMax * 1.25, 500);

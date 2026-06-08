@@ -995,6 +995,10 @@ export class HeliosEngine
     private _rainViewerFetching = false;
     private _rainViewerCompositing = false;
     private _rainViewerRefreshTimer: number | undefined = undefined;
+    //Active blob URL backing the MapLibre image source. Held so the next composite can
+    //revoke it before allocating a fresh one (avoids leaking the previous PNG bytes for
+    //the lifetime of the page).
+    private _rainViewerBlobUrl: string | null = null;
 
     //Fetch the RainViewer index and stash the most recent past frame. Idempotent: a second call
     //while a fetch is in flight short-circuits. Errors are logged and leave the previous frame
@@ -1073,10 +1077,18 @@ export class HeliosEngine
                     id:     lyrId,
                     type:   'raster',
                     source: srcId,
-                    //Opacity sits at 0.60 so the basemap streets / districts read clearly
-                    //through dense rain cells. Desaturation + contrast are already baked in
-                    //via the canvas filter pass; the raster paint stage only carries opacity.
-                    paint:  { 'raster-opacity': 0.60, 'raster-fade-duration': 0 },
+                    paint:  {
+                        //0.50: half the bitmap is transmitted through so the basemap streets +
+                        //district outlines read clearly through dense rain cells.
+                        'raster-opacity':       0.50,
+                        //raster-saturation: -1 is the GPU-side belt-and-suspenders backup for
+                        //the canvas filter's grayscale(1). Some browser / canvas runtimes
+                        //silently ignore the filter property when stacked with blur(); the
+                        //MapLibre paint stage is GPU-driven and always desaturates the texture
+                        //regardless of what the canvas pipeline managed to bake in.
+                        'raster-saturation':    -1,
+                        'raster-fade-duration': 0,
+                    },
                 });
             }
         }
@@ -1170,19 +1182,42 @@ export class HeliosEngine
         }
         await Promise.all(tilePromises);
 
-        //Filter pass: blur + saturate(0) baked into the bitmap so MapLibre's raster paint
-        //stage is left with nothing but opacity to apply. saturate(0) gives the black & white
-        //look (light blue light rain -> light grey, red storm -> dark grey); contrast is left
-        //at its default 1.0 so the full luminance ramp survives, the previous 1.3 boost was
-        //clamping mid-tones toward pure white / black and erasing the rainfall intensity
-        //levels we want the user to read.
+        //Filter pass: blur + grayscale baked into the bitmap. grayscale(1) is more reliable
+        //than saturate(0) on Safari, both convert to B&W but the grayscale form is the WHATWG
+        //canonical name and Safari's filter implementation handles it without quirks. The full
+        //luminance ramp is preserved so light rain reads as light grey and storm reads as
+        //dark grey (contrast left at its 1.0 default; the previous 1.3 boost was clamping
+        //mid-tones toward pure white / black and erasing the rainfall intensity levels). A
+        //belt-and-suspenders raster-saturation: -1 in MapLibre's paint stage (see
+        //attachRainViewerOverlay below) handles any browser where the canvas filter is
+        //silently ignored.
         const filteredCanvas = document.createElement('canvas');
         filteredCanvas.width  = W;
         filteredCanvas.height = H;
         const filteredCtx = filteredCanvas.getContext('2d');
         if (!filteredCtx) { return null; }
-        filteredCtx.filter = `blur(${HeliosEngine._RAINVIEWER_BLUR_PX}px) saturate(0)`;
+        filteredCtx.filter = `blur(${HeliosEngine._RAINVIEWER_BLUR_PX}px) grayscale(1)`;
         filteredCtx.drawImage(stitchCanvas, 0, 0);
+
+        //Export as a blob URL rather than a data URL. The image-source path in MapLibre v5
+        //serialises the URL across the main thread / worker boundary; a 1-2 MB data URL string
+        //triggers a worker class-registry warning on some runtimes ("undefined is not an
+        //object (evaluating 'ae.constructor._classRegistryKey')") and can stall the map.
+        //Blob URLs are short opaque references the browser resolves internally, no
+        //cross-thread payload bloat.
+        const blob = await new Promise<Blob | null>((resolve) =>
+        {
+            filteredCanvas.toBlob(b => resolve(b), 'image/png');
+        });
+        if (!blob) { return null; }
+        //Revoke any prior blob URL so the browser can release the old PNG bytes. Held on the
+        //instance so the next refresh can swap cleanly.
+        if (this._rainViewerBlobUrl)
+        {
+            URL.revokeObjectURL(this._rainViewerBlobUrl);
+        }
+        const blobUrl = URL.createObjectURL(blob);
+        this._rainViewerBlobUrl = blobUrl;
 
         const bounds = {
             west:  xToLon(xMin),
@@ -1190,7 +1225,7 @@ export class HeliosEngine
             north: yToLat(yMin),
             south: yToLat(yMax + 1),
         };
-        return { dataUrl: filteredCanvas.toDataURL('image/png'), bounds };
+        return { dataUrl: blobUrl, bounds };
     }
 
     public detachRainViewerOverlay(): void
@@ -1199,6 +1234,13 @@ export class HeliosEngine
         {
             window.clearInterval(this._rainViewerRefreshTimer);
             this._rainViewerRefreshTimer = undefined;
+        }
+        //Release the blob URL so the browser can free the PNG bytes the next time the user
+        //leaves weather mode. Held URL gets reused on a re-entry if it has not been revoked.
+        if (this._rainViewerBlobUrl)
+        {
+            URL.revokeObjectURL(this._rainViewerBlobUrl);
+            this._rainViewerBlobUrl = null;
         }
         if (!this.map) { return; }
         const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
