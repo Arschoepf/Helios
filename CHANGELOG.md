@@ -33,6 +33,37 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather polish + LiDAR mode-bar fix + rate-limit alert (#210)
+
+Bundle of follow-ups on the v1.8.3-beta.97-beta.101 weather mode work plus a long-standing
+LiDAR mode-switch bug surfaced during testing.
+
+- **Heavier blur on the RainViewer composite + grey levels preserved**: blur radius 10 px ->
+  30 px so the source pixel grid is fully erased at the zoom 10 framing. `contrast(1.3)`
+  dropped back to the default 1.0 so the full grey luminance ramp survives, the previous
+  boost was clamping mid-tones toward pure white / black and erasing the rainfall intensity
+  levels.
+- **Home pin on the weather view**: the small circular home icon that anchors the home
+  cluster on the base mode now stays visible in weather mode too. The user reads the rain
+  cells around their own roof at a glance instead of having to mentally locate the home in
+  the basemap.
+- **Lock chip hidden entirely in weather mode**: the engine force-locks the camera on
+  weather-mode enter, so the toggle had no effect anyway. Removed the chip + the CSS
+  exception that kept it visible.
+- **Default cursor when the camera is locked**: dropped the MapLibre grab cursor in favour
+  of the default arrow when the user has the camera pinned. Drag pan + drag rotate are both
+  disabled in the locked state, so the open-hand cursor was advertising an interaction that
+  does not exist.
+- **LiDAR mode-bar exit no longer locked during exposure recompute**: the modeLocked guard
+  on the Layer + Weather mode-bar buttons used to strand the user in LiDAR mode whenever the
+  atmosphere refresh tick fired an exposure recompute (sun moved past the 1.5 deg
+  threshold). Dropped the guard from the exit buttons; the LiDAR re-entry button keeps it.
+  The engine cancels the in-flight compute when the user actually leaves the mode.
+- **Open-Meteo rate-limit alert banner**: a themed alert banner now paints under the loading
+  banner whenever the home-point fetch is stuck in HTTP 429 back-off ("OpenMeteo: rate limit
+  / Too many requests, please wait", FR + EN translations included). Disappears the moment
+  the next refresh tick succeeds.
+
 ### RainViewer composite: pre-stitched, heavily blurred, image source (#210)
 
 The custom helios-rv:// MapLibre protocol shipped in beta.100 did not deliver visibly softer

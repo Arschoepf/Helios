@@ -41,6 +41,12 @@ export interface Translations
         //Label inside the top-of-card loading banner, visible while the first hydration wave of
         //data fetches is still in flight.
         loadingLabel?:          string; //'Fetching data...'
+        //Headline + body for the alert banner that appears under the loading banner when the
+        //Open-Meteo weather-data fetch hits HTTP 429 (rate limit). Goes away once a subsequent
+        //fetch succeeds, the user knows the card is temporarily without fresh weather data and
+        //why.
+        weatherRateLimitTitle?:   string; //'OpenMeteo rate limit'
+        weatherRateLimitMessage?: string; //'Too many requests, please wait'
         //Badge labels on the dashboard radial dial chip strip (Production / Battery / Cloud /
         //Irradiance).
         radialProductionLabel?: string; //'Production'

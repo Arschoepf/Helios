@@ -183,3 +183,36 @@ export function renderLoadingBanner(host: LoadingTrackerHost): TemplateResult | 
         </div>
     `;
 }
+
+
+export interface WeatherRateLimitHost
+{
+    readonly hass?:        { language?: string } | undefined;
+    _weatherRateLimited:   boolean;
+}
+
+
+//Alert banner painted just under the loading banner whenever the Open-Meteo home-point fetch
+//is stuck in HTTP 429 back-off. Same width / centering as the loading banner so the two read
+//as a stacked column, themed with the HA --error-color so the user picks up the alert nature
+//at a glance without having to read the text. Disappears the moment the engine signals the
+//next successful fetch.
+export function renderWeatherRateLimitBanner(host: WeatherRateLimitHost): TemplateResult | typeof nothing
+{
+    const t        = pickTranslations(host.hass?.language);
+    const title    = t.detail.weatherRateLimitTitle   ?? 'OpenMeteo: rate limit';
+    const message  = t.detail.weatherRateLimitMessage ?? 'Too many requests, please wait';
+    const visible  = host._weatherRateLimited;
+    const cls      = visible ? ' is-visible' : '';
+    return html`
+        <div
+            class="weather-rate-limit-banner${cls}"
+            role="status"
+            aria-live="polite"
+            ?aria-hidden="${!visible}"
+        >
+            <div class="weather-rate-limit-banner-title">${title}</div>
+            <div class="weather-rate-limit-banner-message">${message}</div>
+        </div>
+    `;
+}

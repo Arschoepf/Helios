@@ -23,6 +23,8 @@ export const fr: Translations = {
         dayLabelDayAfter:     'Après-demain',
         shadingDomeHint:      'Dôme d\'auto-apprentissage. Chaque cellule affiche la production PV moyenne à cette position du soleil pour le niveau de nuages ci-dessous. Helios l\'applique à la prévision pour que les ombres réelles (arbre à 16 h, cheminée en hiver) soient prises en compte automatiquement.',
         loadingLabel:         'Récupération des données...',
+        weatherRateLimitTitle:   'OpenMeteo : limite de requêtes',
+        weatherRateLimitMessage: 'Trop de requêtes, veuillez patienter',
         radialProductionLabel: 'Production',
         radialBatteryLabel:    'Batterie',
         radialCloudLabel:      'Nuages',

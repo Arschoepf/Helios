@@ -465,6 +465,18 @@ export class HeliosEngine
 
     //Consecutive HTTP 429 count, drives exponential back-off. Resets on any successful fetch.
     private _rateLimitStreak = 0;
+    //Optional host callback fired whenever the Open-Meteo home-point fetch transitions in or
+    //out of the rate-limited state. Lets the card draw an alert banner under the loading banner
+    //so the user understands why the weather data has stopped refreshing for a few minutes.
+    public onWeatherRateLimitChange?: (rateLimited: boolean) => void;
+    private _emittedRateLimited = false;
+    private _setRateLimited(rateLimited: boolean): void
+    {
+        if (this._emittedRateLimited === rateLimited) { return; }
+        this._emittedRateLimited = rateLimited;
+        try { this.onWeatherRateLimitChange?.(rateLimited); }
+        catch (_) { /* host callback errors must not break the fetch path */ }
+    }
     //Consecutive non-429 failure count (5xx, network, JSON parse). Drives a graduated back-off so
     //a server outage at the previous flat 60 s cadence (= 1440 retries / day per card, compounded
     //across multiple cards / tabs) can no longer pile up the kind of traffic that triggers an IP
@@ -972,10 +984,12 @@ export class HeliosEngine
     private static readonly _RAINVIEWER_HALF_LAT_DEG = 1.6;
     //CSS filter blur radius applied to the stitched canvas before it is exported back as the
     //MapLibre image source. The composite spans ~9 z=7 tiles at 512 px each, so the resulting
-    //canvas is ~1536 x ~1536 px; 10 px of Gaussian blur covers ~0.65 % of the canvas side,
-    //enough to obliterate the source pixel grid + give the radar a painterly cloud-mass look
-    //at the weather-mode zoom 10 framing without erasing the per-cell silhouette.
-    private static readonly _RAINVIEWER_BLUR_PX      = 10;
+    //canvas is ~1536 x ~1536 px; 30 px of Gaussian blur covers ~2 % of the canvas side, enough
+    //to obliterate the source pixel grid + give the radar a painterly cloud-mass look at the
+    //weather-mode zoom 10 framing. The cell silhouette is preserved because the source values
+    //are sparse (most pixels are transparent), so the blur spreads the dense cells out into
+    //soft cloud blobs rather than averaging them into uniform grey.
+    private static readonly _RAINVIEWER_BLUR_PX      = 30;
 
     private _rainViewerFrame: { host: string; path: string } | null = null;
     private _rainViewerFetching = false;
@@ -1156,17 +1170,18 @@ export class HeliosEngine
         }
         await Promise.all(tilePromises);
 
-        //Filter pass: blur + saturate(0) + contrast(1.3) baked into the bitmap so MapLibre's
-        //raster paint stage is left with nothing but opacity to apply. saturate(0) gives the
-        //black & white look (light blue light rain -> light grey, red storm -> dark grey);
-        //contrast(1.3) keeps storm cells separating cleanly from the light-rain background
-        //after the desaturation flattens the luminance.
+        //Filter pass: blur + saturate(0) baked into the bitmap so MapLibre's raster paint
+        //stage is left with nothing but opacity to apply. saturate(0) gives the black & white
+        //look (light blue light rain -> light grey, red storm -> dark grey); contrast is left
+        //at its default 1.0 so the full luminance ramp survives, the previous 1.3 boost was
+        //clamping mid-tones toward pure white / black and erasing the rainfall intensity
+        //levels we want the user to read.
         const filteredCanvas = document.createElement('canvas');
         filteredCanvas.width  = W;
         filteredCanvas.height = H;
         const filteredCtx = filteredCanvas.getContext('2d');
         if (!filteredCtx) { return null; }
-        filteredCtx.filter = `blur(${HeliosEngine._RAINVIEWER_BLUR_PX}px) saturate(0) contrast(1.3)`;
+        filteredCtx.filter = `blur(${HeliosEngine._RAINVIEWER_BLUR_PX}px) saturate(0)`;
         filteredCtx.drawImage(stitchCanvas, 0, 0);
 
         const bounds = {
@@ -3950,9 +3965,11 @@ export class HeliosEngine
             this._renderForCurrentSelection();
 
             //Successful fetch: reset both back-off streaks so the next failure (if any) starts again
-            //at the shortest delay.
+            //at the shortest delay. Drop the rate-limit alert banner the moment a fetch lands so
+            //the user sees the all-clear without waiting for the next refresh tick.
             this._rateLimitStreak  = 0;
             this._otherErrorStreak = 0;
+            this._setRateLimited(false);
 
             if (this._selectedTime === null)
             {
@@ -4005,6 +4022,10 @@ export class HeliosEngine
                 const idx = Math.min(this._rateLimitStreak, RATE_LIMIT_BACKOFF_MS.length - 1);
                 retryDelay = RATE_LIMIT_BACKOFF_MS[idx];
                 this._rateLimitStreak++;
+                //Surface the rate-limit state to the card so it can paint an alert banner under
+                //the loading banner. Idempotent; only fires the card callback on the 0 -> 1
+                //transition (the helper handles the dedup).
+                this._setRateLimited(true);
 
                 this._weatherTimer = window.setTimeout(
                     () => this._refreshWeather(this._fetchLat, this._fetchLon),

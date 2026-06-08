@@ -100,6 +100,15 @@ export const heliosCardStyles = css`
     {
         display: none !important;
     }
+    /*  Camera-locked cursor: drop the MapLibre grab cursor when the user has the camera
+        pinned. drag pan + drag rotate are both disabled in the locked state, so the open-hand
+        cursor was advertising an interaction that does not exist. MapLibre sets the cursor
+        inline on the canvas, so the override needs !important to bite. */
+    ha-card.camera-locked .maplibregl-canvas-container,
+    ha-card.camera-locked .maplibregl-canvas
+    {
+        cursor: default !important;
+    }
 
 
     /*  Home hitbox, invisible circular click target centred on the
@@ -297,8 +306,16 @@ export const heliosCardStyles = css`
     ha-card.overlay-masked .battery-pct-label,
     ha-card.overlay-masked .grid-leader-svg,
     ha-card.overlay-masked .grid-import-label,
-    ha-card.overlay-masked .grid-export-label,
-    ha-card.overlay-masked .home-pill
+    ha-card.overlay-masked .grid-export-label
+    {
+        opacity: 0;
+        pointer-events: none;
+    }
+    /*  home-pill is the small circular home icon that anchors the home cluster. It hides on every
+        masked mode EXCEPT weather: in weather mode the basemap + radar overlay alone don't show
+        where the user lives, so the pill stays so the user can identify their own roof against
+        the rain cells around it. */
+    ha-card.overlay-masked:not(.mode-weather) .home-pill
     {
         opacity: 0;
         pointer-events: none;
@@ -313,9 +330,10 @@ export const heliosCardStyles = css`
         transform: translateY(140%);
         pointer-events: none;
     }
-    /*  Top-left lock chip stays visible (but disabled) in weather mode so the user keeps the same
-        anchor for their camera-lock preference; every other non-base mode hides the cluster. */
-    ha-card.overlay-masked:not(.mode-weather) .overlay-top-left
+    /*  Top-left cluster (lock chip) hides on every masked mode. Weather mode also hides it
+        because the card-side render returns nothing for the lock button when isWeather is true,
+        so the wrapper stays in the tree but is intentionally empty. */
+    ha-card.overlay-masked .overlay-top-left
     {
         opacity: 0;
         pointer-events: none;
@@ -2767,6 +2785,48 @@ export const heliosCardStyles = css`
         background: var(--primary-color, #03a9f4);
         border-radius: 999px;
         transition: width 0.35s ease;
+    }
+
+    /*  Alert banner painted under the loading banner whenever the Open-Meteo home-point fetch is
+        stuck in HTTP 429 back-off. Same width / centering as the loading banner so the two read
+        as a stacked column; themed with --error-color so the alert nature reads at a glance. */
+    .weather-rate-limit-banner
+    {
+        position: absolute;
+        top: 60px;
+        left: 64px;
+        right: 64px;
+        max-width: 260px;
+        margin: 0 auto;
+        padding: 6px 12px 8px;
+        background: var(--ha-card-background, var(--card-background-color, rgba(0, 0, 0, 0.55)));
+        color: var(--error-color, #db4437);
+        border: 1px solid var(--error-color, #db4437);
+        border-radius: 16px;
+        font-size: var(--ha-font-size-s, 12px);
+        line-height: 1.4;
+        z-index: 60;
+        opacity: 0;
+        pointer-events: none;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        transition: opacity 0.25s ease;
+    }
+    .weather-rate-limit-banner.is-visible
+    {
+        opacity: 1;
+    }
+    .weather-rate-limit-banner-title
+    {
+        font-weight: var(--ha-font-weight-medium, 500);
+        text-align: center;
+    }
+    .weather-rate-limit-banner-message
+    {
+        text-align: center;
+        opacity: 0.85;
     }
 
     /*  LiDAR View opacity slider. Painted at the bottom of the card while the LiDAR view is

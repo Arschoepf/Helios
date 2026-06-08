@@ -72,7 +72,7 @@ import
 } from './card/timeline';
 import { enterLidarView, exitLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
 import type { CardMode } from './card/card-mode';
-import { renderLoadingBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
+import { renderLoadingBanner, renderWeatherRateLimitBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
 import { refreshGrid, formatGridValue, gridWattsAtTime, clearGridModuleCaches } from './card/grid';
 import {
     subscribeEnergyPrefs,
@@ -535,6 +535,12 @@ export class HeliosCard extends LitElement
     //mode-bar LiDAR icon swap (icon -> spinner) and the mode-switch
     //lock so the user cannot change modes mid-compute.
     @state() _lidarExposureBusy = false;
+
+    //True while the Open-Meteo home-point fetch is stuck in HTTP 429 back-off. Driven by the
+    //engine's onWeatherRateLimitChange callback (wired in init.ts). Flips back to false the
+    //moment the next refresh tick succeeds; in the meantime the alert banner under the loading
+    //banner tells the user why the weather data is not updating.
+    @state() _weatherRateLimited = false;
 
     //Flag flipped by `fetchEnergyPrefs` after the first parse lands. The card uses it to kick `refreshHaDailyTotals`
     //immediately when the HA Energy defaults snapshot first appears, instead of waiting up to 30 s for the next
@@ -1941,11 +1947,17 @@ export class HeliosCard extends LitElement
         //can scrub through the day and the weather overlay tracks the cursor. CSS opts the timeline
         //out of the mask via a `mode-weather` exception (see helios-card-css.ts).
         const overlayMasked = this._overlayMaskActive || this._detailMode;
+        //camera-locked drives the CSS rule that swaps the MapLibre grab cursor for the default
+        //arrow when the user has the camera pinned: drag pan + rotate are both disabled in that
+        //state so the open-hand cursor was misleading. Re-evaluated every render so the cursor
+        //flips the moment the user toggles the lock chip.
+        const cameraLocked = this._isCameraLocked();
         const cardClasses = [
             cardThemeClass,
             this._detailMode  ? 'detail-active'  : '',
             `mode-${this._cardMode}`,
             overlayMasked     ? 'overlay-masked' : '',
+            cameraLocked      ? 'camera-locked'  : '',
         ].filter(Boolean).join(' ');
 
         return html`
@@ -1954,6 +1966,7 @@ export class HeliosCard extends LitElement
                 <div id="map-container"></div>
 
                 ${renderLoadingBanner(this)}
+                ${renderWeatherRateLimitBanner(this)}
 
                 ${hasHomeCoords && this._timeRange ? html`
                     <div
@@ -2052,16 +2065,21 @@ export class HeliosCard extends LitElement
                     const isLayer    = this._cardMode === 'base';
                     const isLidar    = this._cardMode === 'lidar';
                     const isWeather  = this._cardMode === 'weather';
-                    //Lock mode-switching while the LiDAR exposure sweep is in flight: the user cannot
-                    //exit / re-enter / swap modes until the LiDAR view has finished computing.
+                    //Lock the LiDAR button while its own exposure sweep is in flight (no point
+                    //re-entering a mode mid-compute). The Layer + Weather exits ALWAYS work, even
+                    //during the sweep: the engine cancels the exposure compute when the LiDAR view
+                    //goes inactive, so the user can leave at any moment. Locking those exits used
+                    //to strand the user in LiDAR mode whenever the atmosphere refresh fired an
+                    //exposure recompute (sun moved past the 1.5 deg threshold) while they were
+                    //trying to switch modes.
                     const modeLocked = isLidar && this._lidarExposureBusy;
                     //Mode-bar click handlers bound once as class fields
                     //(see _onModeLayer etc.) so Lit does not see a fresh
                     //closure identity on every render and re-attach the
                     //@click handler four times per cycle.
                     const onLidar    = (lidarReady && !modeLocked) ? this._onModeLidar   : undefined;
-                    const onLayer    = !modeLocked                  ? this._onModeLayer   : undefined;
-                    const onWeather  = !modeLocked                  ? this._onModeWeather : undefined;
+                    const onLayer    = this._onModeLayer;
+                    const onWeather  = this._onModeWeather;
                     //Live cloud-cover icon for the cloud-dome button:
                     //sun, partly-cloudy, cloudy or pouring depending on
                     //the current home reading. The user reads the sky
@@ -2072,32 +2090,31 @@ export class HeliosCard extends LitElement
                     //useless.
                     const cameraLocked  = this._isCameraLocked();
                     const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
-                    //Lock button stays visible in every mode (it's the user's primary anchor for
-                    //camera state) but goes disabled during weather mode: the engine force-locks
-                    //the camera on enter to keep the top-down view framed, so letting the user
-                    //toggle the lock would either fight the engine state or strand the satellite
-                    //view with a half-applied unlock. The pre-enter state is restored on exit.
-                    const lockDisabled  = isWeather;
+                    //Lock button is hidden entirely in weather mode: the engine force-locks the
+                    //camera on weather-mode enter to keep the top-down satellite view framed, so
+                    //the toggle would have no effect anyway. The pre-enter state is restored on
+                    //exit, so the button returning when the user leaves weather mode shows the
+                    //right state.
                     return html`
                         <div class="overlay-top-left">
-                            <button
-                                type="button"
-                                class="camera-lock-btn ${cameraLocked ? 'is-on' : ''} ${lockDisabled ? 'is-disabled' : ''}"
-                                aria-pressed="${cameraLocked ? 'true' : 'false'}"
-                                ?disabled="${lockDisabled}"
-                                @click="${lockDisabled ? undefined : this._onCameraLockToggle}"
-                            >
-                                <ha-icon icon="${lockIcon}"></ha-icon>
-                            </button>
+                            ${isWeather ? nothing : html`
+                                <button
+                                    type="button"
+                                    class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
+                                    aria-pressed="${cameraLocked ? 'true' : 'false'}"
+                                    @click="${this._onCameraLockToggle}"
+                                >
+                                    <ha-icon icon="${lockIcon}"></ha-icon>
+                                </button>
+                            `}
                         </div>
                         <div class="overlay-top-right">
                             <div class="mode-bar" role="radiogroup" aria-label="View mode">
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
+                                    class="mode-bar-seg ${isLayer ? 'is-on' : ''}"
                                     role="radio"
                                     aria-checked="${isLayer ? 'true' : 'false'}"
-                                    ?disabled="${modeLocked}"
                                     aria-label="Default layer UI"
                                     @click="${onLayer}"
                                 >
@@ -2116,10 +2133,9 @@ export class HeliosCard extends LitElement
                                 </button>
                                 <button
                                     type="button"
-                                    class="mode-bar-seg ${isWeather ? 'is-on' : ''} ${modeLocked ? 'is-disabled' : ''}"
+                                    class="mode-bar-seg ${isWeather ? 'is-on' : ''}"
                                     role="radio"
                                     aria-checked="${isWeather ? 'true' : 'false'}"
-                                    ?disabled="${modeLocked}"
                                     aria-label="Weather view"
                                     @click="${onWeather}"
                                 >

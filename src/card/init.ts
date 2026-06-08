@@ -231,6 +231,7 @@ export interface InitHost extends OverlaysHost, LoadingTrackerHost
     _chartSeries:        ChartSeries | null;
     _shadowBusy:         boolean;
     _lidarExposureBusy:  boolean;
+    _weatherRateLimited: boolean;
 
     _lastHomeKey:        string;
     _initInflight:       boolean;
@@ -643,6 +644,14 @@ function wireEngineCallbacks(host: InitHost): void
         host._lidarExposureBusy = busy;
         if (busy) { beginLoadingPhase(host, 'lidar-exposure'); }
         else      { endLoadingPhase(host, 'lidar-exposure'); }
+    };
+
+    //Rate-limit alert banner trigger: the engine fires this whenever the Open-Meteo home-point
+    //fetch transitions in or out of HTTP 429 back-off. The card paints an alert banner under
+    //the loading banner so the user understands why the weather data is not refreshing.
+    host._engine.onWeatherRateLimitChange = (rateLimited: boolean): void =>
+    {
+        host._weatherRateLimited = rateLimited;
     };
 
 }
