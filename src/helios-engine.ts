@@ -860,8 +860,9 @@ export class HeliosEngine
             maxZoom: this.map.getMaxZoom(),
         };
         //Widen the zoom envelope BEFORE the easeTo so the target zoom is accepted instead of
-        //clamped back to the resting 18.
-        this.map.setMinZoom(10);
+        //clamped back to the resting 18. Buffer of 1 below the target keeps MapLibre from edge-
+        //clamping the ease in flight.
+        this.map.setMinZoom(9);
         this.map.setMaxZoom(18);
         //Force the rotation lock on. setCameraLocked persists the new state to localStorage; we'll
         //restore the original on exit so the user's preference comes back exactly as it was.
@@ -871,7 +872,7 @@ export class HeliosEngine
             center:   [this.homeLon, this.homeLat],
             bearing:  0,
             pitch:    0,
-            zoom:     12,
+            zoom:     10,
             duration: 1200,
         });
     }
@@ -929,11 +930,13 @@ export class HeliosEngine
     //---------------------------------------------------------------------------------------------
 
     private static readonly _WEATHER_GRID_SIDE       = 31;
-    //Half-extent of the grid in latitude degrees. 0.7 deg ≈ 78 km north + 78 km south on any
-    //latitude, so the grid covers ~156 km × ~156 km when the longitude span gets compressed by
-    //cos(lat). Sized to match the camera's weather-mode zoom 12 viewport at temperate latitudes
-    //plus a margin so a small pan doesn't drift out of the raster.
-    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.7;
+    //Half-extent of the grid in latitude degrees. 1.3 deg approx 145 km north + 145 km south on
+    //any latitude, so the grid covers ~290 km x ~290 km when the longitude span gets compressed
+    //by cos(lat). Sized to overshoot the camera's weather-mode zoom 10 viewport (~160 km wide)
+    //so the raster keeps painting past the visible edges and a small pan doesn't drift out. At
+    //31 x 31 cells over 290 km that yields ~9.4 km / cell, matching the underlying numerical
+    //weather model native resolution (3 km for AROME-France, 13 km for ICON-EU).
+    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 1.3;
     //Cache TTL for the grid fetch. Open-Meteo refreshes its underlying numerical models every 1-3
     //hours; 30 min keeps the data near-current without burning calls on every mode toggle.
     private static readonly _WEATHER_GRID_TTL_MS     = 30 * 60_000;

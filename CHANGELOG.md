@@ -33,6 +33,18 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather mode zoom 10 + grid extended to 290 km (#210)
+
+Zoom 12 from beta.81 wasn't pulled back enough to give the user a satellite-style overview.
+Bumping the weather-mode camera target to zoom 10 (~160 km viewport at temperate latitudes)
+opens a regional view; the `[minZoom, maxZoom]` envelope widens to `[9, 18]` so the easeTo
+target isn't edge-clamped.
+
+The grid half-extent grows from 0.7 to 1.3 degrees latitude (78 km -> 145 km per side), so the
+raster covers ~290 km x ~290 km and keeps painting past the visible edges at zoom 10. At
+31 x 31 cells the per-cell pitch goes from ~5 km to ~9 km, still inside the underlying weather
+model native resolution range (3 km AROME-France, 13 km ICON-EU).
+
 ### Weather raster: red debug palette + zoom race fix (#210)
 
 Two fixes for the user-visible weather mode pass:
