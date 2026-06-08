@@ -33,6 +33,38 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Real LiDAR exit fix + RainViewer rollback to raw tiles (#210)
+
+After two rounds of bandaids that did not actually fix the LiDAR stuck-exit report,
+the root cause was finally identified.
+
+- **LiDAR stuck exit root cause**: the Layer + Weather mode-bar buttons had
+  `?disabled="${modeLocked}"` wired on them, and `modeLocked = isLidar &&
+  _lidarExposureBusy`. The atmosphere refresh tick periodically fires an exposure
+  recompute (sun crossed the 1.5 deg gate, ~once every few minutes of solar motion)
+  which sets `_lidarExposureBusy` true for the 200 ms - 2 s of the sweep. While
+  busy, the browser silently ignored every @click on the exit buttons because
+  `disabled` buttons do not fire click events, no matter what handler is attached.
+  The user's slider drag was a red herring; the atmosphere timer was firing in the
+  background and locking the exit buttons. Dropped `?disabled` and the
+  `is-disabled` class from the Layer + Weather buttons so the click always lands.
+  The LiDAR re-entry button keeps its `?disabled` (no point stacking a second
+  sweep on top of one already running). The exit fade plus the engine's
+  `setLidarViewActive(false)` cancel the in-flight sweep on the way out.
+- **Earlier bandaids removed**: the brutal teardown sequence (cancel rAFs,
+  synchronous setLidarViewFadeAlpha(0)) and the opacity rAF cancel are gone.
+  The 280 ms smooth exit fade is back. None of those bandaids ever touched the
+  real cause.
+
+- **RainViewer composite pipeline ripped out**: the 4x downscale + 24 px blur was
+  making the radar progressively worse per user feedback. Rolled back to the
+  simplest possible setup: a raw MapLibre raster tile source pointing at
+  `${host}${path}/512/{z}/{x}/{y}/2/1_1.png`, with `raster-saturation: -1` for
+  the black & white look and `raster-opacity: 0.50` for the basemap to read
+  through. Whatever pixelation the user sees at the zoom 10 framing IS the
+  native RainViewer resolution; the blob URL + stitching + downscale + blur
+  attempts to hide it all backfired.
+
 ### Critical fixes round 2: ultra blur + LiDAR hard teardown (#210)
 
 - **Ultra-soft RainViewer composite via 4x downscale + blur(24 px)**: the source-pixel grid

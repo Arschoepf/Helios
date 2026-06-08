@@ -958,12 +958,13 @@ export class HeliosEngine
     //of the atmosphere. The value of the weather mode is "what is happening right now" rather
     //than a forecast scrub the user cannot trust.
     //
-    //Tiles encode rainfall intensity (color scheme 4, The Weather Channel gradient: blue light
-    //rain, green moderate, yellow / orange / red heavy / storm). RainViewer's native data caps
-    //at z=7 so we request 1024 px tiles + cap maxzoom on the raster source: MapLibre asks for
-    //z=7 tiles even past zoom 7 and handles the upscale itself, the server stays in its native
-    //range, and the 1024 px tile resolution keeps the visible texture acceptable at the camera's
-    //weather-mode zoom 10 framing.
+    //Tiles encode rainfall intensity via RainViewer's Universal Blue palette; raster-saturation
+    //-1 + raster-opacity 0.50 on the MapLibre layer flatten the palette to grayscale and let
+    //the basemap read through. RainViewer's native data caps at z=7; maxzoom 7 on the source
+    //tells MapLibre to handle the per-pixel upscale past that point itself rather than asking
+    //the server for higher-z tiles (which respond "Zoom Level Not Supported"). The user lives
+    //with the resulting source-pixel grid at the zoom 10 framing, attempts to hide it via
+    //canvas blur + downscale made the visual worse than the raw tiles.
     //
     //Lifecycle: enterWeatherMode kicks ensureRainViewerFrame + attachRainViewerOverlay once the
     //index has landed. A 5 min refresh timer keeps the radar current while the user lingers
@@ -976,34 +977,10 @@ export class HeliosEngine
     private static readonly _RAINVIEWER_REFRESH_MS = 5 * 60_000;
     private static readonly _RAINVIEWER_SOURCE_ID  = 'helios-rainviewer-source';
     private static readonly _RAINVIEWER_LAYER_ID   = 'helios-rainviewer-layer';
-    //Stitched composite framing. Half-extent in latitude degrees of the bbox the composite
-    //covers around the home. 1.6 deg ~= 178 km on the lat axis at any latitude, so the covered
-    //region is ~356 km x ~356 km after the cos(lat) compression on the lon axis. Wide enough
-    //that the user can pan to the edge of the weather-mode camera envelope without ever seeing
-    //the raster border.
-    private static readonly _RAINVIEWER_HALF_LAT_DEG = 1.6;
-    //Side length of the OUTPUT canvas the stitched + blurred composite is encoded into. Much
-    //smaller than the input stitch (~1536 px) so the downscale itself acts as a natural low-
-    //pass filter that erases the high-frequency RainViewer pixel grid before any explicit
-    //blur is applied. MapLibre then upscales this small bitmap 5-6x bilinearly at the zoom 10
-    //framing, which further smooths the rendering on the GPU. The downscale + bilinear upscale
-    //pair is more effective at hiding pixels than any single-pass CSS filter at the source
-    //resolution.
-    private static readonly _RAINVIEWER_OUTPUT_PX    = 384;
-    //CSS filter blur radius applied INSIDE the downscale step. 24 px on a 384 px output canvas
-    //is ~6 % of the canvas side, which is massive in absolute terms (the blur kernel covers
-    //~50 px effective on a 1536 px input). Combined with the downscale, the radar reads as
-    //very soft cloud blobs rather than a tile-aligned mosaic.
-    private static readonly _RAINVIEWER_BLUR_PX      = 24;
 
     private _rainViewerFrame: { host: string; path: string } | null = null;
     private _rainViewerFetching = false;
-    private _rainViewerCompositing = false;
     private _rainViewerRefreshTimer: number | undefined = undefined;
-    //Active blob URL backing the MapLibre image source. Held so the next composite can
-    //revoke it before allocating a fresh one (avoids leaking the previous PNG bytes for
-    //the lifetime of the page).
-    private _rainViewerBlobUrl: string | null = null;
 
     //Fetch the RainViewer index and stash the most recent past frame. Idempotent: a second call
     //while a fetch is in flight short-circuits. Errors are logged and leave the previous frame
@@ -1034,72 +1011,57 @@ export class HeliosEngine
         }
     }
 
-    //Build the stitched + blurred + desaturated composite from the current RainViewer frame
-    //and attach it to the map as an image source. The composite covers a fixed ~356 km x
-    //~356 km bbox around the home so subsequent refresh cycles can swap the image in place
-    //without recomputing the source coordinates. Returns silently when the map / frame /
-    //tiles are not yet available.
-    //
-    //Why an image source instead of a raster tile source: RainViewer caps native data at
-    //z=7 and serves "Zoom Level Not Supported" beyond. At the weather-mode zoom 10 framing,
-    //MapLibre's raster tile pipeline ends up stretching z=7 tiles ~4x and exposes the source
-    //pixel grid no matter how the raster paint is tuned. Pre-stitching + heavy canvas blur
-    //before handing the result to MapLibre as a single rectangle short-circuits the entire
-    //tile machinery: the blurring is guaranteed to land on the bytes the GPU paints, the
-    //desaturation + contrast tweaks are baked in via canvas filter, and panning never reveals
-    //a freshly upscaled crisp tile.
-    public async attachRainViewerOverlay(): Promise<void>
+    //Attach (or refresh) the RainViewer raster tile source + layer. Raw RainViewer tiles, no
+    //pre-stitch, no canvas filter, no blob URL: MapLibre fetches each tile itself and paints it
+    //via the GPU raster pipeline. The B&W look comes from raster-saturation: -1 (GPU), the
+    //user-asked translucency comes from raster-opacity: 0.50. Whatever pixelation the user sees
+    //at the weather-mode framing IS the native RainViewer resolution (~1 km / pixel at z=7);
+    //the previous downscale + canvas-blur attempts to hide it made the visual worse.
+    public attachRainViewerOverlay(): void
     {
         if (!this.map) { return; }
         const frame = this._rainViewerFrame;
         if (!frame) { return; }
-        if (this._rainViewerCompositing) { return; }
-        this._rainViewerCompositing = true;
-        try
+        const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
+        const lyrId = HeliosEngine._RAINVIEWER_LAYER_ID;
+        //URL template: {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
+        //size 512 (RainViewer free tier supports 256 + 512), color 2 (Universal Blue, only
+        //scheme the public CDN respects), smooth + snow on. The Universal Blue tint is
+        //flattened to grayscale by raster-saturation: -1 below.
+        const tileUrl = `${frame.host}${frame.path}/512/{z}/{x}/{y}/2/1_1.png`;
+        const existing = this.map.getSource(srcId) as any;
+        if (existing)
         {
-            const composite = await this._buildRainViewerComposite(frame);
-            if (!composite || !this.map) { return; }
-            const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
-            const lyrId = HeliosEngine._RAINVIEWER_LAYER_ID;
-            const { dataUrl, bounds } = composite;
-            const coordinates: [[number, number], [number, number], [number, number], [number, number]] = [
-                [bounds.west, bounds.north],
-                [bounds.east, bounds.north],
-                [bounds.east, bounds.south],
-                [bounds.west, bounds.south],
-            ];
-            const existing = this.map.getSource(srcId) as any;
-            if (existing)
-            {
-                //updateImage atomically swaps the bitmap + corners, so the new "now" frame
-                //paints without dropping the layer and blinking the radar off-screen.
-                existing.updateImage({ url: dataUrl, coordinates });
-            }
-            else
-            {
-                this.map.addSource(srcId, { type: 'image', url: dataUrl, coordinates });
-                this.map.addLayer({
-                    id:     lyrId,
-                    type:   'raster',
-                    source: srcId,
-                    paint:  {
-                        //0.50: half the bitmap is transmitted through so the basemap streets +
-                        //district outlines read clearly through dense rain cells.
-                        'raster-opacity':       0.50,
-                        //raster-saturation: -1 is the GPU-side belt-and-suspenders backup for
-                        //the canvas filter's grayscale(1). Some browser / canvas runtimes
-                        //silently ignore the filter property when stacked with blur(); the
-                        //MapLibre paint stage is GPU-driven and always desaturates the texture
-                        //regardless of what the canvas pipeline managed to bake in.
-                        'raster-saturation':    -1,
-                        'raster-fade-duration': 0,
-                    },
-                });
-            }
+            //Swap the tile URL in place + force a re-fetch so the new "now" frame paints
+            //without dropping + re-adding the source / layer (which would blink the radar
+            //off-screen mid-pan).
+            existing.tiles = [tileUrl];
+            const cache = (this.map as any).style?.sourceCaches?.[srcId];
+            cache?.clearTiles?.();
+            cache?.update?.((this.map as any).transform);
+            this.map.triggerRepaint();
         }
-        finally
+        else
         {
-            this._rainViewerCompositing = false;
+            this.map.addSource(srcId, {
+                type:     'raster',
+                tiles:    [tileUrl],
+                tileSize: 512,
+                //Native data caps at z=7. MapLibre handles the per-pixel upscale past that
+                //point itself rather than asking the server for higher-z tiles (which return
+                //"Zoom Level Not Supported").
+                maxzoom:  7,
+            });
+            this.map.addLayer({
+                id:     lyrId,
+                type:   'raster',
+                source: srcId,
+                paint:  {
+                    'raster-opacity':       0.50,
+                    'raster-saturation':    -1,
+                    'raster-fade-duration': 0,
+                },
+            });
         }
         //Kick a periodic refresh so the radar stays current while the user lingers in weather
         //mode. RainViewer refreshes the actual radar every 10 min; polling at half that keeps
@@ -1113,144 +1075,12 @@ export class HeliosEngine
         }
     }
 
-    //Fetch every z=7 RainViewer tile inside the ~356 km x ~356 km home bbox, stitch them onto
-    //one canvas in the correct lat / lon offset, then redraw through a CSS-filtered context
-    //that applies the blur + desaturation + contrast in a single pass. Returns the resulting
-    //data URL + the bbox the composite actually covers (the outer corners of the tile grid,
-    //which usually overshoot the requested bbox by less than a tile width).
-    private async _buildRainViewerComposite(frame: { host: string; path: string })
-        : Promise<{ dataUrl: string; bounds: { south: number; north: number; west: number; east: number } } | null>
-    {
-        const z = 7;
-        const tileSize = 512;
-        const halfLat  = HeliosEngine._RAINVIEWER_HALF_LAT_DEG;
-        const cosLat   = Math.max(0.1, Math.abs(Math.cos(this.homeLat * Math.PI / 180)));
-        const halfLon  = halfLat / cosLat;
-        const south    = this.homeLat - halfLat;
-        const north    = this.homeLat + halfLat;
-        const west     = this.homeLon - halfLon;
-        const east     = this.homeLon + halfLon;
-
-        //Web Mercator lat/lon -> tile (x, y). Standard slippy-map conversion.
-        const N = Math.pow(2, z);
-        const lonToX = (lon: number): number => Math.floor((lon + 180) / 360 * N);
-        const latToY = (lat: number): number =>
-        {
-            const latRad = lat * Math.PI / 180;
-            return Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * N);
-        };
-        //Inverse: tile (x, y) -> lat/lon of the tile's top-left corner.
-        const xToLon = (xt: number): number => xt / N * 360 - 180;
-        const yToLat = (yt: number): number =>
-        {
-            const n = Math.PI - 2 * Math.PI * yt / N;
-            return 180 / Math.PI * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
-        };
-
-        const xMin = lonToX(west);
-        const xMax = lonToX(east);
-        const yMin = latToY(north);
-        const yMax = latToY(south);
-        const nx   = xMax - xMin + 1;
-        const ny   = yMax - yMin + 1;
-        if (nx <= 0 || ny <= 0) { return null; }
-
-        const W = nx * tileSize;
-        const H = ny * tileSize;
-        //Stitch canvas: draws the raw RainViewer tiles edge-to-edge. The next pass redraws this
-        //surface through a CSS filter to bake in the blur + desaturation + contrast in one go.
-        const stitchCanvas = document.createElement('canvas');
-        stitchCanvas.width  = W;
-        stitchCanvas.height = H;
-        const stitchCtx = stitchCanvas.getContext('2d');
-        if (!stitchCtx) { return null; }
-
-        //Fetch + decode every tile in parallel. Tiles that 404 or fail decode are skipped
-        //(left transparent on the canvas); a sparse tile grid is still usable, the user just
-        //sees holes where the server had no data instead of the whole layer dropping.
-        const tilePromises: Promise<void>[] = [];
-        for (let dy = 0; dy < ny; dy++)
-        {
-            for (let dx = 0; dx < nx; dx++)
-            {
-                const x = xMin + dx;
-                const y = yMin + dy;
-                const url = `${frame.host}${frame.path}/${tileSize}/${z}/${x}/${y}/2/1_1.png`;
-                tilePromises.push(
-                    fetch(url, { cache: 'no-store' })
-                        .then(r => r.ok ? r.blob() : Promise.reject(new Error(`HTTP ${r.status}`)))
-                        .then(b => createImageBitmap(b))
-                        .then(bitmap => { stitchCtx.drawImage(bitmap, dx * tileSize, dy * tileSize); })
-                        .catch(() => { /* skip missing tile, leave transparent */ })
-                );
-            }
-        }
-        await Promise.all(tilePromises);
-
-        //Filter pass: downscale stitchCanvas (~1536 px side) into a much smaller OUTPUT canvas
-        //(_RAINVIEWER_OUTPUT_PX side) with blur + grayscale baked into the resize. The
-        //downscale itself acts as a strong low-pass filter (the browser bilinear-averages
-        //source pixels into target pixels), so the high-frequency RainViewer pixel grid is
-        //erased before MapLibre ever sees the bitmap. Layering an explicit blur on top makes
-        //the cloud blobs even softer. grayscale(1) handles the desaturation; raster-saturation
-        //-1 on the MapLibre layer is the belt-and-suspenders backup.
-        const Wout = HeliosEngine._RAINVIEWER_OUTPUT_PX;
-        const Hout = HeliosEngine._RAINVIEWER_OUTPUT_PX;
-        const filteredCanvas = document.createElement('canvas');
-        filteredCanvas.width  = Wout;
-        filteredCanvas.height = Hout;
-        const filteredCtx = filteredCanvas.getContext('2d');
-        if (!filteredCtx) { return null; }
-        //imageSmoothingQuality: 'high' tells the browser to use the best resampler (Lanczos or
-        //similar) when downsizing the stitchCanvas. Combined with the explicit CSS blur this
-        //gives a very smooth painterly look.
-        filteredCtx.imageSmoothingEnabled = true;
-        filteredCtx.imageSmoothingQuality = 'high';
-        filteredCtx.filter = `blur(${HeliosEngine._RAINVIEWER_BLUR_PX}px) grayscale(1)`;
-        filteredCtx.drawImage(stitchCanvas, 0, 0, W, H, 0, 0, Wout, Hout);
-
-        //Export as a blob URL rather than a data URL. The image-source path in MapLibre v5
-        //serialises the URL across the main thread / worker boundary; a 1-2 MB data URL string
-        //triggers a worker class-registry warning on some runtimes ("undefined is not an
-        //object (evaluating 'ae.constructor._classRegistryKey')") and can stall the map.
-        //Blob URLs are short opaque references the browser resolves internally, no
-        //cross-thread payload bloat.
-        const blob = await new Promise<Blob | null>((resolve) =>
-        {
-            filteredCanvas.toBlob(b => resolve(b), 'image/png');
-        });
-        if (!blob) { return null; }
-        //Revoke any prior blob URL so the browser can release the old PNG bytes. Held on the
-        //instance so the next refresh can swap cleanly.
-        if (this._rainViewerBlobUrl)
-        {
-            URL.revokeObjectURL(this._rainViewerBlobUrl);
-        }
-        const blobUrl = URL.createObjectURL(blob);
-        this._rainViewerBlobUrl = blobUrl;
-
-        const bounds = {
-            west:  xToLon(xMin),
-            east:  xToLon(xMax + 1),
-            north: yToLat(yMin),
-            south: yToLat(yMax + 1),
-        };
-        return { dataUrl: blobUrl, bounds };
-    }
-
     public detachRainViewerOverlay(): void
     {
         if (this._rainViewerRefreshTimer !== undefined)
         {
             window.clearInterval(this._rainViewerRefreshTimer);
             this._rainViewerRefreshTimer = undefined;
-        }
-        //Release the blob URL so the browser can free the PNG bytes the next time the user
-        //leaves weather mode. Held URL gets reused on a re-entry if it has not been revoked.
-        if (this._rainViewerBlobUrl)
-        {
-            URL.revokeObjectURL(this._rainViewerBlobUrl);
-            this._rainViewerBlobUrl = null;
         }
         if (!this.map) { return; }
         const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;

@@ -2065,13 +2065,20 @@ export class HeliosCard extends LitElement
                     const isLayer    = this._cardMode === 'base';
                     const isLidar    = this._cardMode === 'lidar';
                     const isWeather  = this._cardMode === 'weather';
-                    //Lock the LiDAR button while its own exposure sweep is in flight (no point
-                    //re-entering a mode mid-compute). The Layer + Weather exits ALWAYS work, even
-                    //during the sweep: the engine cancels the exposure compute when the LiDAR view
-                    //goes inactive, so the user can leave at any moment. Locking those exits used
-                    //to strand the user in LiDAR mode whenever the atmosphere refresh fired an
-                    //exposure recompute (sun moved past the 1.5 deg threshold) while they were
-                    //trying to switch modes.
+                    //modeLocked is true while a LiDAR exposure sweep is in flight (sun crossed
+                    //the 1.5 deg refresh gate, or the user just entered the mode). It gates the
+                    //LiDAR button's `?disabled` so the user does not stack a second sweep on top
+                    //of one already running, but the Layer + Weather EXIT buttons stay fully
+                    //enabled: the user must always be able to leave the mode, even mid-sweep.
+                    //
+                    //Root cause of the long-running "stuck in LiDAR after touching the opacity
+                    //slider" report: when ?disabled was wired on the Layer / Weather buttons
+                    //too, the browser silently ignored every @click on them as soon as the
+                    //atmosphere refresh timer kicked an exposure sweep (~every few minutes of
+                    //solar motion). The user's slider drag was a red herring; the timer was
+                    //firing in the background and locking the exit buttons. Dropping ?disabled
+                    //on the exits lets the click always land; the exit fade + the engine's
+                    //setLidarViewActive(false) cancel the in-flight sweep on the way out.
                     const modeLocked = isLidar && this._lidarExposureBusy;
                     //Mode-bar click handlers bound once as class fields
                     //(see _onModeLayer etc.) so Lit does not see a fresh
@@ -2787,58 +2794,18 @@ export class HeliosCard extends LitElement
     //timeline location, floating orphaned at the bottom of the card.
     //Returning to live before the mode swap hides the tooltip cleanly
     //in the same render cycle.
-    //Hard-tear the LiDAR overlay before flipping the card mode. Cancels any pending opacity
-    //rAF (would otherwise fire next frame and re-anchor the layer's u_color.a uniform mid-
-    //transition), kills any in-flight fade rAF, and pushes alphaFade(0) + setActive(false)
-    //into the engine immediately. Skips the smooth 280 ms fade-out on exit, but in exchange
-    //the dot cloud is guaranteed to disappear the instant the user clicks any other mode
-    //button, no matter what state the slider drag left the layer in.
-    private _forceTeardownLidarOverlay(): void
-    {
-        if (this._lidarOpacityRaf)
-        {
-            cancelAnimationFrame(this._lidarOpacityRaf);
-            this._lidarOpacityRaf = 0;
-            this._pendingLidarOpacity = null;
-        }
-        if (this._lidarFadeRaf !== undefined)
-        {
-            cancelAnimationFrame(this._lidarFadeRaf);
-            this._lidarFadeRaf = undefined;
-        }
-        this._lidarFadeInStartMs  = null;
-        this._lidarFadeOutStartMs = null;
-        this._lidarLayerActive    = false;
-        //Push the zero-fade + inactive flags into the engine synchronously so MapLibre's next
-        //repaint short-circuits the layer draw call (see the alphaFade <= 0 early return in
-        //the WebGL layer). triggerRepaint inside the setters guarantees the next frame paints
-        //without the dots.
-        this._engine?.setLidarViewFadeAlpha(0);
-        this._engine?.setLidarViewActive(false);
-    }
     private _onModeLayer = (): void =>
     {
-        this._forceTeardownLidarOverlay();
         this._exitScrubMode();
         this._cardMode = 'base';
     };
     private _onModeLidar = (): void =>
     {
-        //Re-enter: cancel any stale opacity rAF so the new mode's fade-in is not interrupted
-        //by a fire from a previous slider drag. Skip the full teardown so the engine layer
-        //instance stays warm (the buffer is already on the GPU, no reupload needed).
-        if (this._lidarOpacityRaf)
-        {
-            cancelAnimationFrame(this._lidarOpacityRaf);
-            this._lidarOpacityRaf = 0;
-            this._pendingLidarOpacity = null;
-        }
         this._exitScrubMode();
         this._cardMode = 'lidar';
     };
     private _onModeWeather = (): void =>
     {
-        this._forceTeardownLidarOverlay();
         this._exitScrubMode();
         this._cardMode = 'weather';
     };
