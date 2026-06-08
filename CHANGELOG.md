@@ -33,6 +33,31 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### RainViewer composite: pre-stitched, heavily blurred, image source (#210)
+
+The custom helios-rv:// MapLibre protocol shipped in beta.100 did not deliver visibly softer
+radar in practice (suspected addProtocol / OffscreenCanvas plumbing quirks across MapLibre v5
++ Safari). Switched to the same image-source approach the old Open-Meteo cloud overlay used
+(known to work), now sourced from RainViewer tiles instead of an Open-Meteo grid.
+
+- **Pre-stitched canvas**: fetch every z=7 RainViewer tile inside the ~356 km x ~356 km home
+  bbox in parallel, draw them edge-to-edge onto one canvas. ~9 tiles for the standard zoom 10
+  framing.
+- **Single-pass canvas filter**: `blur(10px) saturate(0) contrast(1.3)` baked into the bitmap
+  before export. 10 px blur on a 1536 x 1536 composite obliterates the source pixel grid and
+  gives the radar a painterly cloud-mass look. The desaturation + contrast move out of
+  MapLibre's raster paint into the canvas filter (one pass, no per-frame cost).
+- **MapLibre image source**: the result is attached as a single rectangle (4 lat / lon
+  corners), so MapLibre's raster tile pipeline is bypassed entirely. The blur is guaranteed
+  to land on the bytes the GPU paints, and panning never reveals a freshly upscaled crisp
+  tile because there are no tiles, just one wide bitmap.
+- **Raster opacity 0.80 -> 0.60**: half a notch softer so the basemap streets / districts
+  read clearly through dense rain cells, per user feedback that the previous setting was
+  still too dense.
+- **Custom protocol removed**: the helios-rv:// scheme + its OffscreenCanvas blur handler
+  are gone. The image-source path is simpler + does not depend on browser support for
+  protocol-level interception.
+
 ### RainViewer tiles passed through a client-side blur (#210)
 
 The z=7 RainViewer native cap, stretched to the weather-mode zoom 10 framing, made the radar
