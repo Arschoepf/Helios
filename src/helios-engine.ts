@@ -877,7 +877,10 @@ export class HeliosEngine
         //fit the viewport, which would clamp the weather-mode easeTo back up to ~16 regardless
         //of setMinZoom. Dropping the bounds entirely lets the camera dezoom freely; the exit
         //restores the original bbox so the rest of the card recovers its pan clamp.
-        this.map.setMaxBounds(null as unknown as undefined);
+        //MapLibre accepts both null and undefined to clear the clamp; undefined avoids the
+        //internal "expected number, got null" log spam MapLibre 5.x emits when null bubbles
+        //through its bound validation path.
+        this.map.setMaxBounds(undefined);
         //Widen the zoom envelope. Buffer of 1 below the target keeps MapLibre from edge-clamping
         //the ease in flight.
         this.map.setMinZoom(8);

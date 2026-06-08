@@ -33,6 +33,13 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### MapLibre null-bound warning silenced (#210)
+
+`enterWeatherCamera` passed `null` to `setMaxBounds` (cast through `unknown` to satisfy the
+TypeScript `undefined` signature). MapLibre's 5.x bound validation logs an internal
+"expected number, got null" warning on that path, ~8x per entry. Switched to `undefined`
+explicitly. Same runtime behaviour, no spam.
+
 ### Weather mode polish round 2 (#210)
 
 beta.90 was a MET Norway switch experiment, reverted; beta.91 ships the next batch of weather
