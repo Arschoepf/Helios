@@ -33,6 +33,37 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### About layout polish + shading / 30-day audit (#210)
+
+**About panel:**
+
+- Developer name fixed to "Jérôme Crémoux" (accent on the second e).
+- Every identity row aligned right with a consistent label-left / link-right layout: Version,
+  Developer (name), X profile, LinkedIn, GitHub Helios, GitHub Helios-Lidar.
+- X logo: inline SVG of the post-rebrand X glyph (mdi:twitter was retired, the MDI set didn't
+  ship a proper "X" replacement).
+- Row padding tightened so the six identity rows stack densely instead of with the previous
+  block spacing.
+
+**Storage audit + legacy sweep:**
+
+- One-time purge of legacy localStorage keys on engine spawn: `helios-shading-map:v2` (retired
+  in beta.80, can sit at 100-500 kB on long-running installs) and `helios:cloud-mode` (retired
+  in beta.81). Idempotent + cheap, only runs once per page load.
+- Active keys confirmed in audit: `helios-camera-pose:<lat,lon>` (camera pin), `helios-weather
+  -cache:<lat,lon,prec>` (Open-Meteo payload), `helios-pv-calib-wipe-flag-v1` (calibration
+  wipe flag). PV history / calib / trainer caches are in-memory only.
+
+**Shading + 30-day reference sweep:**
+
+- `engine.projectShadingDome` + the supporting `_projectSpherePoint` helper removed entirely
+  (dead code since beta.80).
+- Trainer 5-min stats window narrowed from 30 days to 5 days: the only consumer of the wider
+  window was the retired shading map, the unified data source only needs the J-2 .. J+2 slice.
+- Inline comments referencing ShadingDome / shading map / 30-day glissement updated across
+  helios-card, init, overlays, loading-tracker, radiation, calibration, helios-config, pv,
+  weatherMode, ws-timeout.
+
 ### Seven user-facing fixes (#210)
 
 - **Zoom out finally works.** `_applyMapBounds` installs a tight bbox (~2 × building-radius)

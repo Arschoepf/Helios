@@ -433,11 +433,14 @@ export function refreshPv(host: PvHost): void
         }
     }
 
-    //5-min LTS for shading-map trainer (30 days). Same multi-source aggregation as the calib path so the trainer
-    //sees total production rather than the first-entity share.
+    //5-min LTS for the unified data source's past-production curve (5 days, matching the data
+    //source window). Same multi-source aggregation as the calib path so the curve sees total
+    //production rather than the first-entity share. Window scoped to the store's J-2 to J+2 span
+    //(the trainer USED to fetch 30 days for the shading map; with the shading map retired, the
+    //extra 25 days were dead weight on every cold boot).
     if (!host._pvTrainerStatsFetching)
     {
-        const trainerStart = new Date(today0.getTime() - 30 * 24 * HOUR_MS);
+        const trainerStart = new Date(today0.getTime() - 5 * 24 * HOUR_MS);
         const trainerKey   = `${fetchKeyPart}@5m|${trainerStart.getTime()}|${fetchEnd.getTime()}`;
         if (trainerKey !== host._pvTrainerStatsFetchKey)
         {
@@ -449,9 +452,9 @@ export function refreshPv(host: PvHost): void
             }
             else
             {
-                //Defer to browser idle time so the user-facing fetches (raw PV history + calib stats) land first and the chart paints
-                //quickly. The trainer feeds the shading-map heuristic which the engine can rebuild from any non-empty sample stream, so
-                //the trainer is effectively a background optimisation, not a blocker for the chip / chart render.
+                //Defer to browser idle time so the user-facing fetches (calib stats + live state)
+                //land first and the chart paints quickly. The trainer 5-min stats then refine the
+                //past production curve once they arrive, no blocker for the initial chart render.
                 const trainerIds   = sortedLive.length > 0 ? sortedLive : [entity];
                 const unitLow      = (host._pvUnit || '').toLowerCase();
                 const isCumulative = unitLow === 'wh' || unitLow === 'kwh' || unitLow === 'mwh';

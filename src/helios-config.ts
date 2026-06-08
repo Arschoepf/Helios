@@ -102,11 +102,10 @@ export interface HeliosConfig
     //                  Defaults to a vivid purple.
     //Optional. Percent (0-100). Inverter cutoff SoC: the State-of-Charge at which the user's hybrid inverter stops
     //feeding the battery and clamps PV output (almost no production from the panels even when the sun is up). When
-    //set AND HA Energy has at least one battery SoC source declared, the shading map trainer skips every observation
-    //bucket where the SoC reached or exceeded this value. Without the skip those zero-production buckets get
-    //interpreted as 100 % shading at the matching sun azimuth / altitude / cloud bin and pollute the shading map for
-    //the next ~60 days of half-life decay. Threshold varies per inverter model (some cut at 95, some at 98, some at
-    //100); the user configures their own. Leave unset to train on every bucket.
+    //set AND HA Energy has at least one battery SoC source declared, calibration consumers can skip observation buckets
+    //where the SoC reached or exceeded this value. Without the skip those zero-production buckets get interpreted as
+    //true zeros and pollute the rolling calibration ratio. Threshold varies per inverter model (some cut at 95, some
+    //at 98, some at 100); the user configures their own. Leave unset to feed every bucket into the calibration.
     'inverter-cutoff-soc-pct'?: unknown;
     'battery-color'?:         unknown;
     //Grid import / export wiring is resolved exclusively from the HA Energy dashboard global settings: every grid

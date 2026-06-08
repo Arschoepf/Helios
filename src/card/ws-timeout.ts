@@ -120,7 +120,7 @@ export function callWSWithTimeout<T = unknown>(
 
 //Schedule a callback to run when the browser is idle, with a
 //conservative timeout fallback. Used to defer expensive non-critical
-//fetches (the 30-day shading-map trainer) until the user-facing
+//fetches (the 5-min trainer stats) until the user-facing
 //work has landed and the main thread has a moment to breathe. See
 
 //

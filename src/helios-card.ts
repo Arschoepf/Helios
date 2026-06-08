@@ -385,13 +385,13 @@ export class HeliosCard extends LitElement
     @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
     _pvCalibStatsFetchKey  = '';
     _pvCalibStatsFetching  = false;
-    //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same contract as `_pvCalibStats`, just at a finer
-    //period and over a longer window. ~8.6k rows for 30 days.
+    //5-minute long-term-statistics series feeding the unified data source's past-production curve (5 days). Same contract as `_pvCalibStats`, just at a finer
+    //period. ~1.4k rows for 5 days.
     @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
     _pvTrainerStatsFetchKey  = '';
     _pvTrainerStatsFetching  = false;
     //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
-    //(`inverter-cutoff-soc-pct`). The shading trainer reads it to skip buckets where SoC reached the cutoff. Null when the guard is
+    //(`inverter-cutoff-soc-pct`). Reserved for future use after the shading-map trainer retirement. Null when the guard is
     //off or no battery is configured. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
     _batteryHistory: { times: Date[]; values: number[] } | null = null;
     //Idempotency flag for the one-time wipe of legacy PV calibration
@@ -579,7 +579,7 @@ export class HeliosCard extends LitElement
     //aggregation.
     @state() _unifiedStore: import('./card/unifiedStore').UnifiedDataStore | null = null;
     //Single source of truth for which mode the card is in. Drives every transition (slider slide-in
-    /// slide-out, chip + leader + arc fade, timeline slide, WebGL dot-cloud fade-in / out, ShadingDome
+    /// slide-out, chip + leader + arc fade, timeline slide, WebGL dot-cloud fade-in / out, Weather mode
     //SVG fade-in / out). Set imperatively by the mode-bar click handlers, reacted to by
     //_handleCardModeChange in updated() which kicks the engine fades and toggles the overlay mask.
     //Modes are mutually exclusive (the mode-bar lets the user pick exactly one).
@@ -587,8 +587,8 @@ export class HeliosCard extends LitElement
     //True while the chips / leaders / arcs / timeline are masked behind a non-base mode. Decoupled
     //from _cardMode on the EXIT path so the HUD doesn't pop back through still-visible LiDAR dots: on
     //LiDAR -> base, the mask stays ON until the WebGL fade-out completes (the LiDAR fade loop sets it
-    //to false on completion); on ShadingDome -> base, the mask flips OFF immediately because the
-    //dome SVG is faint enough that the HUD chips reading through it during the fade is fine.
+    //to false on completion); on Weather -> base, the mask flips OFF immediately because the
+    //weather raster is faint enough that the HUD chips reading through it during the fade is fine.
     @state() _overlayMaskActive = false;
     //WebGL dot-cloud lifecycle. Set true on lidar enter, the LiDAR fade loop flips it back to false on
     //fade-out completion. Decoupled from _cardMode so the engine layer keeps drawing dots during the
@@ -1073,7 +1073,7 @@ export class HeliosCard extends LitElement
         this._maybeRebuildUnifiedStore();
 
         //Mode-transition state machine. When the user clicks a different mode on the mode-bar,
-        //_onModeLayer / _onModeLidar / _onModeShadingDome set _cardMode directly; the click handler
+        //_onModeLayer / _onModeLidar / _onModeWeather set _cardMode directly; the click handler
         //does nothing else. The rest of the transition (engine fade-in / fade-out kick, overlay mask
         //flip) is centralised here so a single switch on _cardMode drives every side effect, and the
         //picker .is-active classes are decoupled from the WebGL / SVG fade timestamps so they animate
@@ -2797,14 +2797,14 @@ export class HeliosCard extends LitElement
     };
     //Mode-transition state machine. Called from updated() when _cardMode changed. Single switch on
     //the (prev, next) pair drives:
-    //  1. _overlayMaskActive: ON the moment we leave base. OFF on shading-dome -> base immediately
+    //  1. _overlayMaskActive: ON the moment we leave base. OFF on weather -> base immediately
     //     (the dome SVG is faint, the HUD can fade in through it). OFF on lidar -> base only AFTER
     //     the WebGL dot-cloud fade-out completes (see the LiDAR fade loop completion handler) so the
     //     HUD chips do not pop back through the still-visible cloud.
     //  2. LiDAR enter / exit: enterLidarView() activates the engine layer + kicks the alpha ramp;
     //     exitLidarView() starts the fade-out, the engine layer is torn down at end-of-fade.
-    //  3. ShadingDome enter / exit: enterShadingDome() rebuilds the scene + kicks the fade-in;
-    //     exitShadingDome() starts the fade-out, the SVG is dropped at end-of-fade.
+    //  3. Weather enter / exit: enterWeatherMode() kicks the fade-in + the camera ease + the
+    //     multi-point grid fetch; exitWeatherMode() starts the fade-out + restores the camera.
     //
     //CSS animations (slider slide-in / slide-out, chip + leader + arc fade, timeline slide) run on
     //their own classes (.is-active on the sliders, .overlay-masked on ha-card) which derive directly

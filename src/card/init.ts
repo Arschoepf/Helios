@@ -26,7 +26,7 @@ import { beginLoadingPhase, endLoadingPhase, type LoadingTrackerHost } from './l
 //have a runtime effect.
 export const VISUAL_CONFIG_KEYS = [
     'show-labels',
-    //PV layout, every change must reach the engine so the per-array shading geometry, the forecast and the calibration ratio
+    //PV layout, every change must reach the engine so the per-array forecast geometry, the predicted curve and the calibration ratio
     //recompute against the new tilt / azimuth / kWp / inverter cap.
     'pv-arrays',
     'pv-tilt',
@@ -34,8 +34,8 @@ export const VISUAL_CONFIG_KEYS = [
     'pv-inverter-max-kw',
     //map-style triggers a MapLibre setStyle(), the engine reloads the cloud disc, buildings and labels on the resulting `style.load`.
     'map-style',
-    //Inverter-cutoff guard: when set, the shading trainer skips buckets where SoC reached the cutoff so the inverter-blocked
-    //production does not pollute the shading map.
+    //Inverter-cutoff guard: when set, downstream calibration consumers can skip buckets where SoC reached the cutoff so the
+    //inverter-blocked production does not pollute the 5-day calibration ratio.
     'inverter-cutoff-soc-pct',
     //solar-radiation-entity, when set, feeds the engine sensor samples that override Open-Meteo for the live + past irradiance
     //values. A change must refresh the engine so the override (or its absence) is picked up immediately.
@@ -563,7 +563,7 @@ function wireEngineCallbacks(host: InitHost): void
     //the rAF gate, at most one full overlay pass per frame, no
     //matter how many move events MapLibre fires.
     let overlayRaf: number | null = null;
-    //LiDAR-View and Shading-dome modes hide the regular HUD via
+    //LiDAR-View and Weather modes hide the regular HUD via
     //CSS opacity:0 + pointer-events:none. While in those modes
     //the projected sun arc, home silhouettes and chip anchors are
     //invisible but `refreshOverlays` still re-projects them on
@@ -573,7 +573,7 @@ function wireEngineCallbacks(host: InitHost): void
     //refresh leaves the stale scene cached (the toggle path
     //re-runs it once on enter so the user sees up-to-date data).
     type ModeAwareHost = InitHost & {
-        readonly _cardMode?: 'base' | 'lidar' | 'shading-dome';
+        readonly _cardMode?: 'base' | 'lidar' | 'weather';
     };
     host._engine.onMapTransform = () =>
     {

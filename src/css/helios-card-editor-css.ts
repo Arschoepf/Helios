@@ -480,8 +480,11 @@ export const editorStyles = css`
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 0 14px;
+        gap: 12px;
+        padding: 4px 0;
     }
+    .about-row + .about-row { padding-top: 4px; }
+    .about-row:first-of-type { padding-top: 8px; }
     .about-label
     {
         font-weight: 500;
@@ -494,27 +497,51 @@ export const editorStyles = css`
         font-size: 13px;
         color: var(--primary-text-color, #18181b);
     }
-    /*  Version chip: HA frontend body font, bold, primary text colour, decorated as a link (the
-        anchor jumps to the matching GitHub release page). Replaces the previous monospace
-        about-value style so the version reads as part of the HA UI rather than a code label. */
-    .about-version-link
+    /*  Identity rows. Every row uses the same label-left, content-right layout the version row
+        established: flex layout with the label squeezed left + the value or link pushed right.
+        about-row already has the base flex container; the per-content variants below tune the
+        right-side style (link, plain value, version chip). */
+    .about-row-value
     {
         font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
         font-size: 14px;
-        font-weight: var(--ha-font-weight-bold, 700);
-        color: var(--primary-text-color, #18181b);
-        text-decoration: none;
-    }
-    .about-version-link:hover { text-decoration: underline; }
-    /*  Developer block sits right after the version row. Same about-block geometry as the other
-        link groups; the inline "name" line uses the body font (no italic, no monospace) so the
-        developer reads as a person, not a code reference. */
-    .about-developer-name
-    {
-        font-size: 14px;
         font-weight: var(--ha-font-weight-medium, 500);
         color: var(--primary-text-color, #18181b);
+        text-align: right;
     }
+    .about-row-link
+    {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
+        font-size: 14px;
+        font-weight: var(--ha-font-weight-medium, 500);
+        color: var(--primary-color, #3b82f6);
+        text-decoration: none;
+    }
+    .about-row-link:hover { text-decoration: underline; }
+    .about-row-link ha-icon
+    {
+        --mdc-icon-size: 18px;
+        color: inherit;
+    }
+    /*  X brand mark: inline SVG so the post-rebrand glyph renders properly (mdi:twitter would
+        mis-label the platform). Sized to match the ha-icon glyphs in adjacent rows. */
+    .about-row-svg
+    {
+        width:  18px;
+        height: 18px;
+        flex-shrink: 0;
+    }
+    /*  Version chip: HA frontend body font, bold, primary text colour, decorated as a link (the
+        anchor jumps to the matching GitHub release page). */
+    .about-version-link
+    {
+        font-weight: var(--ha-font-weight-bold, 700);
+        color: var(--primary-text-color, #18181b);
+    }
+    .about-version-link:hover { text-decoration: underline; }
     .about-block
     {
         margin-top: 14px;

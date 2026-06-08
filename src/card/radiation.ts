@@ -88,7 +88,7 @@ function parseStatBoundary(raw: unknown): number | null
 //We deliberately do NOT fall back to the `state` field here. A small subset of installs surface their radiation source as a
 //cumulative MJ/m² counter (`state_class: total_increasing`) and `state` then carries monotonically increasing values. Pushing those
 //straight to `setSolarRadiationSamples` would feed the engine values that look like 10000+ W/m² and distort every downstream
-//derivation (shading map calibration, "affiné" forecast, irradiance chip). Buckets with null `mean` are skipped and, if the slot
+//derivation (5-day calibration ratio, "affiné" forecast, irradiance chip). Buckets with null `mean` are skipped and, if the slot
 //ends up empty, the consumer degrades to the raw-history fallback which has its own unit semantics handled.
 function parseRadiationStats(arr: any[]): RadiationHistory
 {

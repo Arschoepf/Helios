@@ -343,9 +343,8 @@ export function refreshOverlays(host: OverlaysHost): void
     //via _startLidarFadeLoop; MapLibre re-issues the layer's draw
     //call on every transform automatically.
 
-    //Shading-dome scene re-projection is wired separately from the
-    //card's onMapTransform handler so this module stays free of a
-    //refreshOverlays in turn).
+    //Weather raster source / layer is owned by the engine + the weather mode lifecycle, so this
+    //transform path stays free of a per-frame refreshOverlays for it.
 }
 
 

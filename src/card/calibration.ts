@@ -108,7 +108,7 @@ export function computeForecastCalibration(host: ChartHost): ForecastCalibration
 
     const ratios: number[] = [];
     //Raster fetched above for the cache key; reused here so each
-    //past-day integration sees identical shading geometry as the
+    //past-day integration sees identical LiDAR-shadow geometry as the
     //upcoming days. Null on installs without LiDAR coverage, in
     //which case predictedKwhForDay skips the raycast.
 

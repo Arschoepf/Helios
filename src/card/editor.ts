@@ -1172,23 +1172,50 @@ export class HeliosCardEditor extends LitElement
 
                 <details class="advanced-section about-section" ?open="${this._openSection === 'about'}" @toggle="${(e: Event) => this._onSectionToggle('about', e)}">
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:information-outline"></ha-icon>${t.editor.aboutSection}</summary>
+                    <!-- Identity + links column. Every row uses the same label-left, content-right
+                         layout the version row established: a single .about-row line per piece of
+                         info, the right side carrying the value (or a clickable link with icon).
+                         The X brand mark is an inline SVG because the MDI icon set doesn't ship
+                         the post-rebrand glyph and mdi:twitter would mis-label the platform. -->
                     <div class="about-row">
                         <span class="about-label">${t.editor.aboutVersionLabel}</span>
-                        <a class="about-version-link"
+                        <a class="about-row-link about-version-link"
                            href="https://github.com/ReikanYsora/Helios/releases/tag/v${__HELIOS_VERSION__}"
                            target="_blank" rel="noopener noreferrer"
                         >${__HELIOS_VERSION__}</a>
                     </div>
-                    <div class="about-block about-developer">
-                        <div class="about-label">${t.editor.aboutDeveloperLabel}</div>
-                        <div class="about-developer-name">ReikanYsora (Jérôme Cremoux)</div>
-                        <a class="about-link" href="https://x.com/ReikanYsora" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:twitter"></ha-icon>
+                    <div class="about-row">
+                        <span class="about-label">${t.editor.aboutDeveloperLabel}</span>
+                        <span class="about-row-value">ReikanYsora (Jérôme Crémoux)</span>
+                    </div>
+                    <div class="about-row">
+                        <span class="about-label" aria-hidden="true"></span>
+                        <a class="about-row-link" href="https://x.com/ReikanYsora" target="_blank" rel="noopener noreferrer">
+                            <svg class="about-row-svg" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117l11.966 15.644Z" fill="currentColor"/>
+                            </svg>
                             <span>@ReikanYsora</span>
                         </a>
-                        <a class="about-link" href="https://www.linkedin.com/in/jerome-cremoux/" target="_blank" rel="noopener noreferrer">
+                    </div>
+                    <div class="about-row">
+                        <span class="about-label" aria-hidden="true"></span>
+                        <a class="about-row-link" href="https://www.linkedin.com/in/jerome-cremoux/" target="_blank" rel="noopener noreferrer">
                             <ha-icon icon="mdi:linkedin"></ha-icon>
                             <span>${t.editor.aboutDeveloperLinkedIn}</span>
+                        </a>
+                    </div>
+                    <div class="about-row">
+                        <span class="about-label" aria-hidden="true"></span>
+                        <a class="about-row-link" href="https://github.com/ReikanYsora/Helios" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t.editor.aboutRepoCard}</span>
+                        </a>
+                    </div>
+                    <div class="about-row">
+                        <span class="about-label" aria-hidden="true"></span>
+                        <a class="about-row-link" href="https://github.com/ReikanYsora/Helios-Lidar" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:github"></ha-icon>
+                            <span>${t.editor.aboutRepoLidar}</span>
                         </a>
                     </div>
                     <div class="about-block">
@@ -1197,17 +1224,6 @@ export class HeliosCardEditor extends LitElement
                             <span>${t.editor.aboutSiteTitle}</span>
                         </a>
                         <p class="about-paragraph">${t.editor.aboutSiteDescription}</p>
-                    </div>
-                    <div class="about-block">
-                        <div class="about-label">${t.editor.aboutCodeLabel}</div>
-                        <a class="about-link" href="https://github.com/ReikanYsora/Helios" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:github"></ha-icon>
-                            <span>${t.editor.aboutRepoCard}</span>
-                        </a>
-                        <a class="about-link" href="https://github.com/ReikanYsora/Helios-Lidar" target="_blank" rel="noopener noreferrer">
-                            <ha-icon icon="mdi:github"></ha-icon>
-                            <span>${t.editor.aboutRepoLidar}</span>
-                        </a>
                     </div>
                     <div class="about-block about-coffee">
                         <p class="about-paragraph">${t.editor.aboutCoffeeMessage}</p>

@@ -13,8 +13,8 @@
 //- Fades out via CSS transition (slide-up + opacity) when the aggregate hits 1.
 //- Stays hidden for the rest of the card lifetime: routine background refreshes do not flash the
 //  banner up again, that would feel like the card "loses its data" every time the user clicks.
-//- Same visual vocabulary as the ShadingDome explanation hint (rounded card, padded, themed bg +
-//  border + shadow) so the user reads one consistent loading language across the card.
+//- Themed rounded card, padded, with the same bg / border / shadow vocabulary as the rest of the
+//  HUD chrome so the user reads one consistent loading language across the card.
 
 import { html, nothing, type TemplateResult } from 'lit';
 import { pickTranslations } from '../i18n';

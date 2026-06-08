@@ -1344,6 +1344,33 @@ export class HeliosEngine
     //mode-switching while a fresh exposure sweep is in flight.
     public onLidarExposureBusyChange?: (busy: boolean) => void;
 
+    //Run a one-time sweep of legacy localStorage keys retired in previous betas of the v1.8.3
+    //cycle. Idempotent + cheap, ~5 ms of localStorage.removeItem calls on cold start. Without this
+    //purge the orphaned keys (helios-shading-map:v2 alone can be 100-500 kB) sit forever in the
+    //user's storage quota, since the writing code path no longer exists to clear them.
+    private static _legacyStorageSwept = false;
+    private static _sweepLegacyStorage(): void
+    {
+        if (HeliosEngine._legacyStorageSwept) { return; }
+        HeliosEngine._legacyStorageSwept = true;
+        try
+        {
+            const ls = window.localStorage;
+            if (!ls) { return; }
+            //Static-key retirees: shading-map (v1.8.3-beta.80, the big virage) and the cloud-mode
+            //toggle preference (v1.8.3-beta.81, replaced by the auto-reveal in weather mode).
+            const STATIC_RETIRED = [
+                'helios-shading-map:v2',
+                'helios:cloud-mode',
+            ];
+            for (const key of STATIC_RETIRED)
+            {
+                if (ls.getItem(key) !== null) { ls.removeItem(key); }
+            }
+        }
+        catch (_) { /* private browsing / disabled storage / quota: silently degrade */ }
+    }
+
     constructor(
         container:    HTMLElement,
         config:       HeliosConfig,
@@ -1351,6 +1378,7 @@ export class HeliosEngine
         haElevation?: number
     )
     {
+        HeliosEngine._sweepLegacyStorage();
         this.homeLat = haCoords[1];
         this.homeLon = haCoords[0];
         this.homeElevation = (typeof haElevation === 'number' && Number.isFinite(haElevation))
@@ -4971,185 +4999,6 @@ export class HeliosEngine
 
     //Project an arbitrary (azimuth, altitude) angular position above
     //the home onto the same sphere the sun arc uses, then forward
-    //to screen pixels. Used by the shading-dome overlay to paint
-    //every populated cell of the learned residual grid on the
-    //celestial hemisphere the same way the sun is.
-    private _projectSpherePoint(
-        azimuthDeg: number, altitudeDeg: number
-    ): { x: number; y: number; depth: number } | null
-    {
-        const D = Math.PI / 180;
-        const a = altitudeDeg * D;
-        const z = azimuthDeg  * D;
-        //Same scale as the sun arc so the shading-dome cells line up with the arc on fullscreen layouts. See
-        const R = SUN_ARC_RADIUS_M * this._sunArcScale();
-        const east  = R * Math.cos(a) * Math.sin(z);
-        const north = R * Math.cos(a) * Math.cos(z);
-        const up    = R * Math.sin(a);
-        const mPerDegLat = 111_320;
-        const mPerDegLon = 111_320 * Math.cos(this.homeLat * D);
-        const lon = this.homeLon + east  / mPerDegLon;
-        const lat = this.homeLat + north / mPerDegLat;
-        return this._projectScenePoint(lon, lat, up);
-    }
-
-
-    //Layout the shading-dome overlay: every populated cell of the learned residual grid projected onto the celestial hemisphere above the home, plus
-    //today's solar arc carrying the per-sample residual ratio so the user can see "the sun walks through this red cell at 17h, that's the tree".
-    //
-    //`cellPolys` , one entry per cell, four corner pixels of the
-    //               annular sector (az ± 5 deg × alt ± 2.5 deg)
-    //               projected onto the sphere; cells with any
-    //               corner behind the camera are dropped.
-    //`todayArc`  , sun-position samples for today, each with the
-    //               shading-map ratio looked up at its (az, alt,
-    //               liveCloud) coordinates and the kernel-smoothed
-    //               confidence.
-    //`homeScreen`, ground anchor reused by the SVG for centred
-    //               labels.
-    //
-    //`now` lets the caller pin the dome to a different day if it
-    //ever needs to (timeline scrubbing, debug). Defaults to wall
-    //clock so the bright arc is always today.
-    public projectShadingDome(opts: {
-        cellLookup: (azimuthDeg: number, altitudeDeg: number, cloudPct: number) =>
-            { ratio: number; confidence: number } | null;
-        decodedCells: Array<{ azimuthDeg: number; altitudeDeg: number; cloudBin: number; ratio: number; aged: number }>;
-        cloudBinForArc: number;   //0..7, which cloud-cover bin to sample for today's arc
-        liveCloudPct:   number;   //real-time cloud cover, used to pick the dome cells visualised
-        now:            Date;
-    }): {
-        homeScreen: { x: number; y: number };
-        cellPolys:  Array<{
-            path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number;
-        }>;
-        todayArc:   Array<{
-            x: number; y: number; ratio: number; confidence: number;
-            altitudeDeg: number; belowHorizon: boolean;
-        }>;
-        sun:        { x: number; y: number; altitudeDeg: number } | null;
-    } | null
-    {
-        if (!this.map)
-        {
-            return null;
-        }
-        const homeScreen = this._projectScenePoint(this.homeLon, this.homeLat, 0);
-        if (!homeScreen)
-        {
-            return null;
-        }
-
-        //--- Background dome: one annular-sector polygon per CELL
-        //of the full (azimuth, altitude) grid, regardless of
-        //whether the shading map has data for it. Cells with
-        //observed data carry their ratio + aged weight so the
-        //render layer paints them coloured; empty cells come
-        //through with aged = 0 and ratio = 1 so the render layer
-        //can stroke just the outline. This way the full lattice
-        //of the dome is visible (you see the structure even on
-        //day 1) and populated zones light up as the model learns.
-        const HALF_AZ  = 5;   //matches AZIMUTH_BIN_DEG  / 2 in shadingMap.ts
-        const HALF_ALT = 2.5; //matches ALTITUDE_BIN_DEG / 2
-        const AZ_BIN_COUNT  = 36;
-        const ALT_BIN_COUNT = 18;
-        //Index populated cells by (az, alt) for the chosen cloud
-        //bin so the grid loop can look them up in O(1) per cell.
-        const populated: Map<string, { ratio: number; aged: number }> = new Map();
-        for (const c of opts.decodedCells)
-        {
-            if (c.cloudBin !== opts.cloudBinForArc)
-            {
-                continue;
-            }
-            const azBin  = Math.floor(c.azimuthDeg  / 10);
-            const altBin = Math.floor(c.altitudeDeg / 5);
-            populated.set(`${azBin}|${altBin}`, { ratio: c.ratio, aged: c.aged });
-        }
-        const cellPolys: Array<{ path: string; ratio: number; aged: number; cloudBin: number; altitudeDeg: number }> = [];
-        for (let azBin = 0; azBin < AZ_BIN_COUNT; azBin++)
-        {
-            const azCentre = azBin * 10 + 5;
-            for (let altBin = 0; altBin < ALT_BIN_COUNT; altBin++)
-            {
-                const altCentre = altBin * 5 + 2.5;
-                const az0 = azCentre  - HALF_AZ;
-                const az1 = azCentre  + HALF_AZ;
-                const al0 = Math.max(0.5, altCentre - HALF_ALT);
-                const al1 = Math.min(89,  altCentre + HALF_ALT);
-                const p1 = this._projectSpherePoint(az0, al0);
-                const p2 = this._projectSpherePoint(az1, al0);
-                const p3 = this._projectSpherePoint(az1, al1);
-                const p4 = this._projectSpherePoint(az0, al1);
-                if (!p1 || !p2 || !p3 || !p4)
-                {
-                    continue;
-                }
-                const path = `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} L ${p2.x.toFixed(1)} ${p2.y.toFixed(1)} L ${p3.x.toFixed(1)} ${p3.y.toFixed(1)} L ${p4.x.toFixed(1)} ${p4.y.toFixed(1)} Z`;
-                const hit = populated.get(`${azBin}|${altBin}`);
-                cellPolys.push({
-                    path,
-                    ratio:    hit ? hit.ratio : 1,
-                    aged:     hit ? hit.aged  : 0,
-                    cloudBin: opts.cloudBinForArc,
-                    //Forwarded so the card-side renderer can drive the enter/exit wipe off altitude rather than a screen-space clip-path. Altitude
-                    //is camera-independent so the zenith (highest cells) stays the last drawn / first erased regardless of how the user has
-                    //rotated the map underneath the dome.
-                    altitudeDeg: altCentre,
-                });
-            }
-        }
-
-        //--- Foreground ribbon: today's sun arc, one polyline sample
-        //per 15 min. Each sample carries the residual ratio from the
-        //shading-map lookup at its (azimuth, altitude, liveCloud) so
-        //the ribbon literally bends red where the model over-
-        //predicts at this time of year, regardless of the season.
-        const todayArc: Array<{ x: number; y: number; ratio: number; confidence: number; altitudeDeg: number; belowHorizon: boolean }> = [];
-        const dayStart = new Date(opts.now);
-        dayStart.setHours(0, 0, 0, 0);
-        const N = SUN_ARC_SAMPLES;
-        const stepMs = (24 * 60 * 60 * 1000) / N;
-        for (let i = 0; i < N; i++)
-        {
-            const t = new Date(dayStart.getTime() + i * stepMs);
-            const sun = getSunPosition(t, this.homeLat, this.homeLon);
-            const belowHorizon = sun.altitude <= 0;
-            const proj = belowHorizon
-                ? null
-                : this._projectSpherePoint(sun.azimuth, sun.altitude);
-            if (!proj)
-            {
-                continue;
-            }
-            const lookup = opts.cellLookup(sun.azimuth, sun.altitude, opts.liveCloudPct);
-            todayArc.push({
-                x:           proj.x,
-                y:           proj.y,
-                ratio:       lookup ? lookup.ratio : 1,
-                confidence:  lookup ? lookup.confidence : 0,
-                altitudeDeg: sun.altitude,
-                belowHorizon,
-            });
-        }
-
-        //--- Sun marker: present-position pin so the user can see
-        //"where the sun is right now" inside the dome view.
-        let sunScreen: { x: number; y: number; altitudeDeg: number } | null = null;
-        const sunNow = getSunPosition(opts.now, this.homeLat, this.homeLon);
-        if (sunNow.altitude > 0)
-        {
-            const p = this._projectSpherePoint(sunNow.azimuth, sunNow.altitude);
-            if (p)
-            {
-                sunScreen = { x: p.x, y: p.y, altitudeDeg: sunNow.altitude };
-            }
-        }
-
-        return { homeScreen, cellPolys, todayArc, sun: sunScreen };
-    }
-
-
     public setSelectedTime(time: Date | null): void
     {
         this._selectedTime = time;
