@@ -947,42 +947,28 @@ export class HeliosEngine
     }
 
     //---------------------------------------------------------------------------------------------
-    //Weather grid: a 9 x 9 lat / lon raster of cloud-cover-low / mid / high values sampled from
-    //MET Norway's locationforecast/2.0/complete endpoint. Source switched from Open-Meteo in
-    //v1.8.3-beta.90 because Open-Meteo's 10 k / day per-IP rate limit kept tripping the user's
-    //instance with HTTP 429 on cold boots. MET Norway tolerates ~20 req/s and has no daily cap,
-    //but trades the multi-location batching: every grid point needs its own fetch. We cap the
-    //grid at 9 x 9 = 81 points + run them through an 8-wide concurrency pool to keep cold-boot
-    //latency under ~3 s, and aggressively cache the result in localStorage with a 6 h TTL
-    //matching MET Norway's model refresh cadence so subsequent visits are instant.
+    //Weather grid: a 31 x 31 lat / lon raster of cloud-cover-low / mid / high values sampled by a
+    //single Open-Meteo multi-location call centred on the home. Spans ~150 km × ~150 km so each
+    //grid cell is ~5 km on a side, roughly matching the underlying model native resolution (3 km
+    //for AROME-France, 13 km for ICON-EU). Read by the weather-mode canvas renderer which paints
+    //a bilinear-interpolated + Perlin-noise-textured cloud raster onto a MapLibre image layer.
     //
-    //Storage layout: per-layer Float32Array of shape (nLat * nLon * nTimes), index =
-    //(latIdx * nLon + lonIdx) * nTimes + timeIdx. ~70 KB raw at 9 x 9 x 49 h x 3 layers x 4 B.
+    //Storage layout: per-layer Float32Array of shape (nLat * nLon * nTimes) so cloudLow[lat, lon,
+    //time] = `cloudLow[(latIdx * nLon + lonIdx) * nTimes + timeIdx]`. Float32 keeps the memory
+    //footprint at ~7 MB total (961 cells × 49 h × 3 layers × 4 bytes) which is acceptable.
     //---------------------------------------------------------------------------------------------
 
-    private static readonly _WEATHER_GRID_SIDE       = 9;
-    //Half-extent of the grid in latitude degrees. 0.8 deg approx 89 km north + 89 km south on any
-    //latitude, so the grid covers ~180 km x ~180 km when the longitude span gets compressed by
-    //cos(lat). Sized to overshoot the camera's weather-mode zoom 10 viewport (~160 km wide) so the
-    //raster keeps painting past the visible edges. At 9 x 9 cells over 180 km that yields ~22 km
-    /// cell, above the underlying numerical model native resolution but the bilinear + Perlin
-    //noise texture in the canvas renderer hides the lower density on screen.
-    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 0.8;
-    //Cache TTL for the grid fetch. MET Norway refreshes its underlying ECMWF + MEPS models every
-    //6 h; matching the TTL means a refresh has fresh data on the first stale check.
-    private static readonly _WEATHER_GRID_TTL_MS     = 6 * 60 * 60 * 1000;
-    //Concurrency for the parallel MET Norway fetch pool. Browsers cap concurrent connections to
-    //the same origin at 6, so 8 is the practical ceiling (some browsers go higher when HTTP/2 is
-    //in play, which api.met.no supports). At ~300 ms per request, 81 points / 8 concurrent =
-    //~10 rounds * 300 ms ≈ 3 s cold-boot latency.
-    private static readonly _WEATHER_GRID_CONCURRENCY = 8;
-    //How many forecast hours to keep from each per-point response. MET Norway returns up to
-    //10 days; we only render J0 onward (the weather mode shows the SELECTED instant which sits
-    //on the timeline cursor, J0 .. J+2 in practice). 49 hours covers the timeline plus a margin.
-    private static readonly _WEATHER_GRID_HOURS      = 49;
-    //localStorage key for the cached grid. Includes a schema version so a future shape change
-    //invalidates older entries automatically rather than reading half-typed payloads.
-    private static readonly _WEATHER_GRID_STORAGE_KEY = 'helios-weather-grid:v1';
+    private static readonly _WEATHER_GRID_SIDE       = 31;
+    //Half-extent of the grid in latitude degrees. 1.3 deg approx 145 km north + 145 km south on
+    //any latitude, so the grid covers ~290 km x ~290 km when the longitude span gets compressed
+    //by cos(lat). Sized to overshoot the camera's weather-mode zoom 10 viewport (~160 km wide)
+    //so the raster keeps painting past the visible edges and a small pan doesn't drift out. At
+    //31 x 31 cells over 290 km that yields ~9.4 km / cell, matching the underlying numerical
+    //weather model native resolution (3 km for AROME-France, 13 km for ICON-EU).
+    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 1.3;
+    //Cache TTL for the grid fetch. Open-Meteo refreshes its underlying numerical models every 1-3
+    //hours; 30 min keeps the data near-current without burning calls on every mode toggle.
+    private static readonly _WEATHER_GRID_TTL_MS     = 30 * 60_000;
 
     private _weatherGrid: {
         bounds:    { south: number; north: number; west: number; east: number };
@@ -1019,14 +1005,9 @@ export class HeliosEngine
 
     //Fire the grid fetch when stale. Idempotent: a second call while a fetch is in flight short-
     //circuits without queueing a second request. The Promise resolves when the data has landed (or
-    //the request failed). Strategy:
-    //  1. Hit the in-memory cache + the localStorage cache first; either returns instantly when
-    //     fresh (TTL = 6 h, matching MET Norway's model refresh cadence).
-    //  2. Otherwise fire 81 parallel per-point fetches against MET Norway's locationforecast/2.0/
-    //     complete endpoint through an 8-wide concurrency pool. Cold-boot latency lands around
-    //     ~3 s on a residential connection.
-    //  3. Persist the resulting grid to localStorage so the next page reload skips the network
-    //     altogether (subject to the 6 h TTL).
+    //the request failed); callers can await for a clean "show the raster once ready" gate but the
+    //weather-mode overlay just polls getWeatherGrid() and re-renders when the next host refresh
+    //tick fires.
     public async ensureWeatherGrid(): Promise<void>
     {
         if (this._weatherGridFetching) { return; }
@@ -1035,23 +1016,14 @@ export class HeliosEngine
         {
             return;
         }
-        //localStorage probe: cheap (~1 ms) and skips the network entirely when the cache is fresh.
-        //Falls through to the network when the entry is missing, expired or schema-mismatched.
-        const cached = this._readWeatherGridFromCache(key);
-        if (cached)
-        {
-            this._weatherGrid          = cached.grid;
-            this._weatherGridFetchKey  = key;
-            this._weatherGridStaleAtMs = cached.staleAtMs;
-            return;
-        }
         this._weatherGridFetching = true;
         try
         {
             const N = HeliosEngine._WEATHER_GRID_SIDE;
             const halfLat = HeliosEngine._WEATHER_GRID_HALF_LAT_DEG;
             //Longitude span gets compressed by cos(lat) so the grid covers the same west-east
-            //distance as the north-south distance regardless of latitude.
+            //distance as the north-south distance regardless of latitude. The math degenerates near
+            //the poles, the abs(cos) guard keeps the division well-behaved at high latitudes.
             const cosLat = Math.max(0.1, Math.abs(Math.cos(this.homeLat * Math.PI / 180)));
             const halfLon = halfLat / cosLat;
             const south = this.homeLat - halfLat;
@@ -1065,73 +1037,67 @@ export class HeliosEngine
                 lats[i] = south + (i / (N - 1)) * (north - south);
                 lons[i] = west  + (i / (N - 1)) * (east  - west);
             }
-
-            const totalPoints = N * N;
-            const HOURS       = HeliosEngine._WEATHER_GRID_HOURS;
-            //Hourly time axis anchored on the most recent UTC hour boundary, capped at HOURS
-            //entries. MET Norway returns each timeseries entry at irregular cadences (hourly for
-            //the first 2-3 days, 6-hourly after), so we pre-build the slot times and pick the
-            //closest entry from each response.
-            const baseHourMs = Math.floor(Date.now() / 3_600_000) * 3_600_000;
-            const times: Date[] = new Array(HOURS);
-            for (let t = 0; t < HOURS; t++) { times[t] = new Date(baseHourMs + t * 3_600_000); }
-            const cloudLow  = new Float32Array(totalPoints * HOURS);
-            const cloudMid  = new Float32Array(totalPoints * HOURS);
-            const cloudHigh = new Float32Array(totalPoints * HOURS);
-
-            //Per-point fetcher. MET Norway requires a User-Agent identifying the calling app;
-            //browsers prevent JS from setting User-Agent, so we rely on the default browser UA
-            //and an explicit `Accept` header. MET Norway has been observed to accept this combo
-            //without rate-limit penalty.
-            const fetchPoint = async (g: number): Promise<void> =>
+            //Flatten to (lat, lon) pairs in row-major (lat-outer, lon-inner) order. Open-Meteo
+            //returns results in the same order the lat / lon arrays are passed. We POST a JSON body
+            //instead of using the GET query string: 961 lat / lon pairs serialise to ~22 kB of URL
+            //which exceeds the 8-16 kB limit most CDNs (Open-Meteo's Cloudflare edge included)
+            //enforce on GET requests, surfacing as an HTTP 414 reject. The POST API expects the
+            //same comma-separated string format as the GET query string, NOT JSON arrays: lat /
+            //lon arrays serialised as `[12.3, 12.4]` get rejected with HTTP 400. We build the
+            //strings explicitly and post them in the JSON body.
+            const flatLats: string[] = new Array(N * N);
+            const flatLons: string[] = new Array(N * N);
+            for (let iLat = 0; iLat < N; iLat++)
             {
-                const iLat = Math.floor(g / N);
-                const iLon = g % N;
-                const lat = lats[iLat];
-                const lon = lons[iLon];
-                const url = `https://api.met.no/weatherapi/locationforecast/2.0/complete?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`;
-                const r = await fetch(url, { headers: { Accept: 'application/json' } });
-                if (!r.ok) { throw new Error(`MET Norway grid point ${g} HTTP ${r.status}`); }
-                const json: any = await r.json();
-                const ts: any[] = json?.properties?.timeseries ?? [];
-                if (ts.length === 0) { return; }
-                //Build a quick (rounded-hour -> entry) lookup so each per-slot pick is O(1).
-                const byHour = new Map<number, any>();
-                for (const entry of ts)
+                for (let iLon = 0; iLon < N; iLon++)
                 {
-                    const t = new Date(entry.time).getTime();
-                    const slot = Math.round(t / 3_600_000) * 3_600_000;
-                    if (!byHour.has(slot)) { byHour.set(slot, entry); }
+                    flatLats[iLat * N + iLon] = lats[iLat].toFixed(4);
+                    flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
                 }
-                const base = g * HOURS;
-                for (let t = 0; t < HOURS; t++)
-                {
-                    const entry = byHour.get(times[t].getTime());
-                    const d = entry?.data?.instant?.details;
-                    if (!d) { continue; }
-                    cloudLow[base + t]  = d.cloud_area_fraction_low    ?? 0;
-                    cloudMid[base + t]  = d.cloud_area_fraction_medium ?? 0;
-                    cloudHigh[base + t] = d.cloud_area_fraction_high   ?? 0;
-                }
-            };
-
-            //Concurrency pool. Each runner picks the next unprocessed point id atomically (single-
-            //threaded JS = the post-increment is atomic) until the queue is drained. Per-point
-            //failures are logged but don't abort the rest of the grid: a single 503 leaves one
-            //cell at 0 / 0 / 0 instead of leaving the whole raster blank.
-            let next = 0;
-            const runners = new Array(HeliosEngine._WEATHER_GRID_CONCURRENCY).fill(0).map(async () =>
-            {
-                while (next < totalPoints)
-                {
-                    const g = next++;
-                    try { await fetchPoint(g); }
-                    catch (e) { console.warn('[HELIOS]', e); }
-                }
+            }
+            const r = await fetch('https://api.open-meteo.com/v1/forecast', {
+                method:  'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body:    'latitude='  + flatLats.join(',')
+                       + '&longitude=' + flatLons.join(',')
+                       + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
+                       + '&forecast_days=2&past_days=0&timezone=UTC',
             });
-            await Promise.all(runners);
-
-            const grid = {
+            if (!r.ok)
+            {
+                throw new Error(`Open-Meteo grid fetch failed: HTTP ${r.status}`);
+            }
+            const arr: any = await r.json();
+            //Multi-location response is an array of single-location result objects, each with its
+            //own `hourly.time` axis. We assume the axis is identical across locations (it is by
+            //construction since every location used the same forecast_days + past_days + timezone),
+            //and only parse it once from the first entry.
+            const results: any[] = Array.isArray(arr) ? arr : [arr];
+            if (results.length === 0 || !results[0]?.hourly?.time)
+            {
+                throw new Error('Open-Meteo grid fetch: empty payload');
+            }
+            const timeStrs: string[] = results[0].hourly.time;
+            const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
+            const nTimes = times.length;
+            const cloudLow  = new Float32Array(N * N * nTimes);
+            const cloudMid  = new Float32Array(N * N * nTimes);
+            const cloudHigh = new Float32Array(N * N * nTimes);
+            for (let g = 0; g < N * N; g++)
+            {
+                const r = results[g];
+                const lo = r?.hourly?.cloud_cover_low  ?? [];
+                const mi = r?.hourly?.cloud_cover_mid  ?? [];
+                const hi = r?.hourly?.cloud_cover_high ?? [];
+                const base = g * nTimes;
+                for (let t = 0; t < nTimes; t++)
+                {
+                    cloudLow[base + t]  = lo[t] ?? 0;
+                    cloudMid[base + t]  = mi[t] ?? 0;
+                    cloudHigh[base + t] = hi[t] ?? 0;
+                }
+            }
+            this._weatherGrid = {
                 bounds: { south, north, west, east },
                 nLat:  N,
                 nLon:  N,
@@ -1142,10 +1108,8 @@ export class HeliosEngine
                 cloudMid,
                 cloudHigh,
             };
-            this._weatherGrid          = grid;
-            this._weatherGridFetchKey  = key;
+            this._weatherGridFetchKey = key;
             this._weatherGridStaleAtMs = Date.now() + HeliosEngine._WEATHER_GRID_TTL_MS;
-            this._writeWeatherGridToCache(key, grid, this._weatherGridStaleAtMs);
         }
         catch (e)
         {
@@ -1155,74 +1119,6 @@ export class HeliosEngine
         {
             this._weatherGridFetching = false;
         }
-    }
-
-    //localStorage cache for the parsed weather grid. Saves the next mode-entry on a page reload
-    //within the 6 h TTL from another network roundtrip. ~70 KB raw / ~150 KB JSON-inflated per
-    //grid, well under the typical 5-10 MB browser quota. Schema-versioned via the key suffix so a
-    //future shape change can be rolled out without poisoning existing entries.
-    private _readWeatherGridFromCache(homeKey: string): { grid: NonNullable<HeliosEngine['_weatherGrid']>; staleAtMs: number } | null
-    {
-        try
-        {
-            const ls = window.localStorage;
-            if (!ls) { return null; }
-            const raw = ls.getItem(HeliosEngine._WEATHER_GRID_STORAGE_KEY);
-            if (!raw) { return null; }
-            const obj: any = JSON.parse(raw);
-            if (obj?.homeKey !== homeKey) { return null; }
-            if (typeof obj.staleAtMs !== 'number' || Date.now() >= obj.staleAtMs) { return null; }
-            //Inflate the JSON arrays back into typed arrays + Date list.
-            const grid = {
-                bounds:    obj.bounds,
-                nLat:      obj.nLat,
-                nLon:      obj.nLon,
-                lats:      new Float32Array(obj.lats),
-                lons:      new Float32Array(obj.lons),
-                times:     (obj.times as string[]).map(s => new Date(s)),
-                cloudLow:  new Float32Array(obj.cloudLow),
-                cloudMid:  new Float32Array(obj.cloudMid),
-                cloudHigh: new Float32Array(obj.cloudHigh),
-            };
-            return { grid, staleAtMs: obj.staleAtMs };
-        }
-        catch (_)
-        {
-            return null;
-        }
-    }
-
-    private _writeWeatherGridToCache(homeKey: string, grid: NonNullable<HeliosEngine['_weatherGrid']>, staleAtMs: number): void
-    {
-        try
-        {
-            const ls = window.localStorage;
-            if (!ls) { return; }
-            //toFixed(1) on the cloud values: percentages quoted with one decimal place hold all
-            //the precision the bilinear + Perlin canvas pipeline can use, and shaves ~60 % off the
-            //serialised payload vs full-precision Float32 -> string.
-            const round1 = (arr: Float32Array): number[] =>
-            {
-                const out = new Array<number>(arr.length);
-                for (let i = 0; i < arr.length; i++) { out[i] = Math.round(arr[i] * 10) / 10; }
-                return out;
-            };
-            const obj = {
-                homeKey,
-                staleAtMs,
-                bounds:    grid.bounds,
-                nLat:      grid.nLat,
-                nLon:      grid.nLon,
-                lats:      Array.from(grid.lats),
-                lons:      Array.from(grid.lons),
-                times:     grid.times.map(t => t.toISOString()),
-                cloudLow:  round1(grid.cloudLow),
-                cloudMid:  round1(grid.cloudMid),
-                cloudHigh: round1(grid.cloudHigh),
-            };
-            ls.setItem(HeliosEngine._WEATHER_GRID_STORAGE_KEY, JSON.stringify(obj));
-        }
-        catch (_) { /* quota / private browsing / disabled storage: silently degrade */ }
     }
 
     //Cloud overlay raster source / layer management. MapLibre's `image` source warps a single image

@@ -33,36 +33,6 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
-### Weather grid: Open-Meteo -> MET Norway (#210)
-
-**Source swap on the weather-mode cloud raster.** Open-Meteo's 10 k / day per-IP rate limit kept
-tripping the user's instance with HTTP 429 on cold boots during the beta cycle (every fresh
-session re-fetched the grid). MET Norway (Yr.no) has no daily cap, tolerates ~20 req/s and
-the locationforecast/2.0/complete endpoint exposes the same low / mid / high cloud_area_fraction
-fields. The catch: single-location only, no multi-location batching like Open-Meteo. The trade-
-offs land at:
-
-- **Grid dropped from 31 x 31 (961 points) to 9 x 9 (81 points)** spanning ~180 km x ~180 km
-  around the home; one fetch per grid point.
-- **8-wide concurrency pool** (browsers cap at 6 concurrent connections to the same origin;
-  MET Norway supports HTTP/2 so 8 is reliable). Cold-boot latency lands around ~3 s on a
-  residential connection.
-- **localStorage cache + 6 h TTL** matching MET Norway's model refresh cadence: subsequent
-  page reloads within the TTL skip the network entirely (~150 KB JSON per grid, schema-versioned
-  key so a future shape change won't poison existing entries).
-- **Cloud values quantised to 1 decimal** in the cache to shave ~60 % off the JSON payload.
-- **Per-point failures are logged but non-fatal** (a single 503 leaves one cell at 0 instead of
-  blanking the whole raster).
-
-Visual quality stays virtually identical: at 9 x 9 the per-cell pitch goes to ~22 km, above the
-underlying model native resolution, but the bilinear + Perlin noise pipeline in
-`weatherMode.ts` smooths the lower density over the 512 x 512 canvas. The forecast horizon
-grows from 2 days (Open-Meteo `forecast_days=2`) to 10 days (MET Norway default), of which we
-keep 49 hours per slot for the scrub timeline.
-
-Easy revert: this is a single-engine-method swap, the rest of the pipeline (canvas render,
-MapLibre image overlay, raster lifecycle) is untouched.
-
 ### About layout polish + shading / 30-day audit (#210)
 
 **About panel:**
