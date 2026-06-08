@@ -75,45 +75,52 @@ swipes through the three cards rather than scrolling them. Day-load grow animati
 cumulative production chart from the previous design is gone; the radial dial plus the peak-
 power-scaled production curve carry the same information at a glance.
 
-### Weather mode with per-altitude SVG cloud overlay (#210)
+### Weather mode with GPU-shader cloud overlay (#210, #213)
 
 Top-right mode bar switches from `Layer / LiDAR / Dome` to `Layer / LiDAR / Weather`. Weather
-mode tilts the camera to a top-down framing around the home and overlays the modelled cloud
-coverage as three colour-coded translucent layers (high / mid / low) on top of the basemap.
-Each layer paints one polygon per grid cell with fill opacity tracking the local cloud cover
-for that altitude band; polygon corners reproject through MapLibre's camera transform on every
-move event so the overlay stays glued to the basemap.
+mode tilts the camera to a top-down framing at zoom 11 around the home and overlays the
+modelled cloud coverage as three altitude bands (low / mid / high) drawn through a MapLibre
+custom layer with a fragment shader.
 
-The data feed is a single Open-Meteo POST per refresh tick (5 min cadence) carrying a 10 x 10
-grid of points covering a ~44 km bbox around the home. The request asks for
-`models=best_match` so the response includes the resolved numerical weather model name
-(AROME-France ~1.3 km, ICON-EU ~7 km, ECMWF IFS ~25 km, etc.); the grid pitch is sized so the
-overlay reads at a reasonable resolution against the underlying model's native cells. 100
-points per call x 12 calls per hour stays well under the per-IP daily quota (10 000 calls /
-day on the free tier) the previous 50 x 50 grid kept tripping.
+The shader pipeline reads from a tiny 10×10 RGBA8 data texture (R = low, G = mid, B = high
+cloud cover %) and modulates it with 4 octaves of simplex FBM noise so each cell paints as an
+organic cloud shape instead of a flat polygon. Bilinear sampling between cells gives smooth
+transitions; the noise carves the cloud edges. A per-band phase offset decorrelates the three
+altitudes so a fully overcast point shows three distinct shapes rather than three identical
+greys stacking, and a per-band scale tunes the feature size (low gets tighter puffs ~28
+cycles/deg, mid ~21, high ~14 broader sheets). All three bands tint with `--primary-text-color`
+read off the live card root, so the cloud field matches the active HA theme automatically.
 
-Drawing in SVG rather than rasterising into a MapLibre image source keeps every pixel crisp
-at the zoom 10 framing; the previous raster pipelines that downscaled + blurred a stitched
-canvas turned the layer into a muted grey wash that erased the per-altitude signal.
+The data feed is one Open-Meteo POST per refresh tick (5 min cadence) carrying a 10×10 grid
+of points covering a ~44 km bbox around the home. The request asks for `models=best_match`
+so the response includes the resolved numerical weather model name (AROME-France ~1.3 km,
+ICON-EU ~7 km, ECMWF IFS ~25 km, etc.). 100 locations per fetch stays well under Open-Meteo's
+600 calls/min per-IP ceiling even on a fresh entry; a 30 min localStorage cache + inflight
+Promise dedup + AbortController on the fetch path means a re-entry within the TTL window costs
+zero API calls.
 
-The first cut paints in vivid debug colours (red for high, green for mid, yellow for low) so
-the per-band signal reads at a glance during testing. The palette collapses to a single muted
-hue once the rendering pipeline is validated.
+The shader output is premultiplied alpha + blends through `gl.ONE / gl.ONE_MINUS_SRC_ALPHA`
+against the basemap. Edge fade on the quad rim plus per-band opacity stacking (20 / 40 / 60 %)
+gives the cloud cluster soft photographic edges. Three altitude toggle buttons in the top-left
+rail flip individual bands on/off without re-uploading the texture. The 5-day timeline stays
+scrubbable: scrubbing picks a different hour slice from the cached grid and re-uploads the
+~400-byte data texture, no fresh HTTP round-trip.
 
-Three cloud-layer chips (low / mid / high) under the mode bar keep showing the per-altitude
-Open-Meteo coverage at the home for the precise numbers; the SVG overlay carries the spatial
-context around it.
+Three cloud-layer chips inside the mode bar still surface the precise home-point coverage per
+altitude (read straight from the Open-Meteo home-point feed), so the user keeps the exact
+numerical readings alongside the spatial context.
 
 ### RainViewer overlay retired (#210)
 
-The previous RainViewer precipitation-radar overlay is removed in favour of the cloud-cover
-SVG above. RainViewer encodes rainfall intensity (rain / snow / storm cells), not cloud
-cover, and the two are very different signals: a 100 % overcast sky with no rain registers
-as nothing on RainViewer, and a thin band of light rain across an otherwise clear sky reads
-as a heavy radar return. Solar production cares about cloud cover (sunlight attenuation),
-not active precipitation. Aligning the mode's data feed with what the rest of the card uses
-(Open-Meteo cloud_cover_low / mid / high) keeps weather mode coherent with the chips, the
-chart curves, the forecast model and the calibration ratio.
+The previous RainViewer precipitation-radar overlay (briefly introduced and removed during the
+v1.8.3 cycle) is gone in favour of the GPU-shader cloud overlay above. RainViewer encodes
+rainfall intensity (rain / snow / storm cells), not cloud cover, and the two are very different
+signals: a 100 % overcast sky with no rain registers as nothing on RainViewer, and a thin band
+of light rain across an otherwise clear sky reads as a heavy radar return. Solar production
+cares about cloud cover (sunlight attenuation), not active precipitation. Aligning the mode's
+data feed with what the rest of the card uses (Open-Meteo cloud_cover_low / mid / high) keeps
+weather mode coherent with the chips, the chart curves, the forecast model and the
+calibration ratio.
 
 ### Shading-map family fully retired (#210)
 
@@ -243,163 +250,24 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
-### Weather mode shader polish: full-viewport bbox + driver hardening, beta.119 (#213)
+### Open-Meteo rate-limit fix + dead-weight purge (#212)
 
-beta.118 fixed the flat-grey artefact but the cloud field only covered the central ~22 km bbox
-of the camera viewport, leaving a soft-edged square in the middle of the screen instead of a
-continuous overhead. Plus the smoothstep band still saturated to a flat fill at coverage 100 %
-(overcast skies), so even the central area looked uniform when the sky was fully cloudy.
+Audit of the cloud-cover traffic against Open-Meteo showed the weather-mode grid was firing
+961 API calls (31×31 locations) per entry against a per-IP 600 calls/min ceiling. The mode
+is now armed with a 100-location grid (10×10), a 30 min localStorage cache with inflight
+Promise dedup, an AbortController on the fetch path, and a 5 day past_days window on the
+home-point fetch (was 30, vestigial from the retired shading-map trainer) so the per-fetch
+cost drops from 6 to 2 API calls.
 
-Fixes:
-
-- `_WEATHER_GRID_HALF_LAT_DEG` 0.10 -> 0.20. Bbox 22 km -> 44 km. Overshoots the zoom-11
-  viewport so the shader's edge fade completes off-screen and the visible cloud field reads as
-  full-bleed. Open-Meteo bills per location (not per km²) so the API cost stays at 100 calls
-  per fetch.
-- Density formula reworked to keep noise variation visible at any coverage. Threshold maps to
-  [0.10, 0.90] (was [0, 1]), and the smoothstep band widens to 0.45 (was 0.25). At coverage
-  100 % the formula now sits in [0.0, 0.45] over the noise range instead of saturating at
-  0.20-1.0, so overcast still shows the cloud relief.
-- Early discard on out-of-bbox + zero-edge-fade fragments before the FBM call. Saves the
-  4-octave simplex work on the soft rim of the quad without touching the visible output.
-- `u_bandIndex` switched to float (some Adreno / Mali drivers misbehave on int ternary inside
-  fragments). `u_time` wrapped mod 3600 host-side so the noise sample stays within FP24
-  precision on long sessions. `u_latCos` uniform passed in so the noise sample undoes Mercator's
-  longitude stretching at high latitudes, keeping cloud features round instead of elongated
-  east-west.
-
-### Weather mode shader fixes: cloud carving + premultiplied alpha, beta.118 (#213)
-
-Fast follow on beta.117. The first cut shipped a flat-grey quad with no visible cloud structure
-because the density formula collapsed under the smoothstep at high coverage, and the fragment
-shader emitted non-premultiplied RGB while MapLibre's framebuffer expected premultiplied alpha,
-so the blend saturated to plain colour even when the alpha modulation worked.
-
-Three fixes:
-
-- Cloud carving rewritten on threshold logic. The FBM noise field is the "where clouds could
-  be" mask, and the per-pixel coverage shifts the smoothstep threshold (coverage 0 -> only the
-  highest noise peaks bleed, coverage 1 -> almost everything paints, in between the noise
-  carves organic shapes). Coverage no longer collapses to flat fill at 100 %.
-- Fragment output switched to premultiplied alpha (`rgb = color * alpha`, `alpha = alpha`) +
-  the host's blend func dropped to `gl.ONE / gl.ONE_MINUS_SRC_ALPHA`. Beta.117 was double-
-  blending against the basemap, which saturated everything to flat tints.
-- Per-band noise scale + phase decorrelation: high clouds get broader features (~14 cycles
-  per degree, cirrus-like sheets), mid stays in between, low gets tighter puffs (~28 cycles).
-  Each band offsets its noise field by a different phase so a fully overcast point shows three
-  distinct shapes rather than three identical greys layered.
-
-Soft alpha fade on the quad edges (smoothstep on the geographic UV) replaces the hard rim from
-beta.117 so the cloud field blends into the basemap rather than ending in a clean rectangle.
-
-### Weather mode -> GPU shader overlay (3 quads + FBM noise), beta.117 (#213)
-
-SVG dots out, fragment-shader-driven custom MapLibre layer in. The cached cloud grid feeds an
-RGBA8 data texture (R = low, G = mid, B = high cloud cover %) sampled bilinearly in the
-fragment shader, modulated by 4 octaves of simplex FBM noise to carve the shredded organic
-edge the dot encoding never managed. Three full-bbox quads, one per altitude band, draw at the
-same `--primary-text-color` tint (read off the live card root via getComputedStyle) with the
-20 / 40 / 60 % per-band opacity from beta.116 preserved. WebGL state is saved + restored
-around every render() so the basemap stays uncorrupted.
-
-Grid is now 10 x 10 at 0.10 deg half-extent, matching the new weather-mode zoom 11 framing
-(~22 x 22 km). One fetch costs 100 API calls; the 30 min localStorage cache + inflight dedup
-+ AbortController from beta.116 still apply.
-
-Card-side: `_weatherShowLow/Mid/High` toggles + timeline scrub feed directly into the engine's
-`setCloudShaderBands` / `refreshCloudShaderTime` so band visibility flips and hour changes
-land in a single texture upload without a Lit re-render. `weather-mode-overlay`,
-`weather-cloud-svg` and `weather-cloud-dot-*` CSS rules removed (dead with the SVG path).
-
-A slow time uniform makes the noise drift, MapLibre coalesces the per-frame triggerRepaint
-so the cost stays at one map redraw per frame even at 60 fps.
-
-### Open-Meteo rate-limit ban + dead-weight purge, beta.116 (#212)
-
-Audit of the card's Open-Meteo traffic showed the weather-mode cloud grid was firing 961 API
-calls (31 × 31 locations) in a single POST per entry, no cache, no dedup, no abort. One entry
-into the mode tripped the per-IP 600 calls/min ceiling and bricked every following request
-from the same IP for ~60 s; a dozen entries blew through the 10 000 calls/day quota. Four
-fixes ship together:
-
-- Grid down to 15 × 15 (225 locations). Cell pitch ~3 km. Still reads as a clear cloud cluster
-  in the dot-cloud encoding at the weather-mode zoom.
-- localStorage cache with a 30 min TTL on the grid payload. Re-entering weather mode within
-  the TTL window hits the cache, zero API calls. Key shape:
-  `helios-weather-grid:v3:<lat3>,<lon3>:<N>:<halfLat>`.
-- In-flight Promise dedup so a double-tap on the weather button shares one POST, and the 5 min
-  refresh tick coalesces with an explicit ensureWeatherCloudGrid() call from the host.
-- AbortController so exitWeatherMode cancels a pending grid fetch cleanly instead of letting
-  it land into a mode the user already left.
-
-Home-point fetch (`src/engine/weather.ts`) drops `PAST_DAYS` from 30 to 5. The 30-day window
-was for the retired shading-map trainer; the forecast calibration uses its own internal 5-day
-window. Open-Meteo bills per `ceil(days / 14)` bucket, so 30 → 5 cuts the home-point fetch
-cost from 6 to 2 API calls (3 × saving).
-
-Dead-weight purge in the same beta:
-- `_sweepLegacyStorage` in helios-engine.ts (3 localStorage keys: `helios-shading-map:v2`,
-  `helios:cloud-mode`, `helios-weather-grid:v2`) removed entirely.
-- `wipeLegacyPvCalibStorage` + `PV_CALIB_WIPE_FLAG_KEY` + caller removed entirely; the legacy
-  PV calibration buffer is no longer cleaned because we no longer need to support installs
-  that ever wrote it.
-- 5 YAML colour keys (`sun-color`, `cloud-color`, `pv-color`, `battery-color`,
-  `building-color`) removed from the config type, from the active readers in charts.ts and
-  dashboardRadial.ts, from the README. Colour identity is fixed by the HA Energy palette via
-  `DEFAULT_*_COLOR_HEX` constants. The editor's retired-keys list strips them on save.
-- 5 YAML LiDAR-view styling keys (`lidar-view-point-color`, `lidar-view-point-opacity`,
-  `lidar-view-wireframe`, `lidar-view-wireframe-color`, `lidar-view-wireframe-opacity`)
-  removed from the README; the point cloud + wireframe inherit `--primary-text-color` from
-  the active HA theme, opacity stays live-tunable via the in-card bottom slider. Editor
-  strips them on save.
-- `cfgHex` helper in card/format.ts removed (the last two readers stopped calling it once the
-  colour overrides went away).
-
-### Weather mode polish, beta.115
-
-Disc radius drops by 40 % (factor 0.40 -> 0.24 of the on-screen cell pitch) so the dot cloud
-reads as small punctuation rather than dense blobs. Per-band opacity tightens to 20 / 40 /
-60 % (low / mid / high) so even fully overlapping stacks stay legible without saturating the
-home + map context underneath.
-
-### Weather mode polish, beta.114
-
-The cloud-cover overlay drops the connected-component polygon finder in favour of a per-point
-dot cloud. Every grid sample whose cloud cover crosses the threshold paints as a small filled
-disc with a 1 px contour, sized to a fraction of the on-screen cell pitch so neighbours never
-quite touch and the basemap stays visible between discs. Both fill and stroke use
-`--primary-text-color`; per-band opacity grows from low (40 %) to mid (60 %) to high (80 %), so
-a point covered on all three altitudes stacks with growing visual weight and the higher band
-dominates. The encoding reads as a punctuated cloud cluster rather than a contiguous wash and
-keeps the home + surrounding map context clearly visible underneath.
-
-### Weather mode polish, beta.113
-
-The per-altitude cloud band toggles in the top-left rail now reuse the exact `.mode-bar /
-.mode-bar-seg` recipe of the top-right mode bar: identical 40 px round icon-only buttons, same
-4 px-gap flex column, same idle / active state recipe. The two rails read as one family of
-controls. The per-band coverage percentage that briefly sat under each glyph in beta.112 is
-dropped, the live home coverage stays available on the mode-bar weather button glyph itself.
-
-### Weather mode polish, beta.112
-
-Final round of refinements on the cloud-cover overlay before the v1.8.3 ship:
-
-- The per-cell polygon rasterisation is replaced by a connected-component blob finder. Adjacent
-  cells that share the "covered" state (mean cloud cover >= 15 % on that band) merge into a
-  single SVG polygon walked along the union's outline, so the overlay reads as smooth shapes
-  rather than a 30 x 30 mosaic of individual squares.
-- The three altitude toggles (high / mid / low) move from the right rail under the mode bar to
-  the top-left corner as a vertical stack of real buttons. Same shape vocabulary as the mode
-  bar, just slightly taller so each button can stack a layer glyph above its current home-point
-  coverage percentage. State resets to all-on every time the user enters weather mode.
-- Band fills derive from `--primary-text-color` via `color-mix` (high = 100 %, mid = 55 %, low =
-  25 % blend toward the card background). No translucency: the contrast comes from the value
-  step between mixes so the three bands stay distinct on every HA theme.
-- The bottom timeline stays visible in weather mode and is fully scrubbable. The cloud-cover
-  grid is fetched once per refresh tick as a 5-day window (-2 days past + today + +2 days
-  forecast = 120 hourly slices); scrubbing the cursor picks the right slice out of the cached
-  Float32Array without any fresh HTTP round-trip.
+The same cycle also purges dead weight the runtime no longer consults: the legacy localStorage
+sweeps (`helios-shading-map:v2`, `helios:cloud-mode`, `helios-weather-grid:v2`, the PV
+calibration buffer wipe) are removed entirely, the YAML colour identity keys (`sun-color`,
+`cloud-color`, `pv-color`, `battery-color`, `building-color`) are dropped from the config type
++ the renderer (colour identity is fixed by the HA Energy palette via the
+`DEFAULT_*_COLOR_HEX` constants), and the LiDAR-view styling keys (`lidar-view-point-color` /
+`-opacity`, `lidar-view-wireframe` / `-color` / `-opacity`) are dropped from the README (the
+point cloud + wireframe inherit `--primary-text-color` from the active HA theme, opacity stays
+live-tunable via the in-card slider). The editor strips them on save.
 
 ### Dependencies refreshed
 
