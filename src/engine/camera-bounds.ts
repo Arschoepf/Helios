@@ -11,4 +11,4 @@
 
 export const CAMERA_PITCH_MIN_DEG  = 15;
 export const CAMERA_PITCH_MAX_DEG  = 55;
-export const CAMERA_PITCH_REST_DEG = 30;
+export const CAMERA_PITCH_REST_DEG = 50;

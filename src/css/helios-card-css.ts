@@ -2455,32 +2455,7 @@ export const heliosCardStyles = css`
         the HA dashboard toolbar buttons so a Helios card dropped
         into a HA Energy dashboard reads as part of the toolbar
         family. */
-    /*  Cloud cover icon, top-left. Plain anchor for the aggregate weather glyph; the per-layer
-        chips (high / mid / low) auto-reveal in weather mode beside it. No longer interactive (the
-        weather-mode click handler in the mode bar replaces the old chip-toggle pattern). */
-    .cloud-cover-anchor
-    {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width:  40px;
-        height: 40px;
-        box-sizing: border-box;
-        color: var(--primary-text-color, #212121);
-        border-radius: 50%;
-        position: relative;
-        z-index: 50;
-        pointer-events: none;
-    }
-    .cloud-cover-anchor ha-icon
-    {
-        --mdc-icon-size: 22px;
-        color: inherit;
-        display: inline-flex;
-        align-items: center;
-    }
-
-    /*  Mode bar (Layer / LiDAR / Shading). Vertical column of three
+    /*  Mode bar (Layer / LiDAR / Weather). Vertical column of three
         icon-only toggles, anchored top-right, no backplate so the
         column reads as a quiet HA-toolbar trio sitting on the map.
         Each button uses the same transparent-circle recipe as the
@@ -2696,26 +2671,11 @@ export const heliosCardStyles = css`
         gap: 8px;
         pointer-events: none;
     }
-    /*  Cloud rail sits BELOW the camera-lock toggle on the left edge,
-        so the two left-side rails do not stack on the same anchor.
-        Offset = lock button (40 px) + the 8 px corner inset + an 8 px
-        gap. Per-layer chips stack BELOW the toggle when cloud mode is
-        on so they read as a column under the toggle. */
-    .overlay-top-left.overlay-top-left--cloud
-    {
-        top: 56px;
-    }
-
-
-    /*  Per-altitude cloud cover discs. Three 40 px round chips drop
-        in the overlay-top-right rail below the cloud-cover toggle.
-        Always in the DOM whenever the cloud scene is available so
-        the chips can fade between the on / off states. The cascade
-        runs strict TOP DOWN on enter: high first (delay 0), mid
-        after high finishes (~280 ms), low last (~560 ms); on exit
-        the same selectors apply BOTTOM UP, low fades first, then
-        mid, then high. Visuals mirror the toggle's idle look exactly,
-        transparent plate, primary-text-color icon + label. */
+    /*  Per-altitude cloud cover discs. Three 40 px round chips stacked under the weather button
+        in the right rail (overlay-top-right) when weather mode is active. Only added to the DOM
+        while weather mode is on, so they pop in / pop out instantly with the mode flip rather
+        than fading through the previous animated cascade (the mode swap already animates the
+        button + the raster overlay, the chips share that single moment). */
     .cloud-layer-chip
     {
         display: inline-flex;
@@ -2724,7 +2684,6 @@ export const heliosCardStyles = css`
         justify-content: center;
         width:  40px;
         height: 40px;
-        margin-top: 4px;
         background: transparent;
         color: var(--primary-text-color, #212121);
         border-radius: 50%;
@@ -2733,36 +2692,6 @@ export const heliosCardStyles = css`
         line-height: 1;
         font-variant-numeric: tabular-nums;
         pointer-events: none;
-        opacity: 0;
-        transform: translateY(-4px);
-        transition: opacity 0.28s ease, transform 0.28s ease;
-    }
-    /*  Exit cascade (bottom up): low fades out first, then mid, then
-        high. These selectors only match when the chip does NOT carry
-        the is-on class, i.e. the moment the toggle flips off. */
-    .cloud-layer-chip--low  { transition-delay: 0ms;   }
-    .cloud-layer-chip--mid  { transition-delay: 280ms; }
-    .cloud-layer-chip--high { transition-delay: 560ms; }
-    /*  Enter cascade (top down): high first, then mid, then low.
-        The is-on selectors override the default delays above so the
-        same chip uses different timings on entry vs exit. */
-    .cloud-layer-chip--high.is-on
-    {
-        opacity: 1;
-        transform: translateY(0);
-        transition-delay: 0ms;
-    }
-    .cloud-layer-chip--mid.is-on
-    {
-        opacity: 1;
-        transform: translateY(0);
-        transition-delay: 280ms;
-    }
-    .cloud-layer-chip--low.is-on
-    {
-        opacity: 1;
-        transform: translateY(0);
-        transition-delay: 560ms;
     }
     .cloud-layer-chip ha-icon
     {

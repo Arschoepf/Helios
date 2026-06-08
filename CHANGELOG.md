@@ -33,6 +33,31 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather mode polish round 2 (#210)
+
+beta.90 was a MET Norway switch experiment, reverted; beta.91 ships the next batch of weather
+mode polish on top of the original Open-Meteo source:
+
+- **Zoom out an extra notch**: target moves from zoom 10 to **zoom 9**; the `[minZoom, maxZoom]`
+  envelope widens to `[8, 18]` accordingly. Grid half-extent grows from 1.3 deg to **1.6 deg**
+  latitude so the raster covers ~356 km x ~356 km and the wider zoom 9 viewport (~320 km) keeps
+  painting past the visible edges.
+- **Cloud overlay actually clears on exit**: `refreshWeatherRaster` now bails when a fade-out is
+  in flight. Previously the canvas was re-attached to the MapLibre raster source mid-fade, so
+  the cloud mass stayed painted on the map after the rest of the overlay had faded out.
+- **Color back to primary**: the debug red palette swaps for the HA theme's `--primary-color`,
+  read live from the document root so theme swaps propagate without a rebuild. Per-layer alpha
+  ceilings drop from 0.85 / 0.70 / 0.55 to 0.50 / 0.40 / 0.30 so the cloud masses read as a
+  soft veil and the map stays legible underneath.
+- **Cloud icon merged into the weather button**: the top-left cloud anchor + per-layer chips
+  are gone. The weather mode button in the right rail now carries the live cloud-cover icon
+  (sun / partly-cloudy / cloudy / pouring) so a user reads the current sky state at a glance
+  without entering the mode. The 3 per-altitude chips (high / mid / low) stack BELOW the mode
+  bar when weather mode is active; they pop in / out with the mode flip.
+- **Default camera pitch raised from 30 deg to 50 deg**: the default boot pose was too close to
+  top-down, opening with the home barely tilted. 50 deg gives a fuller 3D view of the building
+  extrusions out of the box.
+
 ### About layout polish + shading / 30-day audit (#210)
 
 **About panel:**

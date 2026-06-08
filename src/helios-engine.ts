@@ -799,7 +799,7 @@ export class HeliosEngine
     //customised values; reading from _initialBearing / _initialPitch
     //here would simply echo back whatever the user just changed.
     public getDefaultBearing(): number { return this.homeLat >= 0 ? 180 : 0; }
-    public getDefaultPitch():   number { return 55; }
+    public getDefaultPitch():   number { return CAMERA_PITCH_REST_DEG; }
     //Live camera pose readers so the editor can pre-fill its sliders
     //with whatever the user is currently looking at, not just the
     //value committed to the YAML config.
@@ -880,7 +880,7 @@ export class HeliosEngine
         this.map.setMaxBounds(null as unknown as undefined);
         //Widen the zoom envelope. Buffer of 1 below the target keeps MapLibre from edge-clamping
         //the ease in flight.
-        this.map.setMinZoom(9);
+        this.map.setMinZoom(8);
         this.map.setMaxZoom(18);
         //Force the rotation lock on. setCameraLocked persists the new state to localStorage; we'll
         //restore the original on exit so the user's preference comes back exactly as it was.
@@ -890,7 +890,7 @@ export class HeliosEngine
             center:   [this.homeLon, this.homeLat],
             bearing:  0,
             pitch:    0,
-            zoom:     10,
+            zoom:     9,
             duration: 1200,
         });
     }
@@ -959,13 +959,13 @@ export class HeliosEngine
     //---------------------------------------------------------------------------------------------
 
     private static readonly _WEATHER_GRID_SIDE       = 31;
-    //Half-extent of the grid in latitude degrees. 1.3 deg approx 145 km north + 145 km south on
-    //any latitude, so the grid covers ~290 km x ~290 km when the longitude span gets compressed
-    //by cos(lat). Sized to overshoot the camera's weather-mode zoom 10 viewport (~160 km wide)
+    //Half-extent of the grid in latitude degrees. 1.6 deg approx 178 km north + 178 km south on
+    //any latitude, so the grid covers ~356 km x ~356 km when the longitude span gets compressed
+    //by cos(lat). Sized to overshoot the camera's weather-mode zoom 9 viewport (~320 km wide)
     //so the raster keeps painting past the visible edges and a small pan doesn't drift out. At
-    //31 x 31 cells over 290 km that yields ~9.4 km / cell, matching the underlying numerical
+    //31 x 31 cells over 356 km that yields ~12 km / cell, matching the underlying numerical
     //weather model native resolution (3 km for AROME-France, 13 km for ICON-EU).
-    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 1.3;
+    private static readonly _WEATHER_GRID_HALF_LAT_DEG = 1.6;
     //Cache TTL for the grid fetch. Open-Meteo refreshes its underlying numerical models every 1-3
     //hours; 30 min keeps the data near-current without burning calls on every mode toggle.
     private static readonly _WEATHER_GRID_TTL_MS     = 30 * 60_000;

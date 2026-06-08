@@ -238,6 +238,41 @@ function bilinearGrid(
 //Returns -1 when the grid is empty.
 //---------------------------------------------------------------------------------------------------
 
+//Resolve the HA frontend's --primary-color at render time and parse it to RGB triplets the
+//canvas pipeline can multiply into per-pixel alphas. Reads from the document root (the CSS var
+//cascades down from there). Supports the two formats HA themes emit:
+//  - 6-digit hex (#03a9f4)
+//  - rgb(r, g, b) function notation
+//Falls back to HA's default vivid blue (#03a9f4) when the variable is empty / malformed.
+function parsePrimaryColor(): { r: number; g: number; b: number }
+{
+    const DEFAULT = { r: 0x03, g: 0xa9, b: 0xf4 };
+    try
+    {
+        const raw = getComputedStyle(document.documentElement).getPropertyValue('--primary-color').trim();
+        if (!raw) { return DEFAULT; }
+        if (raw.startsWith('#'))
+        {
+            const hex = raw.length === 4
+                ? raw[1] + raw[1] + raw[2] + raw[2] + raw[3] + raw[3]
+                : raw.slice(1, 7);
+            const n = parseInt(hex, 16);
+            if (Number.isFinite(n))
+            {
+                return { r: (n >> 16) & 0xff, g: (n >> 8) & 0xff, b: n & 0xff };
+            }
+        }
+        const m = raw.match(/rgb[a]?\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+        if (m)
+        {
+            return { r: +m[1], g: +m[2], b: +m[3] };
+        }
+    }
+    catch (_) { /* ignore, return default */ }
+    return DEFAULT;
+}
+
+
 function timeIndexAt(times: Date[], t: Date): number
 {
     if (times.length === 0) { return -1; }
@@ -287,6 +322,10 @@ export function refreshWeatherRaster(host: WeatherModeHost): void
 {
     if (!host._engine) { return; }
     if (!host._weatherOverlayVisible) { return; }
+    //Bail while a fade-out is in flight: the engine's MapLibre raster layer was already removed
+    //by exitWeatherMode, and re-adding the canvas here would race the exit and leave the cloud
+    //mass painted on the map after the mode chip + overlay have already faded out.
+    if (host._weatherFadeOutStartMs !== null) { return; }
     const grid = host._engine.getWeatherGrid();
     if (!grid) { return; }
     const t = selectedTime(host);
@@ -309,8 +348,13 @@ export function refreshWeatherRaster(host: WeatherModeHost): void
     const { south, north, west, east } = bounds;
 
     //Noise frequency: smaller value = larger features. ~6 cycles across the canvas width gives
-    //cloud-blob-sized cells at the weather-mode zoom 12 framing.
+    //cloud-blob-sized cells at the weather-mode zoom 9 framing.
     const NOISE_FREQ = 6;
+
+    //Resolve the HA theme's --primary-color at render time so the raster picks up theme swaps
+    //without a rebuild. Read from the document root since the variable cascades down from the
+    //HA frontend. Falls back to a vivid blue (#03a9f4) when the variable is empty / unset.
+    const primary = parsePrimaryColor();
 
     let p = 0;
     for (let y = 0; y < H; y++)
@@ -340,36 +384,35 @@ export function refreshWeatherRaster(host: WeatherModeHost): void
             const modMi = 0.4 + 0.6 * n1;
             const modHi = 0.4 + 0.6 * n2;
 
-            //Per-layer alpha = (coverage / 100) × noise modulation. Squish the coverage by a small
-            //power so values near 100 don't paint as fully opaque (real overcast skies still
-            //let some light through).
-            const aLo = Math.max(0, Math.min(1, (lo / 100) * modLo)) * 0.85;
-            const aMi = Math.max(0, Math.min(1, (mi / 100) * modMi)) * 0.70;
-            const aHi = Math.max(0, Math.min(1, (hi / 100) * modHi)) * 0.55;
+            //Per-layer alpha = (coverage / 100) × noise modulation, capped at conservative ceilings
+            //so the cloud mass reads as a soft veil rather than a wash. The map stays legible
+            //underneath even on overcast sectors. The three layers stack with high (lightest) on
+            //top of mid (medium) on top of low (densest at the bottom).
+            const aLo = Math.max(0, Math.min(1, (lo / 100) * modLo)) * 0.50;
+            const aMi = Math.max(0, Math.min(1, (mi / 100) * modMi)) * 0.40;
+            const aHi = Math.max(0, Math.min(1, (hi / 100) * modHi)) * 0.30;
 
-            //DEBUG: red palette so the user can visually confirm the raster is painting. Restore
-            //the grayscale (200 / 180 / 140 RGB) once visibility is validated.
-            //   - High band: light red (255, 120, 120)
-            //   - Mid band : medium red (220, 60, 60)
-            //   - Low band : deep red (180, 0, 0)
-            //Composite high -> mid -> low so the dense low band wins where coverages overlap.
+            //Composite three primary-tinted layers (high -> mid -> low) onto a transparent
+            //background using standard over-compositing. All three bands share the HA theme's
+            //--primary-color; the visual depth comes from the alpha stacking + noise modulation,
+            //not from per-band hue variation.
             let r = 0, g = 0, b = 0, a = 0;
             //High layer.
-            r += 255 * aHi;
-            g += 120 * aHi;
-            b += 120 * aHi;
+            r += primary.r * aHi;
+            g += primary.g * aHi;
+            b += primary.b * aHi;
             a += aHi;
             //Mid layer.
             const wMi = aMi * (1 - a);
-            r += 220 * wMi;
-            g += 60  * wMi;
-            b += 60  * wMi;
+            r += primary.r * wMi;
+            g += primary.g * wMi;
+            b += primary.b * wMi;
             a += wMi;
             //Low layer.
             const wLo = aLo * (1 - a);
-            r += 180 * wLo;
-            g += 0   * wLo;
-            b += 0   * wLo;
+            r += primary.r * wLo;
+            g += primary.g * wLo;
+            b += primary.b * wLo;
             a += wLo;
 
             px[p++] = Math.round(r);

@@ -2123,9 +2123,26 @@ export class HeliosCard extends LitElement
                                     aria-label="Weather view"
                                     @click="${onWeather}"
                                 >
-                                    <ha-icon icon="mdi:weather-partly-cloudy"></ha-icon>
+                                    <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
                                 </button>
                             </div>
+                            ${isWeather && this._cloudScene ? html`
+                                <!-- Cloud-layer chips. Appear below the mode bar (right rail) the
+                                     moment weather mode is active so the user reads the three
+                                     altitude bands at a glance without leaving the overlay. -->
+                                <div class="cloud-layer-chip cloud-layer-chip--high is-on">
+                                    <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
+                                    <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
+                                </div>
+                                <div class="cloud-layer-chip cloud-layer-chip--mid is-on">
+                                    <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
+                                    <span>${Math.round(this._cloudScene.cloudMid)}%</span>
+                                </div>
+                                <div class="cloud-layer-chip cloud-layer-chip--low is-on">
+                                    <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
+                                    <span>${Math.round(this._cloudScene.cloudLow)}%</span>
+                                </div>
+                            ` : nothing}
                         </div>
                     `;
                 })() : nothing}
@@ -2166,32 +2183,6 @@ export class HeliosCard extends LitElement
                     </svg>
                 ` : nothing}
 
-                ${hasHomeCoords && this._cloudCover >= 0 ? html`
-                    <!-- Cloud cover area, top-left. The aggregate cloud icon is the always-visible
-                         anchor; the per-altitude chips (high / mid / low) auto-reveal whenever the
-                         weather mode is active so the user reads the breakdown at a glance without
-                         a manual toggle. The previous explicit chip-toggle button is retired since
-                         the weather mode now drives that reveal automatically. -->
-                    <div class="overlay-top-left overlay-top-left--cloud">
-                        <div class="cloud-cover-anchor">
-                            <ha-icon icon="${cloudCoverIcon(this._cloudCover)}"></ha-icon>
-                        </div>
-                        ${this._cloudScene && this._cardMode === 'weather' ? html`
-                            <div class="cloud-layer-chip cloud-layer-chip--high is-on">
-                                <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
-                                <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
-                            </div>
-                            <div class="cloud-layer-chip cloud-layer-chip--mid is-on">
-                                <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
-                                <span>${Math.round(this._cloudScene.cloudMid)}%</span>
-                            </div>
-                            <div class="cloud-layer-chip cloud-layer-chip--low is-on">
-                                <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
-                                <span>${Math.round(this._cloudScene.cloudLow)}%</span>
-                            </div>
-                        ` : nothing}
-                    </div>
-                ` : nothing}
 
                 <!--  PV → home animated leader. Vertical dashed line
                       from the PV chip's bottom edge down to the home
