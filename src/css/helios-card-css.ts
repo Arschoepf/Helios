@@ -2693,12 +2693,15 @@ export const heliosCardStyles = css`
         height: 40px;
         background: transparent;
         color: var(--primary-text-color, #212121);
+        border: none;
         border-radius: 50%;
         font-size: var(--ha-font-size-s, 12px);
         font-weight: 600;
         line-height: 1;
         font-variant-numeric: tabular-nums;
-        pointer-events: none;
+        cursor: pointer;
+        padding: 0;
+        transition: opacity 0.18s ease, color 0.18s ease;
     }
     .cloud-layer-chip ha-icon
     {
@@ -2707,6 +2710,18 @@ export const heliosCardStyles = css`
         display: inline-flex;
         align-items: center;
         margin-bottom: 2px;
+    }
+    /*  is-off mutes the chip when its band has been toggled out of the SVG overlay, so the
+        user reads at a glance which layers are currently painted on screen. The colour ramp
+        + opacity drop tracks the mode-bar's own inactive-chip vocabulary.                  */
+    .cloud-layer-chip.is-off
+    {
+        opacity: 0.35;
+        color: var(--secondary-text-color, rgba(0, 0, 0, 0.55));
+    }
+    .cloud-layer-chip:hover
+    {
+        opacity: 1;
     }
 
     /*  Loading banner. Shown at the top of the card while the first hydration wave of data fetches

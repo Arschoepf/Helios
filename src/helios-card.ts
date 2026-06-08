@@ -542,6 +542,14 @@ export class HeliosCard extends LitElement
     //banner tells the user why the weather data is not updating.
     @state() _weatherRateLimited = false;
 
+    //Per-band visibility flags for the weather-mode SVG cloud overlay. The three chips under
+    //the mode-bar double as toggle buttons: tapping a chip flips its flag, which gates the
+    //matching `<g>` band's render output in renderWeatherOverlay. Default all-on so the user
+    //sees every layer the moment they enter weather mode; flags reset on every mode entry.
+    @state() _weatherShowHigh = true;
+    @state() _weatherShowMid  = true;
+    @state() _weatherShowLow  = true;
+
     //Flag flipped by `fetchEnergyPrefs` after the first parse lands. The card uses it to kick `refreshHaDailyTotals`
     //immediately when the HA Energy defaults snapshot first appears, instead of waiting up to 30 s for the next
     //tick. Boot-time loading overlay is gone (the raw 6 h `history/history_during_period` fetch, which was the
@@ -2140,21 +2148,42 @@ export class HeliosCard extends LitElement
                                 </button>
                             </div>
                             ${isWeather && this._cloudScene ? html`
-                                <!-- Cloud-layer chips. Appear below the mode bar (right rail) the
-                                     moment weather mode is active so the user reads the three
-                                     altitude bands at a glance without leaving the overlay. -->
-                                <div class="cloud-layer-chip cloud-layer-chip--high is-on">
+                                <!-- Cloud-layer toggle chips. Appear below the mode bar (right
+                                     rail) the moment weather mode is active so the user reads
+                                     the three altitude bands at a glance without leaving the
+                                     overlay. Tap to toggle the matching SVG band on / off;
+                                     class is-off mutes the chip when its band is hidden so the
+                                     user knows what is on screen. -->
+                                <button
+                                    type="button"
+                                    class="cloud-layer-chip cloud-layer-chip--high ${this._weatherShowHigh ? 'is-on' : 'is-off'}"
+                                    aria-pressed="${this._weatherShowHigh ? 'true' : 'false'}"
+                                    aria-label="Toggle high cloud layer"
+                                    @click="${() => { this._weatherShowHigh = !this._weatherShowHigh; }}"
+                                >
                                     <ha-icon icon="${cloudLayerIcon('high')}"></ha-icon>
                                     <span>${Math.round(this._cloudScene.cloudHigh)}%</span>
-                                </div>
-                                <div class="cloud-layer-chip cloud-layer-chip--mid is-on">
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cloud-layer-chip cloud-layer-chip--mid ${this._weatherShowMid ? 'is-on' : 'is-off'}"
+                                    aria-pressed="${this._weatherShowMid ? 'true' : 'false'}"
+                                    aria-label="Toggle mid cloud layer"
+                                    @click="${() => { this._weatherShowMid = !this._weatherShowMid; }}"
+                                >
                                     <ha-icon icon="${cloudLayerIcon('mid')}"></ha-icon>
                                     <span>${Math.round(this._cloudScene.cloudMid)}%</span>
-                                </div>
-                                <div class="cloud-layer-chip cloud-layer-chip--low is-on">
+                                </button>
+                                <button
+                                    type="button"
+                                    class="cloud-layer-chip cloud-layer-chip--low ${this._weatherShowLow ? 'is-on' : 'is-off'}"
+                                    aria-pressed="${this._weatherShowLow ? 'true' : 'false'}"
+                                    aria-label="Toggle low cloud layer"
+                                    @click="${() => { this._weatherShowLow = !this._weatherShowLow; }}"
+                                >
                                     <ha-icon icon="${cloudLayerIcon('low')}"></ha-icon>
                                     <span>${Math.round(this._cloudScene.cloudLow)}%</span>
-                                </div>
+                                </button>
                             ` : nothing}
                         </div>
                     `;

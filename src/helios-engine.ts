@@ -974,13 +974,13 @@ export class HeliosEngine
     //cancels the timer + clears the cached grid.
     //---------------------------------------------------------------------------------------------
 
-    //Grid dimensions: 10 x 10 = 100 points per refresh. Open-Meteo's multi-location POST cap is
-    //1000 points per call, so a 10 x 10 sit comfortably inside one round-trip. The grid covers a
-    //bbox sized to match the weather-mode zoom 10 framing (~40 km wide); per-cell pitch lands at
-    //~4 km which is between the AROME-France native resolution (1.3 km) and ICON-EU (7 km), so
-    //the user reads the model's actual cloud-cover variation rather than a coarsely smoothed
-    //summary.
-    private static readonly _WEATHER_GRID_SIDE        = 10;
+    //Grid dimensions: 31 x 31 = 961 points per refresh. Open-Meteo's multi-location POST cap is
+    //1000 points per call, so 31 x 31 sits at the maximum density a single round-trip can carry
+    //(32 x 32 = 1024 would tip over the cap). The grid covers a bbox sized to match the
+    //weather-mode zoom 10 framing (~44 km wide); per-cell pitch lands at ~1.4 km which matches
+    //AROME-France's native resolution (1.3 km) so the overlay reads at the finest grain the
+    //best regional model can deliver.
+    private static readonly _WEATHER_GRID_SIDE        = 31;
     //Half-extent of the grid in latitude degrees around the home. 0.20 deg ~= 22 km on the lat
     //axis at any latitude, so the grid covers a ~44 km x ~44 km bbox after the cos(lat)
     //compression on the lon axis matches that envelope. Wide enough to overshoot the camera's

@@ -34,11 +34,13 @@ const CLOUD_LAYER_COLOR_HIGH = '#e53935';
 const CLOUD_LAYER_COLOR_MID  = '#43a047';
 const CLOUD_LAYER_COLOR_LOW  = '#fdd835';
 
-//Per-layer alpha ceiling. A 100 % coverage cell in any single layer paints at this alpha; the
-//three layers stack via over-compositing so a fully-overcast sky still leaves the basemap
-//partially visible underneath rather than blacking it out. Tuned so the colour reads at a
-//glance without swallowing the streets + district outlines.
-const CLOUD_LAYER_ALPHA_CEILING = 0.55;
+//Per-cell threshold below which the band paints nothing. Cells whose mean coverage on a band
+//falls under this percentage are dropped from that band's polygon set so the basemap stays
+//visible in clear areas. Bands paint at fill-opacity 1.0 above the threshold so each band's
+//colour reads vivid + unambiguous; the three altitude bands then read distinctly by stacking
+//order rather than by alpha blending. The user toggles individual bands on / off via the
+//chip buttons under the mode bar when they want to isolate a single layer.
+const CLOUD_LAYER_THRESHOLD_PCT = 15;
 
 
 export interface WeatherModeHost extends OverlaysHost
@@ -52,6 +54,11 @@ export interface WeatherModeHost extends OverlaysHost
     _weatherFadeRaf?:           number;
     _selectedTime:              Date | null;
     _isLiveMode:                boolean;
+    //Per-band visibility flags driven by the three chip buttons under the mode bar. Each flag
+    //gates its band's polygon set out of the SVG when false; default all true on mode entry.
+    _weatherShowHigh:           boolean;
+    _weatherShowMid:            boolean;
+    _weatherShowLow:            boolean;
     //LitElement.requestUpdate(), invoked each frame during the fade so the inline opacity steps
     //smoothly. Duck-typed so importing LitElement here doesn't drag Lit into the engine surface.
     requestUpdate(): void;
@@ -144,9 +151,12 @@ export function weatherFadeAlpha(host: WeatherModeHost): number
 
 
 //Build the SVG polygon-set for one cloud band. Each grid cell projects its 4 lat / lon corners
-//to screen pixel coords through MapLibre's camera, paints one polygon per cell at the per-cell
-//cloud coverage tracked into the fill alpha. The polygon set for one band is a single SVG group
-//so the over-compositing for the three bands stacks at the SVG layer level rather than per-cell.
+//to screen pixel coords through MapLibre's camera, paints one polygon per cell as a solid
+//fill (no alpha blend) when the cell's mean coverage on that band crosses the threshold. Cells
+//below the threshold paint nothing so the basemap stays visible in clear areas. The per-band
+//polygon set is wrapped in a single SVG group; the three groups stack by paint order
+//(high -> mid -> low) so the lowest band, the most relevant to surface-level conditions,
+//sits on top of the higher altitudes when multiple bands cover the same cell.
 function renderCloudBand(
     engine: HeliosEngine,
     grid:   NonNullable<ReturnType<HeliosEngine['getWeatherCloudGrid']>>,
@@ -161,15 +171,15 @@ function renderCloudBand(
     {
         for (let iLon = 0; iLon < nLon - 1; iLon++)
         {
-            //Per-cell mean coverage across the 4 corners. Skip transparent cells to keep the SVG
-            //payload tight on a clear sky (a 100 % clear-sky frame paints 0 polygons per band).
+            //Per-cell mean coverage across the 4 corners. Drop sub-threshold cells (they read
+            //as gaps in the band so the basemap shows through where the model says it is
+            //clear, and the SVG payload stays compact on a partly-cloudy frame).
             const v00 = values[ iLat      * nLon + iLon];
             const v10 = values[ iLat      * nLon + iLon + 1];
             const v01 = values[(iLat + 1) * nLon + iLon];
             const v11 = values[(iLat + 1) * nLon + iLon + 1];
             const mean = (v00 + v10 + v01 + v11) / 4;
-            if (mean <= 1) { continue; }
-            const alpha = Math.max(0, Math.min(1, mean / 100)) * CLOUD_LAYER_ALPHA_CEILING;
+            if (mean < CLOUD_LAYER_THRESHOLD_PCT) { continue; }
 
             const lat0 = grid.lats[iLat];
             const lat1 = grid.lats[iLat + 1];
@@ -186,7 +196,7 @@ function renderCloudBand(
                          + `${p10.x.toFixed(1)},${p10.y.toFixed(1)} `
                          + `${p11.x.toFixed(1)},${p11.y.toFixed(1)} `
                          + `${p01.x.toFixed(1)},${p01.y.toFixed(1)}`;
-            polys.push(svg`<polygon points="${points}" fill="${color}" fill-opacity="${alpha.toFixed(3)}" />`);
+            polys.push(svg`<polygon points="${points}" fill="${color}" />`);
         }
     }
     return polys;
@@ -200,14 +210,25 @@ export function renderWeatherOverlay(host: WeatherModeHost): TemplateResult | ty
     const grid  = host._engine?.getWeatherCloudGrid() ?? null;
     const ready = !!grid && !!host._engine;
 
+    //Per-band visibility flags. A band whose chip has been toggled off is skipped from the
+    //polygon-build pass entirely so the user reads the remaining bands without overdraw.
     let bandHigh: TemplateResult[] = [];
     let bandMid:  TemplateResult[] = [];
     let bandLow:  TemplateResult[] = [];
     if (ready)
     {
-        bandHigh = renderCloudBand(host._engine!, grid!, grid!.cloudHigh, CLOUD_LAYER_COLOR_HIGH);
-        bandMid  = renderCloudBand(host._engine!, grid!, grid!.cloudMid,  CLOUD_LAYER_COLOR_MID);
-        bandLow  = renderCloudBand(host._engine!, grid!, grid!.cloudLow,  CLOUD_LAYER_COLOR_LOW);
+        if (host._weatherShowHigh)
+        {
+            bandHigh = renderCloudBand(host._engine!, grid!, grid!.cloudHigh, CLOUD_LAYER_COLOR_HIGH);
+        }
+        if (host._weatherShowMid)
+        {
+            bandMid  = renderCloudBand(host._engine!, grid!, grid!.cloudMid,  CLOUD_LAYER_COLOR_MID);
+        }
+        if (host._weatherShowLow)
+        {
+            bandLow  = renderCloudBand(host._engine!, grid!, grid!.cloudLow,  CLOUD_LAYER_COLOR_LOW);
+        }
     }
 
     return html`
