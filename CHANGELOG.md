@@ -33,6 +33,23 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather grid 31 x 31 -> 50 x 50 (#210)
+
+User feedback: the Perlin noise + 31 x 31 grid wasn't carrying enough real spatial signal at
+zoom 9; the cloud field read as evenly textured but didn't show the actual cloud-mass shapes
+Open-Meteo's model knows about.
+
+- **Grid bumped from 31 x 31 (961 points) to 50 x 50 (2500 points)** spanning the same ~356 km
+  x ~356 km. Per-cell pitch drops from ~12 km to ~7 km, well inside the underlying model
+  resolution range (3 km AROME-France, 13 km ICON-EU) so we're now reading the model's real
+  variations instead of over-sampling identical neighbours.
+- **Open-Meteo's 1000-coord per-call cap** means 2500 points splits across 3 parallel POST
+  calls. `Promise.all` collapses the latency to a single round-trip (~500 ms), and the chunks
+  land in the same Open-Meteo model run so their time axes match and the stitched grid is
+  consistent.
+- **localStorage cache key bumped from v1 to v2** to invalidate stale 31 x 31 entries on first
+  hit; the new entry sits at ~600 KB JSON (still under the typical 5-10 MB browser quota).
+
 ### Cloud color + opacity round 3 (#210)
 
 - **Cloud color sourced from `--primary-text-color`** instead of `--primary-color`. Dark text on

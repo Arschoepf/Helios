@@ -961,20 +961,26 @@ export class HeliosEngine
     //footprint at ~7 MB total (961 cells × 49 h × 3 layers × 4 bytes) which is acceptable.
     //---------------------------------------------------------------------------------------------
 
-    private static readonly _WEATHER_GRID_SIDE       = 31;
+    private static readonly _WEATHER_GRID_SIDE       = 50;
     //Half-extent of the grid in latitude degrees. 1.6 deg approx 178 km north + 178 km south on
     //any latitude, so the grid covers ~356 km x ~356 km when the longitude span gets compressed
     //by cos(lat). Sized to overshoot the camera's weather-mode zoom 9 viewport (~320 km wide)
     //so the raster keeps painting past the visible edges and a small pan doesn't drift out. At
-    //31 x 31 cells over 356 km that yields ~12 km / cell, matching the underlying numerical
-    //weather model native resolution (3 km for AROME-France, 13 km for ICON-EU).
+    //50 x 50 cells over 356 km that yields ~7 km / cell, well inside the underlying numerical
+    //weather model native resolution range (3 km AROME-France, 13 km ICON-EU); the bilinear +
+    //Perlin canvas pipeline reads as sharper cloud-edge transitions than the previous 31 x 31.
     private static readonly _WEATHER_GRID_HALF_LAT_DEG = 1.6;
     //Cache TTL for the grid fetch. Open-Meteo refreshes its underlying numerical models every 1-3
     //hours; 30 min keeps the data near-current without burning calls on every mode toggle.
     private static readonly _WEATHER_GRID_TTL_MS     = 30 * 60_000;
-    //localStorage key for the cached grid (survives page reloads inside the TTL window). Includes
-    //a schema version suffix so a future shape change invalidates older entries automatically.
-    private static readonly _WEATHER_GRID_STORAGE_KEY = 'helios-weather-grid:v1';
+    //localStorage key for the cached grid (survives page reloads inside the TTL window). v2 bump
+    //matches the grid-size change (31 x 31 -> 50 x 50): the schema is the same but the array
+    //lengths differ, so a v1 entry on existing installs gets re-fetched once on the first hit.
+    private static readonly _WEATHER_GRID_STORAGE_KEY = 'helios-weather-grid:v2';
+    //Open-Meteo's multi-location POST endpoint caps at 1000 lat/lon pairs per call. 50 x 50 = 2500
+    //points needs 3 parallel calls (max 1000 each); we slice the flat lat/lon arrays into chunks
+    //of this size and Promise.all them so the total latency stays at one round-trip.
+    private static readonly _WEATHER_GRID_CHUNK_SIZE = 1000;
 
     private _weatherGrid: {
         bounds:    { south: number; north: number; west: number; east: number };
@@ -1057,13 +1063,17 @@ export class HeliosEngine
                 lons[i] = west  + (i / (N - 1)) * (east  - west);
             }
             //Flatten to (lat, lon) pairs in row-major (lat-outer, lon-inner) order. Open-Meteo
-            //returns results in the same order the lat / lon arrays are passed. We POST a JSON body
-            //instead of using the GET query string: 961 lat / lon pairs serialise to ~22 kB of URL
-            //which exceeds the 8-16 kB limit most CDNs (Open-Meteo's Cloudflare edge included)
-            //enforce on GET requests, surfacing as an HTTP 414 reject. The POST API expects the
-            //same comma-separated string format as the GET query string, NOT JSON arrays: lat /
-            //lon arrays serialised as `[12.3, 12.4]` get rejected with HTTP 400. We build the
-            //strings explicitly and post them in the JSON body.
+            //returns results in the same order the lat / lon arrays are passed. We POST a JSON
+            //body instead of GET because >1 k lat/lon pairs serialise past common CDN URL limits;
+            //Open-Meteo's POST endpoint expects the same comma-separated string format as the GET
+            //query string, just placed in the body with application/x-www-form-urlencoded.
+            //
+            //2500 points (50 x 50) exceeds Open-Meteo's documented 1000-coord per-call cap, so we
+            //split the flat (lat, lon) arrays into chunks of CHUNK_SIZE and fire all chunks in
+            //parallel via Promise.all. The chunks land in the same Open-Meteo model run (same
+            //forecast_days + past_days + timezone), so their per-point time axes match across
+            //chunks and we can stitch the responses back into the row-major grid without
+            //alignment work.
             const flatLats: string[] = new Array(N * N);
             const flatLons: string[] = new Array(N * N);
             for (let iLat = 0; iLat < N; iLat++)
@@ -1074,24 +1084,33 @@ export class HeliosEngine
                     flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
                 }
             }
-            const r = await fetch('https://api.open-meteo.com/v1/forecast', {
-                method:  'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body:    'latitude='  + flatLats.join(',')
-                       + '&longitude=' + flatLons.join(',')
-                       + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
-                       + '&forecast_days=2&past_days=0&timezone=UTC',
-            });
-            if (!r.ok)
+            const TOTAL  = N * N;
+            const CHUNK  = HeliosEngine._WEATHER_GRID_CHUNK_SIZE;
+            const nChunks = Math.ceil(TOTAL / CHUNK);
+            const chunkPromises: Promise<any[]>[] = new Array(nChunks);
+            for (let c = 0; c < nChunks; c++)
             {
-                throw new Error(`Open-Meteo grid fetch failed: HTTP ${r.status}`);
+                const start = c * CHUNK;
+                const end   = Math.min(TOTAL, start + CHUNK);
+                const sliceLats = flatLats.slice(start, end);
+                const sliceLons = flatLons.slice(start, end);
+                chunkPromises[c] = (async () =>
+                {
+                    const r = await fetch('https://api.open-meteo.com/v1/forecast', {
+                        method:  'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body:    'latitude='  + sliceLats.join(',')
+                               + '&longitude=' + sliceLons.join(',')
+                               + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
+                               + '&forecast_days=2&past_days=0&timezone=UTC',
+                    });
+                    if (!r.ok) { throw new Error(`Open-Meteo grid chunk ${c} HTTP ${r.status}`); }
+                    const j: any = await r.json();
+                    return Array.isArray(j) ? j : [j];
+                })();
             }
-            const arr: any = await r.json();
-            //Multi-location response is an array of single-location result objects, each with its
-            //own `hourly.time` axis. We assume the axis is identical across locations (it is by
-            //construction since every location used the same forecast_days + past_days + timezone),
-            //and only parse it once from the first entry.
-            const results: any[] = Array.isArray(arr) ? arr : [arr];
+            const chunkResults: any[][] = await Promise.all(chunkPromises);
+            const results: any[] = chunkResults.flat();
             if (results.length === 0 || !results[0]?.hourly?.time)
             {
                 throw new Error('Open-Meteo grid fetch: empty payload');
@@ -1099,10 +1118,10 @@ export class HeliosEngine
             const timeStrs: string[] = results[0].hourly.time;
             const times: Date[] = timeStrs.map(s => new Date(s + 'Z'));
             const nTimes = times.length;
-            const cloudLow  = new Float32Array(N * N * nTimes);
-            const cloudMid  = new Float32Array(N * N * nTimes);
-            const cloudHigh = new Float32Array(N * N * nTimes);
-            for (let g = 0; g < N * N; g++)
+            const cloudLow  = new Float32Array(TOTAL * nTimes);
+            const cloudMid  = new Float32Array(TOTAL * nTimes);
+            const cloudHigh = new Float32Array(TOTAL * nTimes);
+            for (let g = 0; g < TOTAL; g++)
             {
                 const r = results[g];
                 const lo = r?.hourly?.cloud_cover_low  ?? [];
