@@ -121,6 +121,8 @@ export const ka: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios აშენებულია ერთი დეველოპერის მიერ ბევრი ენერგიითა და ძალიან მცირე ძილით. თუ ის შენს ყოველდღიურ რუტინას ეხმარება, ვარსკვლავი GitHub-ზე ან ყავა პროექტს ცოცხალს ინახავს.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'მიყიდე ყავა',
     }
 };

@@ -232,6 +232,10 @@ export interface Translations
         aboutRepoLidar:           string;
         aboutCoffeeMessage:       string;
         aboutCoffeeLink:          string;
+        //Developer block: surfaces the person behind the card with links to a personal X profile +
+        //LinkedIn page. Sits right after the version row in the About section.
+        aboutDeveloperLabel:      string;
+        aboutDeveloperLinkedIn:   string;
     };
 }
 

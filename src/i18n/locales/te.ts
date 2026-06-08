@@ -121,6 +121,8 @@ export const te: Translations = {
         aboutRepoCard:         'Helios (కార్డ్)',
         aboutRepoLidar:        'Helios-Lidar (సహచర సైట్)',
         aboutCoffeeMessage:    'Helios ను ఒక డెవలపర్ చాలా శక్తితో మరియు చాలా తక్కువ నిద్రతో నిర్మిస్తున్నారు. ఇది మీ రోజువారీ దినచర్యలో సహాయపడితే, GitHub లో ఒక నక్షత్రం లేదా ఒక కాఫీ ప్రాజెక్ట్‌ను సజీవంగా ఉంచుతుంది.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'నాకు ఒక కాఫీ కొనండి',
     }
 };

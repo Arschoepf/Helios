@@ -120,6 +120,8 @@ export const fi: Translations = {
         aboutRepoCard:         'Helios (kortti)',
         aboutRepoLidar:        'Helios-Lidar (oheissivusto)',
         aboutCoffeeMessage:    'Helios on yhden kehittäjän rakentama, paljon energialla ja hyvin vähäisellä unella. Jos siitä on apua arjessasi, tähti GitHubissa tai kuppi kahvia pitää projektin elossa.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Osta minulle kahvi',
     }
 };

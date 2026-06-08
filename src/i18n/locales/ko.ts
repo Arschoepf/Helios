@@ -120,6 +120,8 @@ export const ko: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios는 한 명의 개발자가 풍부한 에너지와 매우 적은 잠으로 만들고 있습니다. 일상에 도움이 된다면 GitHub의 별 하나나 커피 한 잔이 프로젝트를 살아 있게 합니다.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       '커피 한 잔 사주기',
     }
 };

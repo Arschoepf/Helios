@@ -119,6 +119,8 @@ export const nn: Translations = {
         aboutRepoCard:         'Helios (kortet)',
         aboutRepoLidar:        'Helios-Lidar (fylgjesida)',
         aboutCoffeeMessage:    'Helios blir bygd av éin utviklar med mykje energi og veldig lite søvn. Om det hjelper deg i kvardagen, held ei stjerne på GitHub eller ein kaffi prosjektet i live.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Kjøp meg ein kaffi',
     }
 };

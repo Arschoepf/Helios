@@ -119,6 +119,8 @@ export const fy: Translations = {
         aboutRepoCard:         'Helios (de kaart)',
         aboutRepoLidar:        'Helios-Lidar (de begeliedende side)',
         aboutCoffeeMessage:    'Helios wurdt boud troch ien ûntwikkelder mei in soad enerzjy en hiel min sliep. As it dyn deistige rûte helpt, hâldt in stjer op GitHub of in kop kofje it projekt yn libben.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Keapje my in kofje',
     }
 };

@@ -119,6 +119,8 @@ export const af: Translations = {
         aboutRepoCard:         'Helios (die kaart)',
         aboutRepoLidar:        'Helios-Lidar (die gepaarde webwerf)',
         aboutCoffeeMessage:    'Helios word deur een ontwikkelaar gebou, met baie energie en baie min slaap. As dit jou daaglikse roetine help, hou \'n ster op GitHub of \'n koppie koffie die projek aan die lewe.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Koop vir my \'n koffie',
     }
 };

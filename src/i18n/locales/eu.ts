@@ -121,6 +121,8 @@ export const eu: Translations = {
         aboutRepoCard:         'Helios (txartela)',
         aboutRepoLidar:        'Helios-Lidar (toki osagarria)',
         aboutCoffeeMessage:    'Helios garatzaile bakar batek egiten du, energia askorekin eta lo gutxirekin. Zure eguneroko errutinan laguntzen badizu, GitHub-eko izar batek edo kafe batek proiektua bizirik mantentzen dute.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

@@ -120,6 +120,8 @@ export const th: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios สร้างขึ้นโดยนักพัฒนาเพียงคนเดียวด้วยพลังเต็มที่และเวลานอนน้อยมาก หากมันช่วยกิจวัตรประจำวันของคุณ ดาวบน GitHub หรือกาแฟสักแก้วจะช่วยให้โปรเจกต์ยังมีชีวิตอยู่',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'เลี้ยงกาแฟผม',
     }
 };

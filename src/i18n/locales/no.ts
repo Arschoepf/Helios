@@ -125,6 +125,8 @@ export const no: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios bygges av én utvikler med mye energi og veldig lite søvn. Hvis det hjelper deg i hverdagen, holder en stjerne på GitHub eller en kaffe prosjektet i live.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

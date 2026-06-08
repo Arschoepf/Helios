@@ -121,6 +121,8 @@ export const sl: Translations = {
         aboutRepoCard:         'Helios (kartica)',
         aboutRepoLidar:        'Helios-Lidar (spremljevalno spletno mesto)',
         aboutCoffeeMessage:    'Helios gradi en sam razvijalec z veliko energije in zelo malo spanca. Če vam pomaga v dnevni rutini, zvezdica na GitHubu ali kava ohranjata projekt živ.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Kupi mi kavo',
     }
 };

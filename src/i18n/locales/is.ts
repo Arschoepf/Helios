@@ -120,6 +120,8 @@ export const is_: Translations = {
         aboutRepoCard:         'Helios (kortið)',
         aboutRepoLidar:        'Helios-Lidar (fylgisíðan)',
         aboutCoffeeMessage:    'Helios er smíðað af einum forritara með mikla orku og mjög lítinn svefn. Ef það hjálpar í daglegri rútínu þinni, þá heldur stjarna á GitHub eða kaffibolli verkefninu á lífi.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Bjóddu mér kaffi',
     }
 };

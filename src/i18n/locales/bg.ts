@@ -121,6 +121,8 @@ export const bg: Translations = {
         aboutRepoCard:         'Helios (картата)',
         aboutRepoLidar:        'Helios-Lidar (придружаващият сайт)',
         aboutCoffeeMessage:    'Helios е създаден от един разработчик с много енергия и много малко сън. Ако ви помага в ежедневието, звезда в GitHub или кафе поддържат проекта жив.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Купи ми кафе',
     }
 };

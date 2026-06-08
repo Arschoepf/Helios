@@ -33,6 +33,37 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Seven user-facing fixes (#210)
+
+- **Zoom out finally works.** `_applyMapBounds` installs a tight bbox (~2 × building-radius)
+  around the home so the user can't pan past the rendered surroundings; MapLibre enforces an
+  effective minimum zoom from that bbox, which clamps any easeTo target to ~16 regardless of
+  `setMinZoom`. `enterWeatherCamera` now drops `maxBounds` entirely before the easeTo so the
+  camera can dezoom freely to zoom 10. `exitWeatherCamera` restores the original bbox.
+- **Midnight refresh.** The store's data-version hash now includes the local day-key
+  (`Date#toDateString()`), so the store auto-rebuilds at midnight rollover even when no new
+  source rows have landed yet. Without this, every per-day slice stayed shifted by one day
+  until the first fresh fetch tripped a length change.
+- **Chart hover tooltip raised.** Position moves from `top: 14%` to `top: 4%` so the icon +
+  value pair sits at the very top of the chart card, leaving the cursor line visible above as
+  before.
+- **Loading banner no animation, positioned for real.** The slide-in transition used to be
+  half-played on short fetch waves: the banner appeared mid-slide, disappeared the moment the
+  data landed, and the user only saw a blink. The animation is gone; the banner pins at the
+  top edge of the card (top 8 px), horizontally centred between the lock button on the left
+  and the mode bar on the right, fades in / out via opacity only.
+- **Editor About: version font + link.** The version chip now uses the HA frontend body font
+  (`var(--ha-font-family-body)`), bold, primary text colour. The chip is clickable and jumps
+  to the matching GitHub release page (`/releases/tag/v<version>`).
+- **Editor About: Developer block.** New row right under the version with the developer name,
+  X profile link and LinkedIn link.
+- **Site description and coffee-message paragraphs rewritten** to better reflect the
+  positioning the project deserves.
+
+i18n: EN + FR strings updated; the new keys (`aboutDeveloperLabel`,
+`aboutDeveloperLinkedIn`) are filled in EN + FR and shipped as EN placeholders in the 62
+other locales, to be retranslated in the final beta phase.
+
 ### Weather mode zoom 10 + grid extended to 290 km (#210)
 
 Zoom 12 from beta.81 wasn't pulled back enough to give the user a satellite-style overview.

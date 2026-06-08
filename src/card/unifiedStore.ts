@@ -576,6 +576,12 @@ function buildGridSlope(
 //that grows any of them OR the user-facing cadence knob change invalidates the cache key.
 function computeDataVersion(host: UnifiedStoreHost): string
 {
+    //Day-key (local midnight). Included in the version hash so the store auto-rebuilds at midnight
+    //rollover even when no new source rows have landed yet. Without this, opening the dashboard
+    //after a midnight passage with the same fetched arrays leaves the store anchored on the
+    //previous day's J-2 origin, and every per-day slice ends up shifted by one day until the
+    //first fresh fetch trips a length change.
+    const todayKey = new Date().toDateString();
     const cadence       = displayUpdateFrequencyPerHour(host.config);
     const seriesLen     = host._chartSeries?.times.length ?? 0;
     const pvHistLen     = host._pvHistory?.times.length   ?? 0;
@@ -587,7 +593,7 @@ function computeDataVersion(host: UnifiedStoreHost): string
     let gridExpLen = 0;
     host._gridExportSamples.forEach(arr => { gridExpLen += arr.length; });
     const socLive = host._batterySoc ?? '';
-    return `c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvTrainerLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
+    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvTrainerLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
 }
 
 

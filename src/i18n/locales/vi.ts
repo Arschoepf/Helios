@@ -120,6 +120,8 @@ export const vi: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios được xây dựng bởi một nhà phát triển với rất nhiều năng lượng và rất ít giấc ngủ. Nếu nó giúp ích cho thói quen hằng ngày của bạn, một ngôi sao trên GitHub hay một ly cà phê sẽ giữ dự án sống tiếp.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Mời tôi một ly cà phê',
     }
 };

@@ -121,6 +121,8 @@ export const et: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Heliose on ehitanud üks arendaja palju energia ja väga vähese unega. Kui see aitab sinu igapäevast rutiini, hoiab täht GitHubis või kohv projekti elus.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Osta mulle kohv',
     }
 };

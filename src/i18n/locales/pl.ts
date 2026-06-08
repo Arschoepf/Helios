@@ -118,6 +118,8 @@ export const pl: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios tworzy jeden programista z dużą dawką energii i bardzo małą ilością snu. Jeśli pomaga Państwu w codziennym użytkowaniu, gwiazdka na GitHubie lub kawa utrzymują projekt przy życiu.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

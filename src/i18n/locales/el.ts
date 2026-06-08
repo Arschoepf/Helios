@@ -121,6 +121,8 @@ export const el: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Το Helios χτίστηκε από έναν προγραμματιστή με πολλή ενέργεια και πολύ λίγο ύπνο. Αν βοηθάει την καθημερινή σου ρουτίνα, ένα αστέρι στο GitHub ή ένας καφές κρατά το έργο ζωντανό.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Κέρασέ με έναν καφέ',
     }
 };

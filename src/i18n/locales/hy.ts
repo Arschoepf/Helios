@@ -121,6 +121,8 @@ export const hy: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios-ը ստեղծվել է մեկ ծրագրավորողի կողմից շատ էներգիայով և շատ քիչ քունով. Եթե դա օգնում է քո ամենօրյա գործերին, GitHub-ում աստղ կամ սուրճ կպահի նախագիծը կենդանի.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Գնիր ինձ մի սուրճ',
     }
 };

@@ -120,6 +120,8 @@ export const zhHans: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios 由一名开发者凭借大量精力与极少睡眠打造。如果它能帮到你的日常生活,在 GitHub 上点个 star 或请喝一杯咖啡,都能让项目延续下去。',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       '请我喝杯咖啡',
     }
 };

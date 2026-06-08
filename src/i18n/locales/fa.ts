@@ -121,6 +121,8 @@ export const fa: Translations = {
         aboutRepoCard:         'Helios (کارت)',
         aboutRepoLidar:        'Helios-Lidar (سایت همراه)',
         aboutCoffeeMessage:    'Helios توسط یک توسعه‌دهنده با انرژی زیاد و خواب بسیار کم ساخته می‌شود. اگر به روتین روزانهٔ شما کمک می‌کند، یک ستاره در GitHub یا یک قهوه پروژه را زنده نگه می‌دارد.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'برایم یک قهوه بخر',
     }
 };

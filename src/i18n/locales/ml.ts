@@ -120,6 +120,8 @@ export const ml: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios ഒരുപാട് ഊർജ്ജവും വളരെ കുറച്ച് ഉറക്കവുമുള്ള ഒരൊറ്റ ഡെവലപ്പർ നിർമ്മിച്ചതാണ്. ഇത് നിങ്ങളുടെ ദൈനംദിന ജീവിതത്തിന് സഹായകരമാണെങ്കിൽ, GitHub ലെ ഒരു സ്റ്റാർ അല്ലെങ്കിൽ ഒരു കാപ്പി പ്രോജക്റ്റിനെ ജീവനോടെ നിലനിർത്തുന്നു.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'എനിക്ക് ഒരു കാപ്പി വാങ്ങിത്തരൂ',
     }
 };

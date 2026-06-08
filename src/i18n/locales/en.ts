@@ -125,11 +125,13 @@ export const en: Translations = {
         aboutSection:          'About',
         aboutVersionLabel:     'Version',
         aboutSiteTitle:        'Companion site, helios-lidar.org',
-        aboutSiteDescription:  'Free tool to turn raw open LiDAR data from any country (LAZ / LAS or DSM + DTM pairs) into the nDSM GeoTIFF Helios needs, plus the YAML snippet to paste into this editor. No QGIS, no GDAL, no install, no account.',
+        aboutSiteDescription:  'The Helios website. Everything is there: card documentation, plus a free tool to turn raw open LiDAR data from any country (LAZ / LAS or DSM + DTM pairs) into the nDSM GeoTIFF Helios needs. Fully free and open source.',
         aboutCodeLabel:        'Source code',
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
-        aboutCoffeeMessage:    'Helios is built by one developer with a lot of energy and very little sleep. If it helps your daily routine, a star on GitHub or a coffee keeps the project alive.',
+        aboutCoffeeMessage:    'Helios is built by one passionate developer, with a lot of energy and very little sleep. If you like my work, a small star on GitHub already helps me a lot, and if you can, a small coffee keeps the project alive.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

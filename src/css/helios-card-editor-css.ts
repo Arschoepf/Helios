@@ -494,6 +494,27 @@ export const editorStyles = css`
         font-size: 13px;
         color: var(--primary-text-color, #18181b);
     }
+    /*  Version chip: HA frontend body font, bold, primary text colour, decorated as a link (the
+        anchor jumps to the matching GitHub release page). Replaces the previous monospace
+        about-value style so the version reads as part of the HA UI rather than a code label. */
+    .about-version-link
+    {
+        font-family: var(--ha-font-family-body, var(--mdc-typography-body1-font-family, inherit));
+        font-size: 14px;
+        font-weight: var(--ha-font-weight-bold, 700);
+        color: var(--primary-text-color, #18181b);
+        text-decoration: none;
+    }
+    .about-version-link:hover { text-decoration: underline; }
+    /*  Developer block sits right after the version row. Same about-block geometry as the other
+        link groups; the inline "name" line uses the body font (no italic, no monospace) so the
+        developer reads as a person, not a code reference. */
+    .about-developer-name
+    {
+        font-size: 14px;
+        font-weight: var(--ha-font-weight-medium, 500);
+        color: var(--primary-text-color, #18181b);
+    }
     .about-block
     {
         margin-top: 14px;

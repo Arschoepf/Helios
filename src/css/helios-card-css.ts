@@ -913,7 +913,7 @@ export const heliosCardStyles = css`
     .dash-graph-hover-tooltip
     {
         position: absolute;
-        top: 14%;
+        top: 4%;
         transform: translateX(-50%);
         pointer-events: none;
         z-index: 4;
@@ -2781,12 +2781,18 @@ export const heliosCardStyles = css`
         of the HUD chrome. Slide-in from the top + opacity, slide-out downwards via the same pure
         CSS transition pattern (no keyframes, no animation: forwards). Sits above the timeline +
         mode bar at z-index 60. */
+    /*  Loading banner. Pinned at the top edge of the card, horizontally centred between the lock
+        chip on the left and the mode-bar on the right (both anchored at top: 8px). No slide-in
+        animation: short fetch waves were ending before the slide-in completed, leaving the
+        banner blinking once and disappearing without showing meaningful information. Sits at the
+        same top edge as the surrounding chrome, plays no transform, only a snappy opacity step
+        when shown / hidden. */
     .loading-banner
     {
         position: absolute;
-        top: 12px;
-        left: 16px;
-        right: 16px;
+        top: 8px;
+        left: 64px;
+        right: 64px;
         max-width: 260px;
         margin: 0 auto;
         padding: 6px 12px 8px;
@@ -2798,10 +2804,8 @@ export const heliosCardStyles = css`
         line-height: 1.4;
         z-index: 60;
         opacity: 0;
-        transform: translateY(-60px);
         pointer-events: none;
         box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
-        transition: opacity 0.35s ease, transform 0.35s ease;
         display: flex;
         flex-direction: column;
         gap: 6px;
@@ -2809,7 +2813,6 @@ export const heliosCardStyles = css`
     .loading-banner.is-visible
     {
         opacity: 1;
-        transform: translateY(0);
     }
     .loading-banner-label
     {

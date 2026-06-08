@@ -814,13 +814,20 @@ export class HeliosEngine
     //(locked stays locked, free stays free), and the zoom min/max so the temporary expansion we
     //apply for the satellite-style overview reverts on the way back.
     private _preWeatherPose: {
-        bearing: number;
-        pitch:   number;
-        zoom:    number;
-        center:  [number, number];
-        locked:  boolean;
-        minZoom: number;
-        maxZoom: number;
+        bearing:   number;
+        pitch:     number;
+        zoom:      number;
+        center:    [number, number];
+        locked:    boolean;
+        minZoom:   number;
+        maxZoom:   number;
+        //Captured maxBounds box so the exit restores the tight building-radius clamp the rest of
+        //the card relies on. Without saving + restoring this, the engine's _applyMapBounds would
+        //race the easeTo back to UI mode and clamp the camera before the animation lands.
+        maxBoundsWest:  number | null;
+        maxBoundsSouth: number | null;
+        maxBoundsEast:  number | null;
+        maxBoundsNorth: number | null;
     } | null = null;
     //Pending setTimeout that re-tightens the zoom envelope after an exit's easeTo lands. Held as a
     //handle so a rapid UI -> Weather -> UI -> Weather sequence can CANCEL a stale tighten before it
@@ -850,6 +857,7 @@ export class HeliosEngine
             this._weatherZoomTighten = null;
         }
         const prevLocked = this.isCameraLocked();
+        const mb = this.map.getMaxBounds();
         this._preWeatherPose = {
             bearing: this.map.getBearing(),
             pitch:   this.map.getPitch(),
@@ -858,10 +866,20 @@ export class HeliosEngine
             locked:  prevLocked,
             minZoom: this.map.getMinZoom(),
             maxZoom: this.map.getMaxZoom(),
+            maxBoundsWest:  mb ? mb.getWest()  : null,
+            maxBoundsSouth: mb ? mb.getSouth() : null,
+            maxBoundsEast:  mb ? mb.getEast()  : null,
+            maxBoundsNorth: mb ? mb.getNorth() : null,
         };
-        //Widen the zoom envelope BEFORE the easeTo so the target zoom is accepted instead of
-        //clamped back to the resting 18. Buffer of 1 below the target keeps MapLibre from edge-
-        //clamping the ease in flight.
+        //Clear the maxBounds clamp BEFORE the easeTo. _applyMapBounds at boot installs a tight
+        //bbox (~2 x building-radius around the home) so the user can't pan past the rendered
+        //surroundings; MapLibre enforces an effective minimum zoom such that the bounds always
+        //fit the viewport, which would clamp the weather-mode easeTo back up to ~16 regardless
+        //of setMinZoom. Dropping the bounds entirely lets the camera dezoom freely; the exit
+        //restores the original bbox so the rest of the card recovers its pan clamp.
+        this.map.setMaxBounds(null as unknown as undefined);
+        //Widen the zoom envelope. Buffer of 1 below the target keeps MapLibre from edge-clamping
+        //the ease in flight.
         this.map.setMinZoom(9);
         this.map.setMaxZoom(18);
         //Force the rotation lock on. setCameraLocked persists the new state to localStorage; we'll
@@ -894,13 +912,24 @@ export class HeliosEngine
         //Restore the rotation-lock state the user had before entering. setCameraLocked also writes
         //the state back to localStorage so the next reload still sees the user's preference.
         if (this.isCameraLocked() !== pose.locked) { this.setCameraLocked(pose.locked); }
-        //Re-tighten the zoom envelope after the easeTo lands. Deferred past the 1200 ms ease + a
-        //50 ms buffer for MapLibre's onMoveEnd delivery. The handle is kept on the engine so a
-        //subsequent enter (fast mode swap) can cancel it before it fires.
+        //Re-tighten the zoom envelope + restore the maxBounds clamp after the easeTo lands.
+        //Deferred past the 1200 ms ease + a 50 ms buffer for MapLibre's onMoveEnd delivery. The
+        //handle is kept on the engine so a subsequent enter (fast mode swap) can cancel it before
+        //it fires.
         const tighten = (): void =>
         {
             this._weatherZoomTighten = null;
             if (!this.map) { return; }
+            if (pose.maxBoundsWest !== null
+             && pose.maxBoundsSouth !== null
+             && pose.maxBoundsEast !== null
+             && pose.maxBoundsNorth !== null)
+            {
+                this.map.setMaxBounds([
+                    [pose.maxBoundsWest, pose.maxBoundsSouth],
+                    [pose.maxBoundsEast, pose.maxBoundsNorth],
+                ]);
+            }
             this.map.setMinZoom(pose.minZoom);
             this.map.setMaxZoom(pose.maxZoom);
         };

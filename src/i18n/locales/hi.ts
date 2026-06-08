@@ -121,6 +121,8 @@ export const hi: Translations = {
         aboutRepoCard:         'Helios (कार्ड)',
         aboutRepoLidar:        'Helios-Lidar (साथी साइट)',
         aboutCoffeeMessage:    'Helios को एक डेवलपर ने बहुत सी ऊर्जा और बहुत कम नींद के साथ बनाया है। यदि यह आपकी दैनिक दिनचर्या में मदद करता है, तो GitHub पर एक स्टार या एक कॉफ़ी परियोजना को जीवित रखती है।',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'मुझे एक कॉफ़ी पिलाएँ',
     }
 };

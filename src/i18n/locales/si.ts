@@ -120,6 +120,8 @@ export const si: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios සකස් කරන්නේ වැඩ ඇති එක් සංවර්ධකයෙකු වන අතර ඔහුට බොහෝ ශක්තියක් සහ ඉතා සුළු නින්දකි. එය ඔබේ දෛනික චර්යාවට උපකාර කරයි නම්, GitHub හි තරුවක් හෝ කෝපි කෝප්පයක් ව්‍යාපෘතිය ජීවත්ව තබයි.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'මට කෝපි කෝප්පයක් මිලදී දෙන්න',
     }
 };

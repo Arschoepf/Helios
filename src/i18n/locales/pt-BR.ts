@@ -121,6 +121,8 @@ export const ptBR: Translations = {
         aboutRepoCard:         'Helios (o card)',
         aboutRepoLidar:        'Helios-Lidar (o site complementar)',
         aboutCoffeeMessage:    'O Helios é feito por um único desenvolvedor com muita energia e muito pouco sono. Se ele ajuda na sua rotina, uma estrela no GitHub ou um café mantêm o projeto vivo.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

@@ -120,6 +120,8 @@ export const gsw: Translations = {
         aboutRepoCard:         'Helios (d\'Charte)',
         aboutRepoLidar:        'Helios-Lidar (d\'Begleitsyte)',
         aboutCoffeeMessage:    'Helios wird vomne einzige Entwickler buut, mit vill Energie und ganz wenig Schlaf. Wänn\'s dir im Alltag hilft, ghaltet en Stern uf GitHub oder en Kafi s\'Projekt am Läbe.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Chauff mer en Kafi',
     }
 };

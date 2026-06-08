@@ -1174,7 +1174,22 @@ export class HeliosCardEditor extends LitElement
                     <summary class="section-title section-title-collapse"><ha-icon class="section-icon" icon="mdi:information-outline"></ha-icon>${t.editor.aboutSection}</summary>
                     <div class="about-row">
                         <span class="about-label">${t.editor.aboutVersionLabel}</span>
-                        <span class="about-value">${__HELIOS_VERSION__}</span>
+                        <a class="about-version-link"
+                           href="https://github.com/ReikanYsora/Helios/releases/tag/v${__HELIOS_VERSION__}"
+                           target="_blank" rel="noopener noreferrer"
+                        >${__HELIOS_VERSION__}</a>
+                    </div>
+                    <div class="about-block about-developer">
+                        <div class="about-label">${t.editor.aboutDeveloperLabel}</div>
+                        <div class="about-developer-name">ReikanYsora (Jérôme Cremoux)</div>
+                        <a class="about-link" href="https://x.com/ReikanYsora" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:twitter"></ha-icon>
+                            <span>@ReikanYsora</span>
+                        </a>
+                        <a class="about-link" href="https://www.linkedin.com/in/jerome-cremoux/" target="_blank" rel="noopener noreferrer">
+                            <ha-icon icon="mdi:linkedin"></ha-icon>
+                            <span>${t.editor.aboutDeveloperLinkedIn}</span>
+                        </a>
                     </div>
                     <div class="about-block">
                         <a class="about-link" href="https://helios-lidar.org" target="_blank" rel="noopener noreferrer">

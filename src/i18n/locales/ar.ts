@@ -121,6 +121,8 @@ export const ar: Translations = {
         aboutRepoCard:         'Helios (البطاقة)',
         aboutRepoLidar:        'Helios-Lidar (الموقع المرافق)',
         aboutCoffeeMessage:    'Helios بُني بواسطة مطوّر واحد بكثير من الطاقة وقليل جداً من النوم. إن ساعدك في روتينك اليومي، نجمة على GitHub أو قهوة تبقي المشروع حياً.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'اشترِ لي قهوة',
     }
 };

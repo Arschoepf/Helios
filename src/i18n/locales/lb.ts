@@ -119,6 +119,8 @@ export const lb: Translations = {
         aboutRepoCard:         'Helios (d\'Kaart)',
         aboutRepoLidar:        'Helios-Lidar (d\'Begleetsait)',
         aboutCoffeeMessage:    'Helios gëtt vun engem eenzegen Entwéckler mat vill Energie a ganz wéineg Schlof gebaut. Wann et dir an dengem Alldag hëlleft, hält e Stär op GitHub oder e Kaffi d\'Projet um Liewen.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Kaaf mir e Kaffi',
     }
 };

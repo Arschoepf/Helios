@@ -121,6 +121,8 @@ export const ta: Translations = {
         aboutRepoCard:         'Helios (அட்டை)',
         aboutRepoLidar:        'Helios-Lidar (துணை தளம்)',
         aboutCoffeeMessage:    'Helios-ஐ ஒரே ஒரு டெவலப்பர் அதிக ஆற்றலுடனும் மிகவும் குறைந்த தூக்கத்துடனும் கட்டுகிறார். இது உங்கள் தினசரி வழக்கத்திற்கு உதவினால், GitHub-இல் ஒரு நட்சத்திரம் அல்லது ஒரு காபி திட்டத்தை உயிருடன் வைக்கும்.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'எனக்கு ஒரு காபி வாங்கி கொடுங்கள்',
     }
 };

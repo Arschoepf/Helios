@@ -121,6 +121,8 @@ export const cy: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Mae Helios yn cael ei adeiladu gan un datblygwr gyda llawer o egni a thra ychydig o gwsg. Os yw\'n helpu dy drefn ddyddiol, mae seren ar GitHub neu goffi yn cadw\'r prosiect yn fyw.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Pryn goffi i mi',
     }
 };

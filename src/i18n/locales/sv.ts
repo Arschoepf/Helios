@@ -118,6 +118,8 @@ export const sv: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios byggs av en enda utvecklare med mycket energi och väldigt lite sömn. Om det hjälper dig i vardagen håller en stjärna på GitHub eller en kaffe projektet vid liv.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

@@ -120,6 +120,8 @@ export const nb: Translations = {
         aboutRepoCard:         'Helios (kortet)',
         aboutRepoLidar:        'Helios-Lidar (følgesiden)',
         aboutCoffeeMessage:    'Helios bygges av én utvikler med mye energi og veldig lite søvn. Hvis det hjelper deg i hverdagen, holder en stjerne på GitHub eller en kaffe prosjektet i live.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Kjøp meg en kaffe',
     }
 };

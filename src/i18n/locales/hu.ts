@@ -121,6 +121,8 @@ export const hu: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios-t egy fejlesztő építi sok energiával és nagyon kevés alvással. Ha segíti a napi rutinodat, egy csillag a GitHub-on vagy egy kávé életben tartja a projektet.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Vegyél nekem egy kávét',
     }
 };

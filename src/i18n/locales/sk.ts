@@ -121,6 +121,8 @@ export const sk: Translations = {
         aboutRepoCard:         'Helios (karta)',
         aboutRepoLidar:        'Helios-Lidar (sprievodný web)',
         aboutCoffeeMessage:    'Helios stavia jeden vývojár s veľkou energiou a veľmi malým spánkom. Ak vám pomáha v dennej rutine, hviezdička na GitHube alebo káva udržiavajú projekt nažive.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Kúp mi kávu',
     }
 };

@@ -121,6 +121,8 @@ export const uk: Translations = {
         aboutRepoCard:         'Helios (картка)',
         aboutRepoLidar:        'Helios-Lidar (супровідний сайт)',
         aboutCoffeeMessage:    'Helios створює один розробник з великою кількістю енергії та дуже малою кількістю сну. Якщо він допомагає у вашій щоденній рутині, зірочка на GitHub або кава підтримують проєкт живим.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Купи мені каву',
     }
 };

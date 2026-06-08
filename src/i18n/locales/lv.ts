@@ -121,6 +121,8 @@ export const lv: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios ir izveidojis viens izstrādātājs ar daudz enerģijas un ļoti maz miega. Ja tas palīdz jūsu ikdienas rutīnai, zvaigzne GitHub\'ā vai kafija saglabā projektu dzīvu.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Nopērc man kafiju',
     }
 };

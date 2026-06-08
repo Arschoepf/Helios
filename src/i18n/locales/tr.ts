@@ -121,6 +121,8 @@ export const tr: Translations = {
         aboutRepoCard:         'Helios (kart)',
         aboutRepoLidar:        'Helios-Lidar (eşlik eden site)',
         aboutCoffeeMessage:    'Helios, çok enerjisi ve çok az uykusu olan tek bir geliştirici tarafından üretiliyor. Günlük rutininize yardımcı oluyorsa, GitHub\'da bir yıldız veya bir kahve projeyi hayatta tutar.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

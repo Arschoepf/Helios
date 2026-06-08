@@ -120,6 +120,8 @@ export const gl: Translations = {
         aboutRepoCard:         'Helios (a tarxeta)',
         aboutRepoLidar:        'Helios-Lidar (o sitio complementario)',
         aboutCoffeeMessage:    'Helios desenvólveo un único desenvolvedor con moita enerxía e moi pouco sono. Se che axuda no teu día a día, unha estrela en GitHub ou un café manteñen vivo o proxecto.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

@@ -116,6 +116,8 @@ export const nl: Translations = {
         aboutRepoCard:         'Helios',
         aboutRepoLidar:        'Helios-Lidar',
         aboutCoffeeMessage:    'Helios wordt gebouwd door één ontwikkelaar met veel energie en heel weinig slaap. Als het je dagelijkse routine helpt, houdt een ster op GitHub of een koffie het project levend.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };

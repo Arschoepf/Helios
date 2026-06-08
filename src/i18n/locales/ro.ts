@@ -121,6 +121,8 @@ export const ro: Translations = {
         aboutRepoCard:         'Helios (cardul)',
         aboutRepoLidar:        'Helios-Lidar (site-ul companion)',
         aboutCoffeeMessage:    'Helios este construit de un singur dezvoltator cu multă energie și foarte puțin somn. Dacă te ajută în rutina zilnică, o stea pe GitHub sau o cafea țin proiectul în viață.',
+        aboutDeveloperLabel:    'Developer',
+        aboutDeveloperLinkedIn: 'LinkedIn',
         aboutCoffeeLink:       'Buy me a coffee',
     }
 };
