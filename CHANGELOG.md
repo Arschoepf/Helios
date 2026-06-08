@@ -33,6 +33,13 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather grid POST body uses form encoding, not JSON (#210)
+
+Beta.84 packed the lat / lon arrays as JSON in the POST body. Open-Meteo's API rejected this with
+HTTP 400; the documented multi-location POST format expects the same `latitude=A,B&longitude=X,Y`
+comma-separated string format as the GET query string, just placed in the body with
+`application/x-www-form-urlencoded`. The fetch now sends that exact shape.
+
 ### Weather grid fetch: switch GET to POST (#210)
 
 beta.83 fired the multi-location forecast call as a GET with 961 (lat, lon) pairs in the query

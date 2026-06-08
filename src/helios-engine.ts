@@ -995,28 +995,27 @@ export class HeliosEngine
             //returns results in the same order the lat / lon arrays are passed. We POST a JSON body
             //instead of using the GET query string: 961 lat / lon pairs serialise to ~22 kB of URL
             //which exceeds the 8-16 kB limit most CDNs (Open-Meteo's Cloudflare edge included)
-            //enforce on GET requests, surfacing as an HTTP 414 reject.
-            const flatLats: number[] = new Array(N * N);
-            const flatLons: number[] = new Array(N * N);
+            //enforce on GET requests, surfacing as an HTTP 414 reject. The POST API expects the
+            //same comma-separated string format as the GET query string, NOT JSON arrays: lat /
+            //lon arrays serialised as `[12.3, 12.4]` get rejected with HTTP 400. We build the
+            //strings explicitly and post them in the JSON body.
+            const flatLats: string[] = new Array(N * N);
+            const flatLons: string[] = new Array(N * N);
             for (let iLat = 0; iLat < N; iLat++)
             {
                 for (let iLon = 0; iLon < N; iLon++)
                 {
-                    flatLats[iLat * N + iLon] = +lats[iLat].toFixed(4);
-                    flatLons[iLat * N + iLon] = +lons[iLon].toFixed(4);
+                    flatLats[iLat * N + iLon] = lats[iLat].toFixed(4);
+                    flatLons[iLat * N + iLon] = lons[iLon].toFixed(4);
                 }
             }
             const r = await fetch('https://api.open-meteo.com/v1/forecast', {
                 method:  'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body:    JSON.stringify({
-                    latitude:      flatLats,
-                    longitude:     flatLons,
-                    hourly:        'cloud_cover_low,cloud_cover_mid,cloud_cover_high',
-                    forecast_days: 2,
-                    past_days:     0,
-                    timezone:      'UTC',
-                }),
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body:    'latitude='  + flatLats.join(',')
+                       + '&longitude=' + flatLons.join(',')
+                       + '&hourly=cloud_cover_low,cloud_cover_mid,cloud_cover_high'
+                       + '&forecast_days=2&past_days=0&timezone=UTC',
             });
             if (!r.ok)
             {
