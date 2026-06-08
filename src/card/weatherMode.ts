@@ -1,14 +1,14 @@
 //Weather overlay mode. When the user toggles the weather chip in the mode bar, the rest of the
 //HUD fades out (same vocabulary as the LiDAR view), the camera tilts to top-down + zooms out so
 //the user sees the area around the home from above, and a per-altitude cloud-cover SVG overlay
-//paints the modelled coverage as one polygon per connected blob, one band per altitude. The
+//paints the modelled coverage as a dot cloud, one disc per grid point per altitude band. The
 //5-day timeline stays visible and scrubbable: each scrub move just picks a different time slice
 //out of the same cached grid, no fresh HTTP round-trip.
 //
-//Cloud-cover percentages displayed in the per-altitude buttons (top-left rail in weather mode)
-//keep coming from the existing Open-Meteo home-point feed (engine.projectCloudScene), exact-at-
-//the-home numbers. The SVG overlay is the spatial context around the home; the buttons double
-//as toggles that hide individual bands so the user can isolate a single layer.
+//The dot-cloud encoding deliberately under-fills its cell so the basemap stays visible between
+//discs and the overall shape reads as a punctuated cloud cluster rather than a contiguous wash.
+//Per-band opacity grows from low (40 %) to high (80 %) so layered points naturally weight the
+//higher band heavier when more than one altitude reports cloud cover at the same grid sample.
 
 import { html, nothing, svg, type TemplateResult } from 'lit';
 import { refreshOverlays, type OverlaysHost } from './overlays';
@@ -139,163 +139,38 @@ export function weatherFadeAlpha(host: WeatherModeHost): number
 }
 
 
-//Connected-component finder + boundary walker. Reads the cloud cover series for one band at
-//one time slice, builds a binary "covered" mask of cells whose mean exceeds the threshold,
-//flood-fills connected components, then walks each component's outline by collecting the cell-
-//side line segments that face an out-of-component neighbour. The output is one SVG polygon per
-//component, projected to screen space. Two cells in the same component merge into one shape;
-//touching cells across band boundaries stay in separate components.
+//Per-point dot renderer. Reads the cloud cover series for one band at one time slice and emits
+//one SVG circle per grid point whose value crosses the threshold. The disc is filled in the
+//card's primary text colour with the band-specific opacity (low 40 %, mid 60 %, high 80 %) so
+//the three altitudes stack with growing visual weight at each step. Discs are sized to a
+//fraction of the on-screen cell pitch so neighbours never quite touch, which keeps the cloud
+//cluster legible as a punctuated grid rather than a solid wash of colour.
 function renderCloudBand(
-    engine:    HeliosEngine,
-    grid:      NonNullable<ReturnType<HeliosEngine['getWeatherCloudGrid']>>,
+    projected: ReadonlyArray<{ x: number; y: number } | null>,
+    nLat:      number,
+    nLon:      number,
     values:    Float32Array,
     nTimes:    number,
     timeIdx:   number,
+    radius:    number,
     cssClass:  string,
 ): TemplateResult[]
 {
-    const nLat       = grid.nLat;
-    const nLon       = grid.nLon;
-    const nCellsLat  = nLat - 1;
-    const nCellsLon  = nLon - 1;
-    const totalCells = nCellsLat * nCellsLon;
-    if (totalCells === 0) { return []; }
-
-    //Build the binary "covered" mask. Mean of the four corner samples per cell, gated on the
-    //threshold so a cell whose corners are all sub-threshold drops out of the polygon set.
-    const covered = new Uint8Array(totalCells);
-    for (let iLat = 0; iLat < nCellsLat; iLat++)
+    const dots: TemplateResult[] = [];
+    const r = radius.toFixed(1);
+    for (let iLat = 0; iLat < nLat; iLat++)
     {
-        for (let iLon = 0; iLon < nCellsLon; iLon++)
+        for (let iLon = 0; iLon < nLon; iLon++)
         {
-            const i00 = ( iLat      * nLon + iLon)      * nTimes + timeIdx;
-            const i10 = ( iLat      * nLon + iLon + 1)  * nTimes + timeIdx;
-            const i01 = ((iLat + 1) * nLon + iLon)      * nTimes + timeIdx;
-            const i11 = ((iLat + 1) * nLon + iLon + 1)  * nTimes + timeIdx;
-            const mean = (values[i00] + values[i10] + values[i01] + values[i11]) / 4;
-            covered[iLat * nCellsLon + iLon] = mean >= CLOUD_LAYER_THRESHOLD_PCT ? 1 : 0;
+            const pointIdx = iLat * nLon + iLon;
+            const v = values[pointIdx * nTimes + timeIdx];
+            if (v < CLOUD_LAYER_THRESHOLD_PCT) { continue; }
+            const p = projected[pointIdx];
+            if (!p) { continue; }
+            dots.push(svg`<circle class="${cssClass}" cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" />`);
         }
     }
-
-    //Flood-fill connected components. Components are 4-connected (up/down/left/right neighbours
-    //only); diagonal-only contact is read as separate components, which keeps the visual closer
-    //to the underlying model's coverage map at no extra rendering cost.
-    const compId   = new Int32Array(totalCells).fill(-1);
-    const queue    = new Int32Array(totalCells);
-    let   nextId   = 0;
-    for (let startCell = 0; startCell < totalCells; startCell++)
-    {
-        if (!covered[startCell] || compId[startCell] !== -1) { continue; }
-        compId[startCell] = nextId;
-        queue[0] = startCell;
-        let qHead = 0;
-        let qTail = 1;
-        while (qHead < qTail)
-        {
-            const cell = queue[qHead++];
-            const cI = (cell / nCellsLon) | 0;
-            const cJ = cell - cI * nCellsLon;
-            //Four orthogonal neighbours. Each guard pair prevents reading a cell outside the
-            //mask without an explicit branch for every direction.
-            if (cI > 0)
-            {
-                const n = cell - nCellsLon;
-                if (covered[n] && compId[n] === -1) { compId[n] = nextId; queue[qTail++] = n; }
-            }
-            if (cI < nCellsLat - 1)
-            {
-                const n = cell + nCellsLon;
-                if (covered[n] && compId[n] === -1) { compId[n] = nextId; queue[qTail++] = n; }
-            }
-            if (cJ > 0)
-            {
-                const n = cell - 1;
-                if (covered[n] && compId[n] === -1) { compId[n] = nextId; queue[qTail++] = n; }
-            }
-            if (cJ < nCellsLon - 1)
-            {
-                const n = cell + 1;
-                if (covered[n] && compId[n] === -1) { compId[n] = nextId; queue[qTail++] = n; }
-            }
-        }
-        nextId++;
-    }
-    if (nextId === 0) { return []; }
-
-    //Per component: collect boundary edges, chain into a closed loop, project + emit as one
-    //SVG polygon. Edges are addressed by their (a, b) grid-point endpoints; each interior cell
-    //side gets a single edge, each cell-face touching a non-component cell becomes a boundary
-    //edge. Chaining walks the edge graph starting at any vertex and following the outgoing
-    //edge at each step (the boundary is one closed loop per simply-connected component, no
-    //holes expected from cloud-cover data so the chain closes back on itself).
-    const polys: TemplateResult[] = [];
-    //Per-component edge accumulator: from vertex (gI * nLon + gJ) -> destination vertex. One
-    //outgoing edge per source vertex on a simple polygonal boundary, which is the topology a
-    //grid-cell union produces. CCW outgoing direction so the chain wraps the outside of the
-    //component.
-    const adj = new Map<number, number>();
-
-    const vIdx = (gI: number, gJ: number): number => gI * nLon + gJ;
-
-    for (let target = 0; target < nextId; target++)
-    {
-        adj.clear();
-
-        const matches = (i: number, j: number): boolean =>
-        {
-            if (i < 0 || j < 0 || i >= nCellsLat || j >= nCellsLon) { return false; }
-            return compId[i * nCellsLon + j] === target;
-        };
-
-        for (let iLat = 0; iLat < nCellsLat; iLat++)
-        {
-            for (let iLon = 0; iLon < nCellsLon; iLon++)
-            {
-                if (compId[iLat * nCellsLon + iLon] !== target) { continue; }
-                //Cell corners in (gI, gJ) grid-point indices, ordered so the boundary walk
-                //runs counter-clockwise around the cell when viewed from above. North side
-                //is paint-order top of screen, so the cell corners go:
-                //  sw (iLat,     iLon)    -> se (iLat,     iLon + 1)
-                //  se                     -> ne (iLat + 1, iLon + 1)
-                //  ne                     -> nw (iLat + 1, iLon)
-                //  nw                     -> sw (close the cell)
-                //The boundary edge is added when the neighbour on that side is NOT in the
-                //component. Direction is preserved so adjacent boundary edges chain head-to-tail
-                //around the outline.
-                if (!matches(iLat - 1, iLon))     { adj.set(vIdx(iLat,     iLon),     vIdx(iLat,     iLon + 1)); }
-                if (!matches(iLat,     iLon + 1)) { adj.set(vIdx(iLat,     iLon + 1), vIdx(iLat + 1, iLon + 1)); }
-                if (!matches(iLat + 1, iLon))     { adj.set(vIdx(iLat + 1, iLon + 1), vIdx(iLat + 1, iLon)); }
-                if (!matches(iLat,     iLon - 1)) { adj.set(vIdx(iLat + 1, iLon),     vIdx(iLat,     iLon)); }
-            }
-        }
-        if (adj.size === 0) { continue; }
-
-        //Walk the chain. Start at any vertex with an outgoing edge, follow `adj` until we land
-        //back at the start vertex. The chain has the boundary as one closed loop for a simply
-        //connected blob; concave blobs still produce a single chain because every grid corner
-        //has at most one boundary outgoing edge in CCW order.
-        const firstVertex = adj.keys().next().value as number;
-        const points: string[] = [];
-        let v = firstVertex;
-        let safety = adj.size + 4; //defensive cap, the loop terminates on its own
-        while (safety-- > 0)
-        {
-            const gI = (v / nLon) | 0;
-            const gJ = v - gI * nLon;
-            const screen = engine.projectLonLat(grid.lons[gJ], grid.lats[gI]);
-            if (!screen) { break; }
-            points.push(`${screen.x.toFixed(1)},${screen.y.toFixed(1)}`);
-            const next = adj.get(v);
-            if (next === undefined || next === firstVertex) { break; }
-            v = next;
-        }
-        if (points.length >= 3)
-        {
-            polys.push(svg`<polygon class="${cssClass}" points="${points.join(' ')}" />`);
-        }
-    }
-
-    return polys;
+    return dots;
 }
 
 
@@ -322,17 +197,44 @@ export function renderWeatherOverlay(host: WeatherModeHost): TemplateResult | ty
         if (timeIdx >= 0)
         {
             const nTimes = grid!.times.length;
+            const nLat   = grid!.nLat;
+            const nLon   = grid!.nLon;
+            //Project every grid point once + reuse across the three bands. Points that fall
+            //outside the camera's clip space come back as null; the per-band loop drops them.
+            const projected: Array<{ x: number; y: number } | null> = new Array(nLat * nLon);
+            for (let iLat = 0; iLat < nLat; iLat++)
+            {
+                for (let iLon = 0; iLon < nLon; iLon++)
+                {
+                    projected[iLat * nLon + iLon] = engine!.projectLonLat(grid!.lons[iLon], grid!.lats[iLat]);
+                }
+            }
+            //Disc radius derived from the on-screen cell pitch: pick two adjacent points near
+            //the centre of the grid (camera centre = home, so the centre samples reproject with
+            //the least perspective distortion), measure their on-screen distance, and take a
+            //fraction of it as the dot radius. The fraction stays under 0.5 so neighbouring
+            //dots never overlap, leaving the lit basemap visible between them.
+            const midLat = Math.floor(nLat / 2);
+            const midLon = Math.floor(nLon / 2);
+            const a = projected[midLat * nLon + midLon];
+            const b = projected[midLat * nLon + midLon + 1];
+            let pitch = 16;
+            if (a && b)
+            {
+                pitch = Math.hypot(b.x - a.x, b.y - a.y) || pitch;
+            }
+            const radius = Math.max(3, pitch * 0.40);
             if (host._weatherShowHigh)
             {
-                bandHigh = renderCloudBand(engine!, grid!, grid!.cloudHigh, nTimes, timeIdx, 'weather-cloud-poly-high');
+                bandHigh = renderCloudBand(projected, nLat, nLon, grid!.cloudHigh, nTimes, timeIdx, radius, 'weather-cloud-dot-high');
             }
             if (host._weatherShowMid)
             {
-                bandMid  = renderCloudBand(engine!, grid!, grid!.cloudMid,  nTimes, timeIdx, 'weather-cloud-poly-mid');
+                bandMid  = renderCloudBand(projected, nLat, nLon, grid!.cloudMid,  nTimes, timeIdx, radius, 'weather-cloud-dot-mid');
             }
             if (host._weatherShowLow)
             {
-                bandLow  = renderCloudBand(engine!, grid!, grid!.cloudLow,  nTimes, timeIdx, 'weather-cloud-poly-low');
+                bandLow  = renderCloudBand(projected, nLat, nLon, grid!.cloudLow,  nTimes, timeIdx, radius, 'weather-cloud-dot-low');
             }
         }
     }

@@ -2902,28 +2902,24 @@ export const heliosCardStyles = css`
         display: block;
         overflow: visible;
     }
-    /*  Per-band stacking: high (most distant) paints first under mid, mid under low (the
-        physical altitude ordering). Fills are derived from --primary-text-color so the bands
-        stay legible on every HA theme without a per-theme palette: high paints with the full
-        text colour, mid is mixed half-way to the card background, low is muted further down so
-        the three bands keep distinct values even when layered over the same cell. No opacity,
-        the contrast comes entirely from the value step between the mixes so the user reads each
-        band as a flat shape rather than a translucent wash.                                     */
-    .weather-cloud-poly-high
+    /*  Per-point cloud dots. Every grid point with cloud cover over the threshold paints as one
+        small filled disc with a thin contour, both in --primary-text-color so the cluster reads
+        as a single HA-themed swarm regardless of the user's theme. Opacity grows with altitude
+        so a point covered on all three bands stacks low (40 %) under mid (60 %) under high
+        (80 %), the higher band carrying the most visual weight. Stroke is the same colour at
+        the same opacity, just renders as a tighter rim because it is only 1 px wide.            */
+    .weather-cloud-dot-low,
+    .weather-cloud-dot-mid,
+    .weather-cloud-dot-high
     {
-        fill: var(--primary-text-color, #212121);
-        stroke: none;
+        fill:   var(--primary-text-color, #212121);
+        stroke: var(--primary-text-color, #212121);
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
     }
-    .weather-cloud-poly-mid
-    {
-        fill: color-mix(in srgb, var(--primary-text-color, #212121) 55%, var(--card-background-color, #ffffff));
-        stroke: none;
-    }
-    .weather-cloud-poly-low
-    {
-        fill: color-mix(in srgb, var(--primary-text-color, #212121) 25%, var(--card-background-color, #ffffff));
-        stroke: none;
-    }
+    .weather-cloud-dot-low  { fill-opacity: 0.40; stroke-opacity: 0.40; }
+    .weather-cloud-dot-mid  { fill-opacity: 0.60; stroke-opacity: 0.60; }
+    .weather-cloud-dot-high { fill-opacity: 0.80; stroke-opacity: 0.80; }
 
     /*  Photovoltaic production chip, same frame as cloud/W/m² but
         tinted in the user-configured production colour (border +

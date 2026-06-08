@@ -243,6 +243,17 @@ Fix: removed the imperative write; `_onLidarOpacityChange` now calls `this.reque
 Lit re-renders the picker template through the normal text-node pipeline with the markers
 intact. rAF coalescing keeps the cost at one render per frame max during drag.
 
+### Weather mode polish, beta.114
+
+The cloud-cover overlay drops the connected-component polygon finder in favour of a per-point
+dot cloud. Every grid sample whose cloud cover crosses the threshold paints as a small filled
+disc with a 1 px contour, sized to a fraction of the on-screen cell pitch so neighbours never
+quite touch and the basemap stays visible between discs. Both fill and stroke use
+`--primary-text-color`; per-band opacity grows from low (40 %) to mid (60 %) to high (80 %), so
+a point covered on all three altitudes stacks with growing visual weight and the higher band
+dominates. The encoding reads as a punctuated cloud cluster rather than a contiguous wash and
+keeps the home + surrounding map context clearly visible underneath.
+
 ### Weather mode polish, beta.113
 
 The per-altitude cloud band toggles in the top-left rail now reuse the exact `.mode-bar /
