@@ -384,13 +384,15 @@ export function refreshWeatherRaster(host: WeatherModeHost): void
             const modMi = 0.4 + 0.6 * n1;
             const modHi = 0.4 + 0.6 * n2;
 
-            //Per-layer alpha = (coverage / 100) × noise modulation, capped at conservative ceilings
-            //so the cloud mass reads as a soft veil rather than a wash. The map stays legible
-            //underneath even on overcast sectors. The three layers stack with high (lightest) on
-            //top of mid (medium) on top of low (densest at the bottom).
-            const aLo = Math.max(0, Math.min(1, (lo / 100) * modLo)) * 0.50;
-            const aMi = Math.max(0, Math.min(1, (mi / 100) * modMi)) * 0.40;
-            const aHi = Math.max(0, Math.min(1, (hi / 100) * modHi)) * 0.30;
+            //Per-layer alpha = (coverage / 100) × noise modulation. Ceilings tuned so the cloud
+            //masses dominate the view (the whole point of the weather mode) while leaving the map
+            //legible underneath: at 100 % coverage the stacked layers compose to ~0.92 alpha, the
+            //basemap silhouette + landmarks still read through but the user clearly sees an
+            //overcast sky. The three layers stack with high (light) on top of mid (medium) on
+            //top of low (dense).
+            const aLo = Math.max(0, Math.min(1, (lo / 100) * modLo)) * 0.78;
+            const aMi = Math.max(0, Math.min(1, (mi / 100) * modMi)) * 0.65;
+            const aHi = Math.max(0, Math.min(1, (hi / 100) * modHi)) * 0.50;
 
             //Composite three primary-tinted layers (high -> mid -> low) onto a transparent
             //background using standard over-compositing. All three bands share the HA theme's

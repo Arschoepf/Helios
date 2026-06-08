@@ -33,6 +33,17 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Weather grid localStorage cache + opacity bump (#210)
+
+- **localStorage cache** on the weather grid, same recipe the home-point Open-Meteo cache used:
+  schema-versioned key (`helios-weather-grid:v1`), 30 min TTL matching the in-memory cadence,
+  cloud values quantised to 1 decimal so the JSON payload shrinks ~60 %. Page reloads inside the
+  TTL window skip the network entirely (cache hit ~1 ms vs ~500 ms fetch).
+- **Cloud opacity bumped** so the cloud masses dominate the view at full coverage instead of
+  reading as a thin translucent veil. Per-layer alpha ceilings 0.50 / 0.40 / 0.30 -> 0.78 / 0.65
+  / 0.50; at 100 % coverage the stacked composite reaches ~0.92 alpha. The map silhouette +
+  landmarks still read through but the user clearly sees an overcast sky.
+
 ### MapLibre null-bound warning silenced (#210)
 
 `enterWeatherCamera` passed `null` to `setMaxBounds` (cast through `unknown` to satisfy the

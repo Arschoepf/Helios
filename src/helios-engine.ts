@@ -972,6 +972,9 @@ export class HeliosEngine
     //Cache TTL for the grid fetch. Open-Meteo refreshes its underlying numerical models every 1-3
     //hours; 30 min keeps the data near-current without burning calls on every mode toggle.
     private static readonly _WEATHER_GRID_TTL_MS     = 30 * 60_000;
+    //localStorage key for the cached grid (survives page reloads inside the TTL window). Includes
+    //a schema version suffix so a future shape change invalidates older entries automatically.
+    private static readonly _WEATHER_GRID_STORAGE_KEY = 'helios-weather-grid:v1';
 
     private _weatherGrid: {
         bounds:    { south: number; north: number; west: number; east: number };
@@ -1017,6 +1020,19 @@ export class HeliosEngine
         const key = `${this.homeLat.toFixed(4)},${this.homeLon.toFixed(4)}`;
         if (this._weatherGrid && this._weatherGridFetchKey === key && Date.now() < this._weatherGridStaleAtMs)
         {
+            return;
+        }
+        //localStorage probe: cheap (~1 ms) and skips the network entirely when the cached entry
+        //is still inside the TTL window. Survives page reloads + new card mounts within the
+        //30 min cache lifetime, so a user reloading the dashboard a few times doesn't re-fetch
+        //the same grid. Falls through to the network when the entry is missing, expired or
+        //schema-mismatched.
+        const cached = this._readWeatherGridFromCache(key);
+        if (cached)
+        {
+            this._weatherGrid          = cached.grid;
+            this._weatherGridFetchKey  = key;
+            this._weatherGridStaleAtMs = cached.staleAtMs;
             return;
         }
         this._weatherGridFetching = true;
@@ -1100,7 +1116,7 @@ export class HeliosEngine
                     cloudHigh[base + t] = hi[t] ?? 0;
                 }
             }
-            this._weatherGrid = {
+            const grid = {
                 bounds: { south, north, west, east },
                 nLat:  N,
                 nLon:  N,
@@ -1111,8 +1127,13 @@ export class HeliosEngine
                 cloudMid,
                 cloudHigh,
             };
-            this._weatherGridFetchKey = key;
+            this._weatherGrid          = grid;
+            this._weatherGridFetchKey  = key;
             this._weatherGridStaleAtMs = Date.now() + HeliosEngine._WEATHER_GRID_TTL_MS;
+            //Persist to localStorage so the next page reload skips the network entirely while the
+            //TTL is still valid. Errors in the write path (quota exceeded, private browsing)
+            //silently degrade to in-memory only.
+            this._writeWeatherGridToCache(key, grid, this._weatherGridStaleAtMs);
         }
         catch (e)
         {
@@ -1122,6 +1143,74 @@ export class HeliosEngine
         {
             this._weatherGridFetching = false;
         }
+    }
+
+    //localStorage cache for the parsed weather grid. Saves the next mode-entry on a page reload
+    //within the 30 min TTL from another network roundtrip. Schema-versioned via the key suffix so
+    //a future shape change can be rolled out without poisoning existing entries. Cloud values are
+    //quantised to 1 decimal in the cache to shave the JSON payload from ~700 KB to ~300 KB at
+    //31x31x49x3 (still well under the typical 5-10 MB browser quota).
+    private _readWeatherGridFromCache(homeKey: string): { grid: NonNullable<HeliosEngine['_weatherGrid']>; staleAtMs: number } | null
+    {
+        try
+        {
+            const ls = window.localStorage;
+            if (!ls) { return null; }
+            const raw = ls.getItem(HeliosEngine._WEATHER_GRID_STORAGE_KEY);
+            if (!raw) { return null; }
+            const obj: any = JSON.parse(raw);
+            if (obj?.homeKey !== homeKey) { return null; }
+            if (typeof obj.staleAtMs !== 'number' || Date.now() >= obj.staleAtMs) { return null; }
+            const grid = {
+                bounds:    obj.bounds,
+                nLat:      obj.nLat,
+                nLon:      obj.nLon,
+                lats:      new Float32Array(obj.lats),
+                lons:      new Float32Array(obj.lons),
+                times:     (obj.times as string[]).map(s => new Date(s)),
+                cloudLow:  new Float32Array(obj.cloudLow),
+                cloudMid:  new Float32Array(obj.cloudMid),
+                cloudHigh: new Float32Array(obj.cloudHigh),
+            };
+            return { grid, staleAtMs: obj.staleAtMs };
+        }
+        catch (_)
+        {
+            return null;
+        }
+    }
+
+    private _writeWeatherGridToCache(homeKey: string, grid: NonNullable<HeliosEngine['_weatherGrid']>, staleAtMs: number): void
+    {
+        try
+        {
+            const ls = window.localStorage;
+            if (!ls) { return; }
+            //toFixed(1) on the cloud values: percentages quoted with one decimal place hold all
+            //the precision the bilinear + Perlin canvas pipeline can use, and shaves ~60 % off the
+            //serialised payload vs full-precision Float32 -> string.
+            const round1 = (arr: Float32Array): number[] =>
+            {
+                const out = new Array<number>(arr.length);
+                for (let i = 0; i < arr.length; i++) { out[i] = Math.round(arr[i] * 10) / 10; }
+                return out;
+            };
+            const obj = {
+                homeKey,
+                staleAtMs,
+                bounds:    grid.bounds,
+                nLat:      grid.nLat,
+                nLon:      grid.nLon,
+                lats:      Array.from(grid.lats),
+                lons:      Array.from(grid.lons),
+                times:     grid.times.map(t => t.toISOString()),
+                cloudLow:  round1(grid.cloudLow),
+                cloudMid:  round1(grid.cloudMid),
+                cloudHigh: round1(grid.cloudHigh),
+            };
+            ls.setItem(HeliosEngine._WEATHER_GRID_STORAGE_KEY, JSON.stringify(obj));
+        }
+        catch (_) { /* quota / private browsing / disabled storage: silently degrade */ }
     }
 
     //Cloud overlay raster source / layer management. MapLibre's `image` source warps a single image
