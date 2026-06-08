@@ -33,6 +33,28 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### LiDAR exit fix round 3 + RainViewer luminance inversion (#210)
+
+- **LiDAR exit fade was conditional on a card-side flag that desync'd**: the
+  `_handleCardModeChange` exit branch had `if (this._lidarLayerActive) exitLidarView(this)`.
+  Whenever the card-side flag got out of sync with the engine layer's actual `_alphaFade`
+  (the exact path was hard to pin down from code review alone, suspected to be a race
+  with the atmosphere refresh tick that fires the moment the user moves the opacity
+  slider), the guard skipped the exit fade entirely and the dot cloud kept drawing even
+  though `_cardMode` had flipped to base / weather. Dropped the guard: exitLidarView now
+  always runs on a lidar -> non-lidar transition. The fade tick's alpha formula has
+  `_lidarLayerActive ? 1 : 0` as a multiplier, so even with a false card-side flag the
+  alpha collapses to 0 on the first tick and the engine layer short-circuits its draw.
+  Two outcomes, one code path.
+- **RainViewer luminance inversion to match rainfall intensity**: plain `raster-saturation:
+  -1` maps RGB to luminance, but the Universal Blue palette puts LIGHT rain (blue) at
+  low luminance (~Y=29) and HEAVY rain (yellow / red) at high luminance (~Y=226). On
+  the desaturated overlay that read backwards: light grey blobs looked lighter than dark
+  grey blobs, but the underlying data said the opposite. Added `raster-brightness-min: 1`
+  + `raster-brightness-max: 0` after the desaturation: the luminance ramp is reversed so
+  blue ends up light grey and yellow ends up dark grey, the visual finally matches the
+  intensity reading.
+
 ### Real LiDAR exit fix + RainViewer rollback to raw tiles (#210)
 
 After two rounds of bandaids that did not actually fix the LiDAR stuck-exit report,

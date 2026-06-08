@@ -1057,9 +1057,19 @@ export class HeliosEngine
                 type:   'raster',
                 source: srcId,
                 paint:  {
-                    'raster-opacity':       0.50,
-                    'raster-saturation':    -1,
-                    'raster-fade-duration': 0,
+                    'raster-opacity':        0.50,
+                    'raster-saturation':     -1,
+                    //Brightness inversion. Plain raster-saturation: -1 maps RGB to luminance,
+                    //which puts the Universal Blue palette's BLUE (light rain) at low luminance
+                    //(~Y=29 on the 0-255 scale, dark grey) and YELLOW (heavy rain) at high
+                    //luminance (~Y=226, light grey). That reads backwards on a map: a light
+                    //grey blob looks lighter than a dark grey blob, but the underlying data is
+                    //the opposite (yellow is the heavy rain). Setting brightness-min=1 +
+                    //brightness-max=0 reverses the [0..1] luminance ramp so blue ends up light
+                    //grey, yellow ends up dark grey, the visual matches the intensity reading.
+                    'raster-brightness-min': 1,
+                    'raster-brightness-max': 0,
+                    'raster-fade-duration':  0,
                 },
             });
         }

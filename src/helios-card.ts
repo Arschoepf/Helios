@@ -2848,13 +2848,14 @@ export class HeliosCard extends LitElement
 
         if (prev === 'lidar' && next !== 'lidar')
         {
-            //Only kick the WebGL exit fade if the layer was actually activated. If a previous enter
-            //bailed (no provider), _lidarLayerActive stays false and the exit would only schedule a
-            //wasted fade loop with no visible effect.
-            if (this._lidarLayerActive)
-            {
-                exitLidarView(this);
-            }
+            //Always run exitLidarView when leaving LiDAR mode, no _lidarLayerActive guard. The
+            //old guard skipped the exit fade when the flag was false, which left the engine
+            //layer drawing if the card-side flag ever desync'd from the engine layer's actual
+            //alphaFade. exitLidarView is cheap to call when the layer was never activated: the
+            //fade tick's alpha formula has _lidarLayerActive as a multiplier, so a false flag
+            //collapses alpha to 0 on the first tick and the engine layer immediately
+            //short-circuits its draw call.
+            exitLidarView(this);
         }
         else if (prev !== 'lidar' && next === 'lidar')
         {
