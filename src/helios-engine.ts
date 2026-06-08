@@ -1009,8 +1009,10 @@ export class HeliosEngine
         const srcId = HeliosEngine._RAINVIEWER_SOURCE_ID;
         const lyrId = HeliosEngine._RAINVIEWER_LAYER_ID;
         //URL template: {host}{path}/{size}/{z}/{x}/{y}/{color}/{smooth}_{snow}.png
-        //size 1024 (max free tier), color 4 (Weather Channel gradient), smooth + snow on.
-        const url = `${frame.host}${frame.path}/1024/{z}/{x}/{y}/4/1_1.png`;
+        //size 1024 (max free tier), color 0 (Black & White gradient: light grey light rain ->
+        //black storm; reads as a neutral cloud-mass overlay that contrasts on any basemap theme),
+        //smooth + snow on.
+        const url = `${frame.host}${frame.path}/1024/{z}/{x}/{y}/0/1_1.png`;
         const existing = this.map.getSource(srcId) as any;
         if (!existing)
         {
@@ -1028,7 +1030,7 @@ export class HeliosEngine
                 id:     lyrId,
                 type:   'raster',
                 source: srcId,
-                paint:  { 'raster-opacity': 0.85, 'raster-fade-duration': 0 },
+                paint:  { 'raster-opacity': 0.80, 'raster-fade-duration': 0 },
             });
         }
         else

@@ -33,6 +33,15 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### RainViewer palette + opacity tweak (#210)
+
+- **Palette swap**: RainViewer colour scheme 4 (Weather Channel: blue -> green -> yellow ->
+  red) replaced by scheme 0 (Black and White: light grey light rain -> black storm). Reads
+  as a neutral cloud-mass overlay that contrasts on both light and dark HA themes without
+  fighting the basemap's own colour layer.
+- **Raster opacity 0.85 -> 0.80**: half a notch softer so the underlying streets / districts
+  stay legible through dense rain cells.
+
 ### Weather mode: Open-Meteo grid -> RainViewer radar (#210)
 
 The 50 x 50 Open-Meteo cloud grid + canvas Perlin pipeline was costing 3 chunked POST requests
