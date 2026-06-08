@@ -33,6 +33,14 @@ preserved from the in-tree history that used to live inside
 > [helios-lidar.org/roadmap](https://helios-lidar.org/roadmap),
 > refreshed every five minutes.
 
+### Lock button disabled in weather mode (#210)
+
+Last polish on the weather mode entry / exit: the camera-lock button stays visible in the top-
+left corner so the user reads the current lock state at a glance, but goes disabled while the
+weather mode is active. The engine force-locks the camera on enter to keep the satellite-style
+top-down view framed; letting the user toggle the lock would either fight the engine state or
+strand the view with a half-applied unlock. The pre-enter state is still restored on exit.
+
 ### Weather mode UI polish (#210)
 
 Five follow-ups on beta.80 from the user-facing pass:

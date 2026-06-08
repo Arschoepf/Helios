@@ -2072,13 +2072,20 @@ export class HeliosCard extends LitElement
                     //useless.
                     const cameraLocked  = this._isCameraLocked();
                     const lockIcon      = cameraLocked ? 'mdi:lock' : 'mdi:lock-open-variant';
+                    //Lock button stays visible in every mode (it's the user's primary anchor for
+                    //camera state) but goes disabled during weather mode: the engine force-locks
+                    //the camera on enter to keep the top-down view framed, so letting the user
+                    //toggle the lock would either fight the engine state or strand the satellite
+                    //view with a half-applied unlock. The pre-enter state is restored on exit.
+                    const lockDisabled  = isWeather;
                     return html`
                         <div class="overlay-top-left">
                             <button
                                 type="button"
-                                class="camera-lock-btn ${cameraLocked ? 'is-on' : ''}"
+                                class="camera-lock-btn ${cameraLocked ? 'is-on' : ''} ${lockDisabled ? 'is-disabled' : ''}"
                                 aria-pressed="${cameraLocked ? 'true' : 'false'}"
-                                @click="${this._onCameraLockToggle}"
+                                ?disabled="${lockDisabled}"
+                                @click="${lockDisabled ? undefined : this._onCameraLockToggle}"
                             >
                                 <ha-icon icon="${lockIcon}"></ha-icon>
                             </button>

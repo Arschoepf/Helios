@@ -2667,6 +2667,16 @@ export const heliosCardStyles = css`
     }
     .camera-lock-btn.is-on:hover  { background: var(--dark-primary-color, #0288d1); }
     .camera-lock-btn.is-on:active { background: var(--darker-primary-color, #01579b); }
+    /*  Disabled state (weather mode): button stays visible so the user reads the current lock
+        state at a glance but the click target is inert. Greys out + cursor switches to default,
+        no hover / active feedback so taps read as no-ops. */
+    .camera-lock-btn.is-disabled,
+    .camera-lock-btn[disabled]
+    {
+        opacity: 0.45;
+        cursor: default;
+        pointer-events: none;
+    }
 
     /*  Top-left rail, mirrors overlay-top-right on the opposite edge
         so the corner overlays sit at matching heights. Hosts the
