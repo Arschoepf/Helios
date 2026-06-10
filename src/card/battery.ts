@@ -212,9 +212,9 @@ export function refreshBattery(host: BatteryHost): void
             const watts = pvNormalizeToWatts(v, unit);
             //HA Energy `power_config.stat_rate_inverted` flips the sign so positive reads as charging. The dashboard
             //carries the inversion flag alongside the entity id; apply it here so the chip + leader + scrub buffer all
-            //see the canonical "positive = charging" convention regardless of how the user wired the source.
-            const inverted = host._energyDefaults.invertedRateEntities.includes(id);
-            sum += inverted ? -watts : watts;
+            //see the canonical "positive = charging" convention regardless of how the user wired the source. 
+            //Not needed as the energy dashboard properly reports batteries whether inverted or not.
+            sum += watts;
             anyValid = true;
         }
         if (anyValid)
@@ -565,11 +565,8 @@ export async function fetchBatteryHistory(
             }
         }
 
-        //Multi-bank LKCF aggregation. SoC averages across every wired bank, power sums with per-entity sign-flips
-        //applied from `_energyDefaults.invertedRateEntities` before the sum so a mixed-wiring install (standard sign
-        //on bank A, inverted on bank B) still aggregates correctly. Single-bank installs collapse to the per-entity
-        //series unchanged.
-        const invertedSet = new Set(host._energyDefaults.invertedRateEntities);
+        //Multi-bank LKCF aggregation. SoC averages across every wired bank, power sums. 
+        //Single-bank installs collapse to the per-entity series unchanged.
         const socSeries   = aggregateBatteryLkcf(
             socEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
             'mean',
@@ -578,7 +575,7 @@ export async function fetchBatteryHistory(
         const powerSeries = aggregateBatteryLkcf(
             powerEntities.map(id => perEntity[id] ?? { times: [], values: [] }),
             'sum',
-            (v, idx) => invertedSet.has(powerEntities[idx]) ? -v : v,
+            v => v,
         );
         host._batterySocHistory   = socSeries;
         host._batteryPowerHistory = powerSeries;
