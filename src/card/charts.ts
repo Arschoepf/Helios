@@ -14,18 +14,11 @@ import
     DEFAULT_PV_COLOR_HEX
 } from '../helios-config';
 import { formatDate, formatLocalisedNumber, lerpHexToward } from './format';
-import
-{
-    pvCalibK,
-    pvInverterMaxW,
-    pvNormalizeToWatts,
-    computePvPowerWeighted,
-    type PvHistory
-} from './pv';
+import { type PvHistory } from './pv';
 import { getHomeCoords } from './init';
 import { getSunPosition } from '../engine/sun';
-import { computeForecastCalibration } from './calibration';
-import { sliceForRange } from './unifiedStore';
+import { sliceForRange, valueAt } from './unifiedStore';
+import { sumChangeForDay, type ChangeBucket } from './energy-stats';
 
 
 //Per-point forecast multiplier. Identity on calR today; kept as a single hook so a future
@@ -422,49 +415,16 @@ export function pvValueAtTime(
         return { value: NaN, unit: displayUnit, isPredicted: false };
     }
 
-    //Forecast for future hours. Reuses the per-array PV power model + thermal / shading hooks the chart already feeds, plus the 5-day rolling
-    //calibration ratio so the tooltip's forecast value matches the "refined" headline number on the dashboard, plus the optional inverter PMax clip
-    //so the reading never exceeds what the user's hardware can deliver.
-    const series = host._chartSeries;
-    const k      = pvCalibK(host.config);
-    const cal    = computeForecastCalibration(host);
-    const calR   = cal ? cal.ratio : 1;
-    const capW    = pvInverterMaxW(host.config);
-    if (k !== null && series && coords && series.times.length >= 2)
+    //Forecast for future hours: read the unified store's CORRECTED forecast at the cursor instant, the
+    //same series the dotted timeline curve draws and the dashboard "affiné" headline integrates, so the
+    //tooltip never disagrees with the line it sits on. The store value is already cap-clipped and
+    //correction-applied, no local model loop here.
+    const store = host._unifiedStore;
+    if (store)
     {
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let i = 1; i < series.times.length; i++)
+        const w = valueAt(store.forecast, store, targetMs);
+        if (w !== null && w > 0)
         {
-            const t1 = series.times[i].getTime();
-            if (targetMs > t1)
-            {
-                continue;
-            }
-            const t0 = series.times[i - 1].getTime();
-            if (targetMs < t0)
-            {
-                break;
-            }
-            const cloud0 = series.cloud[i - 1] ?? 0;
-            const cloud1 = series.cloud[i] ?? 0;
-            const eff0   = effectiveForecastRatio(calR);
-            const eff1   = effectiveForecastRatio(calR);
-            const w0 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i - 1], coords.lat, coords.lon, cloud0, {
-                airTempC: series.temperature[i - 1],
-                windMs:   series.windSpeed[i - 1],
-                raster,
-            }) * k * eff0);
-            const w1 = Math.min(capW, computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud1, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            }) * k * eff1);
-            const dt = t1 - t0;
-            if (dt <= 0)
-            {
-                return { value: Math.max(0, w1) * nativeFromW, unit: displayUnit, isPredicted: true };
-            }
-            const w  = w0 + (w1 - w0) * (targetMs - t0) / dt;
             return { value: Math.max(0, w) * nativeFromW, unit: displayUnit, isPredicted: true };
         }
     }
@@ -685,6 +645,13 @@ export interface ChartSeries
     times:        Date[];
     irradiance:   number[];
     cloud:        number[];
+    //Hourly horizontal beam + diffuse radiation (W/m²), -1 where the
+    //model didn't decompose. Feed the tilt transposition with the real
+    //direct / diffuse split. Consumers that don't transpose ignore them.
+    directRad:    number[];
+    diffuseRad:   number[];
+    //Hourly ground snow depth (m), NaN where unknown. Feeds the winter snow-cover derate.
+    snowDepth:    number[];
     //Hourly ambient temperature (°C) and 10-metre wind speed (m/s).
     //NaN where the model didn't supply a value. Consumers that
     //don't care about thermal derating ignore these fields.
@@ -701,6 +668,10 @@ export interface ChartHost
     readonly _timeRange:    { start: Date; end: Date } | null;
     readonly _chartSeries:  ChartSeries | null;
     readonly _pvHistory:    PvHistory | null;
+    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. Used to sum exact
+    //per-day produced kWh (sumChangeForDay) so the daily totals match the HA Energy dashboard to the
+    //watt-hour instead of drifting from the integrated, gap-interpolated curve.
+    readonly _pvChangeSeries: ChangeBucket[] | null;
     //Per-entity histories preserved alongside the aggregated `_pvHistory` so the chart can render one curve per
     //source and the scrub tooltip can show a per-source breakdown next to the summed value. Single-source installs
     //carry a single entry equal to the aggregate; multi-source installs carry one entry per HA Energy source.
@@ -709,11 +680,6 @@ export interface ChartHost
     //carries the same 5-day window with two orders of magnitude fewer rows on high-frequency installs. Null while the stats fetch is in
     //flight, or empty when the entity is not LTS-tracked, in both cases the consumer degrades to `_pvHistory`.
     readonly _pvCalibStats:   PvHistory | null;
-    //5-minute long-term-statistics series feeding the 30-day shading-map trainer. Same fallback contract as `_pvCalibStats`.
-    readonly _pvTrainerStats: PvHistory | null;
-    //Optional companion battery SoC history, populated by the same fetchPvHistory call when the inverter-cutoff guard is armed.
-    //Null when the guard is off or no battery is configured. The shading trainer reads it to skip buckets where SoC reached the cutoff.
-    readonly _batteryHistory: PvHistory | null;
     readonly _pvUnit:       string;
     readonly _selectedTime: Date | null;
     readonly _isLiveMode:   boolean;
@@ -1535,153 +1501,47 @@ export function computeDailyKwhTotals(host: ChartHost): Map<number, number>
         return d.getTime();
     };
 
-    //Pass 1: past + today-so-far from the observed history. Combines two sources so days that fall outside the narrow raw window
-    //still get a value:
-    //  - `_pvHistory` (~2 days raw, finest resolution) covers today and yesterday.
-    //  - `_pvCalibStats` (5 days hourly stats) covers days 2-5 in the past so the per-day chips on the timeline keep showing real
-    //    figures instead of falling silently to zero.
-    //Days covered by `_pvHistory` are integrated from that slot only; the stats slot fills in days the raw window does not reach.
-    const unit = (host._pvUnit || '').toLowerCase();
-    const isCumulativeEnergy = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-
-    const rawHist = host._pvHistory;
-    const rawFirstMs = (rawHist && rawHist.times.length > 0) ? rawHist.times[0].getTime() : null;
-    const rawLastMs  = (rawHist && rawHist.times.length > 0) ? rawHist.times[rawHist.times.length - 1].getTime() : null;
-
-    const integrate = (
-        h:           PvHistory,
-        bucketGuard: (tMs: number) => boolean,
-    ): void =>
+    //Pass 1: past + today-so-far, summed directly from the recorder `change` buckets per day so each
+    //day's produced kWh matches the HA Energy dashboard to the watt-hour. No curve integration, no gap
+    //interpolation (which was inflating the totals a percent or two above HA). The change series spans
+    //the store's J-2 past window, which covers every past day the timeline can show.
+    const changeSeries = host._pvChangeSeries;
+    if (changeSeries && changeSeries.length > 0)
     {
-        if (isCumulativeEnergy)
+        const cursor = new Date(startMs);
+        cursor.setHours(0, 0, 0, 0);
+        while (cursor.getTime() < endMsAbs)
         {
-            //Cumulative energy sensor: difference consecutive
-            //samples and sum the deltas per day. Counter resets
-            //(dv < 0) are dropped, same convention the chart uses.
-            for (let i = 1; i < h.times.length; i++)
+            const ds   = cursor.getTime();
+            const next = new Date(cursor);
+            next.setDate(next.getDate() + 1);
+            const kwh = sumChangeForDay(changeSeries, ds, next.getTime());
+            if (kwh !== null)
             {
-                const tMs = h.times[i].getTime();
-                if (tMs < startMs || tMs > endMsAbs)
-                {
-                    continue;
-                }
-                if (!bucketGuard(tMs))
-                {
-                    continue;
-                }
-                const dv = h.values[i] - h.values[i - 1];
-                if (!isFinite(dv) || dv < 0)
-                {
-                    continue;
-                }
-                const kwh = unit === 'mwh' ? dv * 1000
-                          : unit === 'wh'  ? dv / 1000
-                          : dv;
-                const k = dayKey(tMs);
-                out.set(k, (out.get(k) ?? 0) + kwh);
+                out.set(ds, Math.max(0, kwh));
             }
+            cursor.setTime(next.getTime());
         }
-        else
-        {
-            //Power sensor: trapezoidal integration of the
-            //instantaneous reading over each consecutive pair.
-            //Skip gaps > 6 h (likely sensor outage, integrating
-            //across them would invent energy).
-            for (let i = 1; i < h.times.length; i++)
-            {
-                const tCurrMs = h.times[i].getTime();
-                if (tCurrMs < startMs || tCurrMs > endMsAbs)
-                {
-                    continue;
-                }
-                if (!bucketGuard(tCurrMs))
-                {
-                    continue;
-                }
-                const tPrevMs = h.times[i - 1].getTime();
-                const dtH = (tCurrMs - tPrevMs) / 3_600_000;
-                if (dtH <= 0 || dtH > 6)
-                {
-                    continue;
-                }
-                const wPrev = pvNormalizeToWatts(h.values[i - 1], host._pvUnit);
-                const wCurr = pvNormalizeToWatts(h.values[i],     host._pvUnit);
-                if (!isFinite(wPrev) || !isFinite(wCurr))
-                {
-                    continue;
-                }
-                const kwh = ((wPrev + wCurr) / 2) * dtH / 1000;
-                const k = dayKey(tCurrMs);
-                out.set(k, (out.get(k) ?? 0) + kwh);
-            }
-        }
-    };
-
-    if (rawHist && rawHist.times.length >= 2)
-    {
-        //Full integration over the raw slot; no gating, raw is authoritative for the days it covers.
-        integrate(rawHist, () => true);
-    }
-    const calib = host._pvCalibStats;
-    if (calib && calib.times.length >= 2)
-    {
-        //Stats slot fills the wider days only. A sample whose timestamp falls within the raw window is already counted; skip it.
-        integrate(calib, (tMs) =>
-        {
-            if (rawFirstMs === null || rawLastMs === null)
-            {
-                return true;
-            }
-            return tMs < rawFirstMs || tMs > rawLastMs;
-        });
     }
 
-    //Pass 2: future + today-remainder from the forecast model.
-    //Skipped silently when peak power is unset (no model, no
-    //forecast, only past observation contributes). Forecast kWh
-    //is multiplied by the 5-day rolling calibration ratio so the
-    //per-day chips match the "refined" dashboard headline + the
-    //dotted forecast curve next to them, then clipped at the
-    //inverter PMax so a bright midday hour can't push the daily
-    //total above what the hardware would actually deliver.
-    const k        = pvCalibK(host.config);   //W per percent of STC
-    const series   = host._chartSeries;
-    const coords   = getHomeCoords(host.config, host.hass);
-    const cal      = computeForecastCalibration(host);
-    const calR     = cal ? cal.ratio : 1;
-    const capW     = pvInverterMaxW(host.config);
-    if (k !== null && k > 0 && series && coords)
+    //Pass 2: future + today-remainder from the unified store's CORRECTED forecast, the same series the
+    //dotted timeline curve draws and the dashboard "affiné" headline integrates, so the per-day chips
+    //agree with the curve next to them. Only buckets at / after "now" contribute (past is Pass 1's real
+    //production); the store forecast is already cap-clipped and correction-applied.
+    const store = host._unifiedStore;
+    if (store)
     {
-        //Index hourly forecast samples by hour-floor ms so we can integrate them by 1-hour rectangles per day. The series timestamps are already at
-        //hour boundaries from the engine's resampling.
-        const nowMs  = Date.now();
-        const raster = host._engine?.getLidarRaster() ?? null;
-        for (let i = 0; i < series.times.length; i++)
+        const nowMs = Date.now();
+        const stepH = store.stepMs / 3_600_000;   //bucket length in hours
+        for (let i = 0; i < store.bucketsTotal; i++)
         {
-            const tMs   = series.times[i].getTime();
-            if (tMs < startMs || tMs > endMsAbs)
-            {
-                continue;
-            }
-            if (tMs < nowMs) continue;   //past covered by Pass 1
-            const cloud = series.cloud[i] ?? 0;
-            const pct   = computePvPowerWeighted(host.config, series.times[i], coords.lat, coords.lon, cloud, {
-                airTempC: series.temperature[i],
-                windMs:   series.windSpeed[i],
-                raster,
-            });
-            if (pct <= 0)
-            {
-                continue;
-            }
-            //pct × k = watts at this hour midpoint × 1h = Wh.
-            //Divide by 1000 to land in kWh; clip first so the
-            //daily total honours the inverter cap.
-            const eff   = effectiveForecastRatio(calR);
-            const watts = Math.min(capW, pct * k * eff);
-            const kwh   = watts / 1000;
-            const dk    = dayKey(tMs);
-            out.set(dk, (out.get(dk) ?? 0) + kwh);
+            const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
+            if (mid < startMs || mid > endMsAbs) { continue; }
+            if (mid < nowMs) { continue; }   //past covered by Pass 1
+            const w = store.forecast[i];
+            if (w === null || !isFinite(w) || w <= 0) { continue; }
+            const dk = dayKey(mid);
+            out.set(dk, (out.get(dk) ?? 0) + w * stepH / 1000);
         }
     }
 

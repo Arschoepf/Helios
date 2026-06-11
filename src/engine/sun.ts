@@ -135,6 +135,27 @@ export interface PvComputeContext
     airTempC?: number;
     windMs?:   number;
     shading?:  boolean;
+    //Measured / forecast global horizontal irradiance in W/m² (Open-Meteo shortwave_radiation, or a
+    //home radiation sensor). When provided and >= 0, it replaces the analytical Haurwitz clear-sky ×
+    //Kasten-Czeplak cloud magnitude as the GHI base, so the forecast inherits the weather model's own
+    //cloud physics instead of the cubic approximation. Undefined keeps the legacy analytical base
+    //bit-for-bit.
+    ghiWm2?:   number;
+    //Measured / forecast beam + diffuse irradiance on the HORIZONTAL plane in W/m² (Open-Meteo
+    //direct_radiation + diffuse_radiation). When BOTH are provided and >= 0 they replace the analytical
+    //cloud-derived direct / diffuse split in the tilt transposition: the beam term is the real DNI
+    //projected onto the panel, the diffuse term the real sky diffuse, so a tilted array under broken
+    //cloud no longer rides the crude kCloud → direct-fraction cubic. Ignored on a horizontal panel
+    //(GHI already is the plane-of-array value there) and when either is missing.
+    directWm2?:  number;
+    diffuseWm2?: number;
+    //Plane-of-array irradiance in W/m² straight from Open-Meteo's `global_tilted_irradiance` for THIS
+    //panel's tilt + azimuth (see card/gti.ts). When provided and >= 0 on a tilted panel it REPLACES the
+    //isotropic Liu-Jordan transposition below: Open-Meteo computes the POA with an anisotropic
+    //(Perez-family) sky model, better than our isotropic diffuse assumption, especially off the
+    //equator-facing direction. LiDAR shading still carves the beam out (estimated from the diffuse +
+    //ground terms) so a shaded array keeps only the sky + ground POA. Undefined keeps the transposition.
+    poaWm2?:     number;
 }
 
 export function computePvPower(
@@ -160,7 +181,11 @@ export function computePvPower(
     const cc     = Math.max(0, Math.min(100, cloudCoverPct)) / 100;
     const kCloud = 1 - 0.75 * Math.pow(cc, 3.4);
 
-    const ghiEff = ghiClear * kCloud;
+    //GHI magnitude: prefer the supplied measured / forecast irradiance (Open-Meteo shortwave or a home
+    //sensor) when present, which already encodes the real cloud attenuation, and fall back to the
+    //analytical Haurwitz × Kasten-Czeplak otherwise. kCloud is still used below for the direct /
+    //diffuse split regardless of which magnitude won.
+    const ghiEff = (ctx?.ghiWm2 != null && ctx.ghiWm2 >= 0) ? ctx.ghiWm2 : ghiClear * kCloud;
 
     let poaEff: number;
 
@@ -204,20 +229,38 @@ export function computePvPower(
         const cosTheta = Math.sin(altR) * Math.cos(beta)
                        + Math.cos(altR) * Math.sin(beta) * Math.cos(dAz);
 
-        //Direct fraction from the cloud-attenuation factor. kCloud
-        //spans ~0.25 (overcast) to 1.0 (clear sky), mapped to a
-        //direct fraction of 0 → 0.85. Loose approximation of a
-        //proper clearness-index decomposition (Erbs, Reindl); good
-        //enough at the hourly resolution the card runs at.
-        const directFraction  = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
-        const diffuseFraction = 1 - directFraction;
-
         //Beam transposition ratio R_b = cos(θi) / cos(zenith). Clamp
         //the denominator at sin(5°) so the ratio doesn't blow up at
         //sunrise / sunset (the beam component is tiny there anyway).
         const Rb = cosTheta > 0
             ? Math.max(0, cosTheta) / Math.max(0.087, cosZ)
             : 0;
+
+        //Direct / diffuse split. The SPLIT (which fraction of the GHI arrives as a collimated beam vs
+        //isotropic sky) drives the transposition gain on a tilted panel; the magnitude stays owned by
+        //ghiEff so the sensor-priority GHI base above is respected. Prefer the measured / forecast
+        //decomposition (Open-Meteo direct + diffuse radiation on the horizontal plane) when BOTH are
+        //supplied: their ratio is the real beam fraction, far better than the kCloud cubic for a tilted
+        //array under broken cloud. Fall back to the cloud-derived fraction when either is missing
+        //(sensor-only GHI, Haurwitz path).
+        const hasSplit = ctx?.directWm2 != null && ctx.directWm2 >= 0
+                      && ctx?.diffuseWm2 != null && ctx.diffuseWm2 >= 0
+                      && (ctx.directWm2 + ctx.diffuseWm2) > 0;
+
+        let directFraction: number;
+        if (hasSplit)
+        {
+            directFraction = ctx!.directWm2! / (ctx!.directWm2! + ctx!.diffuseWm2!);
+        }
+        else
+        {
+            //kCloud spans ~0.25 (overcast) to 1.0 (clear sky), mapped to
+            //a direct fraction of 0 → 0.85. Loose approximation of a
+            //proper clearness-index decomposition (Erbs, Reindl); good
+            //enough at the hourly resolution the card runs at.
+            directFraction = Math.max(0, Math.min(0.85, (kCloud - 0.25) / 0.75 * 0.85));
+        }
+        const diffuseFraction = 1 - directFraction;
 
         //Shading: the LiDAR raycast told us a building or tree is
         //sitting between the panel and the sun. The direct beam is
@@ -229,7 +272,26 @@ export function computePvPower(
         const diffusePoa = ghiEff * diffuseFraction * (1 + Math.cos(beta)) / 2;
         const groundPoa  = ghiEff * 0.2             * (1 - Math.cos(beta)) / 2;
 
-        poaEff = directPoa + diffusePoa + groundPoa;
+        //Open-Meteo GTI base, when available for this orientation, replaces the isotropic transposition
+        //above with the model's anisotropic POA. LiDAR shading still removes the beam: GTI is the TOTAL
+        //plane-of-array, so we carve out the beam it implies (GTI minus our sky + ground estimate) and
+        //keep only the diffuse + ground sky when the array is shaded.
+        if (ctx?.poaWm2 != null && ctx.poaWm2 >= 0)
+        {
+            if (ctx.shading)
+            {
+                const skyGround = Math.min(ctx.poaWm2, diffusePoa + groundPoa);
+                poaEff = skyGround;
+            }
+            else
+            {
+                poaEff = ctx.poaWm2;
+            }
+        }
+        else
+        {
+            poaEff = directPoa + diffusePoa + groundPoa;
+        }
     }
 
     //Thermal derating: warmer cells produce less. Only applied when the caller passes a finite air temperature, otherwise the multiplier stays at 1
