@@ -18,8 +18,6 @@ import
     pvRateAtTime,
     pvNormalizeToWatts,
     pvCalibK,
-    pvInverterMaxW,
-    computePvPowerWeighted,
     formatPvValue,
     resolvePvLiveEntity,
     clearPvModuleCaches
@@ -33,7 +31,6 @@ import
     clearBatteryModuleCaches
 } from './card/battery';
 import { refreshSolarRadiation, clearRadiationModuleCaches } from './card/radiation';
-import { computeForecastCalibration } from './card/calibration';
 import
 {
     renderChart,
@@ -72,7 +69,7 @@ import
 import { enterLidarView, exitLidarView, renderLidarViewOpacityPicker } from './card/lidar-view';
 import type { CardMode } from './card/card-mode';
 import { renderLoadingBanner, renderWeatherRateLimitBanner, type LoadingPhaseId, type LoadingPhaseState } from './card/loading-tracker';
-import { refreshGrid, formatGridValue, gridWattsAtTime, clearGridModuleCaches } from './card/grid';
+import { refreshGrid, formatGridValue } from './card/grid';
 import {
     subscribeEnergyPrefs,
     unsubscribeEnergyPrefs,
@@ -87,7 +84,10 @@ import {
     syncWeatherShaderState,
 } from './card/weatherMode';
 import { cloudCoverIcon, cloudLayerIcon } from './card/cloud-icons';
-import { buildUnifiedStore, isStoreFresh, type UnifiedStoreHost } from './card/unifiedStore';
+import { clearEnergyStatsCache, wattsAtFromChangeSeries } from './card/energy-stats';
+import { refreshSkyForecast, clearSkyForecastCache } from './card/forecast-sky';
+import { refreshTiltedIrradiance, clearGtiCache } from './card/gti';
+import { buildUnifiedStore, isStoreFresh, valueAt, type UnifiedStoreHost } from './card/unifiedStore';
 import
 {
     computeConfigSig,
@@ -385,18 +385,39 @@ export class HeliosCard extends LitElement
     @state() _pvCalibStats: { times: Date[]; values: number[] } | null = null;
     _pvCalibStatsFetchKey  = '';
     _pvCalibStatsFetching  = false;
-    //5-minute long-term-statistics series feeding the unified data source's past-production curve (5 days). Same contract as `_pvCalibStats`, just at a finer
-    //period. ~1.4k rows for 5 days.
-    @state() _pvTrainerStats: { times: Date[]; values: number[] } | null = null;
-    _pvTrainerStatsFetchKey  = '';
-    _pvTrainerStatsFetching  = false;
-    //Companion battery SoC history fetched alongside PV history when the user has wired a battery AND armed the inverter-cutoff guard
-    //(`inverter-cutoff-soc-pct`). Reserved for future use after the shading-map trainer retirement. Null when the guard is
-    //off or no battery is configured. Not reactive: the trainer pulls it directly and we never need to re-render on a SoC sample change.
-    _batteryHistory: { times: Date[]; values: number[] } | null = null;
-    //Rolling buffer of state samples. For cumulative-energy sensors this gives a "last minute" instantaneous rate, fresher than the historical fetch
-    //which only refreshes per timeline range.
-    _pvSampleBuffer: Array<{ t: number; v: number }> = [];
+    //Recorder `change` series for the solar energy meter(s): the canonical past-production source for
+    //the unified store + chip scrub. Reset-corrected, unit-normalised kWh per 5-minute bucket, the
+    //same metric the HA Energy dashboard consumes. Replaces the client-side counter differentiation.
+    @state() _pvChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    _pvChangeSeriesFetchKey  = '';
+    _pvChangeSeriesFetching  = false;
+    //Learned sky-residual forecast correction. The two histories (60-day hourly production from the
+    //recorder, 60-day hourly cloud from Open-Meteo) feed buildSkyResidualMap; the resulting map
+    //multiplies the forecast per sun position so it converges to the user's real shading + biases.
+    @state() _skyResidualMap: import('./card/forecast-sky').SkyResidualMap | null = null;
+    _skyProdSeries:    import('./card/energy-stats').ChangeBucket[] | null = null;
+    _skyProdFetchKey   = '';
+    _skyProdFetching   = false;
+    _skyCloudTimes:    number[] = [];
+    _skyCloud:         number[] = [];
+    _skyShortwave:     number[] = [];
+    _skyDirect:        number[] = [];
+    _skyDiffuse:       number[] = [];
+    _skyTemp:          number[] = [];
+    _skyWind:          number[] = [];
+    _skySnow:          number[] = [];
+    _skySoc:           import('./card/energy-stats').MeanBucket[] | null = null;
+    _skySocFetchKey    = '';
+    _skySocFetching    = false;
+    //Per-orientation Open-Meteo GTI store (src/card/gti.ts). Shared by the forecast + the 60-day
+    //learning so both transpose on the same anisotropic POA. Not @state: read directly when the store
+    //rebuilds, the requestUpdate inside refreshTiltedIrradiance drives the re-render.
+    _gtiStore:         import('./card/gti').GtiStore | null = null;
+    _gtiFetchKey       = '';
+    _gtiFetching       = false;
+    _skyCloudFetchKey  = '';
+    _skyCloudFetching  = false;
+    _skyMapVersion     = '';
     //Home-battery state, populated when the HA Energy dashboard exposes at least one battery source (`stat_rate`,
     //`stat_energy_from`, `stat_energy_to` or `stat_soc`). Live readings; historical series lives in the *History fields
     //below. Units are kept alongside the values so the chip can format kW vs W without re-reading the state.
@@ -410,29 +431,15 @@ export class HeliosCard extends LitElement
     @state() _gridImportUnit:    string        = '';
     @state() _gridExportValue:   number | null = null;
     @state() _gridExportUnit:    string        = '';
-    //Rolling buffers used by refreshGrid when the wired entity is a
-    //cumulative energy sensor (Wh / kWh): we derive a live W value
-    //from the slope over the last ~5 min instead of surfacing the
-    //meter's running total to the chip.
-    //Per-entity rolling buffers keyed by entity_id. Multi-entity
-    //grid wires (heures pleines / creuses, peak / off-peak) keep one
-    //buffer per source.
-    _gridImportSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
-    _gridExportSamples: Map<string, Array<{ t: number; v: number }>> = new Map();
-    //Last derived watts per entity, tagged with the wall-clock at
-    //which the underlying state changed. The chip displays the watts
-    //of whichever entity moved most recently, so HP / HC indexes
-    //don't fight each other when only one is currently incrementing.
-    _gridImportLastDerived: Map<string, { watts: number; t: number }> = new Map();
-    _gridExportLastDerived: Map<string, { watts: number; t: number }> = new Map();
-    //Unit per grid entity (kwh / wh / mwh / w / kw) so the
-    //past-scrub derivation can convert raw buffer values to watts
-    //independently of the slot's overall normalised unit.
-    _gridImportUnits: Map<string, string> = new Map();
-    _gridExportUnits: Map<string, string> = new Map();
-    //Combined signed grid-power slot driven by the HA Energy grid source's `stat_rate`. When wired, refreshGrid derives
-    //the net signed watts from these buffers and routes the sign to the import / export chips; the directional slots
-    //above stay empty.
+    //Recorder `change` series for the grid import / export energy meters: the canonical past-power
+    //source for the unified store + scrub. Reset-corrected, unit-normalised kWh per 5-minute bucket,
+    //the same metric the HA Energy dashboard consumes. Replaces the per-entity rolling slope buffers.
+    @state() _gridImportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    @state() _gridExportChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    _gridImportChangeFetchKey = '';
+    _gridExportChangeFetchKey = '';
+    _gridImportChangeFetching = false;
+    _gridExportChangeFetching = false;
     //Historical series for the active timeline range. Both battery entities are fetched in a single `history/history_during_period` WebSocket call
     //when both are set.
     @state() _batterySocHistory: {
@@ -445,6 +452,13 @@ export class HeliosCard extends LitElement
     } | null = null;
     _batteryFetchKey  = '';
     _batteryFetching  = false;
+    //Recorder `change` series for the battery charge (stat_energy_to) + discharge (stat_energy_from)
+    //meters: the canonical past-power source for the unified store + scrub. Net (charge - discharge)
+    //gives a structural sign so charging is never lost (#216).
+    @state() _batteryChargeChangeSeries:    import('./card/energy-stats').ChangeBucket[] | null = null;
+    @state() _batteryDischargeChangeSeries: import('./card/energy-stats').ChangeBucket[] | null = null;
+    _batteryChangeFetchKey = '';
+    _batteryChangeFetching = false;
     //Solar-radiation entity history, populated when
     //`solar-radiation-entity` is configured. We pull the recorder's
     //samples over the active timeline range and merge them with the
@@ -514,6 +528,11 @@ export class HeliosCard extends LitElement
         times:        Date[];
         irradiance:   number[];
         cloud:        number[];
+        //Hourly horizontal beam + diffuse radiation in W/m², -1 where the model didn't decompose. Feed the PV tilt transposition's direct / diffuse split.
+        directRad:    number[];
+        diffuseRad:   number[];
+        //Hourly ground snow depth in metres, NaN where unknown. Feeds the winter snow-cover derate.
+        snowDepth:    number[];
         //Hourly ambient temperature in °C + wind speed in m/s, NaN-padded where the model didn't return a value. Both arrays mirror the `times`
         //length and feed the PV prediction's thermal-derating term.
         temperature:  number[];
@@ -862,16 +881,38 @@ export class HeliosCard extends LitElement
         //from scratch instead of pulling from the cached fetch key.
         this._pvHistory                   = null;
         this._pvCalibStats                = null;
-        this._pvTrainerStats              = null;
-        this._pvSampleBuffer              = [];
+        this._pvChangeSeries              = null;
+        this._pvChangeSeriesFetchKey      = '';
+        this._skyResidualMap              = null;
+        this._skyProdSeries               = null;
+        this._skyProdFetchKey             = '';
+        this._skyCloudTimes               = [];
+        this._skyCloud                    = [];
+        this._skyShortwave                = [];
+        this._skyDirect                   = [];
+        this._skyDiffuse                  = [];
+        this._skyTemp                     = [];
+        this._skyWind                     = [];
+        this._skySnow                     = [];
+        this._skySoc                      = null;
+        this._skySocFetchKey              = '';
+        this._gtiStore                    = null;
+        this._gtiFetchKey                 = '';
+        this._skyCloudFetchKey            = '';
+        this._skyMapVersion               = '';
         this._pvFetchKey                  = '';
         this._pvCalibStatsFetchKey        = '';
-        this._pvTrainerStatsFetchKey      = '';
         this._pvHistoryDiagnostics        = null;
+        this._gridImportChangeSeries      = null;
+        this._gridExportChangeSeries      = null;
+        this._gridImportChangeFetchKey    = '';
+        this._gridExportChangeFetchKey    = '';
         this._batterySocHistory           = null;
         this._batteryPowerHistory         = null;
         this._batteryFetchKey             = '';
-        this._batteryHistory              = null;
+        this._batteryChargeChangeSeries   = null;
+        this._batteryDischargeChangeSeries = null;
+        this._batteryChangeFetchKey       = '';
         this._solarRadiationHistory       = null;
         this._solarRadiationFetchKey      = '';
         //Drop the module-level caches too. Without these calls the per-LitElement state above is reset but the next refresh hits the
@@ -879,7 +920,9 @@ export class HeliosCard extends LitElement
         clearPvModuleCaches();
         clearBatteryModuleCaches();
         clearRadiationModuleCaches();
-        clearGridModuleCaches();
+        clearEnergyStatsCache();
+        clearSkyForecastCache();
+        clearGtiCache();
         //Engine-side: clears localStorage weather cache, drops the in-memory hourly snapshot and triggers a refetch.
         this._engine?.resetDataCache();
         //Reset the loading tracker so the user gets the same hydration feedback they saw at first boot.
@@ -1261,6 +1304,22 @@ export class HeliosCard extends LitElement
         refreshBattery(this);
         refreshGrid(this);
         refreshSolarRadiation(this);
+        //Background forecast refinements (per-orientation GTI, 60-day cloud + production history). These
+        //are DEFERRED until the critical engine weather has landed (_chartSeries populated). At load
+        //several api.open-meteo.com requests would otherwise fire at once and, against the browser's
+        //~6-connection-per-host limit plus Open-Meteo's rate limits, could starve or 429 the weather
+        //fetch itself, leaving the card with no weather and no forecast. Weather first, refinements after.
+        //onWeatherUpdate moves _timeRange when it lands, which re-trips this refresh chain, so the gated
+        //fetches fire on the very next pass once weather is in.
+        const skyCoords = getHomeCoords(this.config, this.hass);
+        const weatherReady = (this._chartSeries?.times.length ?? 0) > 0;
+        if (skyCoords && weatherReady)
+        {
+            //GTI must refresh before the sky map rebuilds: the learning reads _gtiStore, so landing it
+            //first means the very next maybeRebuildSkyMap picks up the anisotropic POA in the same pass.
+            refreshTiltedIrradiance(this, skyCoords.lat, skyCoords.lon);
+            refreshSkyForecast(this, skyCoords.lat, skyCoords.lon);
+        }
     }
 
 
@@ -1477,48 +1536,17 @@ export class HeliosCard extends LitElement
                 : (this._pvCurrent !== null ? currentPvRate(this) : null))
             : null;
 
-        //Predicted PV at the scrub instant when scrubbing into the
-        //future. Uses the same kWp × computePvPower(t, lat, lon, cloud)
-        //path the chart's dotted forecast line uses. Falls back to
-        //null when peak power is unset or no weather is available
-        //yet, in which case the chip stays hidden as before.
+        //Predicted PV at the scrub instant when scrubbing into the future. Reads the unified store's
+        //corrected forecast at that instant, the exact series the dotted timeline curve draws and the
+        //dashboard "affiné" headline integrates, so the chip never disagrees with the line it sits on.
+        //Stays null (chip hidden) when the store isn't built or the instant has no forecast.
         let pvPredictedRate: { value: number; unit: string } | null = null;
-        if (pvScrubFuture && pvEntityId !== '' && layout !== null)
+        if (pvScrubFuture && pvEntityId !== '' && layout !== null && this._unifiedStore)
         {
-            const k      = pvCalibK(this.config);
-            const coords = getHomeCoords(this.config, this.hass);
-            const series = this._chartSeries;
-            if (k !== null && coords && series && series.times.length > 0)
+            const w = valueAt(this._unifiedStore.forecast, this._unifiedStore, this._selectedTime!.getTime());
+            if (w !== null && w > 0)
             {
-                //Pick the series sample closest to _selectedTime.
-                const targetMs = this._selectedTime!.getTime();
-                let best = 0;
-                let bestDiff = Math.abs(series.times[0].getTime() - targetMs);
-                for (let i = 1; i < series.times.length; i++)
-                {
-                    const d = Math.abs(series.times[i].getTime() - targetMs);
-                    if (d < bestDiff) { bestDiff = d; best = i; }
-                }
-                const cloud = series.cloud[best] ?? 0;
-                const pct   = computePvPowerWeighted(this.config, this._selectedTime!, coords.lat, coords.lon, cloud, {
-                    airTempC: series.temperature[best],
-                    windMs:   series.windSpeed[best],
-                    raster:   this._engine?.getLidarRaster() ?? null,
-                });
-                if (pct > 0)
-                {
-                    //k is W per percent of STC, so pct × k is watts.
-                    //Apply the 5-day rolling calibration ratio so the
-                    //chip agrees with the dotted forecast curve + the
-                    //tooltip value at the same scrub instant; clip at
-                    //the inverter's PMax so a bright forecast hour
-                    //doesn't overshoot the install's hardware ceiling.
-                    //Infinity cap = no clipping.
-                    const cal  = computeForecastCalibration(this);
-                    const calR = cal ? cal.ratio : 1;
-                    const w    = Math.min(pvInverterMaxW(this.config), pct * k * calR);
-                    pvPredictedRate = { value: w, unit: 'W' };
-                }
+                pvPredictedRate = { value: w, unit: 'W' };
             }
         }
 
@@ -1582,25 +1610,18 @@ export class HeliosCard extends LitElement
         const batteryScrubFuture = batteryScrubbing
             && this._selectedTime!.getTime() > Date.now() + 60_000;
 
-        //Grid IN / OUT past-scrub: derive the watts from the rolling
-        //buffer around the scrub instant so the chip reflects what
-        //was actually flowing at that moment, not the live now. Skip
-        //in future scrub (no data) and in live mode (live values
-        //already in _gridImportValue / _gridExportValue).
+        //Grid IN / OUT past-scrub: read the average watts at the scrub instant from the recorder
+        //`change` series so the chip reflects what flowed at that moment, not live now. Skip in
+        //future scrub (no data) and in live mode (live values already in _gridImportValue /
+        //_gridExportValue).
         const gridScrubTimeMs = batteryScrubbing && !batteryScrubFuture
             ? this._selectedTime!.getTime()
             : null;
-        //Scrub path runs through gridWattsAtTime which sums slopes
-        //across every wired entity, the sum can dip below zero
-        //around the moment a tariff switches or when a meter
-        //quantises in the "wrong" direction by one Wh. A negative
-        //IMPORT at scrub time is an EXPORT moment that the export
-        //chip already reports; clamping to 0 keeps the slot honest.
         const rawImport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridImportSamples, this._gridImportUnits, gridScrubTimeMs)
+            ? wattsAtFromChangeSeries(this._gridImportChangeSeries, gridScrubTimeMs)
             : this._gridImportValue;
         const rawExport = gridScrubTimeMs !== null
-            ? gridWattsAtTime(this._gridExportSamples, this._gridExportUnits, gridScrubTimeMs)
+            ? wattsAtFromChangeSeries(this._gridExportChangeSeries, gridScrubTimeMs)
             : this._gridExportValue;
         const gridImportDisplayWatts = rawImport === null ? null : Math.max(0, rawImport);
         const gridExportDisplayWatts = rawExport === null ? null : Math.max(0, rawExport);
@@ -1611,13 +1632,25 @@ export class HeliosCard extends LitElement
         const activeBatterySoc: number | null = batteryScrubbing
             ? batterySampleAtTime(this._batterySocHistory, this._selectedTime!)
             : this._batterySoc;
-        const activeBatteryPower: number | null = batteryScrubbing
-            ? batterySampleAtTime(this._batteryPowerHistory, this._selectedTime!)
-            : this._batteryPower;
-        //The power unit doesn't change between live and history
-        //samples (same entity, same configuration), so we read it
-        //from the live state cache regardless of mode.
-        const activeBatteryUnit = this._batteryPowerUnit;
+        //Battery power scrub: net the charge / discharge `change` series at the scrub instant
+        //(charge - discharge), structural sign. Live mode reads the live signed value.
+        let activeBatteryPower: number | null;
+        if (batteryScrubbing)
+        {
+            const tMs = this._selectedTime!.getTime();
+            const c   = wattsAtFromChangeSeries(this._batteryChargeChangeSeries, tMs);
+            const d   = wattsAtFromChangeSeries(this._batteryDischargeChangeSeries, tMs);
+            activeBatteryPower = (c === null && d === null)
+                ? null
+                : Math.max(0, c ?? 0) - Math.max(0, d ?? 0);
+        }
+        else
+        {
+            activeBatteryPower = this._batteryPower;
+        }
+        //The power unit is watts on both the live and scrub paths (the change series resolves to W,
+        //the live read normalises to W), so the chip formats consistently regardless of mode.
+        const activeBatteryUnit = batteryScrubbing ? 'W' : this._batteryPowerUnit;
 
         const showSocChip = (hasHomeCoords && layout !== null)
             && !batteryScrubFuture
@@ -1631,22 +1664,20 @@ export class HeliosCard extends LitElement
         const batterySocText = showSocChip
             ? `${Math.round(activeBatterySoc!)} %`
             : '';
+        //Chip value uses HA's Energy Sources sign convention: discharge positive (the battery
+        //supplies power), charge negative (it consumes / stores). `activeBatteryPower` is the
+        //physical charge-positive net, so negate it for the displayed sign. The colour + leader flow
+        //below stay on the physical value so charging still reads pink + flows INTO the battery.
         const batteryPowerText = showPowerChip
-            ? formatBatteryPower(this.hass, activeBatteryPower!, activeBatteryUnit)
+            ? formatBatteryPower(this.hass, -activeBatteryPower!, activeBatteryUnit)
             : '';
 
-        //Charging / discharging direction drives the SVG arrow
-        //path direction on the PV↔Power leader. Sign comes straight
-        //from the entity (positive = charging by convention).
-        //Charging: arrow flows PV → Power (energy moving INTO the
-        //battery). Discharging: arrow flows Power → PV (energy
-        //moving OUT). The dashes flow at a speed proportional to
-        //|P|, saturating at the same ~5 kW threshold as the PV
-        //leader so all energy-flow streams read on the same scale.
-        //Battery direction sign: positive = charging (energy IN),
-        //negative = discharging (OUT). Drives the dual-tone leader
-        //color (pink for charging, teal for discharging, the HA
-        //Energy palette identity).
+        //Charging / discharging direction drives the SVG arrow path direction on the PV↔Power
+        //leader, off the PHYSICAL sign (positive = charging). Charging: arrow flows PV → Power
+        //(energy moving INTO the battery), dashes at a speed proportional to |P| saturating at the
+        //same ~5 kW threshold as the PV leader. The dual-tone leader colour tracks the physical
+        //direction too (battery-in tint charging, battery-out tint discharging), independent of the
+        //HA-sign flip applied to the chip text above.
         const batteryCharging = showPowerChip && (activeBatteryPower! > 0);
         const batteryLeaderColor = batteryCharging
             ? 'var(--energy-battery-in-color, #f06292)'

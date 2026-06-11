@@ -5,6 +5,326 @@ added / changed / fixed buckets. Entries below the top one are
 preserved from the in-tree history that used to live inside
 `ARCHITECTURE.md`.
 
+## v1.8.4 (2026-06-11)
+
+> Data-correctness cycle. The v1.8.3 switch to the HA Energy dashboard as the single source of
+> truth surfaced a class of bugs where Helios rolled its own differentiation of the cumulative
+> energy counters instead of reading the same numbers HA does. v1.8.4 converges every measured
+> series onto the recorder's `change` metric so Helios matches the HA Energy dashboard to the
+> watt-hour, surface by surface.
+
+### Solar production reads the recorder `change` metric (#215, #220)
+
+The past-production series (timeline curve, dashboard graph, scrub tooltip) and the live chip
+no longer differentiate the raw solar counter client-side. They now read the recorder's
+pre-computed `change` per 5-minute bucket on the solar energy meter (`stat_energy_from`), the
+exact same data the HA Energy dashboard consumes. The recorder handles counter resets
+(total_increasing dropping to 0, daily-reset meters) and unit conversion (Wh / kWh / MWh ->
+kWh) natively, so:
+
+- a SolarEdge install that updates every 15 minutes no longer reads a flat 0 W (the old rolling
+  buffer trimmed to 5 minutes never caught two samples). #215
+- a daily-reset "production today" counter no longer paints a midnight spike or absurd totals
+  (e.g. 17 000 kWh). The recorder brackets the delta across the reset. #220
+
+Live "now" power prefers the HA Energy power sensor (`stat_rate`) read straight from the entity
+state, exactly like the HA Energy live tile, summed across split installs. On cumulative-only
+installs with no power sensor, the chip shows the average power of the latest completed 5-minute
+bucket instead of a fabricated 0.
+
+The watt curve is the bucket's kWh / bucket-duration, the canonical "power from energy" any HA
+template would compute, so where HA has a number Helios shows the same number.
+
+### Cleanup + data-interval control reframed (beta.4)
+
+With every measured series now sourced from the recorder `change` metric, the leftover client-side
+derivation state is gone: the PV rolling sample buffer (`_pvSampleBuffer`), the 5-minute trainer
+LTS slot (`_pvTrainerStats` + its cache + fetch) and the `fetchPvStatistics` `role` switch are
+removed (the function is calibration-only now).
+
+The data-interval control is reframed from "update frequency" to "graph detail". It no longer
+changes the data (always Home Assistant's 5-minute statistics now); it only controls how densely
+the curve is drawn, so it reads as a perf / smoothing lever alongside the display radius: 1 point
+per hour (lightest) to 12 (one every 5 minutes, full detail), default 4 = every 15 minutes. Label
++ help updated in EN + FR.
+
+### Release prep: full i18n conformance + docs (beta.22)
+
+Two editor hints whose meaning changed this cycle were re-translated across all 63 locales: the
+graph-detail slider help no longer claims the forecast is unaffected (it now follows the slider since
+the sub-hourly change), and the inverter-cutoff help no longer names the retired shadow-map trainer
+(it describes the forecast learning that replaced it). README carries a v1.8.4 note, and the
+helios-lidar.org demo mock was updated to expose the recorder `change` metric per bucket so the demo
+card's production / grid / battery curves render with the v1.8.4 build.
+
+### Release prep: hovered time in the tooltip, inverter-cutoff re-wired, dead code removed (beta.21)
+
+- The graph view's hover tooltip now leads with the clock time of the cursor, as a row inside the
+  tooltip (not a separate badge), so you can read which hour the production / forecast values are for.
+- The `inverter-cutoff-soc-pct` guard, orphaned when the self-learning shadow-map was retired, is
+  re-wired into the sky-residual forecast learning. When the guard is armed, the learning fetches the
+  battery SoC over its 60-day window and drops the hours where the SoC reached the cutoff, so the
+  inverter clamping PV output on a full battery no longer teaches the map a false low output at those
+  sun positions.
+- Dead code removed: the unused `fetchPvHistory` raw-history path (~120 lines, superseded by the
+  recorder `change` series) and its `_batteryHistory` companion, plus two dead i18n keys
+  (`shadingDomeHint`, a leftover hover-time label) across all 63 locales. Stale comments referencing
+  the removed shadow-dome / trainer and old beta build numbers were cleaned up, and the editor help
+  for the graph-detail slider + the inverter-cutoff guard now describe current behaviour.
+
+### Background Open-Meteo fetches wait for the critical weather (beta.20)
+
+The forecast work added over this cycle fans out several `api.open-meteo.com` requests at load: the
+engine weather fetch (which the timeline, clouds, irradiance and forecast all depend on), plus the
+60-day cloud history and one `global_tilted_irradiance` request per array orientation. Against the
+browser's ~6-connections-per-host limit and Open-Meteo's rate limits, that burst could starve or 429
+the critical weather fetch itself, so on some loads `onWeatherUpdate` never fired and the card showed
+no weather and no forecast. The per-orientation GTI and the 60-day histories are now DEFERRED until
+the engine weather has landed (`_chartSeries` populated), so the weather fetch runs alone at load and
+the refinements follow once it is in. Pairs with the timeline seed (beta.19): the timeline draws
+immediately and the weather fills in without the background fetches competing for it.
+
+### Timeline renders from the first frame, not after the weather push (beta.19)
+
+The bottom time-bar is gated on `_timeRange`, which was only ever set by the engine's
+`onWeatherUpdate` callback (or a day rollover). That callback fires when the Open-Meteo weather lands,
+but an aborted or rate-limited fetch can return without firing it, and the load now fans out several
+Open-Meteo requests at once (weather, 60-day production + cloud history, per-orientation GTI), so on a
+slow or throttled connection the first weather push could be delayed or skipped, leaving the whole
+timeline blank until the next day rollover. The card now seeds `_timeRange` from the engine's
+synthetic-fallback window the instant the engine spawns, so the time-bar renders immediately and the
+first real weather update simply upgrades it to the data-derived window.
+
+### Dashboard CoverFlow: hover time in the graph tooltip (beta.17, beta.18)
+
+The graph view's hover tooltip now carries the clock time. Hovering the production / forecast chart
+shows the values for that point, but there was no way to tell WHICH hour they belonged to: a clock
+mini-card now sits above the production / forecast pair and shows the hovered time, plus the
+`dashTimeLabel` string is translated across every locale.
+
+(beta.18 backs out the beta.17 attempt at fixing the radial dial's elliptical hour ring: it relied on
+a query-container on the dial wrap, which is being re-approached without touching layout containment.)
+
+### Live chips handle meters that only report every 15 minutes (beta.15)
+
+A meter that only advances its cumulative counter every N minutes (SolarEdge: every 15) made the live
+chips flicker between 0 and a wildly wrong value. The recorder buckets `change` every 5 minutes, so a
+15-minute meter lands its whole delta in ONE 5-minute bucket and leaves the other two at zero. The
+live read took the single latest bucket, so two-thirds of the time it saw 0 W and one-third it saw
+~3× the real power.
+
+The read now judges meter density over a recent probe window: if most buckets carry energy it's a
+fine meter and the latest bucket is read directly, exactly as before (no smoothing, no behaviour
+change for those installs); if the window is sparse it's a coarse meter and the lone delta is averaged
+over the probe span, giving the true average power. So the coarse-meter fix is invisible to fine-meter
+installs. Same split for the scrub-tooltip read, centred on the cursor. This corrects the live solar,
+battery charge / discharge and grid import / export chips together, since all four derive power from
+the same recorder `change` series. Installs with a real power sensor (`stat_rate`) were never
+affected, they read it directly.
+
+### Battery chip colour falls back to the HA Energy hexes (beta.14)
+
+The dashboard battery badge took its tint straight from `--energy-battery-in-color` /
+`--energy-battery-out-color` with no fallback. Those custom properties are defined by Home Assistant's
+Energy dashboard; on a theme or HA version where they aren't exposed to the card the value stayed
+correct (HA Sources sign, discharge +, charge −) but the colour resolved to nothing, so the chip read
+in the default text colour instead of pink (charge) / teal (discharge). Every battery colour
+reference now carries the HA hex as a fallback (`#f06292` in, `#4db6ac` out), matching the solar chip
+which already had `#ff9800`.
+
+### Forecast: sub-hourly resolution so short shadows show up (beta.13)
+
+The forecast was computed once per hour and interpolated up to the display cadence, so a tree (or
+chimney, mast) that clips production for 30-45 minutes was stepped right over: the hourly sample
+either landed in the shadow or missed it, and the curve never showed the dip cleanly. The forecast
+now runs at the STORE cadence (the "graph detail" slider, default every 15 minutes), so the LiDAR
+shading and the sun position are sampled every bucket and a short shadow is resolved. The hourly
+Open-Meteo weather is interpolated between samples so the magnitude stays smooth (no stair-steps), and
+the per-orientation GTI is interpolated the same way. Set the slider finer for sharper shadows,
+coarser to fall back to the old hourly behaviour.
+
+The 60-day learning pass evaluates its model at four instants per hour to match: the recorder only
+keeps hourly stats that far back, but sampling the model sub-hourly means the learned residual sees
+the same fraction-of-the-hour shading the forecast resolves, so it doesn't double-count a shadow the
+sub-hourly forecast already draws geometrically.
+
+### Forecast: one pipeline for every visual + the learned map reaches the future (beta.12)
+
+Two fixes that together close the "the tree shadow shows on past days but never on future days"
+report.
+
+**One forecast, computed once.** The forecast was being recomputed in SIX places (the timeline curve,
+the scrub tooltip, the live PV chip, the dashboard headline, the CoverFlow day cards, the day-strip
+chips), and the five outside the timeline had drifted: they used the old 5-day scalar calibration
+instead of the learned sky-residual map, and several didn't even pass the Open-Meteo GHI / GTI / snow
+inputs. So the same day could read differently depending on which widget you looked at. Now the
+unified store is the single forecast pipeline: it emits the corrected `forecast` (LiDAR + GTI +
+thermal + snow + learned map) AND a `forecastRaw` (same physics, no learned correction) in one pass,
+and every visual reads those series. The dashboard's "PRÉVU" is the raw integral, "affiné" the
+corrected integral, and they now match the timeline curve, the tooltip and the chips to the
+watt-hour. Net deletion of five duplicate model loops.
+
+**The learned map now reaches the future.** The sky-residual map is binned by the sun's position
+(azimuth, altitude). At a fixed time of day the sun drifts across that grid with the season, so the
+cells the FUTURE forecast samples sit at the leading edge of what the history has observed and carry
+few samples, where the map fell back to the global ratio and erased any learned shading. A recently
+grown tree that shades, say, 15:30-17:00 would therefore show in the past forecast (well-sampled
+cells) but fade out in the future (thin leading-edge cells). A confidence-weighted neighbour pass now
+lets a thin cell adopt the learned ratio of its well-sampled neighbour, the cell the sun has just
+swept past, so the correction bleeds one cell forward and the future forecast inherits it. Confident
+cells are left untouched (sharp features preserved) and a thin cell with no confident neighbour still
+leans on the global ratio (isolated noise is never amplified).
+
+### Forecast: anisotropic GTI base + winter snow-cover derate (beta.11)
+
+Two more inputs from the same Open-Meteo source, both aimed at the prediction.
+
+**Anisotropic plane-of-array (GTI).** Our tilt transposition assumed an ISOTROPIC sky: every patch of
+sky contributes equally to a tilted panel. The real sky is brighter in a halo around the sun and
+along the horizon, which a tilted panel sees differently depending on where it aims. Open-Meteo
+computes the plane-of-array irradiance with an anisotropic (Perez-family) model for a given tilt +
+azimuth, so the card now pulls `global_tilted_irradiance` per configured array orientation and uses
+it as the POA base, replacing the isotropic transposition where available. Open-Meteo accepts one
+tilt/azimuth per request, so a multi-orientation install fetches one series per distinct orientation,
+in parallel, over the same [J-60, J+2] window the forecast and the 60-day learning both read (one
+fetch feeds both). LiDAR shading still carves the beam out of the GTI so a shaded array keeps only
+the sky + ground POA. Arrays with no GTI series (fetch failed, tracker-mounted) stay on the
+transposition. The fetch is a silent background refinement: the card renders on the transposition
+until GTI lands, it never gates the loading banner.
+
+**Snow-cover derate.** Ground snow lying with sub-freezing air means the array is most likely buried
+and producing near zero whatever the irradiance says, a winter blind spot the model had no way to
+see. The card now reads `snow_depth` and applies a temperature-gated derate: fully covered at / below
+freezing, easing back to clear by +4 °C as the snow sheds off the tilted glass. Applied identically
+to the forecast and the 60-day learning, so a snow day no longer teaches the sky-residual map a false
+low ratio at winter sun positions.
+
+While wiring the learning's model eval to match the forecast for these two, it also gained the air
+temperature + wind it was missing, so the thermal derating now runs on both sides instead of being
+silently absorbed (and then double-counted) by the residual.
+
+### Forecast: real direct / diffuse split for the tilt transposition (beta.10)
+
+A tilted array does not see the GHI directly: the beam component is projected onto the panel normal
+(it gains on a panel aimed at the sun, loses on one aimed away) while the diffuse sky component is
+transposed isotropically. The accuracy of that projection hinges on knowing how much of the GHI
+arrives as a collimated beam vs scattered sky. Until now Helios derived that split from a cubic of
+the cloud-cover factor (`kCloud`), a rough stand-in for a proper clearness decomposition that drifts
+badly under broken cloud, exactly when a tilted array's output is hardest to predict.
+
+The model now pulls Open-Meteo's `direct_radiation` + `diffuse_radiation` (horizontal plane,
+alongside `shortwave_radiation` in the same single GET) and uses their ratio as the real beam
+fraction. The magnitude stays owned by the GHI base (so a home irradiance sensor still wins on
+level), only the split is taken from the measured decomposition: `directPoa` ends up equal to the
+real DNI projected onto the panel. This sharpens every tilted-array forecast, most visibly on
+split-orientation installs (East + West strings) and on partly-cloudy days. Applied identically to
+the forecast curve and to the 60-day learning pass so the sky-residual map stays self-consistent.
+Hours the provider doesn't decompose fall back to the legacy cloud-fraction path per-hour.
+
+### Forecast: the learned map shares the forecast's GHI base (beta.9)
+
+The sky-residual map is learned by comparing real production against the physical model. That model
+now takes the Open-Meteo `shortwave_radiation` (GHI in W/m²) as its irradiance base instead of
+re-deriving clear-sky GHI from a Haurwitz fit scaled by cloud cover. The forecast curve already
+uses that same shortwave base, so learning and prediction now run on the identical irradiance
+input: the residual the map captures is purely the user's local shading and array biases, no longer
+contaminated by the gap between two different irradiance estimators. The cloud-history fetch was
+widened to pull `shortwave_radiation` alongside `cloud_cover` in the same single Open-Meteo GET, so
+there is no extra request.
+
+### Forecast: the learned map now carries the level too (beta.8)
+
+beta.7's sky map was shape-only (normalised to mean 1) and left the level to the clamped 5-day
+scalar [0.5, 1.5], so an install whose physical model was systematically off on the LEVEL (a kWp
+misconfig, a base-irradiance bias) kept a large forecast-vs-actual gap the scalar couldn't close.
+The map now learns the raw actual/model ratio per sun position, carrying both the level AND the
+shape, clamped wider [0.2, 2.5], and REPLACES the scalar when warm. Cold cells fall back to the
+learned global level; a brand-new install with no map keeps the legacy scalar so day 1 is
+unchanged. This applies to every forecast curve, including the past days shown in the CoverFlow.
+
+### Learned sky-residual forecast correction (replaces the shadow-map trainer)
+
+The v1.8.3 cycle retired the self-learning shadow-map, and the forecast lost the correction that
+captured the shading the LiDAR raster can't see (a tree the scan missed, foliage that grew, a
+neighbour's roof the flood-fill clipped, a wrong LiDAR cell). It comes back lighter and better, as
+a **learned sky-residual map** in `src/card/forecast-sky.ts`.
+
+The card derives, per (sun-azimuth, sun-altitude) cell, the residual between what the user actually
+produced and what the current model (LiDAR included) predicted, over a rolling 60-day window. The
+residual is normalised to mean 1, so it carries only the SHAPE (how each sun position deviates from
+the average); the 5-day scalar calibration keeps owning the overall level. At forecast time the
+residual multiplies the model output per hour, so the forecast converges to the user's real shading
+and biases. Where a cell has no history the residual is 1, so a cold install loses nothing on day 1
+and the correction phases in as production accumulates, weighted toward recent data (30-day
+half-life) so it tracks seasonal foliage and soiling instead of a stale annual mean.
+
+Why it beats the old shadow-dome: it is a 2D map (not 3D az×alt×cloud), carries no localStorage and
+no per-frame projection (sampled only when the forecast is built, never drawn), and is derived in
+memory from the recorder + Open-Meteo each session. LiDAR stays the cold-start prior, the learned
+map only refines what it got wrong, so installs with real obstacles (trees, neighbours) get a
+forecast no clear-sky model can match.
+
+Data: a 60-day hourly produced-energy series (recorder `change`, exact + reset-corrected) + a
+60-day hourly cloud history (one Open-Meteo GET, past_days 60). Both fetched once per session and
+cached.
+
+### Daily totals match the HA Energy dashboard exactly (#200, #216)
+
+The per-day produced kWh and the net battery kWh shown in the dashboard dive (radial badge, graph
+view, CoverFlow cards) and the timeline day-strip were computed by integrating the gap-interpolated
+power curve, which drifted a percent or two above the HA Energy dashboard (e.g. 14,2 vs 14,04 kWh
+on the same day). They now sum the recorder `change` buckets directly over each day
+(`sumChangeForDay`), with no curve integration and no interpolation, so every daily total matches
+the HA Energy dashboard to the watt-hour.
+
+The net battery daily total also adopts HA's Sources sign convention: discharge positive, charge
+negative (the battery row in HA reads "−0,21 kWh" on a day it net-charged). Every battery value
+now matches HA sign-for-sign: the radial badge daily + hover AND the live battery chip on the 3D
+map all read charge as negative, discharge as positive. The colour + leader-flow direction still
+track the physical direction (charge = battery-in tint, energy flowing into the battery), so the
+sign convention and the visual direction stay decoupled and consistent everywhere.
+
+### Grid import / export read the recorder `change` metric (#200)
+
+The grid past series (timeline curve, dashboard graph, scrub tooltip) drops the per-entity
+rolling slope buffers + the raw / LTS history backfill in favour of the recorder `change` metric
+on the directional energy meters: import from `stat_energy_from`, export from `stat_energy_to`.
+Import and export are separate meters, so each direction's watts come straight from its own
+meter with no sign inference and every surface reads the same buckets, which removes the
+cross-surface import inconsistency. Live "now" still prefers the signed `stat_rate` sensor read
+straight from the entity state (real-time, summed + split exactly like the HA Energy live tile);
+cumulative-only installs fall back to the average power of the latest completed 5-minute change
+bucket per direction. The whole per-entity buffer / bracketed-slope machinery is gone.
+
+### Battery charge / discharge from separate meters, structural sign (#216)
+
+The battery power series + live chip no longer infer the charge / discharge sign from a single
+signed sensor (which, on a cumulative-only install, fell back to reading the discharge energy
+meter as if it were power and never surfaced charging, the "charge stuck at 0 W" bug). Charge
+now comes from the `stat_energy_to` `change` series and discharge from `stat_energy_from`, two
+separate recorder meters, and the net is charge minus discharge so the sign is structural,
+charging can never be lost. Live "now" still prefers the signed `power_config.stat_rate` sensor
+when wired; otherwise it nets the latest charge / discharge change buckets.
+
+### Global display radius back as an editor slider (50-500 m)
+
+The display radius (the distance around the home within which buildings, LiDAR cells and raster
+shadows render) is configurable again from the visual editor, in the UI & map section above the
+auto-rotate toggle. v1.8.3 had collapsed it to a fixed 200 m constant; a user reported the full
+disc as the cause of slowdowns on older phones, so the slider returns as the primary perf lever:
+drop it toward 50 m to render less geometry per frame, raise it toward 500 m for a wider survey,
+default stays 200 m. The new `display-radius` config key feeds a single resolver (`displayRadiusM`)
+that every layer reads, so the basemap bbox, building extent, LiDAR overlay, shadow raster, camera
+bounds and the LiDAR fade band all resize in lockstep when the slider moves. Label + help are
+French for now; other locales fall back to an inline English default.
+
+### Data-interval control capped at 12 / hour (5 minutes)
+
+The data-interval slider now ranges 1-12 buckets / hour instead of 1-60. 12 / hour = 5 minutes,
+the recorder's finest statistics period (HA has no statistics shorter than 5 minutes). Settings
+above 12 could only interpolate the 5-minute buckets into cosmetic sub-buckets with no extra
+real data, so the ceiling now sits where every step still maps to a distinct recorder bucket.
+
 ## v1.8.3
 
 > The biggest release of the v1.8.x line by a wide margin. v1.8.3

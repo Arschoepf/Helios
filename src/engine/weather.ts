@@ -15,6 +15,17 @@ export interface SampleHourly
     cloudHigh:   number[];
     weatherCode: number[];
     shortwave:   number[];
+    //Beam (direct) + diffuse shortwave radiation on the horizontal plane in W/m², hourly. Same -1 "no
+    //data" sentinel as shortwave. Feed the PV tilt transposition so a sloped array runs on the real
+    //direct / diffuse decomposition rather than the cloud-derived split. Providers that don't return
+    //them leave -1, and the transposition falls back to the legacy cloud-fraction path.
+    directRad:   number[];
+    diffuseRad:  number[];
+    //Snow depth on the ground in METRES, hourly. NaN-padded when missing. A proxy for snow lying on the
+    //panels: combined with the air temperature it drives a winter cover derate (see snowCoverFactor in
+    //card/pv.ts), since ground snow with sub-freezing air means the array is likely covered and
+    //producing near zero regardless of irradiance.
+    snowDepth:   number[];
     //2-metre air temperature in °C, hourly. Used by the PV thermal derating model to estimate cell temperature alongside the irradiance term.
     //NaN-padded when a hour is missing.
     temperature: number[];
@@ -213,6 +224,9 @@ interface CachedPayload
         cloudHigh:   number[];
         weatherCode: number[];
         shortwave:   number[];
+        directRad?:   number[];   //optional: older caches predate the direct / diffuse fetch
+        diffuseRad?:  number[];
+        snowDepth?:   number[];   //optional: older caches predate the snow-depth fetch
         temperature?: number[];   //optional: older caches predate this field
         windSpeed?:   number[];
     };
@@ -291,6 +305,11 @@ function readCache(lat: number, lon: number, precision: 'standard' | 'high'): Sa
             cloudHigh:   p.cloudHigh   ?? [],
             weatherCode: p.weatherCode ?? [],
             shortwave:   p.shortwave   ?? [],
+            //Older caches predate the direct / diffuse fetch; empty arrays read as -1 per index below
+            //(via the ?? [] fallthrough on read), so the tilt split falls back to the cloud-derived path.
+            directRad:   p.directRad   ?? [],
+            diffuseRad:  p.diffuseRad  ?? [],
+            snowDepth:   p.snowDepth   ?? [],
             //Older caches predate the temperature + wind fetch; treat
             //missing arrays as "no data" so the thermal derating
             //multiplier falls back to 1 and the prediction reduces
@@ -322,6 +341,9 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
                 cloudHigh:   data.cloudHigh,
                 weatherCode: data.weatherCode,
                 shortwave:   data.shortwave,
+                directRad:   data.directRad,
+                diffuseRad:  data.diffuseRad,
+                snowDepth:   data.snowDepth,
                 temperature: data.temperature,
                 windSpeed:   data.windSpeed,
             }
@@ -344,6 +366,12 @@ function writeCache(lat: number, lon: number, precision: 'standard' | 'high', da
 //    parametrisations.
 const HOURLY_VARS = [
     'shortwave_radiation_instant',
+    //Beam + diffuse on the horizontal plane, same instant cadence as shortwave so all three line up on
+    //the time cursor. Feed the tilt transposition with the real direct / diffuse decomposition.
+    'direct_radiation_instant',
+    'diffuse_radiation_instant',
+    //Ground snow depth (metres). Drives the winter snow-cover derate on the PV output.
+    'snow_depth',
     'cloud_cover',
     'cloud_cover_low',
     'cloud_cover_mid',
@@ -537,6 +565,9 @@ export async function fetchHomePointData(
                 cloudHigh:   highSeries,
                 weatherCode: readWeatherCode(row, models),
                 shortwave:   fillShortwave(readSeries(row, 'shortwave_radiation_instant', models)),
+                directRad:   fillShortwave(readSeries(row, 'direct_radiation_instant',  models)),
+                diffuseRad:  fillShortwave(readSeries(row, 'diffuse_radiation_instant', models)),
+                snowDepth:   fillNaN(readSeries(row, 'snow_depth', models)),
                 temperature: fillNaN(readSeries(row, 'temperature_2m',  models)),
                 windSpeed:   fillNaN(readSeries(row, 'wind_speed_10m',  models)),
             };

@@ -34,7 +34,11 @@ import type { HeliosConfig } from '../helios-config';
 import { displayUpdateFrequencyPerHour } from '../helios-config';
 import type { ChartSeries } from './charts';
 import type { PvHistory } from './pv';
-import { pvNormalizeToWatts, pvCalibK, pvInverterMaxW, computePvPowerWeighted } from './pv';
+import { pvCalibK, pvInverterMaxW, computePvPowerWeighted, snowCoverFactor } from './pv';
+import { changeSeriesToWatts, type ChangeBucket } from './energy-stats';
+import { sampleSkyResidual } from './forecast-sky';
+import { sampleGti } from './gti';
+import { getSunPosition } from '../engine/sun';
 import { effectiveForecastRatio } from './charts';
 import { computeForecastCalibration } from './calibration';
 import { getHomeCoords } from './init';
@@ -51,14 +55,6 @@ const DAY_MS  = 24 * HOUR_MS;
 export const STORE_DAYS_PAST  = 2;
 export const STORE_DAYS_AHEAD = 2;
 export const STORE_DAYS       = STORE_DAYS_PAST + 1 + STORE_DAYS_AHEAD;
-
-//Forecast inner-loop cadence. Locked to one bucket per hour matching the Open-Meteo weather grid;
-//the computed hourly values are then linearly interpolated into the storage cadence at the end of
-//buildForecast. Higher rates would only fabricate intermediate values without adding any signal.
-const FORECAST_BUCKETS_PER_HOUR = 1;
-const FORECAST_BUCKETS_PER_DAY  = 24 * FORECAST_BUCKETS_PER_HOUR;
-const FORECAST_BUCKETS_TOTAL    = STORE_DAYS * FORECAST_BUCKETS_PER_DAY;
-const FORECAST_STEP_MS          = HOUR_MS / FORECAST_BUCKETS_PER_HOUR;
 
 
 //Per-build cadence bundle. Derived from the user config once at the top of buildUnifiedStore and
@@ -94,6 +90,9 @@ export interface UnifiedDataStore
     cloud:        (number | null)[];
     production:   (number | null)[];
     forecast:     (number | null)[];
+    //Pure physical-model forecast (no learned sky-residual ratio). The "PRÉVU" raw figure; `forecast`
+    //is the same pipeline × the learned correction (the "affiné" figure + the timeline curve).
+    forecastRaw:  (number | null)[];
     battery:      (number | null)[];
     batterySoc:   (number | null)[];
     gridImport:   (number | null)[];
@@ -109,20 +108,29 @@ export interface UnifiedStoreHost
     readonly hass:                    { language?: string; states?: Record<string, { state: string }>; config?: { latitude?: number; longitude?: number } } | undefined;
     readonly _chartSeries:            ChartSeries | null;
     readonly _pvHistory:              PvHistory | null;
+    //Recorder `change` series for the solar energy meter(s), 5-minute buckets. The canonical past-
+    //production source: buildProduction converts each bucket's reset-corrected kWh to average watts.
+    readonly _pvChangeSeries:         ChangeBucket[] | null;
     readonly _pvCalibStats:           PvHistory | null;
-    //5-minute long-term-statistics series, 30-day rolling window. Primary past-production source
-    //(12 samples per hour vs the hourly calib stats), fetched on idle for the shading-map trainer.
-    //Null until the deferred fetch lands; the builder degrades to _pvCalibStats only.
-    readonly _pvTrainerStats:         PvHistory | null;
     readonly _pvUnit:                 string;
-    readonly _batteryPowerHistory:    { times: Date[]; values: number[] } | null;
-    readonly _batteryPowerUnit:       string;
+    //Recorder `change` series for the battery charge (stat_energy_to) + discharge (stat_energy_from)
+    //meters. buildBattery nets them (charge - discharge) so the sign is structural.
+    readonly _batteryChargeChangeSeries:    ChangeBucket[] | null;
+    readonly _batteryDischargeChangeSeries: ChangeBucket[] | null;
     readonly _batterySoc:             number | null;
-    readonly _gridImportSamples:      Map<string, Array<{ t: number; v: number }>>;
-    readonly _gridExportSamples:      Map<string, Array<{ t: number; v: number }>>;
-    readonly _gridImportUnits:        Map<string, string>;
-    readonly _gridExportUnits:        Map<string, string>;
+    //Recorder `change` series for the grid import / export energy meters, 5-minute buckets. Same
+    //contract as the production series: each direction's bucket kWh is converted to average watts.
+    readonly _gridImportChangeSeries: ChangeBucket[] | null;
+    readonly _gridExportChangeSeries: ChangeBucket[] | null;
     readonly _engine?:                { getLidarRaster(): import('../engine/pv-shading').NdsmRaster | null };
+    //Learned sky-residual forecast correction (src/card/forecast-sky.ts). Multiplies the forecast per
+    //sun position so it converges to the user's real shading + biases. Null until the histories land,
+    //in which case the forecast stays on the physical + LiDAR + scalar-calibration path unchanged.
+    readonly _skyResidualMap:         import('./forecast-sky').SkyResidualMap | null;
+    //Per-orientation Open-Meteo GTI store (src/card/gti.ts). When present, buildForecast transposes each
+    //array on the model's anisotropic plane-of-array irradiance instead of our isotropic Liu-Jordan.
+    //Null until the per-orientation fetches land, in which case the transposition path is used.
+    readonly _gtiStore:               import('./gti').GtiStore | null;
 }
 
 
@@ -171,38 +179,6 @@ function interpolateNullGaps(arr: (number | null)[]): void
         }
         i = j;
     }
-}
-
-
-//Resample a length-srcLen series to a length-dstLen series using linear interpolation between
-//bracketing source buckets. Both arrays sit on the same time window. Null source buckets stay null
-//in the dst when both bracketing values are null. dstLen == srcLen returns a copy.
-function resampleLinear(src: ReadonlyArray<number | null>, dstLen: number): (number | null)[]
-{
-    const srcLen = src.length;
-    if (dstLen === srcLen)
-    {
-        return src.slice() as (number | null)[];
-    }
-    const out = new Array<number | null>(dstLen).fill(null);
-    if (srcLen === 0)
-    {
-        return out;
-    }
-    for (let j = 0; j < dstLen; j++)
-    {
-        const srcF = (j + 0.5) * srcLen / dstLen - 0.5;
-        const i0 = Math.max(0, Math.min(srcLen - 1, Math.floor(srcF)));
-        const i1 = Math.max(0, Math.min(srcLen - 1, i0 + 1));
-        const v0 = src[i0];
-        const v1 = src[i1];
-        if (v0 === null && v1 === null) { continue; }
-        if (v0 === null) { out[j] = v1; continue; }
-        if (v1 === null) { out[j] = v0; continue; }
-        const f = Math.max(0, Math.min(1, srcF - i0));
-        out[j] = v0 + (v1 - v0) * f;
-    }
-    return out;
 }
 
 
@@ -278,108 +254,26 @@ function buildCloud(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: nu
 }
 
 
-//Production = past actual only, no model fallback. Reads the 5-min trainer LTS first, then hourly
-//calib as fallback, then the live tail from _pvHistory. For cumulative entities every source is
-//differentiated to instant W; for power entities the samples feed in directly. Past buckets without
-//a real sample are filled by linear interpolation between bracketing real samples; the data source
-//never blends a forecast value into a "real" series. Future buckets stay null.
-function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
+//Production = past actual only, no model fallback. Sourced from the recorder `change` metric on the
+//solar energy meter(s) (host._pvChangeSeries), the exact same data the HA Energy dashboard consumes:
+//each 5-minute bucket's reset-corrected, unit-normalised kWh is converted to its average watts
+//(kWh * 1000 / bucket-hours). No client-side counter differentiation, no unit-string classification,
+//so a 15-minute SolarEdge counter or a daily-reset meter is handled natively by the recorder.
+//
+//Store buckets are always >= the 5-minute source period (the data-interval control caps at 12 / hour
+//= 5 min), so each store bucket aggregates one or more whole source buckets and the conversion is
+//exact. Past gaps between source buckets are linearly interpolated so the curve stays continuous;
+//future buckets stay null so the forecast series owns the future half.
+function buildProduction(host: UnifiedStoreHost, _storeStartMs: number, _storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
 {
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    const unit  = (host._pvUnit || '').toLowerCase();
-    const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-
-    const ingestPower = (tMs: number, w: number): void =>
+    const out = changeSeriesToWatts(host._pvChangeSeries, _storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
+    //Production is never negative; a tiny negative recorder change (meter glitch) is noise, floor it.
+    for (let i = 0; i < out.length; i++)
     {
-        if (!Number.isFinite(w) || w < 0) { return; }
-        if (tMs < storeStartMs || tMs >= storeEndMs || tMs > nowMs) { return; }
-        const h = bucketForMs(storeStartMs, tMs, p.stepMs, p.bucketsTotal);
-        if (h < 0) { return; }
-        sums[h]   += w;
-        counts[h] += 1;
-    };
-
-    //LTS ingester: shared between the 5-min trainer and the hourly calib. For cumulative entities
-    //the values are bucket-end lifetime counters and we differentiate adjacent pairs to dv / dtH
-    //(with 6 h outage cap + monotonic reset guard). For power entities values are already
-    //bucket-mean watts and feed straight in.
-    const ingestLts = (lts: PvHistory): void =>
-    {
-        if (lts.times.length < 2) { return; }
-        if (isCum)
-        {
-            const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
-            let prevIdx = 0;
-            for (let i = 1; i < lts.times.length; i++)
-            {
-                const t1  = lts.times[i].getTime();
-                const t0  = lts.times[prevIdx].getTime();
-                const dtH = (t1 - t0) / HOUR_MS;
-                if (dtH <= 0 || dtH > 6) { prevIdx = i; continue; }
-                const dv = lts.values[i] - lts.values[prevIdx];
-                prevIdx = i;
-                if (dv < 0) { continue; }
-                ingestPower(t1, (dv / dtH) * factor);
-            }
-        }
-        else
-        {
-            for (let i = 0; i < lts.times.length; i++)
-            {
-                ingestPower(lts.times[i].getTime(), pvNormalizeToWatts(lts.values[i], host._pvUnit));
-            }
-        }
-    };
-
-    //Trainer first (5-min granularity, 30-day window): primary past source. Calib stats (hourly,
-    //5-day window) stay as fallback for the rare bucket the trainer doesn't cover.
-    if (host._pvTrainerStats) { ingestLts(host._pvTrainerStats); }
-    if (host._pvCalibStats)   { ingestLts(host._pvCalibStats); }
-
-    //Live tail from the push stream. For cumulative entities each push is a counter reading and we
-    //differentiate adjacent pairs with a 3-minute anchor so integer-Wh quantization noise doesn't
-    //paint fake spikes. Power entities feed in directly.
-    const hist = host._pvHistory;
-    if (hist && hist.times.length > 0)
-    {
-        if (isCum)
-        {
-            const MIN_DTH = 0.05; //3 minutes
-            const factor  = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
-            let prevIdx = 0;
-            for (let i = 1; i < hist.times.length; i++)
-            {
-                const t1  = hist.times[i].getTime();
-                const t0  = hist.times[prevIdx].getTime();
-                const dtH = (t1 - t0) / HOUR_MS;
-                if (dtH <= 0) { continue; }
-                if (dtH > 6) { prevIdx = i; continue; }
-                const dv = hist.values[i] - hist.values[prevIdx];
-                if (dv < 0) { prevIdx = i; continue; }
-                if (dtH < MIN_DTH) { continue; }
-                ingestPower(t1, (dv / dtH) * factor);
-                prevIdx = i;
-            }
-        }
-        else
-        {
-            for (let i = 0; i < hist.times.length; i++)
-            {
-                ingestPower(hist.times[i].getTime(), pvNormalizeToWatts(hist.values[i], host._pvUnit));
-            }
-        }
+        const v = out[i];
+        if (v !== null && v < 0) { out[i] = 0; }
     }
-    for (let h = 0; h < p.bucketsTotal; h++)
-    {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
-    }
-    //Restrict interpolation to the past half of the store. Past gaps between LTS samples get filled
-    //with a value that lives strictly between two real readings: the curve stays continuous AND
-    //honest. Future buckets stay null so the forecast series stays the only thing the dial draws on
-    //the future half.
-    const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
+    const nowBucket = bucketForMs(_storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
     if (pastEnd > 0)
     {
@@ -391,93 +285,145 @@ function buildProduction(host: UnifiedStoreHost, storeStartMs: number, storeEndM
 }
 
 
-//Forecast = computePvPowerWeighted × pvCalibK × effectiveForecastRatio at every weather-grid bucket
-//(one per hour, matching Open-Meteo). The hourly array is then linearly resampled to the storage
-//cadence so the curve drops straight into the per-bucket consumer alongside the other series.
-//Trains the shading map once per build so the map carries every fresh observation that landed
-//between the previous build and this one.
+//Forecast = computePvPowerWeighted × pvCalibK × (learned sky-residual ratio, or the 5-day scalar when
+//the map is cold) × snow-cover derate, at every STORE bucket. Runs at the display cadence so a fine
+//"graph detail" setting resolves short shadow dips; the hourly Open-Meteo weather is interpolated
+//between samples to keep the magnitude smooth. Emits the corrected forecast + the raw physical model.
 function buildForecast(
     host: UnifiedStoreHost,
     storeStartMs: number,
     storeEndMs: number,
     p: CadenceParams,
-): (number | null)[]
+): { forecast: (number | null)[]; forecastRaw: (number | null)[] }
 {
-    const empty = new Array<number | null>(p.bucketsTotal).fill(null);
+    const empty = () => new Array<number | null>(p.bucketsTotal).fill(null);
     const series = host._chartSeries;
     const coords = getHomeCoords(host.config, host.hass);
-    if (!series || !coords) { return empty; }
+    if (!series || !coords) { return { forecast: empty(), forecastRaw: empty() }; }
     const k = pvCalibK(host.config);
-    if (k === null) { return empty; }
+    if (k === null) { return { forecast: empty(), forecastRaw: empty() }; }
     const cap     = pvInverterMaxW(host.config);
     const cal     = computeForecastCalibration(host as any);
     const calR    = cal ? cal.ratio : 1;
     const raster  = host._engine?.getLidarRaster() ?? null;
 
-    //Hourly inner loop: one bucket per hour of the 5-day window, matching the weather model cadence.
-    const hourly = new Array<number | null>(FORECAST_BUCKETS_TOTAL).fill(null);
-    for (let h = 0; h < FORECAST_BUCKETS_TOTAL; h++)
+    //Inner loop runs at the STORE cadence (the "graph detail" slider, default 4/h = 15 min) instead of
+    //a fixed hourly pass. The LiDAR shading + sun position are then sampled every bucket, so a short
+    //shadow (a tree clipping production for 30-45 min) is resolved instead of being stepped over by an
+    //hourly midpoint. The hourly Open-Meteo weather is interpolated between samples so the magnitude
+    //stays smooth at any cadence (no hourly stair-steps). `hourly` is the corrected forecast (model ×
+    //learned ratio); `hourlyRaw` is the pure physical model (no learned ratio) for the "PRÉVU" figure.
+    const hourly    = new Array<number | null>(p.bucketsTotal).fill(null);
+    const hourlyRaw = new Array<number | null>(p.bucketsTotal).fill(null);
+    const times     = series.times;
+    let wi = 0;   //moving cursor into the hourly weather series; bucket midpoints are ascending
+    for (let h = 0; h < p.bucketsTotal; h++)
     {
-        const mid = storeStartMs + h * FORECAST_STEP_MS + FORECAST_STEP_MS / 2;
+        const mid = storeStartMs + h * p.stepMs + p.stepMs / 2;
         if (mid < storeStartMs || mid >= storeEndMs) { continue; }
-        //Cloud lookup: pick the chartSeries sample closest to the bucket midpoint. The data source's
-        //cloud series already holds the same information in the storage cadence but referencing
-        //chartSeries directly here keeps buildForecast independent of buildCloud.
-        let bestIdx = -1;
-        let bestDt  = Infinity;
-        for (let i = 0; i < series.times.length; i++)
+        if (times.length === 0) { continue; }
+
+        //Bracket the bucket midpoint between two hourly weather samples and interpolate each field.
+        while (wi < times.length - 1 && times[wi + 1].getTime() <= mid) { wi++; }
+        const i0 = wi;
+        const i1 = Math.min(times.length - 1, wi + 1);
+        const t0 = times[i0].getTime();
+        const t1 = times[i1].getTime();
+        const f  = (t1 > t0) ? Math.max(0, Math.min(1, (mid - t0) / (t1 - t0))) : 0;
+
+        const cc   = lerpPlain(series.cloud[i0],       series.cloud[i1],       f);
+        const ghi  = lerpPlain(series.irradiance[i0],  series.irradiance[i1],  f);
+        const dir  = lerpRad(series.directRad?.[i0],   series.directRad?.[i1],  f);
+        const dif  = lerpRad(series.diffuseRad?.[i0],  series.diffuseRad?.[i1], f);
+        const temp = lerpFinite(series.temperature?.[i0], series.temperature?.[i1], f);
+        const wind = lerpFinite(series.windSpeed?.[i0],   series.windSpeed?.[i1],   f);
+        const snow = lerpFinite(series.snowDepth?.[i0],   series.snowDepth?.[i1],   f);
+
+        const t = new Date(mid);
+        const wRaw = computePvPowerWeighted(host.config, t, coords.lat, coords.lon, cc, {
+            airTempC:     temp,
+            windMs:       wind,
+            //Open-Meteo shortwave (or home sensor) GHI as the irradiance base; beam + diffuse drive the
+            //real direct / diffuse split; per-orientation GTI replaces the transposition where available.
+            ghiWm2:       ghi,
+            directWm2:    dir,
+            diffuseWm2:   dif,
+            tiltedPoaWm2: host._gtiStore ? (tilt, az) => sampleGti(host._gtiStore, tilt, az, mid) : undefined,
+            raster,
+        });
+        //Calibration ratio. When the learned sky map is warm it REPLACES the 5-day scalar, carrying the
+        //level AND the per-sun-position shape (a tree the LiDAR missed, foliage, a wrong cell). A cold
+        //cell falls back to the map's global level; no map at all keeps the legacy clamped scalar.
+        let ratio: number;
+        if (host._skyResidualMap)
         {
-            const dt = Math.abs(series.times[i].getTime() - mid);
-            if (dt < bestDt) { bestDt = dt; bestIdx = i; }
+            const sun = getSunPosition(t, coords.lat, coords.lon);
+            ratio = sampleSkyResidual(host._skyResidualMap, sun.azimuth, sun.altitude);
         }
-        const cc = bestIdx >= 0 ? (series.cloud[bestIdx] ?? 0) : 0;
-        const t  = new Date(mid);
-        const wRaw = computePvPowerWeighted(
-            host.config,
-            t,
-            coords.lat,
-            coords.lon,
-            cc,
-            {
-                airTempC: bestIdx >= 0 ? series.temperature?.[bestIdx] : undefined,
-                windMs:   bestIdx >= 0 ? series.windSpeed?.[bestIdx]   : undefined,
-                raster,
-            }
-        );
-        const eff = effectiveForecastRatio(calR);
-        const w   = wRaw * k * eff;
+        else
+        {
+            ratio = effectiveForecastRatio(calR);
+        }
+        //Raw = pure physics (LiDAR + thermal + GTI + snow), no learned ratio. Corrected = × ratio.
+        const snowF = snowCoverFactor(snow, temp);
+        const rawW  = wRaw * k * snowF;
+        if (Number.isFinite(rawW))
+        {
+            hourlyRaw[h] = Math.min(cap, Math.max(0, rawW));
+        }
+        const w = rawW * ratio;
         if (Number.isFinite(w))
         {
             hourly[h] = Math.min(cap, Math.max(0, w));
         }
     }
-    //Resample the hourly forecast to the storage cadence. resampleLinear is a no-op when bucketsTotal
-    //matches FORECAST_BUCKETS_TOTAL (cadence = 1/h), otherwise linearly interpolates between hours.
-    return resampleLinear(hourly, p.bucketsTotal);
+    return { forecast: hourly, forecastRaw: hourlyRaw };
 }
 
 
-function buildBattery(host: UnifiedStoreHost, storeStartMs: number, storeEndMs: number, nowMs: number, p: CadenceParams): (number | null)[]
+//Interpolate a weather field between two bracketing hourly samples. lerpPlain assumes both sides are
+//valid numbers (cloud / irradiance always are in the chart series). lerpRad guards the -1 "no data"
+//sentinel on the radiation fields, lerpFinite the NaN padding on temp / wind / snow: if one side is
+//missing take the other, if both return undefined so the model context falls back.
+function lerpPlain(a: number, b: number, f: number): number
 {
+    return a + (b - a) * f;
+}
+function lerpRad(a: number | undefined, b: number | undefined, f: number): number | undefined
+{
+    const ba = !(typeof a === 'number' && isFinite(a) && a >= 0);
+    const bb = !(typeof b === 'number' && isFinite(b) && b >= 0);
+    if (ba && bb) { return undefined; }
+    if (ba) { return b; }
+    if (bb) { return a; }
+    return a! + (b! - a!) * f;
+}
+function lerpFinite(a: number | undefined, b: number | undefined, f: number): number | undefined
+{
+    const ba = !(typeof a === 'number' && isFinite(a));
+    const bb = !(typeof b === 'number' && isFinite(b));
+    if (ba && bb) { return undefined; }
+    if (ba) { return b; }
+    if (bb) { return a; }
+    return a! + (b! - a!) * f;
+}
+
+
+//Battery net power per bucket, convention "positive = charging". Charge watts come from the
+//stat_energy_to `change` series, discharge from stat_energy_from; the net is charge - discharge.
+//Because the two directions are separate recorder meters, the sign is structural, charging is never
+//lost (the bug where a single signed sensor only ever surfaced discharge). Future buckets null.
+function buildBattery(host: UnifiedStoreHost, storeStartMs: number, nowMs: number, p: CadenceParams): (number | null)[]
+{
+    const charge    = changeSeriesToWatts(host._batteryChargeChangeSeries,    storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
+    const discharge = changeSeriesToWatts(host._batteryDischargeChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
     const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const hist = host._batteryPowerHistory;
-    if (!hist || hist.times.length === 0) { return out; }
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    for (let i = 0; i < hist.times.length; i++)
+    for (let i = 0; i < p.bucketsTotal; i++)
     {
-        const tMs = hist.times[i].getTime();
-        if (tMs < storeStartMs || tMs >= storeEndMs || tMs > nowMs) { continue; }
-        const w = pvNormalizeToWatts(hist.values[i], host._batteryPowerUnit);
-        if (!Number.isFinite(w)) { continue; }
-        const h = bucketForMs(storeStartMs, tMs, p.stepMs, p.bucketsTotal);
-        if (h < 0) { continue; }
-        sums[h]   += w;
-        counts[h] += 1;
-    }
-    for (let h = 0; h < p.bucketsTotal; h++)
-    {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
+        const c = charge[i];
+        const d = discharge[i];
+        if (c === null && d === null) { continue; }
+        out[i] = Math.max(0, c ?? 0) - Math.max(0, d ?? 0);
     }
     const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
     const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
@@ -504,63 +450,26 @@ function buildBatterySoc(host: UnifiedStoreHost, storeStartMs: number, nowMs: nu
 }
 
 
-//Grid import / export: per-entity cumulative kWh meters get differentiated to W on adjacent pairs,
-//signed-W rare configs feed in directly. Per-entity contributions sum into the bucket.
-function buildGridSlope(
-    samplesByEntity: Map<string, Array<{ t: number; v: number }>>,
-    unitsByEntity:   Map<string, string>,
-    storeStartMs:    number,
-    storeEndMs:      number,
-    nowMs:           number,
-    p:               CadenceParams,
+//Grid import / export: average watts per bucket from the recorder `change` series on the
+//directional energy meter, exactly like the production series (kWh * 1000 / bucket-hours). Reset-
+//corrected + unit-normalised server-side, no client-side differentiation. Past gaps interpolated,
+//future buckets null.
+function buildGridChange(
+    series:       ChangeBucket[] | null,
+    storeStartMs: number,
+    stepMs:       number,
+    bucketsTotal: number,
+    nowMs:        number,
 ): (number | null)[]
 {
-    const out = new Array<number | null>(p.bucketsTotal).fill(null);
-    const sums   = new Array<number>(p.bucketsTotal).fill(0);
-    const counts = new Array<number>(p.bucketsTotal).fill(0);
-    samplesByEntity.forEach((samples, entityId) =>
+    const out = changeSeriesToWatts(series, storeStartMs, stepMs, bucketsTotal, nowMs);
+    for (let i = 0; i < out.length; i++)
     {
-        const unit = (unitsByEntity.get(entityId) || '').toLowerCase();
-        const isCum = unit === 'wh' || unit === 'kwh' || unit === 'mwh';
-        const factor = unit === 'wh' ? 1 : unit === 'mwh' ? 1_000_000 : 1000;
-        if (isCum)
-        {
-            for (let i = 1; i < samples.length; i++)
-            {
-                const t1  = samples[i].t;
-                const t0  = samples[i - 1].t;
-                const dtH = (t1 - t0) / HOUR_MS;
-                if (dtH <= 0 || dtH > 6) { continue; }
-                const dv = samples[i].v - samples[i - 1].v;
-                if (!Number.isFinite(dv) || dv < 0) { continue; }
-                if (t1 < storeStartMs || t1 >= storeEndMs || t1 > nowMs) { continue; }
-                const h = bucketForMs(storeStartMs, t1, p.stepMs, p.bucketsTotal);
-                if (h < 0) { continue; }
-                sums[h]   += (dv / dtH) * factor;
-                counts[h] += 1;
-            }
-        }
-        else
-        {
-            for (let i = 0; i < samples.length; i++)
-            {
-                const t = samples[i].t;
-                if (t < storeStartMs || t >= storeEndMs || t > nowMs) { continue; }
-                const w = samples[i].v;
-                if (!Number.isFinite(w) || w < 0) { continue; }
-                const h = bucketForMs(storeStartMs, t, p.stepMs, p.bucketsTotal);
-                if (h < 0) { continue; }
-                sums[h]   += w;
-                counts[h] += 1;
-            }
-        }
-    });
-    for (let h = 0; h < p.bucketsTotal; h++)
-    {
-        if (counts[h] > 0) { out[h] = sums[h] / counts[h]; }
+        const v = out[i];
+        if (v !== null && v < 0) { out[i] = 0; }
     }
-    const nowBucket = bucketForMs(storeStartMs, nowMs, p.stepMs, p.bucketsTotal);
-    const pastEnd   = Math.min(p.bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
+    const nowBucket = bucketForMs(storeStartMs, nowMs, stepMs, bucketsTotal);
+    const pastEnd   = Math.min(bucketsTotal, (nowBucket < 0 ? 0 : nowBucket + 1));
     if (pastEnd > 0)
     {
         const pastSlice = out.slice(0, pastEnd);
@@ -585,21 +494,17 @@ function computeDataVersion(host: UnifiedStoreHost): string
     const seriesLen     = host._chartSeries?.times.length ?? 0;
     const pvHistLen     = host._pvHistory?.times.length   ?? 0;
     const pvCalibLen    = host._pvCalibStats?.times.length ?? 0;
-    const pvTrainerLen  = host._pvTrainerStats?.times.length ?? 0;
-    const battHistLen   = host._batteryPowerHistory?.times.length ?? 0;
-    let gridImpLen = 0;
-    host._gridImportSamples.forEach(arr => { gridImpLen += arr.length; });
-    let gridExpLen = 0;
-    host._gridExportSamples.forEach(arr => { gridExpLen += arr.length; });
+    const pvChangeLen   = host._pvChangeSeries?.length ?? 0;
+    const battHistLen   = (host._batteryChargeChangeSeries?.length ?? 0) + (host._batteryDischargeChangeSeries?.length ?? 0);
+    const gridImpLen = host._gridImportChangeSeries?.length ?? 0;
+    const gridExpLen = host._gridExportChangeSeries?.length ?? 0;
     const socLive = host._batterySoc ?? '';
-    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvTrainerLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
+    return `d${todayKey}|c${cadence}|${seriesLen}|${pvHistLen}|${pvCalibLen}|${pvChangeLen}|${battHistLen}|${gridImpLen}|${gridExpLen}|${socLive}`;
 }
 
 
 //Top-level builder. Resolves the cadence from the user config, then runs each per-metric pass in
-//dependency order. Pure function of the host snapshot: same input -> same output, no side effects
-//on the host except shadingTrainer.trainShadingMap which advances the shading map state
-//intentionally on every build.
+//dependency order. Pure function of the host snapshot: same input -> same output, no side effects.
 export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
 {
     const bucketsPerHour = displayUpdateFrequencyPerHour(host.config);
@@ -614,13 +519,15 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
     const irradiance   = buildIrradiance(host, storeStartMs, storeEndMs, p);
     const cloud        = buildCloud(host, storeStartMs, storeEndMs, p);
     //Production reads ONLY real sensor samples and interpolates between them. Forecast is the model
-    //output, computed independently at weather cadence and resampled into the storage buckets.
+    //output, computed at the store cadence with the hourly weather interpolated between samples.
     const production   = buildProduction(host, storeStartMs, storeEndMs, nowMs, p);
-    const forecast     = buildForecast(host, storeStartMs, storeEndMs, p);
-    const battery      = buildBattery(host, storeStartMs, storeEndMs, nowMs, p);
+    const fc           = buildForecast(host, storeStartMs, storeEndMs, p);
+    const forecast     = fc.forecast;
+    const forecastRaw  = fc.forecastRaw;
+    const battery      = buildBattery(host, storeStartMs, nowMs, p);
     const batterySoc   = buildBatterySoc(host, storeStartMs, nowMs, p);
-    const gridImport   = buildGridSlope(host._gridImportSamples, host._gridImportUnits, storeStartMs, storeEndMs, nowMs, p);
-    const gridExport   = buildGridSlope(host._gridExportSamples, host._gridExportUnits, storeStartMs, storeEndMs, nowMs, p);
+    const gridImport   = buildGridChange(host._gridImportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
+    const gridExport   = buildGridChange(host._gridExportChangeSeries, storeStartMs, p.stepMs, p.bucketsTotal, nowMs);
     return {
         storeStartMs,
         storeEndMs,
@@ -634,6 +541,7 @@ export function buildUnifiedStore(host: UnifiedStoreHost): UnifiedDataStore
         cloud,
         production,
         forecast,
+        forecastRaw,
         battery,
         batterySoc,
         gridImport,
@@ -684,6 +592,52 @@ export function dayBucketRange(store: UnifiedDataStore, dayOffset: number): { st
     const startBucket = Math.max(0, bucketForMs(store.storeStartMs, dayStartMs, store.stepMs, store.bucketsTotal));
     const endBucket   = Math.min(store.bucketsTotal, startBucket + store.bucketsPerDay);
     return { start: startBucket, end: endBucket };
+}
+
+
+//Integrate the forecast series (watts per bucket) over [dayStartMs, dayEndMs) into kWh, at the store
+//cadence: each non-null bucket contributes watts × stepHours / 1000. The single source for every
+//forecast kWh figure (dashboard headline, CoverFlow cards, day-strip chips) so they all match the
+//timeline curve exactly. `raw` selects the uncorrected physical model (the "PRÉVU" figure) over the
+//learned-corrected forecast (the "affiné" figure). Returns null when no bucket in range carried a value.
+export function integrateForecastKwh(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number, raw = false): number | null
+{
+    const series = raw ? store.forecastRaw : store.forecast;
+    const stepH  = store.stepMs / HOUR_MS;
+    let kwh = 0;
+    let any = false;
+    for (let i = 0; i < store.bucketsTotal; i++)
+    {
+        const mid = store.storeStartMs + (i + 0.5) * store.stepMs;
+        if (mid < dayStartMs || mid >= dayEndMs) { continue; }
+        const v = series[i];
+        if (v === null || !isFinite(v)) { continue; }
+        kwh += v * stepH / 1000;
+        any = true;
+    }
+    return any ? kwh : null;
+}
+
+
+//Cumulative forecast kWh samples across [dayStartMs, dayEndMs), one point per store bucket, for the
+//dashboard's running intraday forecast curve. Same integration as integrateForecastKwh so the curve's
+//endpoint equals the headline total. Always seeded with a 0 point at dayStartMs.
+export function forecastCumulativeForDay(store: UnifiedDataStore, dayStartMs: number, dayEndMs: number): Array<{ tMs: number; kwh: number }>
+{
+    const stepH = store.stepMs / HOUR_MS;
+    const out: Array<{ tMs: number; kwh: number }> = [{ tMs: dayStartMs, kwh: 0 }];
+    let kwh = 0;
+    for (let i = 0; i < store.bucketsTotal; i++)
+    {
+        const bucketStart = store.storeStartMs + i * store.stepMs;
+        const mid         = bucketStart + 0.5 * store.stepMs;
+        if (mid < dayStartMs || mid >= dayEndMs) { continue; }
+        const v = store.forecast[i];
+        if (v === null || !isFinite(v)) { continue; }
+        kwh += v * stepH / 1000;
+        out.push({ tMs: bucketStart + store.stepMs, kwh });
+    }
+    return out;
 }
 
 
