@@ -35,6 +35,9 @@ export interface Translations
         dayLabelDayBefore?:     string; //'2 days ago'
         dayLabelTomorrow?:      string; //'Tomorrow'
         dayLabelDayAfter?:      string; //'In 2 days'
+        //Explanation block shown above the cloud-cover slider on the Shading Dome view, so the user
+        //understands what the dome represents without having to dig into docs.
+        shadingDomeHint?:       string; //'Each cell shows what the sun delivers from that sky position...'
         //Label inside the top-of-card loading banner, visible while the first hydration wave of
         //data fetches is still in flight.
         loadingLabel?:          string; //'Fetching data...'
@@ -93,11 +96,6 @@ export interface Translations
         dataDisplaySection:           string;
         displayUpdateFrequency:       string;
         displayUpdateFrequencyHelp:   string;
-        //Global display radius slider (50-500 m). Optional: only the FR locale carries it for now,
-        //every other locale falls back to the inline default in the editor. Re-added in v1.8.4 as a
-        //perf lever for older phones (smaller rendered disc = less geometry projected per frame).
-        displayRadius?:               string;
-        displayRadiusHelp?:           string;
         //Single section for the user's PV install. Bundles the inverter cap, the per-row panel orientation, the inverter-cutoff
         //SoC guard and the optional solar-radiation override sensor: every install-level knob that does NOT have a HA Energy
         //dashboard equivalent.
@@ -160,7 +158,7 @@ export interface Translations
         pvArrayTrackerSingleV:    string;
         pvArrayTrackerHelp:       string;
         //Inverter cutoff SoC: percent at which the user's hybrid inverter clamps PV output once the battery hits its set ceiling. When set,
-        //the forecast learning drops every hour where the SoC reached this value so the inverter-blocked production doesn't
+        //the shading-map trainer drops every observation bucket where the SoC reached this value so the inverter-blocked production doesn't
         //train as phantom shadow.
         inverterCutoffSocPct:       string;
         inverterCutoffSocPctHelp:   string;
