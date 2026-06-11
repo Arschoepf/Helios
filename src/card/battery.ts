@@ -212,9 +212,15 @@ export function refreshBattery(host: BatteryHost): void
             const watts = pvNormalizeToWatts(v, unit);
             //HA Energy `power_config.stat_rate_inverted` flips the sign so positive reads as charging. The dashboard
             //carries the inversion flag alongside the entity id; apply it here so the chip + leader + scrub buffer all
+<<<<<<< HEAD
             //see the canonical "positive = charging" convention regardless of how the user wired the source. 
             //Not needed as the energy dashboard properly reports batteries whether inverted or not.
             sum += watts;
+=======
+            //see the canonical "positive = charging" convention regardless of how the user wired the source.
+            const inverted = host._energyDefaults.invertedRateEntities.includes(id);
+            sum += inverted ? -watts : watts;
+>>>>>>> parent of 4dd597b (v1.8.4: HA Energy change-metric convergence + forecast overhaul (#199, #200, #215, #216, #220))
             anyValid = true;
         }
         if (anyValid)
